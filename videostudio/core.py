@@ -41,7 +41,7 @@ class Store:
         finally: c.close()
     def event(self,c,j,s,e,detail=''):
         c.execute('INSERT INTO events(job,at,stage,event,detail) VALUES(?,?,?,?,?)',(j,time.time(),s,e,detail))
-    def create(self,data,key):
+    def create(self,data,key,connector_scope=None):
         data=validate_request(data)
         if not key or len(key)>200: raise ValueError('Idempotency-Key required (max 200 characters)')
         raw=json.dumps(data,sort_keys=True,ensure_ascii=False)
@@ -58,8 +58,12 @@ class Store:
             try: output.mkdir()
             except FileExistsError:
                 output=self.outputs/(name+'-'+j[:8]); output.mkdir()
+            (output/'brief.json').write_text(json.dumps({'job_id':j,**data},ensure_ascii=False,indent=2),encoding='utf8')
             now=time.time()
             c.execute('INSERT INTO jobs(id,idem,request,state,output,created,updated) VALUES(?,?,?,?,?,?,?)',(j,key,raw,'queued',str(output),now,now))
+            if connector_scope:
+                bound=c.execute('UPDATE connector_scopes SET job=? WHERE id=? AND job IS NULL',(j,connector_scope))
+                if bound.rowcount!=1:raise ValueError('Connector scope is unavailable')
             self.event(c,j,None,'created')
         return self.get(j),True
     def get(self,j):
@@ -116,6 +120,8 @@ class Worker:
                 s.active(jid)
                 if not isinstance(value,dict):raise PermanentError('Stage returned invalid checkpoint')
                 if stage=='verify' and value.get('verified') is not True:raise PermanentError('Verification did not pass')
+                mirror=Path(j['output'])/(stage+'.json');temporary=mirror.with_suffix('.part.json')
+                temporary.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf8');temporary.replace(mirror)
                 with s.db() as c:
                     c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)',(jid,stage,json.dumps(value)))
                     c.execute('UPDATE jobs SET state=?,error=NULL,next_at=0,updated=? WHERE id=?',('completed' if stage=='verify' else 'queued',time.time(),jid));s.event(c,jid,stage,'completed')

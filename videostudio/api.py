@@ -48,8 +48,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def public_job(j):
         return {**j,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None}
     @app.get('/api/preflight')
-    def preflight():
-        result=pipeline.preflight()
+    def preflight(scope:str|None=None):
+        result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()
         result['checks']=[{**c,'message':c.get('message',c.get('detail',''))} for c in result['checks']]
         return result
     @app.get('/api/voices')
@@ -126,7 +126,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         with store.db() as connection:
             previous=connection.execute('SELECT id FROM jobs WHERE idem=?',(idempotency_key,)).fetchone()
         if previous is None:
-            pf=pipeline.preflight()
+            pf=pipeline.preflight(request.headers.get('x-connector-scope')) if isinstance(pipeline,Pipeline) else pipeline.preflight()
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
         scope=request.headers.get('x-connector-scope')
@@ -138,7 +138,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if bound is None:raise HTTPException(422,'Unknown connector scope')
             if bound['job'] and (previous is None or previous['id']!=bound['job']):raise HTTPException(409,'Connector scope already owns another job; open a new video session')
         try:
-            job,created=store.create(data,idempotency_key)
+            job,created=store.create(data,idempotency_key,scope)
             if scope:exchanges.bind(scope,job['id'])
             return {**public_job(job),'job':public_job(job),'created':created}
         except ValueError as e:raise HTTPException(409 if 'already used' in str(e) else 422,str(e))
