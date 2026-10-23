@@ -16,6 +16,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     default_export=ROOT/'data'/'voices-export.json'
     voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
+    from .exchanges import Exchanges
+    exchanges=Exchanges(store)
+    if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
     def loop():
         while not stop.is_set():
@@ -61,6 +64,34 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         for v in voices.catalog()['voices']:
             if v['id']==voice_id and v.get('sample_path') and Path(v['sample_path']).is_file():return FileResponse(v['sample_path'],media_type='audio/wav')
         raise HTTPException(404,'Sample unavailable; no synthesis performed')
+    def same_origin(request):
+        from urllib.parse import urlparse
+        origin=request.headers.get('origin')
+        if origin and urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
+    @app.post('/api/connector/sessions')
+    def connector_session(request:Request):
+        same_origin(request)
+        scope=exchanges.scope()
+        return {'project_id':scope,'run_id':scope,'url':f'/story-video/projects/{scope}/production'}
+    prefix='/api/v1/projects/{project_id}/runs/{run_id}/chatgpt-exchanges'
+    def checked_scope(project_id,run_id):
+        if project_id!=run_id:raise HTTPException(404,'Scope not found')
+        return project_id
+    @app.get(prefix)
+    def pending(project_id:str,run_id:str):
+        try:return exchanges.pending(checked_scope(project_id,run_id))
+        except KeyError:raise HTTPException(404,'Scope not found')
+    @app.get(prefix+'/{exchange_id}')
+    def receipt(project_id:str,run_id:str,exchange_id:str):
+        try:r=exchanges.get(checked_scope(project_id,run_id),exchange_id)
+        except KeyError:raise HTTPException(404,'Exchange not found')
+        return {'id':r['id'],'version':r['version'],'accepted':r['response'] is not None}
+    @app.post(prefix+'/{exchange_id}/response')
+    def response(project_id:str,run_id:str,exchange_id:str,data:dict,request:Request):
+        same_origin(request)
+        try:return exchanges.receive(checked_scope(project_id,run_id),exchange_id,data.get('expected_version'),data.get('response_text'))
+        except KeyError:raise HTTPException(404,'Exchange not found')
+        except ValueError as e:raise HTTPException(422,str(e))
     @app.post('/api/jobs',status_code=201)
     def submit(data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
         # Loopback-only API: avoid drive-by browser mutations (no permissive CORS).
@@ -77,8 +108,17 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             pf=pipeline.preflight()
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
+        scope=request.headers.get('x-connector-scope')
+        if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome' and not scope:
+            raise HTTPException(422,'Existing Chrome connector scope required')
+        if scope:
+            with store.db() as c:
+                bound=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()
+            if bound is None:raise HTTPException(422,'Unknown connector scope')
+            if bound['job'] and (previous is None or previous['id']!=bound['job']):raise HTTPException(409,'Connector scope already owns another job; open a new video session')
         try:
             job,created=store.create(data,idempotency_key)
+            if scope:exchanges.bind(scope,job['id'])
             return {**public_job(job),'job':public_job(job),'created':created}
         except ValueError as e:raise HTTPException(409 if 'already used' in str(e) else 422,str(e))
     @app.get('/api/jobs')
@@ -109,7 +149,13 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if name=='video.mp4' and j['state']!='completed':raise HTTPException(409,'Video not verified')
         return FileResponse(candidate)
     static=ROOT/'static'
-    if static.is_dir():app.mount('/',StaticFiles(directory=static,html=True),name='frontend')
+    if static.is_dir():
+        @app.get('/story-video/projects/{project_id}/production')
+        def production_page(project_id:str):
+            try:exchanges.pending(project_id)
+            except KeyError:raise HTTPException(404,'Unknown connector scope')
+            return FileResponse(static/'index.html')
+        app.mount('/',StaticFiles(directory=static,html=True),name='frontend')
     return app
 
 app=create_app(worker_enabled=os.getenv('VS_WORKER_ENABLED','1')=='1')

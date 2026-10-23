@@ -23,7 +23,8 @@ for a in records:
     for p in (STORY/'Voices/Work/Previews').glob('*/request.json'):
         try:
             d=json.loads(p.read_text(encoding='utf-8'))
-            if d.get('voice_id')==row['id'] and (p.parent/'preview.wav').is_file():preview.append(p.parent/'preview.wav')
+            same_voice=d.get('voice_id')==row['id'] or d.get('reference',{}).get('sha256')==row['sha256']
+            if same_voice and (p.parent/'preview.wav').is_file():preview.append(p.parent/'preview.wav')
         except (ValueError,OSError):pass
     if preview:row['sample_path']=str(preview[-1])
     rows.append(row)

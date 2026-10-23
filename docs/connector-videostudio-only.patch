@@ -1,0 +1,94 @@
+--- before/manifest.json
++++ after/manifest.json
+@@ -1,15 +1,60 @@
+ {
+   "manifest_version": 3,
+   "name": "Storyforge — ChatGPT trên Chrome",
+-  "version": "0.1.22",
++  "version": "0.1.23",
+   "minimum_chrome_version": "120",
+   "description": "Trao đổi yêu cầu của Studio trên PC qua một tab ChatGPT riêng. Không gọi Codex hoặc AI API.",
+-  "permissions": ["storage", "alarms"],
+-  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*", "https://storyforge-studio-1419.vercel.app/*", "https://story.multigen.store/*", "https://chatgpt.com/*"],
+-  "background": {"service_worker": "background.js", "type": "module"},
++  "permissions": [
++    "storage",
++    "alarms"
++  ],
++  "host_permissions": [
++    "http://localhost:3000/*",
++    "http://127.0.0.1:3000/*",
++    "https://storyforge-studio-1419.vercel.app/*",
++    "https://story.multigen.store/*",
++    "https://chatgpt.com/*",
++    "http://localhost:8877/*",
++    "http://127.0.0.1:8877/*"
++  ],
++  "background": {
++    "service_worker": "background.js",
++    "type": "module"
++  },
+   "content_scripts": [
+-    {"matches": ["http://localhost:3000/story-video/projects/*/production*", "http://127.0.0.1:3000/story-video/projects/*/production*", "https://storyforge-studio-1419.vercel.app/story-video/projects/*/production*", "https://story.multigen.store/story-video/projects/*/production*"], "js": ["studio.js"], "run_at": "document_idle"},
+-    {"matches": ["https://chatgpt.com/*"], "js": ["chatgpt.js"], "run_at": "document_idle"}
++    {
++      "matches": [
++        "http://localhost:3000/story-video/projects/*/production*",
++        "http://127.0.0.1:3000/story-video/projects/*/production*",
++        "https://storyforge-studio-1419.vercel.app/story-video/projects/*/production*",
++        "https://story.multigen.store/story-video/projects/*/production*",
++        "http://localhost:8877/story-video/projects/*/production*",
++        "http://127.0.0.1:8877/story-video/projects/*/production*"
++      ],
++      "js": [
++        "studio.js"
++      ],
++      "run_at": "document_idle"
++    },
++    {
++      "matches": [
++        "https://chatgpt.com/*"
++      ],
++      "js": [
++        "chatgpt.js"
++      ],
++      "run_at": "document_idle"
++    }
+   ],
+-  "web_accessible_resources": [{"resources": ["protocol.js", "chatgpt-dom.js"], "matches": ["https://chatgpt.com/*"]}]
++  "web_accessible_resources": [
++    {
++      "resources": [
++        "protocol.js",
++        "chatgpt-dom.js"
++      ],
++      "matches": [
++        "https://chatgpt.com/*"
++      ]
++    }
++  ]
+ }
+--- before/protocol.js
++++ after/protocol.js
+@@ -1,4 +1,4 @@
+-export const BUILD = '0.1.22';
++export const BUILD = '0.1.23';
+ export const TEXT_ONLY_CONTRACT = `STUDIO_TEXT_ONLY:
+ This is a text-only planning/validation request. Return exactly one JSON object matching the supplied schema.
+ Do not generate, edit, render or attach images, video, audio or files. Do not use image generation/editing tools, canvas or other media tools.
+@@ -17,13 +17,14 @@
+ }
+ const localOrigins=['http://localhost:3000','http://127.0.0.1:3000'];
+ const onlineOrigins=['https://storyforge-studio-1419.vercel.app','https://story.multigen.store'];
++const videoStudioOrigins=['http://localhost:8877','http://127.0.0.1:8877'];
+ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ export function fail(code, message) { return Object.assign(new Error(message), {code}); }
+ export function studioScope(sender, scope) {
+   try {
+     const url = new URL(sender.url);
+     return sender.frameId === 0 && sender.tab?.id === scope.studio_tab_id &&
+-      (localOrigins.includes(url.origin) || onlineOrigins.includes(url.origin)) &&
++      (localOrigins.includes(url.origin) || onlineOrigins.includes(url.origin) || videoStudioOrigins.includes(url.origin)) &&
+       (scope.studio_origin ? url.origin===scope.studio_origin : localOrigins.includes(url.origin)) &&
+       url.pathname === `/story-video/projects/${scope.project_id}/production` &&
+       ['run','preproduction'].includes(scope.scope_kind ?? 'run') &&

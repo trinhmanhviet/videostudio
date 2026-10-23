@@ -39,11 +39,17 @@ class Pipeline:
         self.speech_cache=os.getenv('VS_SPEECH_CACHE','')
         self.knowledge=Path(os.environ['VS_KNOWLEDGE_DIR']) if os.getenv('VS_KNOWLEDGE_DIR') else None
         self.ffmpeg=os.getenv('VS_FFMPEG','ffmpeg');self.ffprobe=os.getenv('VS_FFPROBE','ffprobe')
+    def use_exchanges(self,exchanges):
+        self.exchanges=exchanges
+        import threading
+        self.context=threading.local()
     def preflight(self):
         checks=[]
         def add(name,ok,detail):checks.append({'name':name,'ok':bool(ok),'detail':detail})
         local=lambda u:urlparse(u).hostname in ('127.0.0.1','localhost','::1')
-        add('llm',self.llm and self.model and self.key and local(self.llm),'Explicit loopback VS_LLM_URL (including /v1), VS_LLM_MODEL and VS_LLM_KEY required; no automatic credential import')
+        chrome=os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome'
+        add('chrome_transport' if chrome else 'llm',hasattr(self,'exchanges') if chrome else self.llm and self.model and self.key and local(self.llm),'Existing connector transport API configured; NOT proof of live Chrome authorization/login' if chrome else 'Explicit loopback VS_LLM_URL/model/key required')
+        if chrome:add('chrome_live_acceptance',False,'Updated existing extension must be reloaded and live session tested by the owner; no synthetic Start click. Closing the Studio tab still revokes ownership authorization.')
         add('speech',importlib.util.find_spec('vieneu') and self.speech_cache and Path(self.speech_cache).is_dir(),'VieNeu and pre-existing offline VS_SPEECH_CACHE required')
         add('research',self.knowledge and self.knowledge.is_dir() and any(self.knowledge.glob('*.txt')),'VS_KNOWLEDGE_DIR must contain real .txt research sources; no fabricated internet research')
         add('ffmpeg',shutil.which(self.ffmpeg) and shutil.which(self.ffprobe),'FFmpeg and FFprobe required')
@@ -64,6 +70,9 @@ class Pipeline:
         return {'ready':all(x['ok'] for x in checks),'checks':checks,'voice_warnings':catalog['warnings']}
     def llm_json(self,prompt,check):
         check()
+        if os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome':
+            if not hasattr(self,'exchanges') or not getattr(self.context,'job',None):raise PermanentError('Chrome exchange context unavailable')
+            return self.exchanges.request(self.context.job,prompt,check)
         if not self.llm or not self.key or not self.model:raise PermanentError('LLM unconfigured')
         if urlparse(self.llm).hostname not in ('localhost','127.0.0.1','::1'):raise PermanentError('Only explicit local LLM service permitted')
         r=httpx.post(self.llm+'/chat/completions',headers={'Authorization':'Bearer '+self.key},json={'model':self.model,'messages':[{'role':'user','content':prompt}],'response_format':{'type':'json_object'},'stream':False,'max_tokens':6000},timeout=180)
@@ -110,7 +119,15 @@ class Pipeline:
                         Path(path).write_bytes(content.content);return {'path':str(path),'prompt_id':pid,'assets':[asset(path)]}
                 time.sleep(.5)
             raise TimeoutError('Comfy history timeout; persisted prompt will be reattached')
-    def handlers(self):return {s:getattr(self,s) for s in ('plan','research','script','speech','images','subtitles','music','render','verify')}
+    def handlers(self):
+        def wrapped(name):
+            def invoke(j,check):
+                if hasattr(self,'context'):self.context.job=j['id']
+                try:return getattr(self,name)(j,check)
+                finally:
+                    if hasattr(self,'context'):self.context.job=None
+            return invoke
+        return {s:wrapped(s) for s in ('plan','research','script','speech','images','subtitles','music','render','verify')}
     def plan(self,j,check):
         pf=self.preflight()
         if not pf['ready']:raise PermanentError('Preflight blocked: '+', '.join(x['name'] for x in pf['checks'] if not x['ok']))
