@@ -13,7 +13,8 @@ ROOT=Path(__file__).resolve().parent.parent
 
 def create_app(store=None,pipeline=None,worker_enabled=True):
     store=store or Store(os.getenv('VS_DATABASE',str(ROOT/'data'/'jobs.sqlite3')),os.getenv('VS_OUTPUT_DIR','E:/Videos'))
-    voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT'))
+    default_export=ROOT/'data'/'voices-export.json'
+    voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
     def loop():

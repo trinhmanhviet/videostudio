@@ -38,6 +38,8 @@ class Voices:
                 p=Path(r.get('reference_path','__missing__'))
                 r['available']=p.is_file() and bool(r.get('sha256')) and digest(p)==r['sha256']
             else:r['available']=True
+            if r.get('status') and r['status']!='locked':r['available']=False
+            if r.get('selectable') is False:r['available']=False
         # Loose samples are retained as inventory, NOT falsely advertised as cloned IDs.
         samples=[str(p) for p in (self.root/'Voices'/'Samples').glob('*') if p.is_file()]
         return {'voices':sorted(rows.values(),key=lambda r:r['id']),'complete':complete,'warnings':warnings,'unmapped_sample_files':samples}
