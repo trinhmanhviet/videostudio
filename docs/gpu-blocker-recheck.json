@@ -1,0 +1,13 @@
+{
+  "queue_running_count": 0,
+  "queue_pending_count": 0,
+  "devices": [
+    {
+      "name": "cuda:0 NVIDIA GeForce RTX 3090 Ti : cudaMallocAsync",
+      "free_mb": 473,
+      "total_mb": 24564
+    }
+  ],
+  "generation_submitted": false,
+  "models_unloaded": false
+}
