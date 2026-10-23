@@ -1,0 +1,12 @@
+{
+  "test": "One owner-authorized short completion request",
+  "provider": "existing local ChatGPT2API",
+  "model": "auto",
+  "http_status": 502,
+  "upstream_status": 403,
+  "upstream_route": "/backend-anon/conversation",
+  "result": "failed",
+  "conclusion": "Model-list availability does not establish a usable generation backend. Current proxy cannot be accepted as a working unattended provider.",
+  "actions": "No retry, authentication bypass, CAPTCHA handling, account modification or alternate connector attempted.",
+  "production_ready": false
+}
