@@ -62,8 +62,9 @@ class Exchanges:
             if r['response'] is not None and r['response']!=serialized:raise ValueError('Immutable response conflict')
             c.execute('UPDATE connector_exchanges SET response=? WHERE id=?',(serialized,identifier))
         return {'accepted':True,'id':identifier,'version':version}
-    def request(self,job,prompt,check,timeout=180):
-        scope=self.for_job(job);key=hashlib.sha256(prompt.encode()).hexdigest()
+    def enqueue(self,scope,prompt):
+        self.pending(scope)
+        key=hashlib.sha256(prompt.encode()).hexdigest()
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT id FROM connector_exchanges WHERE scope=? AND request_key=?',(scope,key)).fetchone()
@@ -72,6 +73,10 @@ class Exchanges:
                 immutable=f'YÊU CẦU STUDIO {identifier}\n'+prompt
                 if len(immutable.encode())>700000:raise PermanentError('Connector request exceeds size budget')
                 c.execute('INSERT INTO connector_exchanges(id,scope,request_key,prompt,created) VALUES(?,?,?,?,?)',(identifier,scope,key,immutable,time.time()))
+        return identifier
+    def request(self,job,prompt,check,timeout=180):
+        scope=self.for_job(job)
+        identifier=self.enqueue(scope,prompt)
         end=time.monotonic()+timeout
         while time.monotonic()<end:
             check();r=self.get(scope,identifier)

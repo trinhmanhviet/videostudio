@@ -83,6 +83,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         import json
         with store.db() as c:c.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)',(scope,json.dumps(allowed),time.time()))
         return {'recorded':True}
+    @app.post('/api/connector/smoke/{scope}')
+    def smoke_connector(scope:str,request:Request):
+        same_origin(request)
+        try:identifier=exchanges.enqueue(scope,'Engineering connection test only. Return exactly one JSON object: {"connection_test":"videostudio","ok":true}. Do not create media or use tools.')
+        except KeyError:raise HTTPException(404,'Scope not found')
+        return {'exchange_id':identifier}
     @app.get('/api/connector/status')
     def connector_status():
         import json
@@ -166,10 +172,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     static=ROOT/'static'
     if static.is_dir():
         @app.get('/story-video/projects/{project_id}/production')
-        def production_page(project_id:str):
+        def production_page(project_id:str,connector_test:bool=False):
             try:exchanges.pending(project_id)
             except KeyError:raise HTTPException(404,'Unknown connector scope')
-            return FileResponse(static/'index.html')
+            return FileResponse(static/('connector-test.html' if connector_test else 'index.html'))
         app.mount('/',StaticFiles(directory=static,html=True),name='frontend')
     return app
 
