@@ -29,7 +29,7 @@ That FFmpeg test is NOT speech synthesis, music generation, model output, visual
 
 - Supported unattended LLM connection/model/credentials not configured. Existing Chrome start safeguard is preserved; no simulated trusted gesture or parallel connector is supplied.
 - VieNeu is not importable in the active Python; its existing offline cache/environment needs connecting without downloading models to C:.
-- Complete authoritative preset + all-project clone inventory has not been imported. Historical sample files do not prove clone identity. Existing StoryForge voices are untouched. `VS_VOICES_EXPORT` supports an explicit read-only catalog; it must not silently omit the three user clones.
+- Follow-up: authoritative read-only DB import now preserves all 25 presets and all 3 locked user clones with matching reference hashes, plus 3 archived clones retained but disabled. Existing StoryForge voices are untouched. Local export is ignored by Git. See `docs/integration-followup.md` for owner-authorized service starts and evidence.
 - Research currently retrieves local `.txt` sources only, not automatic web discovery or claim verification.
 - Current generation scaffold is a single still, single narration and full-utterance subtitle cue. It does not meet multi-scene storytelling, measured-script revision, caption readability/alignment or continuity QA requirements.
 - Renderer scaffold remains 720x1280/24fps with bounded atempo and simple music looping, not the required 1080x1920/30fps natural-duration/crossfade policy. Do not use its output as product acceptance.
