@@ -7,7 +7,8 @@ def main():
     if not cache.is_dir():raise RuntimeError('Existing speech model cache required')
     os.environ.update(HF_HOME=str(cache),HF_HUB_CACHE=str(cache/'hub'),HUGGINGFACE_HUB_CACHE=str(cache/'hub'),HF_MODULES_CACHE=str(cache/'modules'),HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
     from vieneu import Vieneu
-    tts=Vieneu();v=d['voice']
+    # Explicit existing CPU/ONNX runtime: no opportunistic GPU load/download.
+    tts=Vieneu(backend='onnx',device='cpu');v=d['voice']
     if v['kind']=='clone':
         from .core import digest
         p=Path(v['reference_path'])

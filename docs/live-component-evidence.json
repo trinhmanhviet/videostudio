@@ -1,0 +1,40 @@
+{
+  "comfy_queue": {
+    "queue_running": [],
+    "queue_pending": []
+  },
+  "devices": [
+    {
+      "name": "cuda:0 NVIDIA GeForce RTX 3090 Ti : cudaMallocAsync",
+      "vram_total": 25756696576,
+      "vram_free": 492318720
+    }
+  ],
+  "gpu_submission_performed": false,
+  "no_global_unload_or_interrupt": true,
+  "chrome_smoke_responses": [
+    {
+      "id": "64293a96-d410-4523-8ecb-14d343d6e948",
+      "scope": "7ef68fc4-1143-4812-b2a3-fce83954dc18",
+      "response": "{\"connection_test\": \"videostudio\", \"ok\": true}"
+    }
+  ],
+  "tts_report": {
+    "voice_id": "clone:d4f6b4b1-1af3-4bc3-a922-06ac47914c25",
+    "engine": "VieNeu local CPU ONNX offline",
+    "duration_seconds": 4.32,
+    "streams": [
+      {
+        "codec": "pcm_s16le",
+        "sample_rate": "48000",
+        "channels": 1
+      }
+    ],
+    "full_decode_ok": true,
+    "semantic_listening_performed": false,
+    "finite_samples": true,
+    "rms": 0.07925326067453323,
+    "peak": 0.747894287109375,
+    "non_silent": true
+  }
+}
