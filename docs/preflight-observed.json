@@ -1,0 +1,73 @@
+{
+  "ready": false,
+  "checks": [
+    {
+      "name": "llm",
+      "ok": false,
+      "detail": "Explicit loopback VS_LLM_URL (including /v1), VS_LLM_MODEL and VS_LLM_KEY required; no automatic credential import"
+    },
+    {
+      "name": "speech",
+      "ok": false,
+      "detail": "VieNeu and pre-existing offline VS_SPEECH_CACHE required"
+    },
+    {
+      "name": "research",
+      "ok": false,
+      "detail": "VS_KNOWLEDGE_DIR must contain real .txt research sources; no fabricated internet research"
+    },
+    {
+      "name": "ffmpeg",
+      "ok": true,
+      "detail": "FFmpeg and FFprobe required"
+    },
+    {
+      "name": "comfy_nodes",
+      "ok": true,
+      "detail": "Source-derived Qwen2.1/Stable Audio3 blueprint node availability only; not live workflow validation. Flux2Klein unavailable (no verified graph)"
+    },
+    {
+      "name": "stable_audio3_integration",
+      "ok": false,
+      "detail": "Stable Audio3 source blueprint is not an attested working integration. Model filenames/node presence do not prove model compatibility; generation adapter unavailable pending verified workflow/output evidence. No GPU test performed."
+    },
+    {
+      "name": "model:qwen_image_2.1_int8_convrot.safetensors",
+      "ok": true,
+      "detail": "Must already exist in Comfy; no download"
+    },
+    {
+      "name": "model:qwen3vl_8b_int8_convrot.safetensors",
+      "ok": true,
+      "detail": "Must already exist in Comfy; no download"
+    },
+    {
+      "name": "model:qwen_image_2.1_vae_bf16.safetensors",
+      "ok": true,
+      "detail": "Must already exist in Comfy; no download"
+    },
+    {
+      "name": "model:stable_audio_3_medium_base.safetensors",
+      "ok": true,
+      "detail": "Must already exist in Comfy; no download"
+    },
+    {
+      "name": "model:t5gemma_b_b_ul2.safetensors",
+      "ok": true,
+      "detail": "Must already exist in Comfy; no download"
+    },
+    {
+      "name": "voice_inventory",
+      "ok": false,
+      "detail": "Complete preset and all-project clone DB export required; stopped DB is never started"
+    },
+    {
+      "name": "production_acceptance",
+      "ok": false,
+      "detail": "Implementation incomplete: multi-scene timed storyboard, measured narration rewrite, aligned safe-area subtitles, GPU ownership coordination and live AI end-to-end acceptance remain unverified. Production jobs disabled; no fake completion."
+    }
+  ],
+  "voice_warnings": [
+    "Voice inventory incomplete: stopped StoryForge DB not queried. Supply complete read-only asset/preset export; no clone is silently omitted or fabricated."
+  ]
+}

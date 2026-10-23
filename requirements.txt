@@ -1,0 +1,5 @@
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+httpx>=0.27,<1
+Pillow>=10,<13
+# VieNeu deliberately not installed automatically: existing offline environment/cache required.

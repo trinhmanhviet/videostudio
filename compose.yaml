@@ -1,0 +1,16 @@
+# Optional packaging only; not started or built during implementation.
+# Host-native operation is required for the existing VieNeu environment.
+services:
+  videostudio:
+    build: .
+    ports: ["127.0.0.1:8877:8877"]
+    environment:
+      VS_DATABASE: /data/jobs.sqlite3
+      VS_OUTPUT_DIR: /videos
+      VS_STORYFORGE_ROOT: /storyforge
+      VS_WORKER_ENABLED: "0"
+    volumes:
+      - ./data:/data
+      - E:/Videos:/videos
+      - D:/Projects/storyforge:/storyforge:ro
+    restart: "no"
