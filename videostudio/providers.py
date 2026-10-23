@@ -83,7 +83,16 @@ class Pipeline:
                 saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
                 if not pid:raise PermanentError('Indeterminate Comfy submission; refusing duplicate GPU work')
             else:
-                check();receipt.write_text(json.dumps({'state':'submitting'}))
+                check()
+                q=c.get('queue');q.raise_for_status();queue=q.json()
+                if queue.get('queue_running') or queue.get('queue_pending'):
+                    raise RuntimeError('ComfyUI busy with other work; no submission/unload/interrupt performed')
+                stats=c.get('system_stats');stats.raise_for_status()
+                devices=stats.json().get('devices',[])
+                minimum=int(os.getenv('VS_MIN_FREE_VRAM_MB','12288'))*1024*1024
+                if not devices or min(d.get('vram_free',0) for d in devices)<minimum:
+                    raise RuntimeError('Insufficient free VRAM; refusing to unload models owned by another tool')
+                receipt.write_text(json.dumps({'state':'submitting'}))
                 r=c.post('prompt',json={'prompt':graph,'client_id':'videostudio-'+j['id']});r.raise_for_status();pid=r.json().get('prompt_id')
                 if not pid:raise PermanentError('Comfy rejected workflow')
                 receipt.write_text(json.dumps({'prompt_id':pid}))
@@ -92,7 +101,7 @@ class Pipeline:
                 check();r=c.get('history/'+pid);r.raise_for_status();h=r.json().get(pid)
                 if h:
                     if h.get('status',{}).get('status_str')=='error':raise PermanentError('Comfy generation failed')
-                    outputs=h.get('outputs',{}).get('8',{});items=outputs.get('images' if kind=='images' else 'audio',[])
+                    outputs=h.get('outputs',{}).get('8',{});items=outputs.get('images' if kind.startswith('images') else 'audio',[])
                     if items:
                         a=items[0];prefix=graph['8']['inputs']['filename_prefix'];folder,name=prefix.rsplit('/',1)
                         if a.get('type')!='output' or a.get('subfolder')!=folder or not a.get('filename','').startswith(name+'_') or '/' in a['filename'] or '\\' in a['filename']:raise PermanentError('Unsafe Comfy output')
@@ -119,34 +128,69 @@ class Pipeline:
         if not sources:raise PermanentError('No relevant verified local research sources')
         return {'sources':sources,'assets':[{'path':s['path'],'sha256':s['sha256']} for s in sources],'mode':'local_corpus'}
     def script(self,j,check):
-        d=self.llm_json('Write Vietnamese narration for requested duration. Return JSON {"narration":str,"source_paths":[str]}. Only supported facts from supplied sources; do not invent quotes. Target ~3 spoken words per second. '+json.dumps({'request':j['request'],'plan':j['checkpoints']['plan'],'research':j['checkpoints']['research']},ensure_ascii=False),check)
+        d=self.llm_json('Write Vietnamese narration for requested duration. Return JSON {"narration":str,"source_paths":[str],"scenes":[{"narration":str,"visual_prompt":str}]}. Each scene is one short spoken utterance, at most 85 characters (including spaces), with its own English visual prompt. Preserve a consistent character, location and visual style across scenes. Concatenated scenes must equal narration. Only supported facts from supplied sources; do not invent quotes. Target ~3 spoken words per second. '+json.dumps({'request':j['request'],'plan':j['checkpoints']['plan'],'research':j['checkpoints']['research']},ensure_ascii=False),check)
         allowed={s['path'] for s in j['checkpoints']['research']['sources']}
         if not isinstance(d.get('narration'),str) or not d['narration'].strip() or not d.get('source_paths') or not set(d['source_paths'])<=allowed:raise ValueError('Unattributed or empty script')
+        from .captions import wrap_caption
+        scenes=d.get('scenes')
+        if not isinstance(scenes,list) or not scenes or len(scenes)>150:raise ValueError('Timed utterance storyboard required')
+        for scene in scenes:
+            if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError('Missing scene visual prompt')
+            wrap_caption(scene.get('narration',''))
+        d['narration']=' '.join(scene['narration'] for scene in scenes)
         return d
     def speech(self,j,check):
         check();v=self.voices.selected(j['request']['voice_id']);out=Path(j['output'])/'speech.wav'
-        # Separate process allows cooperative cancel and avoids loading GPU in API process.
-        args=[os.sys.executable,'-m','videostudio.speech_worker',json.dumps({'text':j['checkpoints']['script']['narration'],'voice':v,'cache':self.speech_cache,'output':str(out)},ensure_ascii=False)]
-        run(args,check,timeout=900)
-        seconds=float(probe(out,self.ffprobe)['format']['duration'])
-        if seconds<=0:raise ValueError('Empty speech')
-        return {'path':str(out),'duration_seconds':seconds,'assets':[asset(out)]}
+        from .core import digest
+        import hashlib
+        utterances=[];assets=[];cursor=0
+        for i,scene in enumerate(j['checkpoints']['script']['scenes']):
+            check();part=out.with_name(f'speech-{i:04}.wav');receipt=part.with_suffix('.json')
+            identity=hashlib.sha256(json.dumps({'narration':scene['narration'],'voice':v},sort_keys=True).encode()).hexdigest()
+            saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
+            if not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part)):
+                args=[os.getenv('VS_SPEECH_PYTHON',os.sys.executable),'-m','videostudio.speech_worker',json.dumps({'text':scene['narration'],'voice':v,'cache':self.speech_cache,'output':str(part)},ensure_ascii=False)]
+                run(args,check,timeout=900)
+                receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
+            duration=float(probe(part,self.ffprobe)['format']['duration'])
+            if duration<=0:raise ValueError('Empty utterance audio')
+            utterances.append({**scene,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration});cursor+=duration;assets.append(asset(part))
+        listing=out.with_name('speech-concat.txt')
+        listing.write_text('\n'.join("file '"+str(Path(u['path']).resolve()).replace('\\\\','/')+"'" for u in utterances))
+        run([self.ffmpeg,'-v','error','-y','-f','concat','-safe','0','-i',listing,'-c:a','pcm_s16le',out],check)
+        target=j['request']['duration_seconds'];tolerance=min(2.0,max(.25,target*.03))
+        if cursor>target or target-cursor>tolerance:raise PermanentError(f'Measured narration {cursor:.2f}s does not naturally match {target}s; bounded script rewrite integration still required')
+        return {'path':str(out),'duration_seconds':cursor,'utterances':utterances,'assets':assets+[asset(out)]}
     def images(self,j,check):
-        prefix='videostudio/'+j['id']+'-image';graph=image_graph(j['checkpoints']['plan']['visual_prompt'],int(j['id'].replace('-','')[:8],16),prefix)
-        return self.comfy_asset(j,'images',graph,Path(j['output'])/'image.png',check)
+        from .core import digest
+        from PIL import Image,ImageStat
+        scenes=[];assets=[]
+        for i,u in enumerate(j['checkpoints']['speech']['utterances']):
+            check();kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
+            saved=json.loads(checkpoint.read_text()) if checkpoint.is_file() else {}
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt']
+            if not reusable:
+                prefix='videostudio/'+j['id']+'-'+kind
+                graph=image_graph(u['visual_prompt'],int(j['id'].replace('-','')[:8],16)+i,prefix)
+                self.comfy_asset(j,kind,graph,path,check)
+                with Image.open(path) as picture:
+                    picture.load()
+                    if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid/near-uniform scene image')
+                checkpoint.write_text(json.dumps({'sha256':digest(path),'prompt':u['visual_prompt']}))
+            scenes.append({'path':str(path),'duration':u['duration']});assets.append(asset(path))
+        # A short natural tail hold belongs to the final scene, not stretched speech.
+        scenes[-1]['duration']+=j['request']['duration_seconds']-j['checkpoints']['speech']['duration_seconds']
+        return {'scenes':scenes,'assets':assets}
     def subtitles(self,j,check):
-        # Honest scene-level caption: full utterance cue, not fabricated word alignment.
-        check();p=Path(j['output'])/'subtitles.srt';secs=j['request']['duration_seconds']
-        def stamp(s):
-            ms=round(s*1000);h,ms=divmod(ms,3600000);m,ms=divmod(ms,60000);s,ms=divmod(ms,1000);return f'{h:02}:{m:02}:{s:02},{ms:03}'
-        text=j['checkpoints']['script']['narration'].replace('-->','→')
-        p.write_text('1\n00:00:00,000 --> '+stamp(secs)+'\n'+text+'\n',encoding='utf-8')
-        return {'path':str(p),'timing_policy':'single_utterance_measured_speech_paced_to_target','assets':[asset(p)]}
+        from .captions import write_captions
+        check();p=Path(j['output'])/'subtitles.srt'
+        result=write_captions(j['checkpoints']['speech']['utterances'],p)
+        return {'path':str(p),**result,'assets':[asset(p)]}
     def music(self,j,check):
         check()
         raise PermanentError('Stable Audio3 unavailable: source blueprint has not been attested against installed model/node compatibility and actual output. Refusing speculative GPU submission.')
     def render(self,j,check):
-        cp=j['checkpoints'];return render(cp['images']['path'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe)
+        cp=j['checkpoints'];return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe)
     def verify(self,j,check):
         p=j['checkpoints']['render']['video'];v=verify(p,j['request']['duration_seconds'],self.ffprobe)
         run([self.ffmpeg,'-v','error','-i',p,'-f','null','-'],check,timeout=900)
