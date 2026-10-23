@@ -73,6 +73,21 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         same_origin(request)
         scope=exchanges.scope()
         return {'project_id':scope,'run_id':scope,'url':f'/story-video/projects/{scope}/production'}
+    @app.post('/api/connector/status/{scope}')
+    def report_connector(scope:str,data:dict,request:Request):
+        same_origin(request)
+        try:exchanges.pending(scope)
+        except KeyError:raise HTTPException(404,'Scope not found')
+        # Informational heartbeat only, never grants authorization or readiness.
+        allowed={k:data[k] for k in ('build','stage','connected','enabled') if k in data and isinstance(data[k],(str,bool))}
+        import json
+        with store.db() as c:c.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)',(scope,json.dumps(allowed),time.time()))
+        return {'recorded':True}
+    @app.get('/api/connector/status')
+    def connector_status():
+        import json
+        with store.db() as c:rows=c.execute('SELECT * FROM connector_status ORDER BY updated DESC LIMIT 10').fetchall()
+        return {'items':[{'scope':r['scope'],'status':json.loads(r['status']),'updated':r['updated']} for r in rows]}
     prefix='/api/v1/projects/{project_id}/runs/{run_id}/chatgpt-exchanges'
     def checked_scope(project_id,run_id):
         if project_id!=run_id:raise HTTPException(404,'Scope not found')
