@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, os, re, sqlite3, time, uuid
+import hashlib, json, os, re, sqlite3, time, uuid, unicodedata
 from pathlib import Path
 from datetime import datetime
 from contextlib import contextmanager
@@ -13,6 +13,12 @@ def digest(path):
     with open(path,'rb') as f:
         for b in iter(lambda:f.read(1024*1024), b''): h.update(b)
     return h.hexdigest()
+
+def output_slug(text):
+    """Readable ASCII slug for generated output folder names."""
+    text=text.replace('đ','d').replace('Đ','D')
+    text=''.join(ch for ch in unicodedata.normalize('NFD',text) if not unicodedata.combining(ch))
+    return re.sub(r'[^a-z0-9]+','-',text.lower()).strip('-')[:60].rstrip('-') or 'video'
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
@@ -70,7 +76,7 @@ class Store:
                 if row['request']!=raw: raise ValueError('Idempotency key already used for a different request')
                 return self.get(row['id']),False
             j=str(uuid.uuid4()); self.outputs.mkdir(parents=True,exist_ok=True)
-            slug=re.sub(r'[^a-z0-9]+','-',data['idea'].lower()).strip('-')[:60] or 'video'
+            slug=output_slug(data['idea'])
             name=slug+'-'+datetime.now().strftime('%Y%m%d-%H%M%S')
             output=self.outputs/name
             try: output.mkdir()

@@ -20,6 +20,9 @@ class DurableTests(unittest.TestCase):
         a,new=self.s.create(REQUEST,'key');b,new2=self.s.create(REQUEST,'key');c,_=self.s.create(REQUEST,'other')
         self.assertTrue(new);self.assertFalse(new2);self.assertEqual(a['id'],b['id']);self.assertNotEqual(a['output'],c['output'])
         with self.assertRaises(ValueError):self.s.create(dict(REQUEST,idea='Different'),'key')
+    def test_output_directory_transliterates_vietnamese_title(self):
+        j,_=self.s.create({**REQUEST,'idea':'Cá trích ướp muối'},'vietnamese-title')
+        self.assertRegex(Path(j['output']).name,r'^ca-trich-uop-muoi-\d{8}-\d{6}$')
     def test_recovery_keeps_checkpoints(self):
         calls=[];j,_=self.s.create(REQUEST,'key');w=Worker(self.s,self.handlers(calls));w.step();w.step()
         fresh=Store(self.root/'jobs.db',self.root/'out');w=Worker(fresh,self.handlers(calls))
