@@ -62,16 +62,37 @@ class ChromeChatGPTBridge:
         saved = self.journal.conversation(job)
         result = await self.cdp.command('Target.getTargets')
         targets = result.get('targetInfos', [])
+        target = None
         if saved:
             for t in targets:
                 if t.get('targetId') == saved['target'] and t.get('type') == 'page' and valid_chat_url(t.get('url','')):
                     # Never commandeer a different conversation the user navigated to.
                     if t['url'].split('?')[0].rstrip('/') == saved['url'].split('?')[0].rstrip('/'):
-                        return t['targetId']
-        url = saved['url'] if saved else 'https://chatgpt.com/'
-        created = await self.cdp.command('Target.createTarget', {'url':url})
-        target = created['targetId']
-        self.journal.set_conversation(job, url, target)
+                        target = t['targetId']
+                        break
+        else:
+            # Reuse active ChatGPT tab if one already exists
+            for t in targets:
+                if t.get('type') == 'page' and valid_chat_url(t.get('url','')):
+                    target = t['targetId']
+                    self.journal.set_conversation(job, t.get('url', 'https://chatgpt.com/'), target)
+                    break
+        if not target:
+            url = saved['url'] if saved else 'https://chatgpt.com/'
+            created = await self.cdp.command('Target.createTarget', {'url':url})
+            target = created['targetId']
+            self.journal.set_conversation(job, url, target)
+
+        # Close all other page tabs to keep only one active tab and save RAM
+        for t in targets:
+            tid = t.get('targetId')
+            if t.get('type') == 'page' and tid != target:
+                try:
+                    await self.cdp.command('Target.closeTarget', {'targetId': tid})
+                    self.sessions.pop(tid, None)
+                except BaseException:
+                    pass
+
         return target
 
     async def session(self, target):

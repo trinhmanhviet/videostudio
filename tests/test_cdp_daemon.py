@@ -39,6 +39,23 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tid,'new')
         self.assertEqual(self.bridge.cdp.command.call_args_list[1].args[0],'Target.createTarget')
         self.assertEqual(self.bridge.cdp.command.call_args_list[1].args[1]['url'],'https://chatgpt.com/c/owned')
+    async def test_reuses_existing_chat_tab_for_new_job_and_closes_extra_tabs(self):
+        self.bridge.cdp=MagicMock()
+        self.bridge.cdp.close=AsyncMock()
+        self.bridge.cdp.command=AsyncMock(side_effect=[
+            {'targetInfos':[
+                {'targetId':'tab1','url':'https://chatgpt.com/','type':'page'},
+                {'targetId':'tab2','url':'https://chatgpt.com/c/old','type':'page'},
+                {'targetId':'blank','url':'about:blank','type':'page'}
+            ]},
+            {},
+            {}
+        ])
+        tid=await self.bridge.ensure_tab('new-job')
+        self.assertEqual(tid,'tab1')
+        closed=[c.args[1]['targetId'] for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Target.closeTarget']
+        self.assertEqual(closed,['tab2','blank'])
+        self.assertEqual(self.bridge.journal.conversation('new-job')['target'],'tab1')
     async def test_target_destroyed_invalidates_session(self):
         self.bridge.sessions['a']='session'
         self.bridge.on_event({'method':'Target.targetDestroyed','params':{'targetId':'a'}})
