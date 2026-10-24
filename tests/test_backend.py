@@ -93,6 +93,7 @@ class MediaTests(unittest.TestCase):
                     f.setparams((1,2,16000,0,'NONE','not compressed'));f.writeframes(b''.join(struct.pack('<h',int(1500*math.sin(2*math.pi*freq*i/16000))) for i in range(32000)))
             (p/'subtitles.srt').write_text('1\n00:00:00,000 --> 00:00:02,000\nCPU integration fixture\n')
             r=render(p/'image.png',p/'speech.wav',p/'music.wav',p/'subtitles.srt',p/'video.mp4',2,lambda:None)
+            self.assertFalse((p/'visual-disclosure.txt').exists(), 'Viewer video must not carry the AI-reconstruction banner')
             self.assertTrue(verify(r['video'],2)['verified'])
             self.assertEqual({s['codec_type'] for s in probe(r['video'])['streams']},{'video','audio'})
             with self.assertRaises(PermanentError):verify(r['video'],20)

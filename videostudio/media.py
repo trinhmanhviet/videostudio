@@ -69,10 +69,9 @@ def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffp
     music=prepared_music['path']
     # Scene-level subtitle cues are authored from actual utterance intervals.
     sub=Path(subtitles).name
-    (target.parent/'visual-disclosure.txt').write_text('Hình minh họa tạo bằng AI',encoding='utf8')
     fade=min(1.5,seconds/5)
     vol=max(0.0,min(1.0,float(music_volume)))
-    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,drawtext=textfile=visual-disclosure.txt:font=Arial:fontcolor=white@0.72:fontsize=28:x=90:y=90,subtitles=filename={sub}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume={vol:.2f},aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.08:ratio=2.5:attack=30:release=400[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false[mix]'
+    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,subtitles=filename={sub}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume={vol:.2f},aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.08:ratio=2.5:attack=30:release=400[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false[mix]'
     # Filter paths are relative to output directory; no shell and no user filter text.
     args=[ffmpeg,'-y','-loop','1','-i',str(Path(image[0]['path'] if isinstance(image,list) else image).resolve()),'-i',str(Path(speech).resolve()),'-i',str(Path(music).resolve()),'-filter_complex',filt,'-map','[v]','-map','[mix]','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',str(tmp.resolve())]
     if isinstance(image,list):
