@@ -81,7 +81,15 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         # Informational heartbeat only, never grants authorization or readiness.
         allowed={k:data[k] for k in ('build','stage','connected','enabled') if k in data and isinstance(data[k],(str,bool))}
         import json
-        with store.db() as c:c.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)',(scope,json.dumps(allowed),time.time()))
+        with store.db() as c:
+            previous=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(scope,)).fetchone()
+            # A second Studio tab reports other_run; it must not replace the
+            # fresh owner-tab heartbeat. This remains informational, not auth.
+            if previous:
+                old=json.loads(previous['status'])
+                if allowed.get('stage')=='other_run' and old.get('enabled') is True and old.get('build')==allowed.get('build') and time.time()-previous['updated']<30:
+                    return {'recorded':False,'reason':'non_owner_tab'}
+            c.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)',(scope,json.dumps(allowed),time.time()))
         return {'recorded':True}
     @app.post('/api/connector/smoke/{scope}')
     def smoke_connector(scope:str,request:Request):
