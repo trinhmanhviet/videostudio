@@ -45,7 +45,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS attempts(job TEXT, stage TEXT, count INTEGER NOT NULL, PRIMARY KEY(job,stage));
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, at REAL, stage TEXT, event TEXT, detail TEXT);
             CREATE TABLE IF NOT EXISTS worker_lock(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT, expires REAL);
-            CREATE TABLE IF NOT EXISTS recovery_grants(job TEXT,stage TEXT,attempt_limit INTEGER NOT NULL,reason TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(job,stage));''')
+            CREATE TABLE IF NOT EXISTS recovery_grants(job TEXT,stage TEXT,attempt_limit INTEGER NOT NULL,reason TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(job,stage));
+            CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY, created REAL NOT NULL);''')
     @contextmanager
     def db(self):
         c=sqlite3.connect(self.path,timeout=10); c.row_factory=sqlite3.Row
@@ -77,6 +78,7 @@ class Store:
                 output=self.outputs/(name+'-'+j[:8]); output.mkdir()
             (output/'brief.json').write_text(json.dumps({'job_id':j,**data},ensure_ascii=False,indent=2),encoding='utf8')
             now=time.time()
+            c.execute('INSERT OR IGNORE INTO projects VALUES(?,?)',(data.get('project','Dự án mặc định'),now))
             c.execute('INSERT INTO jobs(id,idem,request,state,output,created,updated) VALUES(?,?,?,?,?,?,?)',(j,key,raw,'queued',str(output),now,now))
             if connector_scope:
                 bound=c.execute('UPDATE connector_scopes SET job=? WHERE id=? AND job IS NULL',(j,connector_scope))

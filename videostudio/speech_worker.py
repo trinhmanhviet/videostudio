@@ -11,6 +11,13 @@ def main():
         except Exception:pass
         os.environ['PATH']=torch_lib+';'+os.environ.get('PATH','')
     os.environ.update(HF_HOME=str(cache),HF_HUB_CACHE=str(cache/'hub'),HUGGINGFACE_HUB_CACHE=str(cache/'hub'),HF_MODULES_CACHE=str(cache/'modules'),HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
+    import onnxruntime as ort
+    _orig_session=ort.InferenceSession
+    def _gpu_sess(path,*args,**kwargs):
+        if kwargs.get('providers')==['CPUExecutionProvider'] and 'CUDAExecutionProvider' in ort.get_available_providers() and os.getenv('VS_SPEECH_DEVICE','cuda')!='cpu':
+            kwargs['providers']=['CUDAExecutionProvider','CPUExecutionProvider']
+        return _orig_session(path,*args,**kwargs)
+    ort.InferenceSession=_gpu_sess
     from vieneu import Vieneu
     tts=Vieneu(backend='onnx')
     v=d['voice']

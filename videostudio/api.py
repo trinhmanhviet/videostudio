@@ -50,27 +50,28 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         err=j.get('error')
         if not err:return None
         stage=j.get('stage')
-        reason='Tác vụ bị gián đoạn ở bước '+str(stage)
-        suggestion='Bạn có thể bấm "Thử lại bước này" để hệ thống tiếp tục xử lý.'
+        reason='Tác vụ dừng ở bước '+str(stage)
+        suggestion='Kiểm tra chi tiết lỗi bên dưới và bấm Thử lại khi đã điều chỉnh.'
         if stage=='script' and 'Script quality' in err:
-            reason='Kịch bản chưa đạt yêu cầu kiểm chứng hoặc đang bị lệch khỏi trọng tâm ý tưởng gốc.'
-            if any(k in err for k in ('ẩm thực','Valencia','Sicily','nông nghiệp','lạc đề')):
-                reason='Kịch bản thiên về ẩm thực nói chung, thiếu tư liệu lịch sử canh tác nông nghiệp lúa nước tại châu Âu.'
-                suggestion='Bổ sung địa danh hoặc chi tiết nông nghiệp cụ thể vào ý tưởng: "Kỹ thuật canh tác lúa của nông dân Valencia (Tây Ban Nha) và Sicily thời Trung cổ, hệ thống đắp bờ dẫn nước và các sản phẩm từ hạt gạo và rơm lúa".'
-            elif 'quote' in err.lower() or 'evidence' in err.lower():
-                reason='Tư liệu tìm được chưa đủ các câu trích dẫn nguyên văn để chứng thực lịch sử.'
-                suggestion='Bổ sung tên nhân vật, mốc niên đại hoặc địa danh cụ thể vào ý tưởng để AI tìm kiếm nguồn tư liệu chính xác hơn.'
-            else:
-                suggestion='Thử bổ sung thêm bối cảnh lịch sử hoặc địa điểm cụ thể vào ý tưởng rồi bấm Thử lại.'
+            reason='Kịch bản chưa đáp ứng tiêu chí kiểm chứng thực tế hoặc đang lệch khỏi trọng tâm ý tưởng ban đầu.'
+            if '[' in err and ']' in err:
+                try:
+                    import ast
+                    raw_issues=err.split('Script quality/grounding retry budget exhausted: ',1)[-1]
+                    issues=ast.literal_eval(raw_issues)
+                    if isinstance(issues,list) and issues:
+                        reason=' '.join(str(x) for x in issues[:2])
+                except Exception:pass
+            suggestion='Để kịch bản vượt qua bước kiểm chứng, bạn nên bổ sung các chi tiết cụ thể (như mốc thời gian, nhân vật, địa danh, hoặc bối cảnh thực tế) vào ý tưởng video rồi tạo lại.'
         elif stage=='speech' and 'Duration' in err:
-            reason='Thời lượng lời đọc thực tế bị lệch quá nhiều so với số giây yêu cầu.'
-            suggestion='Tăng thêm nội dung ý tưởng hoặc điều chỉnh số giây để khớp với tốc độ đọc tự nhiên.'
+            reason='Thời lượng lời đọc thực tế chênh lệch quá ngưỡng cho phép so với thời lượng video yêu cầu.'
+            suggestion='Điều chỉnh độ dài ý tưởng hoặc tăng/giảm số giây đặt cho video để khớp với tốc độ đọc tự nhiên.'
         elif stage=='images' and ('10061' in err or 'refused' in err):
-            reason='Mất kết nối với ComfyUI trên cổng 8188 trong lúc tạo hình ảnh.'
-            suggestion='Kiểm tra cửa sổ ComfyUI đang chạy trên máy rồi bấm Thử lại.'
+            reason='Không thể kết nối tới ComfyUI trên cổng 8188 trong giai đoạn tạo hình ảnh.'
+            suggestion='Hãy đảm bảo ComfyUI đang hoạt động trên máy rồi bấm Thử lại bước này.'
         elif 'Chrome' in err or 'connector' in err:
-            reason='Mất kết nối hoặc phiên đăng nhập ChatGPT trên Chrome riêng chưa sẵn sàng.'
-            suggestion='Bấm "Kiểm tra kết nối" hoặc "Mở Chrome riêng" để xác nhận đăng nhập ChatGPT.'
+            reason='Mất kết nối hoặc phiên Chrome riêng chưa sẵn sàng tương tác với ChatGPT.'
+            suggestion='Bấm "Kiểm tra kết nối" hoặc "Mở Chrome riêng" để xác thực trạng thái đăng nhập.'
         return {'reason':reason,'suggestion':suggestion}
     def public_job(j):
         with store.db() as c:owner=c.execute('SELECT id FROM connector_scopes WHERE job=?',(j['id'],)).fetchone()
@@ -92,6 +93,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def get_projects():
         with store.db() as c:
             rows=c.execute('SELECT id, request, state, stage, created, output FROM jobs ORDER BY created DESC').fetchall()
+            p_rows=c.execute('SELECT name, created FROM projects ORDER BY created DESC').fetchall()
         projects_dict={}
         for r in rows:
             try:req=json.loads(r['request'])
@@ -120,10 +122,21 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                     projects_dict[pname]['thumbnail']=thumb
                 if not projects_dict[pname]['latest_video'] and out_url:
                     projects_dict[pname]['latest_video']=out_url
+        for pr in p_rows:
+            if pr['name'] not in projects_dict:
+                projects_dict[pr['name']]={'name':pr['name'],'count':0,'latest_id':None,'latest_state':None,'latest_stage':None,'latest_created':pr['created'],'latest_video':None,'thumbnail':None,'idea':''}
         if 'Dự án mặc định' not in projects_dict:
             projects_dict['Dự án mặc định']={'name':'Dự án mặc định','count':0,'latest_id':None,'latest_state':None,'latest_stage':None,'latest_created':time.time(),'latest_video':None,'thumbnail':None,'idea':''}
         items=sorted(list(projects_dict.values()),key=lambda x:x['latest_created'] or 0,reverse=True)
         return {'items':items,'projects':[x['name'] for x in items]}
+    @app.post('/api/projects')
+    def create_project(data:dict,request:Request):
+        same_origin(request)
+        pname=data.get('name','').strip()
+        if not pname or len(pname)>200:raise HTTPException(422,'Tên dự án không hợp lệ')
+        with store.db() as c:
+            c.execute('INSERT OR IGNORE INTO projects VALUES(?,?)',(pname,time.time()))
+        return {'ok':True,'name':pname}
     @app.post('/api/jobs/{job_id}/retry')
     def retry_job(job_id:str,data:dict|None=None,request:Request=None):
         if request:same_origin(request)

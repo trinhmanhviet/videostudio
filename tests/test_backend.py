@@ -100,10 +100,12 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(c.post('/api/jobs',json=REQUEST,headers={'Idempotency-Key':'b','Origin':'https://evil.example'}).status_code,403)
                 self.assertEqual(c.get('/api/jobs/'+jid+'/files/video.mp4').status_code,404)
                 self.assertEqual(c.post('/api/jobs/'+jid+'/cancel').json()['state'],'cancelled')
-                # Test project scoping and listing
+                # Test project scoping, empty project creation, and listing
+                c.post('/api/projects',json={'name':'Empty Studio Project'})
                 c.post('/api/jobs',json={**REQUEST,'project':'Egg Coffee'},headers={'Idempotency-Key':'p1'})
                 projects=c.get('/api/projects').json()['projects']
                 self.assertIn('Egg Coffee',projects)
+                self.assertIn('Empty Studio Project',projects)
                 self.assertIn('Dự án mặc định',projects)
                 # Test system logs endpoint
                 logs=c.get('/api/system/logs').json()

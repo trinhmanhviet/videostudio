@@ -91,11 +91,14 @@ $('#btnBackToGallery').onclick=()=>{
   $('#viewGallery').hidden=false;
   loadProjects();
 };
-$('#btnCreateNewProject').onclick=()=>{
+$('#btnCreateNewProject').onclick=async()=>{
   const name=prompt('Nhập tên dự án mới:','');
   if(name&&name.trim()){
-    openProject(name.trim());
+    const clean=name.trim();
+    try{await api('/api/projects',{method:'POST',body:JSON.stringify({name:clean})});}catch(e){}
+    openProject(clean);
     $('#idea').value='';
+    await loadProjects();
   }
 };
 
