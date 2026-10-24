@@ -462,8 +462,8 @@ class Pipeline:
         return {'narration':' '.join(s['narration'] for s in all_new_scenes),'source_paths':previous.get('source_paths',[]),'scenes':all_new_scenes,'chapters':chapters}
     def speech(self,j,check):
         from .captions import wrap_caption
-        budget=int(os.getenv('VS_DURATION_REWRITE_ATTEMPTS','3'))
-        if not 1<=budget<=4:raise PermanentError('Invalid duration rewrite budget')
+        budget=int(os.getenv('VS_DURATION_REWRITE_ATTEMPTS','4'))
+        if not 1<=budget<=5:raise PermanentError('Invalid duration rewrite budget')
         for attempt in range(budget):
             check();revision=Path(j['output'])/f'narration-attempt-{attempt:02}'
             revision.mkdir(exist_ok=True)
