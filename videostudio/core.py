@@ -91,6 +91,23 @@ class Store:
                 if bound.rowcount!=1:raise ValueError('Connector scope is unavailable')
             self.event(c,j,None,'created')
         return self.get(j),True
+    def create_derived(self, parent_job_id, new_voice_id, key=None):
+        parent=self.get(parent_job_id)
+        if parent['state']!='completed':
+            raise ValueError('Chỉ có thể đổi giọng cho video đã hoàn tất')
+        data=dict(parent['request'], voice_id=new_voice_id)
+        if not key:
+            key=str(uuid.uuid4())
+        new_job, _ = self.create(data, key)
+        nid = new_job['id']
+        with self.db() as c:
+            for stage in ('plan', 'research', 'script', 'images', 'music'):
+                if stage in parent['checkpoints']:
+                    val=json.dumps(parent['checkpoints'][stage], ensure_ascii=False)
+                    c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)', (nid, stage, val))
+            c.execute("UPDATE jobs SET stage='speech', updated=? WHERE id=?", (time.time(), nid))
+            self.event(c, nid, 'speech', 'voice_changed', f"Đổi giọng đọc từ video {parent_job_id} sang {new_voice_id}")
+        return self.get(nid)
     def get(self,j):
         with self.db() as c:
             r=c.execute('SELECT * FROM jobs WHERE id=?',(j,)).fetchone()

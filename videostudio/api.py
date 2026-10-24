@@ -154,6 +154,18 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             c.execute("UPDATE jobs SET state='queued',error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),job_id))
             store.event(c,job_id,stage,'retried','Người dùng yêu cầu thử lại bước '+str(stage))
         return public_job(store.get(job_id))
+    @app.post('/api/jobs/{job_id}/change-voice')
+    def change_voice(job_id:str,data:dict,request:Request):
+        same_origin(request)
+        new_voice=data.get('voice_id','').strip()
+        if not new_voice:raise HTTPException(422,'Vui lòng chọn giọng đọc mới')
+        try:voices.selected(new_voice)
+        except Exception as e:raise HTTPException(422,f'Giọng đọc không khả dụng: {e}')
+        try:
+            job=store.create_derived(job_id,new_voice)
+            return public_job(job)
+        except KeyError:raise HTTPException(404,'Job not found')
+        except ValueError as e:raise HTTPException(400,str(e))
     @app.get('/api/system/logs')
     def system_logs():
         with store.db() as c:
