@@ -6,7 +6,7 @@ from html.parser import HTMLParser
 from urllib.parse import urlparse,urljoin
 from pathlib import Path
 import httpx
-ALLOWED=('wikipedia.org','britannica.com','si.edu','nasa.gov','loc.gov','archives.gov','gov.vn')
+ALLOWED=('wikipedia.org','britannica.com','si.edu','nasa.gov','loc.gov','archives.gov','gov.vn','bl.uk','history.ac.uk','medievalists.net','english-heritage.org.uk')
 class PlainText(HTMLParser):
     def __init__(self):super().__init__();self.skip=0;self.parts=[]
     def handle_starttag(self,tag,attrs):
