@@ -22,7 +22,7 @@ def probe(path,ffprobe='ffprobe'):
 
 def asset(path):return {'path':str(Path(path).resolve()),'sha256':digest(path)}
 
-def audio_report(path,check,ffmpeg='ffmpeg'):
+def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.001):
     import array,math
     raw=run([ffmpeg,'-v','error','-i',path,'-ar','16000','-ac','1','-f','f32le','-'],check)
     if not raw or len(raw)>100000000:raise PermanentError('Empty/oversized audio analysis')
@@ -30,7 +30,7 @@ def audio_report(path,check,ffmpeg='ffmpeg'):
     if not all(math.isfinite(x) for x in values):raise PermanentError('Nonfinite audio samples')
     rms=math.sqrt(sum(x*x for x in values)/len(values));peak=max(abs(x) for x in values)
     clipped=sum(abs(x)>=.999 for x in values)/len(values)
-    if rms<.001 or peak>1.001 or clipped>.001:raise PermanentError('Silent or clipped audio')
+    if rms<.001 or peak>peak_limit or clipped>.001:raise PermanentError('Silent or clipped audio')
     return {'full_decode_ok':True,'finite_samples':True,'rms':rms,'peak':peak,'clipped_fraction':clipped,'semantic_completeness_verified':False}
 
 def visual_track(scenes,output,check,ffmpeg='ffmpeg'):
@@ -71,7 +71,7 @@ def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffp
     sub=Path(subtitles).name
     (target.parent/'visual-disclosure.txt').write_text('Hình minh họa tạo bằng AI',encoding='utf8')
     fade=min(1.5,seconds/5)
-    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,drawtext=textfile=visual-disclosure.txt:font=Arial:fontcolor=white@0.72:fontsize=28:x=90:y=90,subtitles=filename={sub}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume=0.12,aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.025:ratio=6:attack=20:release=300[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[mix]'
+    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,drawtext=textfile=visual-disclosure.txt:font=Arial:fontcolor=white@0.72:fontsize=28:x=90:y=90,subtitles=filename={sub}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume=0.12,aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.025:ratio=6:attack=20:release=300[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false[mix]'
     # Filter paths are relative to output directory; no shell and no user filter text.
     args=[ffmpeg,'-y','-loop','1','-i',str(Path(image[0]['path'] if isinstance(image,list) else image).resolve()),'-i',str(Path(speech).resolve()),'-i',str(Path(music).resolve()),'-filter_complex',filt,'-map','[v]','-map','[mix]','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',str(tmp.resolve())]
     if isinstance(image,list):

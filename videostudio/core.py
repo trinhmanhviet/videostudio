@@ -87,7 +87,7 @@ class Store:
     def attempt_limit(self,j,stage,base=3):
         with self.db() as c:r=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
         return r['attempt_limit'] if r else base
-    def resume(self,j,scope,base=3):
+    def resume(self,j,scope,base=3,actor='owner'):
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT * FROM jobs WHERE id=?',(j,)).fetchone()
@@ -95,7 +95,14 @@ class Store:
             owner=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()
             if not owner or owner['job']!=j:raise ValueError('Connector scope does not own this job')
             if row['state'] not in ('failed','cancelled'):raise ValueError('Only failed/cancelled job may be continued')
-            if row['state']=='failed' and 'Chrome connector response unavailable' not in (row['error'] or ''):raise ValueError('Failure needs targeted repair, not a generic retry')
+            connector_failure='Chrome connector response unavailable' in (row['error'] or '')
+            comfy_recovery=False
+            if row['stage']=='music':
+                from .comfy_recovery import resolve_music_kind
+                comfy_recovery=resolve_music_kind(row['output'])!='music'
+            if actor not in ('owner','service_recovery'):raise ValueError('Invalid resume actor')
+            if actor=='service_recovery' and (not comfy_recovery or row['state']!='failed' or row['cancel']):raise ValueError('Service recovery requires a failed job and attested crash journal; never resume explicit cancellation')
+            if row['state']=='failed' and not connector_failure and not comfy_recovery:raise ValueError('Failure needs targeted repair, not a generic retry')
             checkpoints={r['stage'] for r in c.execute('SELECT stage FROM checkpoints WHERE job=?',(j,))}
             stage=next((s for s in STAGES if s not in checkpoints),None)
             if stage is None:raise ValueError('Job already has all checkpoints')
@@ -103,12 +110,16 @@ class Store:
             grant=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
             limit=grant['attempt_limit'] if grant else base
             if count>=limit:
-                if grant:raise ValueError('One-time recovery allowance exhausted; attempts are preserved')
-                if count!=base:raise ValueError('Unexpected attempt history; no recovery budget granted')
-                limit=base+1
-                c.execute('INSERT INTO recovery_grants VALUES(?,?,?,?,?)',(j,stage,limit,'explicit owner continuation after connector repair',time.time()))
+                if row['stage']=='music' and (Path(row['output'])/'music.mp3').is_file() and 'Silent or clipped audio' in (row['error'] or ''):
+                    limit=count+1
+                    c.execute('INSERT OR REPLACE INTO recovery_grants VALUES(?,?,?,?,?)',(j,stage,limit,'music normalization applied after MP3 peak overshoot',time.time()))
+                elif grant:raise ValueError('One-time recovery allowance exhausted; attempts are preserved')
+                elif count!=base:raise ValueError('Unexpected attempt history; no recovery budget granted')
+                else:
+                    limit=base+1
+                    c.execute('INSERT INTO recovery_grants VALUES(?,?,?,?,?)',(j,stage,limit,'confirmed Comfy native-crash recovery' if comfy_recovery else 'explicit owner continuation after connector repair',time.time()))
             c.execute("UPDATE jobs SET state='queued',cancel=0,error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),j))
-            self.event(c,j,stage,'owner_resume',f'Keep checkpoints and {count} prior attempts; effective limit {limit}; no exchange resubmission')
+            self.event(c,j,stage,'service_crash_resume' if actor=='service_recovery' else 'owner_resume',f'Keep checkpoints and {count} prior attempts; effective limit {limit}; old receipts preserved')
         return self.get(j)
     def active(self,j):
         if self.get(j)['cancel']: raise Cancelled()

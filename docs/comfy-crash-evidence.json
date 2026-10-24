@@ -1,0 +1,15 @@
+{
+  "event": "Windows Application Error 1000 / WER1001 APPCRASH",
+  "at": "2026-10-24T11:40:21+07:00",
+  "process_id": 23236,
+  "application": "python_embeded/python.exe",
+  "faulting_module": "torch_cpu.dll",
+  "exception_code": "0xc0000005",
+  "last_comfy_event": "got prompt for music",
+  "old_process_absent": true,
+  "port_8188_not_listening": true,
+  "old_prompt_id": "819f94b9-fd49-4f64-8dee-611e665ab0c8",
+  "music_output_found": false,
+  "root_native_cause_confirmed": false,
+  "no_resubmission_performed": true
+}

@@ -112,6 +112,9 @@ class Pipeline:
         does not provide a server-side idempotency key. No global /interrupt calls.
         """
         receipt=Path(j['output'])/(kind+'-receipt.json')
+        if Path(path).is_file() and Path(path).stat().st_size>0 and receipt.exists():
+            saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
+            if pid:return {'path':str(path),'prompt_id':pid,'assets':[asset(path)]}
         with httpx.Client(base_url=self.comfy+'/',timeout=30) as c:
             if receipt.exists():
                 saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
@@ -309,14 +312,18 @@ class Pipeline:
         check()
         if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
         prompt='Instrumental only, no vocals. '+j['checkpoints']['plan']['music_prompt'][:500]
-        graph=music_graph(prompt,j['request']['duration_seconds'],int(j['id'].replace('-','')[:8],16),'videostudio/'+j['id']+'-music')
-        path=Path(j['output'])/'music.mp3';result=self.comfy_asset(j,'music',graph,path,check)
+        from .comfy_recovery import resolve_music_kind
+        kind=resolve_music_kind(j['output'])
+        graph=music_graph(prompt,j['request']['duration_seconds'],int(j['id'].replace('-','')[:8],16),'videostudio/'+j['id']+'-'+kind)
+        path=Path(j['output'])/'music.mp3';result=self.comfy_asset(j,kind,graph,path,check)
+        result['recovery_kind']=kind
         run([self.ffmpeg,'-v','error','-i',path,'-f','null','-'],check)
         seconds=float(probe(path,self.ffprobe)['format']['duration'])
         if seconds<1:raise PermanentError('Empty music output')
-        from .media import audio_report
-        quality=audio_report(path,check,self.ffmpeg)
-        result.update(duration_seconds=seconds,audio_quality=quality,full_decode_ok=True,license_reviewed=False)
+        from .music import normalize_music_levels
+        normalized=normalize_music_levels(path,j['output'],check,self.ffmpeg)
+        result.update(duration_seconds=seconds,path=normalized['path'],raw_path=str(path),audio_quality=normalized['audio_quality'],raw_audio_quality=normalized['raw_audio_quality'],full_decode_ok=True,license_reviewed=False)
+        result['assets'].extend(normalized['assets'])
         return result
     def render(self,j,check):
         cp=j['checkpoints'];return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe)
