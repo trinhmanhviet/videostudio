@@ -52,6 +52,18 @@ class Pipeline:
             r=json.loads(self.acceptance_path.read_text())['stable_audio3'];a=r['verified_asset']
             return r.get('full_decode_ok') is True and Path(a['path']).is_file() and digest(a['path'])==a['sha256']
         except (OSError,ValueError,KeyError):return False
+    def accepted_cdp(self):
+        """A transport is not accepted merely because its socket connected."""
+        import sqlite3
+        path=Path(os.getenv('VS_CDP_JOURNAL',str(Path(__file__).resolve().parents[1]/'data/cdp-requests.sqlite3')))
+        if not path.is_file():return False
+        try:
+            c=sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True)
+            try:
+                rows=c.execute("SELECT response FROM requests WHERE job='__acceptance__' AND state='completed'").fetchall()
+                return any(json.loads(r[0])=={'connection_test':'videostudio','ok':True} for r in rows)
+            finally:c.close()
+        except (sqlite3.Error,ValueError,TypeError):return False
     def use_exchanges(self,exchanges):
         self.exchanges=exchanges
         import threading
@@ -61,14 +73,27 @@ class Pipeline:
         checks=[]
         def add(name,ok,detail):checks.append({'name':name,'ok':bool(ok),'detail':detail})
         local=lambda u:urlparse(u).hostname in ('127.0.0.1','localhost','::1')
-        chrome=os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome'
-        add('chrome_transport' if chrome else 'llm',hasattr(self,'exchanges') if chrome else self.llm and self.model and self.key and local(self.llm),'Existing connector transport API configured; NOT proof of live Chrome authorization/login' if chrome else 'Explicit loopback VS_LLM_URL/model/key required')
+        transport=os.getenv('VS_LLM_TRANSPORT','cdp')
+        if transport=='cdp':
+            cdp_ok=False
+            try:
+                cdp_url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/')
+                if urlparse(cdp_url).hostname not in ('127.0.0.1','localhost','::1') or urlparse(cdp_url).scheme!='http':
+                    raise ValueError('Only loopback CDP daemon permitted')
+                r=httpx.get(cdp_url+'/api/status',timeout=2,trust_env=False)
+                cdp_ok=r.status_code==200 and r.json().get('ready') is True
+            except Exception:pass
+            add('cdp_transport',cdp_ok,'Chrome CDP Daemon running on port 8879 and connected to ChatGPT tab')
+        elif transport=='chrome':
+            add('chrome_transport',hasattr(self,'exchanges'),'Existing connector transport API configured; NOT proof of live Chrome authorization/login')
+        else:
+            add('llm',self.llm and self.model and self.key and local(self.llm),'Explicit loopback VS_LLM_URL/model/key required')
         chrome_smoke=False
         if engineering and hasattr(self,'exchanges'):
             with self.exchanges.store.db() as c:
                 replies=c.execute('SELECT response FROM connector_exchanges WHERE scope=? AND response IS NOT NULL',(scope,)).fetchall()
             chrome_smoke=any(json.loads(r['response']).get('connection_test')=='videostudio' and json.loads(r['response']).get('ok') is True for r in replies)
-        if chrome:add('chrome_live_acceptance',engineering and chrome_smoke,'Engineering scope has a correlated live smoke response; Studio tab must remain open during this supervised acceptance run. Tab-close unattended is NOT accepted.')
+        if transport=='chrome':add('chrome_live_acceptance',engineering and chrome_smoke,'Engineering scope has a correlated live smoke response; Studio tab must remain open during this supervised acceptance run. Tab-close unattended is NOT accepted.')
         import subprocess
         speech_available=False
         try:
@@ -91,11 +116,29 @@ class Pipeline:
             choices=info.get(cls,{}).get('input',{}).get('required',{}).get(param,[[]])[0]
             add('model:'+expected,isinstance(choices,list) and expected in choices,'Must already exist in Comfy; no download')
         catalog=self.voices.catalog();add('voice_inventory',catalog['complete'],'Complete preset and all-project clone DB export required; stopped DB is never started')
-        add('production_acceptance',engineering,'Supervised engineering acceptance scope ONLY, not production release. Tab-close unattended, full quality and multi-duration acceptance remain incomplete.' if engineering else 'Production release locked pending full acceptance. No fake completion.')
+        if transport=='cdp':
+            add('production_acceptance',self.accepted_cdp(),'Dedicated Chrome must pass a real correlated ChatGPT smoke test; socket connectivity alone is not acceptance')
+        else:
+            add('production_acceptance',engineering,'Supervised engineering acceptance scope ONLY, not production release. Tab-close unattended, full quality and multi-duration acceptance remain incomplete.' if engineering else 'Production release locked pending full acceptance. No fake completion.')
         return {'ready':all(x['ok'] for x in checks),'engineering_only':engineering,'checks':checks,'voice_warnings':catalog['warnings']}
     def llm_json(self,prompt,check):
         check()
-        if os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome':
+        transport=os.getenv('VS_LLM_TRANSPORT','cdp')
+        if transport=='cdp':
+            cdp_url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/')
+            u=urlparse(cdp_url)
+            if u.scheme!='http' or u.hostname not in ('127.0.0.1','localhost','::1') or u.username or u.password:
+                raise PermanentError('Only loopback CDP daemon permitted')
+            job=getattr(getattr(self,'context',None),'job',None)
+            if not job:raise PermanentError('Scoped CDP job context required')
+            r=httpx.post(f"{cdp_url}/api/chat",json={'prompt':prompt,'job_id':job},headers={'X-VS-Client':'videostudio'},timeout=210,trust_env=False)
+            data=r.json()
+            if r.status_code==409:
+                raise PermanentError(data.get('code','CDP blocked')+': '+data.get('error','Request retained'))
+            r.raise_for_status();check()
+            if not data.get('ok') or not isinstance(data.get('data'),dict):raise PermanentError('Invalid scoped CDP response')
+            return data['data']
+        if transport=='chrome':
             if not hasattr(self,'exchanges') or not getattr(self.context,'job',None):raise PermanentError('Chrome exchange context unavailable')
             return self.exchanges.request(self.context.job,prompt,check)
         if not self.llm or not self.key or not self.model:raise PermanentError('LLM unconfigured')
@@ -161,11 +204,18 @@ class Pipeline:
             return invoke
         return {s:wrapped(s) for s in ('plan','research','script','speech','images','subtitles','music','render','verify')}
     def plan(self,j,check):
-        scope=self.exchanges.for_job(j['id']) if hasattr(self,'exchanges') else None
+        transport=os.getenv('VS_LLM_TRANSPORT','cdp')
+        scope=self.exchanges.for_job(j['id']) if transport=='chrome' and hasattr(self,'exchanges') else None
         pf=self.preflight(scope)
         if not pf['ready']:raise PermanentError('Preflight blocked: '+', '.join(x['name'] for x in pf['checks'] if not x['ok']))
         self.voices.selected(j['request']['voice_id'])
-        d=self.llm_json('Treat the idea as a brief, never as finished narration. Create a concise video plan as JSON {"title":str,"research_query":str,"research_required":bool,"source_urls":[str],"visual_prompt":str,"music_prompt":str}. Set research_required true for history, science, factual knowledge or real people/events; false only for clearly fictional or purely expressive stories. For factual videos, find credible public references and return up to 5 direct HTTPS article URLs from wikipedia.org, britannica.com, si.edu, nasa.gov, loc.gov, archives.gov, gov.vn. Never invent a source; backend will retrieve it. Music must be instrumental. Video request: '+json.dumps(j['request']),check)
+        prompt_text=('Search the web for accurate factual evidence, dates, and context. '
+                     'Treat the idea as a brief, never as finished narration. '
+                     'Create a concise video plan as JSON {"title":str,"research_query":str,"research_required":bool,"source_urls":[str],"visual_prompt":str,"music_prompt":str}. '
+                     'Set research_required true for history, science, factual knowledge or real people/events; false only for clearly fictional or purely expressive stories. '
+                     'For factual videos, find credible public references and return up to 5 direct HTTPS article URLs from wikipedia.org, britannica.com, si.edu, nasa.gov, loc.gov, archives.gov, gov.vn. '
+                     'Never invent a source; retrieved evidence is required. Music must be instrumental. Video request: '+json.dumps(j['request'],ensure_ascii=False))
+        d=self.llm_json(prompt_text,check)
         if not all(isinstance(d.get(k),str) and d[k].strip() for k in ('title','research_query','visual_prompt','music_prompt')):raise ValueError('Invalid video plan')
         if not isinstance(d.get('research_required'),bool) or not isinstance(d.get('source_urls'),list):raise ValueError('Plan must classify factuality and provide source URLs')
         return d

@@ -53,6 +53,34 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()
         result['checks']=[{**c,'message':c.get('message',c.get('detail',''))} for c in result['checks']]
         return result
+    def browser_endpoint():
+        from urllib.parse import urlparse
+        url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/')
+        p=urlparse(url)
+        if p.scheme!='http' or p.hostname not in ('127.0.0.1','localhost','::1') or p.username or p.password:
+            raise HTTPException(503,'Only loopback dedicated browser daemon allowed')
+        return url
+    @app.get('/api/browser/status')
+    def browser_status():
+        import httpx
+        try:
+            r=httpx.get(browser_endpoint()+'/api/status',timeout=2,trust_env=False)
+            if r.status_code!=200:raise HTTPException(503,'Browser service unavailable')
+            return r.json()
+        except httpx.HTTPError:raise HTTPException(503,'Start the dedicated VideoStudio browser service first')
+    def browser_control(action,request):
+        import httpx
+        same_origin(request)
+        try:
+            r=httpx.post(browser_endpoint()+'/api/browser/'+action,json={},headers={'X-VS-Client':'videostudio'},timeout=40,trust_env=False)
+            data=r.json()
+            if r.status_code!=200:raise HTTPException(r.status_code,data.get('error','Browser check failed'))
+            return data
+        except httpx.HTTPError:raise HTTPException(503,'Dedicated browser service unavailable; no extension fallback')
+    @app.post('/api/browser/start')
+    def browser_start(request:Request):return browser_control('start',request)
+    @app.post('/api/browser/probe')
+    def browser_probe(request:Request):return browser_control('probe',request)
     @app.get('/api/voices')
     def catalog():
         c=voices.catalog()
@@ -140,7 +168,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
         scope=request.headers.get('x-connector-scope')
-        if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','chrome')=='chrome' and not scope:
+        if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp')=='chrome' and not scope:
             raise HTTPException(422,'Existing Chrome connector scope required')
         if scope:
             with store.db() as c:
