@@ -16,6 +16,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     default_export=ROOT/'data'/'voices-export.json'
     voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
+    pipeline.store=store
     from .exchanges import Exchanges
     exchanges=Exchanges(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
@@ -45,20 +46,111 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     app.state.store=store;app.state.pipeline=pipeline
     @app.get('/api/health')
     def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled}
+    def diagnose_job_error(j):
+        err=j.get('error')
+        if not err:return None
+        stage=j.get('stage')
+        reason='Tác vụ bị gián đoạn ở bước '+str(stage)
+        suggestion='Bạn có thể bấm "Thử lại bước này" để hệ thống tiếp tục xử lý.'
+        if stage=='script' and 'Script quality' in err:
+            reason='Kịch bản chưa đạt yêu cầu kiểm chứng hoặc đang bị lệch khỏi trọng tâm ý tưởng gốc.'
+            if any(k in err for k in ('ẩm thực','Valencia','Sicily','nông nghiệp','lạc đề')):
+                reason='Kịch bản thiên về ẩm thực nói chung, thiếu tư liệu lịch sử canh tác nông nghiệp lúa nước tại châu Âu.'
+                suggestion='Bổ sung địa danh hoặc chi tiết nông nghiệp cụ thể vào ý tưởng: "Kỹ thuật canh tác lúa của nông dân Valencia (Tây Ban Nha) và Sicily thời Trung cổ, hệ thống đắp bờ dẫn nước và các sản phẩm từ hạt gạo và rơm lúa".'
+            elif 'quote' in err.lower() or 'evidence' in err.lower():
+                reason='Tư liệu tìm được chưa đủ các câu trích dẫn nguyên văn để chứng thực lịch sử.'
+                suggestion='Bổ sung tên nhân vật, mốc niên đại hoặc địa danh cụ thể vào ý tưởng để AI tìm kiếm nguồn tư liệu chính xác hơn.'
+            else:
+                suggestion='Thử bổ sung thêm bối cảnh lịch sử hoặc địa điểm cụ thể vào ý tưởng rồi bấm Thử lại.'
+        elif stage=='speech' and 'Duration' in err:
+            reason='Thời lượng lời đọc thực tế bị lệch quá nhiều so với số giây yêu cầu.'
+            suggestion='Tăng thêm nội dung ý tưởng hoặc điều chỉnh số giây để khớp với tốc độ đọc tự nhiên.'
+        elif stage=='images' and ('10061' in err or 'refused' in err):
+            reason='Mất kết nối với ComfyUI trên cổng 8188 trong lúc tạo hình ảnh.'
+            suggestion='Kiểm tra cửa sổ ComfyUI đang chạy trên máy rồi bấm Thử lại.'
+        elif 'Chrome' in err or 'connector' in err:
+            reason='Mất kết nối hoặc phiên đăng nhập ChatGPT trên Chrome riêng chưa sẵn sàng.'
+            suggestion='Bấm "Kiểm tra kết nối" hoặc "Mở Chrome riêng" để xác nhận đăng nhập ChatGPT.'
+        return {'reason':reason,'suggestion':suggestion}
     def public_job(j):
         with store.db() as c:owner=c.execute('SELECT id FROM connector_scopes WHERE job=?',(j['id'],)).fetchone()
-        return {**j,'connector_scope':owner['id'] if owner else None,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None,'project':j.get('request',{}).get('project','Dự án mặc định')}
+        diag=diagnose_job_error(j)
+        events=j.get('events',[])
+        latest_event=events[-1] if events else None
+        return {
+            **j,
+            'connector_scope':owner['id'] if owner else None,
+            'status':j['state'],
+            'progress':round(len(j['checkpoints'])/9*100),
+            'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None,
+            'project':j.get('request',{}).get('project','Dự án mặc định'),
+            'diagnostics':diag,
+            'latest_event':latest_event,
+            'events':events[-30:]
+        }
     @app.get('/api/projects')
     def get_projects():
-        with store.db() as c:rows=c.execute('SELECT request FROM jobs').fetchall()
-        projects={'Dự án mặc định'}
+        with store.db() as c:
+            rows=c.execute('SELECT id, request, state, stage, created, output FROM jobs ORDER BY created DESC').fetchall()
+        projects_dict={}
         for r in rows:
-            try:
-                raw_str=r['request'] if isinstance(r,sqlite3.Row) else r[0]
-                p=json.loads(raw_str).get('project')
-                if p:projects.add(p)
+            try:req=json.loads(r['request'])
+            except Exception:req={}
+            pname=req.get('project') or 'Dự án mặc định'
+            out_url=f"/api/jobs/{r['id']}/files/video.mp4" if r['state']=='completed' else None
+            thumb=None
+            if r['output']:
+                img0=Path(r['output'])/'images-0000.png'
+                if img0.is_file():thumb=f"/api/jobs/{r['id']}/files/images-0000.png"
+            if pname not in projects_dict:
+                projects_dict[pname]={
+                    'name':pname,
+                    'count':1,
+                    'latest_id':r['id'],
+                    'latest_state':r['state'],
+                    'latest_stage':r['stage'],
+                    'latest_created':r['created'],
+                    'latest_video':out_url,
+                    'thumbnail':thumb,
+                    'idea':req.get('idea','')
+                }
+            else:
+                projects_dict[pname]['count']+=1
+                if not projects_dict[pname]['thumbnail'] and thumb:
+                    projects_dict[pname]['thumbnail']=thumb
+                if not projects_dict[pname]['latest_video'] and out_url:
+                    projects_dict[pname]['latest_video']=out_url
+        if 'Dự án mặc định' not in projects_dict:
+            projects_dict['Dự án mặc định']={'name':'Dự án mặc định','count':0,'latest_id':None,'latest_state':None,'latest_stage':None,'latest_created':time.time(),'latest_video':None,'thumbnail':None,'idea':''}
+        items=sorted(list(projects_dict.values()),key=lambda x:x['latest_created'] or 0,reverse=True)
+        return {'items':items,'projects':[x['name'] for x in items]}
+    @app.post('/api/jobs/{job_id}/retry')
+    def retry_job(job_id:str,data:dict|None=None,request:Request=None):
+        if request:same_origin(request)
+        try:j=store.get(job_id)
+        except KeyError:raise HTTPException(404,'Job not found')
+        if j['state']!='failed':raise HTTPException(400,'Chỉ có thể thử lại job ở trạng thái thất bại')
+        stage=j['stage']
+        new_idea=(data or {}).get('idea')
+        with store.db() as c:
+            if new_idea and isinstance(new_idea,str) and new_idea.strip():
+                req=j['request'];req['idea']=new_idea.strip()
+                c.execute('UPDATE jobs SET request=? WHERE id=?',(json.dumps(req,ensure_ascii=False),job_id))
+            if stage:
+                c.execute('DELETE FROM attempts WHERE job=? AND stage=?',(job_id,stage))
+            c.execute("UPDATE jobs SET state='queued',error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),job_id))
+            store.event(c,job_id,stage,'retried','Người dùng yêu cầu thử lại bước '+str(stage))
+        return public_job(store.get(job_id))
+    @app.get('/api/system/logs')
+    def system_logs():
+        with store.db() as c:
+            events=[dict(r) for r in c.execute('SELECT * FROM events ORDER BY seq DESC LIMIT 50').fetchall()]
+        comfy_log=''
+        clog=ROOT.parent/'1_SD_and_workflow'/'ComfyUI-Easy-Install'/'ComfyUI-Easy-Install'/'ComfyUI'/'user'/'comfyui.log'
+        if clog.is_file():
+            try:comfy_log='\n'.join(clog.read_text(encoding='utf-8',errors='replace').splitlines()[-40:])
             except Exception:pass
-        return {'items':sorted(list(projects)),'projects':sorted(list(projects))}
+        return {'events':events,'comfy_log':comfy_log}
     @app.get('/api/preflight')
     def preflight(scope:str|None=None):
         result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()

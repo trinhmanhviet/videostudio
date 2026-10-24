@@ -222,6 +222,7 @@ class Pipeline:
             return invoke
         return {s:wrapped(s) for s in ('plan','research','script','speech','images','subtitles','music','render','verify')}
     def plan(self,j,check):
+        if getattr(self,'store',None):self.store.log(j['id'],'plan','Đang phân tích ý tưởng và lập kế hoạch sản xuất...')
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
         scope=self.exchanges.for_job(j['id']) if transport=='chrome' and hasattr(self,'exchanges') else None
         pf=self.preflight(scope)
@@ -238,7 +239,9 @@ class Pipeline:
         if not isinstance(d.get('research_required'),bool) or not isinstance(d.get('source_urls'),list):raise ValueError('Plan must classify factuality and provide source URLs')
         return d
     def research(self,j,check):
-        check();plan=j['checkpoints']['plan'];query=plan['research_query'].casefold().split();sources=[]
+        check()
+        if getattr(self,'store',None):self.store.log(j['id'],'research','Đang tìm kiếm và kiểm tra nguồn tham khảo...')
+        plan=j['checkpoints']['plan'];query=plan['research_query'].casefold().split();sources=[]
         if plan.get('research_required') is False:return {'sources':[],'assets':[],'mode':'fiction_or_expressive','factual_claims_permitted':False}
         for p in (self.knowledge.glob('*.txt') if self.knowledge else []):
             text=p.read_text(encoding='utf-8')[:50000]
@@ -272,6 +275,7 @@ class Pipeline:
     def script(self,j,check):
         feedback=[]
         for attempt in range(2):
+            if getattr(self,'store',None):self.store.log(j['id'],'script',f'Đang viết và đối chiếu kịch bản với nguồn tư liệu (lượt {attempt+1}/2)...')
             try:d=self._script_draft(j,check,feedback)
             except ValueError as error:
                 feedback=[str(error)];continue
@@ -333,8 +337,11 @@ class Pipeline:
         from .core import digest
         import hashlib
         utterances=[];assets=[];cursor=0
+        total=len(j['checkpoints']['script']['scenes'])
         for i,scene in enumerate(j['checkpoints']['script']['scenes']):
-            check();part=out.with_name(f'speech-{i:04}.wav');receipt=part.with_suffix('.json')
+            check()
+            if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {i+1}/{total} (GPU)...')
+            part=out.with_name(f'speech-{i:04}.wav');receipt=part.with_suffix('.json')
             identity=hashlib.sha256(json.dumps({'narration':scene['narration'],'voice':v},sort_keys=True).encode()).hexdigest()
             saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
             if not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part)):
@@ -356,8 +363,11 @@ class Pipeline:
         from .core import digest
         from PIL import Image,ImageStat
         scenes=[];assets=[]
+        total=len(j['checkpoints']['speech']['utterances'])
         for i,u in enumerate(j['checkpoints']['speech']['utterances']):
-            check();kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
+            check()
+            if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo hình ảnh: cảnh {i+1}/{total} (ComfyUI Qwen 2.1)...')
+            kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
             saved=json.loads(checkpoint.read_text()) if checkpoint.is_file() else {}
             reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt']
             if not reusable:
@@ -379,6 +389,7 @@ class Pipeline:
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
         check()
+        if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền và chuẩn hóa âm thanh (Stable Audio 3)...')
         if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
         prompt='Instrumental only, no vocals. '+j['checkpoints']['plan']['music_prompt'][:500]
         from .comfy_recovery import resolve_music_kind
@@ -395,9 +406,11 @@ class Pipeline:
         result['assets'].extend(normalized['assets'])
         return result
     def render(self,j,check):
+        if getattr(self,'store',None):self.store.log(j['id'],'render','Đang kết hợp hình ảnh, phụ đề, âm thanh và xuất video MP4...')
         cp=j['checkpoints'];vol=j['request'].get('music_volume',0.35)
         return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe,music_volume=vol)
     def verify(self,j,check):
+        if getattr(self,'store',None):self.store.log(j['id'],'verify','Đang kiểm tra chất lượng video thành phẩm...')
         p=j['checkpoints']['render']['video'];v=verify(p,j['request']['duration_seconds'],self.ffprobe)
         run([self.ffmpeg,'-v','error','-i',p,'-f','null','-'],check,timeout=900)
         from .media import audio_report

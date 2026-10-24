@@ -5,13 +5,14 @@ from pathlib import Path
 def main():
     d=json.loads(sys.argv[1]);cache=Path(d['cache']).resolve()
     if not cache.is_dir():raise RuntimeError('Existing speech model cache required')
+    torch_lib=r'D:\1_SD_and_workflow\ComfyUI-Easy-Install\ComfyUI-Easy-Install\python_embeded\Lib\site-packages\torch\lib'
+    if os.path.isdir(torch_lib):
+        try:os.add_dll_directory(torch_lib)
+        except Exception:pass
+        os.environ['PATH']=torch_lib+';'+os.environ.get('PATH','')
     os.environ.update(HF_HOME=str(cache),HF_HUB_CACHE=str(cache/'hub'),HUGGINGFACE_HUB_CACHE=str(cache/'hub'),HF_MODULES_CACHE=str(cache/'modules'),HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
     from vieneu import Vieneu
-    # Sequential execution on GPU: use CUDA for fast inference; fall back to CPU if unavailable
-    try:
-        tts=Vieneu(backend='onnx',device='cuda')
-    except Exception:
-        tts=Vieneu(backend='onnx',device='cpu')
+    tts=Vieneu(backend='onnx')
     v=d['voice']
     if v['kind']=='clone':
         from .core import digest

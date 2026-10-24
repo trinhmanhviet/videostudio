@@ -105,6 +105,18 @@ class ApiTests(unittest.TestCase):
                 projects=c.get('/api/projects').json()['projects']
                 self.assertIn('Egg Coffee',projects)
                 self.assertIn('Dự án mặc định',projects)
+                # Test system logs endpoint
+                logs=c.get('/api/system/logs').json()
+                self.assertIn('events',logs)
+                # Test retry endpoint on failed job
+                with store.db() as conn:
+                    conn.execute("UPDATE jobs SET state='failed',stage='script',error='Script quality/grounding retry budget exhausted' WHERE id=?",(jid,))
+                failed_job=c.get('/api/jobs/'+jid).json()
+                self.assertIsNotNone(failed_job.get('diagnostics'))
+                retry_res=c.post('/api/jobs/'+jid+'/retry',json={'idea':'New better idea'})
+                self.assertEqual(retry_res.status_code,200)
+                self.assertEqual(retry_res.json()['status'],'queued')
+                self.assertEqual(retry_res.json()['request']['idea'],'New better idea')
 
     def test_preflight_rejects_before_job_allocation(self):
         from fastapi.testclient import TestClient

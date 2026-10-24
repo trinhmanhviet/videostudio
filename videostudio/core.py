@@ -29,7 +29,8 @@ def validate_request(data):
         res['project']=data['project'].strip()
     if 'music_volume' in data:
         mv=data['music_volume']
-        if isinstance(mv,bool) or not isinstance(mv,(int,float)) or not 0<=mv<=1:raise ValueError('Music volume must be 0–1')
+        import math
+        if isinstance(mv,bool) or not isinstance(mv,(int,float)) or not math.isfinite(mv) or not 0<=mv<=1:raise ValueError('Music volume must be finite 0–1')
         res['music_volume']=float(mv)
     return res
 
@@ -53,6 +54,10 @@ class Store:
         finally: c.close()
     def event(self,c,j,s,e,detail=''):
         c.execute('INSERT INTO events(job,at,stage,event,detail) VALUES(?,?,?,?,?)',(j,time.time(),s,e,detail))
+    def log(self,j,s,detail=''):
+        with self.db() as c:
+            self.event(c,j,s,'progress',detail)
+            c.execute('UPDATE jobs SET updated=? WHERE id=?',(time.time(),j))
     def create(self,data,key,connector_scope=None):
         data=validate_request(data)
         if not key or len(key)>200: raise ValueError('Idempotency-Key required (max 200 characters)')
