@@ -27,5 +27,9 @@ def main():
         if digest(p)!=v['sha256']:raise RuntimeError('Clone reference changed')
         audio=tts.infer(d['text'],ref_audio=str(p),denoise=True)
     else:audio=tts.infer(d['text'],voice=v['id'])
+    import numpy as np
+    peak=float(np.max(np.abs(audio))) if len(audio) else 0.0
+    if peak>0.95:
+        audio=audio*(0.95/peak)
     tts.save(audio,d['output'])
 if __name__=='__main__':main()
