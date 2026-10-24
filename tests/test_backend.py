@@ -71,6 +71,9 @@ class DurableTests(unittest.TestCase):
     def test_duration_validation(self):
         for d in (True,-1,0,601,'30',float('nan')):
             with self.assertRaises(ValueError):validate_request(dict(REQUEST,duration_seconds=d))
+        self.assertEqual(validate_request(dict(REQUEST,pitch=-3.5))['pitch'],-3.5)
+        for bad_p in (True,-13,13,'0',float('nan'),float('inf')):
+            with self.assertRaises(ValueError):validate_request(dict(REQUEST,pitch=bad_p))
     def test_voice_import_preserves_ids(self):
         root=self.root/'story';p=root/'Voices'/'Work'/'Previews'/'one';p.mkdir(parents=True);(p/'request.json').write_text(json.dumps({'voice_id':'original'}))
         ref=self.root/'ref.wav';ref.write_bytes(b'actual-reference-fixture')
@@ -137,10 +140,11 @@ class ApiTests(unittest.TestCase):
                     conn.execute("UPDATE jobs SET state='completed',stage='verify' WHERE id=?",(jid,))
                     conn.execute("INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)",(jid,'plan',json.dumps({'title':'T'})))
                     conn.execute("INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)",(jid,'images',json.dumps({'scenes':[]})))
-                cv_res=c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh'})
+                cv_res=c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh','pitch':-2})
                 self.assertEqual(cv_res.status_code,200)
                 new_j=cv_res.json()
                 self.assertEqual(new_j['request']['voice_id'],'Thiện Minh')
+                self.assertEqual(new_j['request']['pitch'],-2)
                 self.assertEqual(new_j['stage'],'speech')
                 self.assertIn('plan',new_j['checkpoints'])
 

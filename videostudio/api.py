@@ -159,10 +159,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         same_origin(request)
         new_voice=data.get('voice_id','').strip()
         if not new_voice:raise HTTPException(422,'Vui lòng chọn giọng đọc mới')
+        pitch=float(data.get('pitch',0))
+        if not (-12<=pitch<=12):raise HTTPException(422,'Pitch phải nằm trong khoảng -12 đến 12')
         try:voices.selected(new_voice)
         except Exception as e:raise HTTPException(422,f'Giọng đọc không khả dụng: {e}')
         try:
-            job=store.create_derived(job_id,new_voice)
+            job=store.create_derived(job_id,new_voice,pitch=pitch)
             return public_job(job)
         except KeyError:raise HTTPException(404,'Job not found')
         except ValueError as e:raise HTTPException(400,str(e))

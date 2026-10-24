@@ -22,7 +22,7 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=10000: raise ValueError('Invalid idea')
@@ -38,6 +38,12 @@ def validate_request(data):
         import math
         if isinstance(mv,bool) or not isinstance(mv,(int,float)) or not math.isfinite(mv) or not 0<=mv<=1:raise ValueError('Music volume must be finite 0–1')
         res['music_volume']=float(mv)
+    if 'pitch' in data:
+        p=data['pitch']
+        import math
+        if isinstance(p,bool) or not isinstance(p,(int,float)) or not math.isfinite(p) or not -12<=p<=12:
+            raise ValueError('Pitch must be finite number between -12 and 12 semitones')
+        res['pitch']=round(float(p),1)
     return res
 
 class Store:
@@ -91,11 +97,11 @@ class Store:
                 if bound.rowcount!=1:raise ValueError('Connector scope is unavailable')
             self.event(c,j,None,'created')
         return self.get(j),True
-    def create_derived(self, parent_job_id, new_voice_id, key=None):
+    def create_derived(self, parent_job_id, new_voice_id, key=None, pitch=0):
         parent=self.get(parent_job_id)
         if parent['state']!='completed':
             raise ValueError('Chỉ có thể đổi giọng cho video đã hoàn tất')
-        data=dict(parent['request'], voice_id=new_voice_id)
+        data=dict(parent['request'], voice_id=new_voice_id, pitch=pitch)
         if not key:
             key=str(uuid.uuid4())
         data=validate_request(data)
