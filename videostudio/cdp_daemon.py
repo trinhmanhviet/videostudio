@@ -284,7 +284,7 @@ async def create_app(bridge=None):
                 value = await bridge.probe_login()
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
-                if not isinstance(prompt,str) or not 1 <= len(prompt) <= 100000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
+                if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
                     raise web.HTTPBadRequest(text='Scoped job_id and prompt required')
                 value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt)}
             bridge.last_error = None
