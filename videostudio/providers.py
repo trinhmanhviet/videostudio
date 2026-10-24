@@ -395,7 +395,8 @@ class Pipeline:
         result['assets'].extend(normalized['assets'])
         return result
     def render(self,j,check):
-        cp=j['checkpoints'];return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe)
+        cp=j['checkpoints'];vol=j['request'].get('music_volume',0.35)
+        return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe,music_volume=vol)
     def verify(self,j,check):
         p=j['checkpoints']['render']['video'];v=verify(p,j['request']['duration_seconds'],self.ffprobe)
         run([self.ffmpeg,'-v','error','-i',p,'-f','null','-'],check,timeout=900)

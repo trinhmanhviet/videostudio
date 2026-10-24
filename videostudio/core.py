@@ -15,12 +15,23 @@ def digest(path):
     return h.hexdigest()
 
 def validate_request(data):
-    if set(data)!={'idea','voice_id','duration_seconds'}: raise ValueError('Exactly idea, voice_id, duration_seconds required')
+    required={'idea','voice_id','duration_seconds'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume'}
+    if not required.issubset(set(data)) or not set(data).issubset(allowed):
+        raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=10000: raise ValueError('Invalid idea')
     if not isinstance(data['voice_id'],str) or not 1<=len(data['voice_id'])<=200: raise ValueError('Invalid voice')
     d=data['duration_seconds']
     if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=600: raise ValueError('Duration must be 8–600 seconds')
-    return dict(data,idea=data['idea'].strip())
+    res=dict(data,idea=data['idea'].strip())
+    if 'project' in data:
+        if not isinstance(data['project'],str) or not 1<=len(data['project'].strip())<=200:raise ValueError('Invalid project name')
+        res['project']=data['project'].strip()
+    if 'music_volume' in data:
+        mv=data['music_volume']
+        if isinstance(mv,bool) or not isinstance(mv,(int,float)) or not 0<=mv<=1:raise ValueError('Music volume must be 0–1')
+        res['music_volume']=float(mv)
+    return res
 
 class Store:
     def __init__(self,path,outputs):

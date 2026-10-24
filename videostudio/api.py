@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, threading, time
+import json, os, sqlite3, threading, time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Header, Request
@@ -47,7 +47,18 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled}
     def public_job(j):
         with store.db() as c:owner=c.execute('SELECT id FROM connector_scopes WHERE job=?',(j['id'],)).fetchone()
-        return {**j,'connector_scope':owner['id'] if owner else None,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None}
+        return {**j,'connector_scope':owner['id'] if owner else None,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None,'project':j.get('request',{}).get('project','Dự án mặc định')}
+    @app.get('/api/projects')
+    def get_projects():
+        with store.db() as c:rows=c.execute('SELECT request FROM jobs').fetchall()
+        projects={'Dự án mặc định'}
+        for r in rows:
+            try:
+                raw_str=r['request'] if isinstance(r,sqlite3.Row) else r[0]
+                p=json.loads(raw_str).get('project')
+                if p:projects.add(p)
+            except Exception:pass
+        return {'items':sorted(list(projects)),'projects':sorted(list(projects))}
     @app.get('/api/preflight')
     def preflight(scope:str|None=None):
         result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()
@@ -102,6 +113,61 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         for v in voices.catalog()['voices']:
             if v['id']==voice_id and v.get('sample_path') and Path(v['sample_path']).is_file():return FileResponse(v['sample_path'],media_type='audio/wav')
         raise HTTPException(404,'Sample unavailable; no synthesis performed')
+    @app.post('/api/voices/clone')
+    async def clone_voice(data:dict,request:Request):
+        same_origin(request)
+        name=data.get('name','').strip()
+        if not name:raise HTTPException(422,'Tên giọng đọc không được để trống')
+        audio_b64=data.get('audio_base64','')
+        if not audio_b64:raise HTTPException(422,'Thiếu dữ liệu âm thanh mẫu')
+        duration=max(3.0,min(60.0,float(data.get('duration',15.0))))
+        import base64,uuid,subprocess
+        from .core import digest
+        try:
+            raw_bytes=base64.b64decode(audio_b64.split('base64,')[-1])
+        except Exception:raise HTTPException(422,'Dữ liệu âm thanh không hợp lệ')
+        if len(raw_bytes)<1000:raise HTTPException(422,'Tệp âm thanh quá ngắn hoặc rỗng')
+        vdir=ROOT/'data'/'voices';vdir.mkdir(parents=True,exist_ok=True)
+        vid=str(uuid.uuid4())
+        tmp_in=vdir/f'tmp-in-{vid}.bin'
+        ref_wav=vdir/f'ref-{vid}.wav'
+        prev_wav=vdir/f'preview-{vid}.wav'
+        try:
+            tmp_in.write_bytes(raw_bytes)
+            subprocess.run([pipeline.ffmpeg,'-y','-v','error','-i',str(tmp_in),'-t',str(duration),'-ar','16000','-ac','1',str(ref_wav)],check=True,timeout=30)
+            if not ref_wav.is_file() or ref_wav.stat().st_size<1000:
+                raise RuntimeError('Chuyển đổi âm thanh mẫu thất bại')
+            existing_cache=pipeline.speech_cache
+            args=[pipeline.speech_python,'-m','videostudio.speech_worker',json.dumps({
+                'text':'Xin chào, đây là giọng đọc mẫu vừa được nhân bản trong VideoStudio.',
+                'voice':{'kind':'clone','reference_path':str(ref_wav.resolve()),'sha256':digest(ref_wav)},
+                'cache':existing_cache,
+                'output':str(prev_wav.resolve())
+            },ensure_ascii=False)]
+            subprocess.run(args,check=True,timeout=60)
+            export_path=ROOT/'data'/'voices-export.json'
+            catalog_data={'complete':True,'source':'user_clones','voices':[]}
+            if export_path.is_file():
+                try:catalog_data=json.loads(export_path.read_text(encoding='utf-8'))
+                except Exception:pass
+            entry={
+                'id':f'clone:{vid}',
+                'name':name,
+                'gender':'custom',
+                'region':'custom',
+                'style':'clone',
+                'description':f'Giọng clone từ mẫu {duration:.0f}s',
+                'source':'VideoStudio-Clone',
+                'kind':'clone',
+                'reference_path':str(ref_wav.resolve()),
+                'sample_path':str(prev_wav.resolve()),
+                'sha256':digest(ref_wav)
+            }
+            catalog_data.setdefault('voices',[]).append(entry)
+            export_path.write_text(json.dumps(catalog_data,ensure_ascii=False,indent=2),encoding='utf-8')
+            return {'ok':True,'voice':{'id':entry['id'],'name':entry['name'],'sample_url':f'/api/voices/{entry["id"]}/sample'}}
+        finally:
+            if tmp_in.is_file():tmp_in.unlink(missing_ok=True)
     def same_origin(request):
         from urllib.parse import urlparse
         origin=request.headers.get('origin')
