@@ -25,7 +25,7 @@ def validate_request(data):
     allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
-    if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=10000: raise ValueError('Invalid idea')
+    if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=50000: raise ValueError('Invalid idea')
     if not isinstance(data['voice_id'],str) or not 1<=len(data['voice_id'])<=200: raise ValueError('Invalid voice')
     d=data['duration_seconds']
     if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=600: raise ValueError('Duration must be 8–600 seconds')

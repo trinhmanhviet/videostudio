@@ -72,6 +72,8 @@ class DurableTests(unittest.TestCase):
         for d in (True,-1,0,601,'30',float('nan')):
             with self.assertRaises(ValueError):validate_request(dict(REQUEST,duration_seconds=d))
         self.assertEqual(validate_request(dict(REQUEST,pitch=-3.5))['pitch'],-3.5)
+        self.assertEqual(len(validate_request(dict(REQUEST,idea='a'*45000))['idea']),45000)
+        with self.assertRaises(ValueError):validate_request(dict(REQUEST,idea='a'*50001))
         for bad_p in (True,-13,13,'0',float('nan'),float('inf')):
             with self.assertRaises(ValueError):validate_request(dict(REQUEST,pitch=bad_p))
     def test_voice_import_preserves_ids(self):
