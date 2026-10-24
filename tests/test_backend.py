@@ -1,7 +1,7 @@
 import json, tempfile, unittest, wave, math, struct
 from pathlib import Path
 from unittest.mock import patch
-from videostudio.core import Store, Worker, STAGES, PermanentError, validate_request
+from videostudio.core import Store, Worker, STAGES, PermanentError, validate_request, output_slug
 from videostudio.media import render,verify,asset,probe
 from videostudio.voices import Voices
 
@@ -23,6 +23,16 @@ class DurableTests(unittest.TestCase):
     def test_output_directory_transliterates_vietnamese_title(self):
         j,_=self.s.create({**REQUEST,'idea':'Cá trích ướp muối'},'vietnamese-title')
         self.assertRegex(Path(j['output']).name,r'^ca-trich-uop-muoi-\d{8}-\d{6}$')
+    def test_output_slug_normalizes_edge_cases(self):
+        cases=(
+            ('ĐỒNG Nai', 'dong-nai'),
+            ('ca\u0301 phe\u0302', 'ca-phe'),
+            ('  Lịch---sử!! ', 'lich-su'),
+            ('a'*59+'  đuôi', 'a'*59),
+            ('東京', 'video'),
+        )
+        for source,expected in cases:
+            with self.subTest(source=source):self.assertEqual(output_slug(source),expected)
     def test_recovery_keeps_checkpoints(self):
         calls=[];j,_=self.s.create(REQUEST,'key');w=Worker(self.s,self.handlers(calls));w.step();w.step()
         fresh=Store(self.root/'jobs.db',self.root/'out');w=Worker(fresh,self.handlers(calls))
