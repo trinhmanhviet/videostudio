@@ -69,8 +69,9 @@ class DurableTests(unittest.TestCase):
         while w.step():pass
         self.assertEqual(self.s.get(j['id'])['state'],'failed')
     def test_duration_validation(self):
-        for d in (True,-1,0,601,'30',float('nan')):
+        for d in (True,-1,0,7201,'30',float('nan')):
             with self.assertRaises(ValueError):validate_request(dict(REQUEST,duration_seconds=d))
+        self.assertEqual(validate_request(dict(REQUEST,duration_seconds=7200))['duration_seconds'],7200)
         self.assertEqual(validate_request(dict(REQUEST,pitch=-3.5))['pitch'],-3.5)
         self.assertEqual(len(validate_request(dict(REQUEST,idea='a'*95000))['idea']),95000)
         with self.assertRaises(ValueError):validate_request(dict(REQUEST,idea='a'*100001))

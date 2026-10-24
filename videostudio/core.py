@@ -28,7 +28,7 @@ def validate_request(data):
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
     if not isinstance(data['voice_id'],str) or not 1<=len(data['voice_id'])<=200: raise ValueError('Invalid voice')
     d=data['duration_seconds']
-    if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=600: raise ValueError('Duration must be 8–600 seconds')
+    if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=7200: raise ValueError('Duration must be 8–7200 seconds')
     res=dict(data,idea=data['idea'].strip())
     if 'project' in data:
         if not isinstance(data['project'],str) or not 1<=len(data['project'].strip())<=200:raise ValueError('Invalid project name')

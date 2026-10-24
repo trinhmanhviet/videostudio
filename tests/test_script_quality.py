@@ -95,4 +95,34 @@ class ScriptQualityTests(unittest.TestCase):
             self.assertEqual(len(drafted),1)
             self.assertEqual(prompts[0],prompts[1])
 
+    def test_chapters_pipeline_for_long_duration_video(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Pipeline.__new__(Pipeline); calls=[]
+            def fake_llm(prompt,check):
+                calls.append(prompt)
+                if 'Plan a cohesive' in prompt:
+                    return {'chapters':[
+                        {'index':1,'title':'Mở đầu và biến cố','summary':'Giáp xích thế kỷ 11'},
+                        {'index':2,'title':'Cao trào và súng đạn','summary':'Giáp tấm và súng hỏa mai'}
+                    ]}
+                elif 'Chapter 1' in prompt:
+                    return {'narration':'Một thanh kiếm chém xuống. Người thợ rèn phải tìm cách giữ hiệp sĩ sống sót.','source_paths':['source'],
+                            'scenes':[{'narration':'Một thanh kiếm chém xuống.','visual_prompt':'close-up 35mm f/2.0 of sword clash'},
+                                     {'narration':'Người thợ rèn phải tìm cách giữ hiệp sĩ sống sót.','visual_prompt':'medium shot of medieval forge'}]}
+                elif 'Chapter 2' in prompt:
+                    return {'narration':'Súng hỏa mai xuất hiện trên chiến trường. Áo giáp tấm dày hơn nhưng quá nặng.','source_paths':['source'],
+                            'scenes':[{'narration':'Súng hỏa mai xuất hiện trên chiến trường.','visual_prompt':'musket smoke on battlefield'},
+                                     {'narration':'Áo giáp tấm dày hơn nhưng quá nặng.','visual_prompt':'heavy bullet-proof breastplate'}]}
+                raise ValueError('Unexpected prompt: '+prompt[:50])
+            p.llm_json=fake_llm
+            j={'output':t,'request':{'duration_seconds':600,'idea':'Lịch sử áo giáp'},'checkpoints':{'plan':{},'research':{'sources':[{'path':'source','text':'Nguồn tham khảo bảo tàng.'}]}}}
+            d=p._script_draft(j,lambda:None,[])
+            self.assertEqual(len(calls),3)
+            self.assertEqual(len(d['scenes']),4)
+            self.assertTrue((Path(t)/'chapters.json').exists())
+            self.assertTrue((Path(t)/'chapter-01.json').exists())
+            self.assertTrue((Path(t)/'chapter-02.json').exists())
+            self.assertIn('Một thanh kiếm chém xuống',d['narration'])
+            self.assertIn('Súng hỏa mai xuất hiện',d['narration'])
+
 if __name__=='__main__':unittest.main()
