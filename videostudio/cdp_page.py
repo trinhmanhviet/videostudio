@@ -32,7 +32,8 @@ def snapshot_expression(marker=''):
       const login = !!document.querySelector('input[type="password"],input[autocomplete="one-time-code"]') ||
         [...document.querySelectorAll('button,a')].some(e => /^(log in|sign in|đăng nhập)$/i.test(e.textContent.trim()));
       const challenge = /verify you are human|checking your browser|confirm you are human|captcha/i.test(document.title + '\n' + body.slice(0,1200));
-      const composer = document.querySelector('#prompt-textarea,textarea[placeholder], [contenteditable="true"][role="textbox"]');
+      const candidates = [...document.querySelectorAll('#prompt-textarea,textarea[placeholder], [contenteditable="true"][role="textbox"]')].filter(el => el.getBoundingClientRect().width > 0);
+      const composer = candidates.length > 0 ? candidates[candidates.length - 1] : null;
       const messages = [...document.querySelectorAll('[data-message-author-role]')];
       let matched = false, text = '', messageId = '';
       for (const el of messages) {
@@ -67,20 +68,30 @@ def snapshot_expression(marker=''):
 def composer_expression():
     return r'''(() => {
       if (MODE_INFO.mode !== 'chat') return null;
-      const e=document.querySelector('#prompt-textarea,textarea[placeholder], [contenteditable="true"][role="textbox"]');
-      if(!e || (e.innerText||e.value||'').trim()) return null;
-      e.focus(); return {focused:document.activeElement===e};
+      const candidates = [...document.querySelectorAll('#prompt-textarea,textarea[placeholder], [contenteditable="true"][role="textbox"]')].filter(el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      const e = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      if (!e) return null;
+      if ((e.innerText||e.value||'').trim()) return null;
+      e.focus();
+      const r = e.getBoundingClientRect();
+      return {focused: true, x: r.left + r.width/2, y: r.top + r.height/2};
     })()'''.replace('MODE_INFO',MODE_EXPRESSION)
 
 
 def send_button_expression():
     return r'''(() => {
       if (MODE_INFO.mode !== 'chat') return null;
-      const e=document.querySelector('button[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Gửi prompt"],button[aria-label="Send message"],button[aria-label="Send"]');
-      if(!e || e.disabled) return null;
-      const r=e.getBoundingClientRect();
-      if(r.width<=0 || r.height<=0) return null;
-      return {x:r.x+r.width/2,y:r.y+r.height/2};
+      const candidates = [...document.querySelectorAll('button[data-testid="send-button"],button[aria-label="Send prompt"],button[aria-label="Gửi prompt"],button[aria-label="Send message"],button[aria-label="Send"]')].filter(el => {
+        const r = el.getBoundingClientRect();
+        return !el.disabled && r.width > 0 && r.height > 0;
+      });
+      const e = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return {x: r.left + r.width/2, y: r.top + r.height/2};
     })()'''.replace('MODE_INFO',MODE_EXPRESSION)
 
 

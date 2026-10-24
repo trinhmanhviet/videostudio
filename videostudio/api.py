@@ -60,9 +60,17 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if p.scheme!='http' or p.hostname not in ('127.0.0.1','localhost','::1') or p.username or p.password:
             raise HTTPException(503,'Only loopback dedicated browser daemon allowed')
         return url
+    def browser_request_local(request):
+        from urllib.parse import urlparse
+        try:
+            host=urlparse('//'+request.headers.get('host',''))
+            allowed=host.hostname in ('127.0.0.1','localhost','::1') and not (host.username or host.password or host.path or host.query or host.fragment)
+        except ValueError:allowed=False
+        if not allowed:raise HTTPException(403,'Loopback Host required for browser control')
     @app.get('/api/browser/status')
-    def browser_status():
+    def browser_status(request:Request):
         import httpx
+        browser_request_local(request)
         try:
             r=httpx.get(browser_endpoint()+'/api/status',timeout=2,trust_env=False)
             if r.status_code!=200:raise HTTPException(503,'Browser service unavailable')
@@ -70,6 +78,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         except httpx.HTTPError:raise HTTPException(503,'Start the dedicated VideoStudio browser service first')
     def browser_control(action,request):
         import httpx
+        browser_request_local(request)
         same_origin(request)
         try:
             r=httpx.post(browser_endpoint()+'/api/browser/'+action,json={},headers={'X-VS-Client':'videostudio'},timeout=40,trust_env=False)

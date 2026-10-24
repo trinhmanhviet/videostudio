@@ -75,7 +75,10 @@ class RequestJournal:
     def accept(self, identifier, envelope):
         if not isinstance(envelope, dict) or envelope.get('request_id') != identifier or not isinstance(envelope.get('result'), dict):
             raise ValueError('Response must match exact request_id and result object')
-        self.complete(identifier, envelope['result'])
+        res = envelope['result']
+        if 'your_response' in res and len(res) == 1 and isinstance(res['your_response'], dict):
+            res = res['your_response']
+        self.complete(identifier, res)
 
     def conversation(self, job):
         with self.db() as c:

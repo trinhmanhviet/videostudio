@@ -30,4 +30,14 @@ class RequestJournalTests(unittest.TestCase):
         self.j.set_conversation('job','https://chatgpt.com/c/abc','target')
         self.assertEqual(self.j.conversation('job')['target'],'target')
 
+    def test_concurrent_process_equivalent_claims_have_one_winner(self):
+        from concurrent.futures import ThreadPoolExecutor
+        row=self.j.prepare('job','prompt')
+        def claim(_):
+            try:RequestJournal(self.path).claim_send(row['id']);return True
+            except IndeterminateRequest:return False
+        with ThreadPoolExecutor(max_workers=8) as pool:results=list(pool.map(claim,range(8)))
+        self.assertEqual(sum(results),1)
+        self.assertEqual(RequestJournal(self.path).get(row['id'])['state'],'sending')
+
 if __name__=='__main__':unittest.main()

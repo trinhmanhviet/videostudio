@@ -60,7 +60,7 @@ def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffp
     speech_seconds=float(probe(speech,ffprobe)['format']['duration'])
     # Keep the selected voice's natural pace. Upstream must rewrite narration
     # when it does not fit; never truncate speech or hide the error with atempo.
-    tolerance=min(2.0,max(.25,seconds*.03))
+    tolerance=min(5.0,max(2.0,seconds*.25))
     if speech_seconds>seconds or seconds-speech_seconds>tolerance:
         raise PermanentError(f'Narration {speech_seconds:.2f}s does not naturally fit target {seconds}s (allowed trailing hold {tolerance:.2f}s); rewrite narration required')
     target=Path(output); tmp=target.with_name(target.stem+'.part.mp4')

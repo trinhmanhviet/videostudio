@@ -87,7 +87,7 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         state=self.page_state('chat',wrapped.replace('\n','\n\n'))
         self.bridge.page_ready=AsyncMock(return_value=('own','session',state))
         response={'url':'https://chatgpt.com/c/own','mode':'chat','matched':True,'text':json.dumps({'request_id':identifier,'result':{'ok':True}}),'generating':False}
-        self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},response,response])
+        self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},state,None,response,response])
         self.assertEqual(await self.bridge.ask_chatgpt('job','prompt'),{'ok':True})
         self.assertFalse(any(c.args[0]=='Input.insertText' for c in self.bridge.cdp.command.call_args_list))
     async def test_foreign_prepared_draft_is_never_overwritten(self):
@@ -113,6 +113,45 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         target,session,state=await self.bridge.page_ready('job',timeout=3)
         self.assertEqual((target,session),('new','session2'))
         self.assertEqual(state['mode'],'chat')
+        self.assertFalse(any(c.args[0].startswith('Input.') for c in self.bridge.cdp.command.call_args_list))
+
+    async def test_work_change_after_claim_aborts_before_mouse_dispatch(self):
+        import json
+        from videostudio.cdp_requests import IndeterminateRequest
+        await self.setup_page();self.bridge.connect=AsyncMock()
+        r=self.bridge.journal.prepare('job','prompt');identifier=r['id']
+        wrapped=('[VideoStudio request '+identifier+']\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
+        state=self.page_state('chat',wrapped)
+        response={'mode':'chat','matched':True,'text':json.dumps({'request_id':identifier,'result':{'ok':True}}),'generating':False}
+        self.bridge.page_ready=AsyncMock(return_value=('own','session',state))
+        self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},self.page_state('work',wrapped),response,response])
+        with self.assertRaises(IndeterminateRequest):
+            await self.bridge.ask_chatgpt('job','prompt')
+        self.assertEqual(self.bridge.journal.get(identifier)['state'],'sending')
+        self.assertFalse(any(c.args[0]=='Input.dispatchMouseEvent' for c in self.bridge.cdp.command.call_args_list))
+    async def test_daemon_rejects_rebound_host_even_with_client_header(self):
+        r=await self.client.post('/api/browser/start',json={},headers={'Host':'evil.example','X-VS-Client':'videostudio','Origin':'http://evil.example'})
+        self.assertEqual(r.status,403);self.launcher.ensure_started.assert_not_called()
+
+    async def test_crash_after_mouse_press_retains_sending_and_restart_never_resubmits(self):
+        import json
+        await self.setup_page();self.bridge.connect=AsyncMock()
+        record=self.bridge.journal.prepare('job','prompt');identifier=record['id']
+        wrapped=('[VideoStudio request '+identifier+']\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
+        state=self.page_state('chat',wrapped)
+        self.bridge.page_ready=AsyncMock(return_value=('own','session',state))
+        self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},state])
+        async def crash(method,*args,**kwargs):
+            if method=='Input.dispatchMouseEvent':raise ConnectionError('lost after press')
+            return {}
+        self.bridge.cdp.command=AsyncMock(side_effect=crash)
+        with self.assertRaises(ConnectionError):await self.bridge.ask_chatgpt('job','prompt')
+        self.bridge.journal=RequestJournal(self.bridge.journal.path)
+        self.assertEqual(self.bridge.journal.get(identifier)['state'],'sending')
+        response={'mode':'chat','matched':True,'text':json.dumps({'request_id':identifier,'result':{'ok':True}}),'generating':False}
+        self.bridge.evaluate=AsyncMock(side_effect=[response,response]);self.bridge.cdp.command=AsyncMock()
+        result=await self.bridge.ask_chatgpt('job','prompt')
+        self.assertEqual(result,{'ok':True})
         self.assertFalse(any(c.args[0].startswith('Input.') for c in self.bridge.cdp.command.call_args_list))
 
 if __name__=='__main__':unittest.main()

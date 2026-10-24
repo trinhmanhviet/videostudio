@@ -37,7 +37,7 @@ class ChromeChatGPTBridge:
     def status(self):
         connected = self.cdp.connected
         return {'ok':True, 'service':'videostudio-dedicated-cdp', 'connected':connected,
-                'ready':connected and self.authenticated, 'mode':'headed',
+                'ready':connected and self.authenticated, 'mode':'headed', 'readiness_scope':'connector_only', 'production_ready':False,
                 'authentication':'verified' if connected and self.authenticated else 'unverified',
                 'last_error':self.last_error}
 
@@ -177,6 +177,10 @@ class ChromeChatGPTBridge:
                     focused = await self.evaluate(session, composer_expression())
                     if not focused:
                         raise RuntimeError('Composer unavailable; no prompt sent')
+                    if isinstance(focused, dict) and 'x' in focused and 'y' in focused:
+                        for kind in ('mousePressed', 'mouseReleased'):
+                            await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':focused['x'], 'y':focused['y'], 'button':'left', 'clickCount':1}, session=session)
+                        await asyncio.sleep(0.1)
                     await self.cdp.command('Input.insertText', {'text':wrapped}, session=session)
                 button = None
                 send_deadline = time.monotonic()+5
@@ -189,8 +193,14 @@ class ChromeChatGPTBridge:
                     raise RuntimeError('Send button unavailable; draft preserved, no request sent')
                 # Durable write BEFORE mouse input. Any crash from here is recovery-only.
                 self.journal.claim_send(identifier)
+                final = await self.evaluate(session, snapshot_expression(marker))
+                draft_clean = ' '.join(final.get('draft','').replace('\u00a0',' ').split()) if final else ''
+                wrapped_clean = ' '.join(wrapped.replace('\u00a0',' ').split())
+                if not final or final.get('mode')!='chat' or final.get('login') or final.get('challenge') or final.get('generating') or not draft_clean or (draft_clean != wrapped_clean and marker not in draft_clean):
+                    raise IndeterminateRequest('Chat mode or draft changed at send boundary; no mouse dispatch, receipt retained')
                 for kind in ('mousePressed', 'mouseReleased'):
                     await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
+                await self.evaluate(session, "(() => { const b = document.querySelector('button[aria-label=\"Send\"],button[data-testid=\"send-button\"],button[aria-label=\"Send prompt\"],button[aria-label=\"Send message\"]'); if(b && !b.disabled) b.click(); })()")
             # Previously attempted request: only read its conversation, never send again.
             deadline = time.monotonic()+timeout_seconds
             previous = None

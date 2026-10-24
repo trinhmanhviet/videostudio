@@ -14,7 +14,7 @@ class Fixture:
 class BrowserAPITests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
-        self.client=TestClient(create_app(Store(Path(self.tmp.name)/'db',Path(self.tmp.name)/'out'),Fixture(),False))
+        self.client=TestClient(create_app(Store(Path(self.tmp.name)/'db',Path(self.tmp.name)/'out'),Fixture(),False),base_url='http://127.0.0.1:8877')
     def tearDown(self):self.client.close();self.tmp.cleanup()
     def test_status_only_proxies_passive_get(self):
         with patch('httpx.get',return_value=SimpleNamespace(status_code=200,json=lambda:{'connected':False,'ready':False})) as get:
@@ -33,5 +33,14 @@ class BrowserAPITests(unittest.TestCase):
         body=self.client.get('/').text
         self.assertNotIn('location.replace(s.url)',body)
         self.assertIn('browserStart',body)
+
+    def test_rebound_host_cannot_read_browser_status(self):
+        with patch('httpx.get') as get:
+            r=self.client.get('/api/browser/status',headers={'Host':'evil.example'})
+            self.assertEqual(r.status_code,403);get.assert_not_called()
+    def test_matching_evil_host_and_origin_cannot_control_browser(self):
+        with patch('httpx.post') as post:
+            r=self.client.post('/api/browser/start',headers={'Host':'evil.example','Origin':'http://evil.example'})
+            self.assertEqual(r.status_code,403);post.assert_not_called()
 
 if __name__=='__main__':unittest.main()
