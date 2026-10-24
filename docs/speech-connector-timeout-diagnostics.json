@@ -1,0 +1,43 @@
+{
+  "job_id": "7173e469-2b6f-48b3-8f60-5b09a27ade0c",
+  "state": "failed",
+  "stage": "speech",
+  "error": "Chrome connector response unavailable; request retained for correlated recovery, not resubmitted",
+  "attempts": {
+    "plan": 1,
+    "research": 2,
+    "script": 2,
+    "speech": 3
+  },
+  "preserved_checkpoints": [
+    "plan",
+    "research",
+    "script"
+  ],
+  "pending_exchanges": [
+    {
+      "id": "856ab85a-5b9a-41bf-bc2d-a7ef0feef3ca",
+      "scope": "7ef68fc4-1143-4812-b2a3-fce83954dc18",
+      "version": 1,
+      "created": 1792814713.023437
+    }
+  ],
+  "connector": {
+    "items": [
+      {
+        "scope": "7ef68fc4-1143-4812-b2a3-fce83954dc18",
+        "status": {
+          "build": "0.1.24",
+          "stage": "idle",
+          "connected": true,
+          "enabled": false
+        },
+        "updated": 1792815412.815763
+      }
+    ]
+  },
+  "root_disable_reason": "not yet established: server telemetry omits extension error/log details; real Chrome inspection unavailable because Browser Relay session is unknown",
+  "no_new_job_or_resubmission": true,
+  "attempt_budget_reset": false,
+  "at": 1792815437.444124
+}
