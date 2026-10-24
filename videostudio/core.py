@@ -32,7 +32,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS checkpoints(job TEXT, stage TEXT, value TEXT NOT NULL, PRIMARY KEY(job,stage));
             CREATE TABLE IF NOT EXISTS attempts(job TEXT, stage TEXT, count INTEGER NOT NULL, PRIMARY KEY(job,stage));
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, at REAL, stage TEXT, event TEXT, detail TEXT);
-            CREATE TABLE IF NOT EXISTS worker_lock(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT, expires REAL);''')
+            CREATE TABLE IF NOT EXISTS worker_lock(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT, expires REAL);
+            CREATE TABLE IF NOT EXISTS recovery_grants(job TEXT,stage TEXT,attempt_limit INTEGER NOT NULL,reason TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(job,stage));''')
     @contextmanager
     def db(self):
         c=sqlite3.connect(self.path,timeout=10); c.row_factory=sqlite3.Row
@@ -83,6 +84,32 @@ class Store:
         with self.db() as c:
             c.execute("UPDATE jobs SET cancel=1,state=CASE WHEN state IN ('queued','retrying') THEN 'cancelled' ELSE state END,updated=? WHERE id=?",(time.time(),j));self.event(c,j,None,'cancel_requested')
         return self.get(j)
+    def attempt_limit(self,j,stage,base=3):
+        with self.db() as c:r=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
+        return r['attempt_limit'] if r else base
+    def resume(self,j,scope,base=3):
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row=c.execute('SELECT * FROM jobs WHERE id=?',(j,)).fetchone()
+            if not row:raise KeyError(j)
+            owner=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()
+            if not owner or owner['job']!=j:raise ValueError('Connector scope does not own this job')
+            if row['state'] not in ('failed','cancelled'):raise ValueError('Only failed/cancelled job may be continued')
+            if row['state']=='failed' and 'Chrome connector response unavailable' not in (row['error'] or ''):raise ValueError('Failure needs targeted repair, not a generic retry')
+            checkpoints={r['stage'] for r in c.execute('SELECT stage FROM checkpoints WHERE job=?',(j,))}
+            stage=next((s for s in STAGES if s not in checkpoints),None)
+            if stage is None:raise ValueError('Job already has all checkpoints')
+            attempts=c.execute('SELECT count FROM attempts WHERE job=? AND stage=?',(j,stage)).fetchone();count=attempts['count'] if attempts else 0
+            grant=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
+            limit=grant['attempt_limit'] if grant else base
+            if count>=limit:
+                if grant:raise ValueError('One-time recovery allowance exhausted; attempts are preserved')
+                if count!=base:raise ValueError('Unexpected attempt history; no recovery budget granted')
+                limit=base+1
+                c.execute('INSERT INTO recovery_grants VALUES(?,?,?,?,?)',(j,stage,limit,'explicit owner continuation after connector repair',time.time()))
+            c.execute("UPDATE jobs SET state='queued',cancel=0,error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),j))
+            self.event(c,j,stage,'owner_resume',f'Keep checkpoints and {count} prior attempts; effective limit {limit}; no exchange resubmission')
+        return self.get(j)
     def active(self,j):
         if self.get(j)['cancel']: raise Cancelled()
     def lock(self,owner,ttl=30):
@@ -105,6 +132,7 @@ class Worker:
             if not jobs:return False
             j=jobs[-1]; jid=j['id']; stage=next((x for x in STAGES if x not in j['checkpoints']),None)
             if not stage: raise PermanentError('Missing verified completion transition')
+            allowed_attempts=s.attempt_limit(jid,stage,self.max_attempts)
             try:
                 s.active(jid)
                 # A checkpoint is trusted only if every attested file still matches.
@@ -113,7 +141,7 @@ class Worker:
                         if not Path(a['path']).is_file() or digest(a['path'])!=a['sha256']: raise PermanentError('Checkpoint asset missing or changed')
                 with s.db() as c:
                     row=c.execute('SELECT count FROM attempts WHERE job=? AND stage=?',(jid,stage)).fetchone(); count=(row[0] if row else 0)+1
-                    if count>self.max_attempts: raise PermanentError('Retry budget exhausted after restart')
+                    if count>allowed_attempts: raise PermanentError('Retry budget exhausted after restart')
                     c.execute('INSERT OR REPLACE INTO attempts VALUES(?,?,?)',(jid,stage,count))
                     c.execute("UPDATE jobs SET state='running',stage=?,updated=? WHERE id=?",(stage,time.time(),jid));s.event(c,jid,stage,'started')
                 value=self.handlers[stage](j,lambda:s.active(jid))
@@ -129,7 +157,7 @@ class Worker:
                 with s.db() as c:c.execute("UPDATE jobs SET state='cancelled',updated=? WHERE id=?",(time.time(),jid));s.event(c,jid,stage,'cancelled')
             except Exception as e:
                 attempts=s.get(jid)['attempts'].get(stage,0)
-                terminal=isinstance(e,PermanentError) or attempts>=self.max_attempts
+                terminal=isinstance(e,PermanentError) or attempts>=allowed_attempts
                 with s.db() as c:
                     c.execute('UPDATE jobs SET state=?,error=?,next_at=?,updated=? WHERE id=?',('failed' if terminal else 'retrying',str(e)[:2000],time.time()+self.backoff*2**max(0,attempts-1),time.time(),jid));s.event(c,jid,stage,'failed' if terminal else 'retry',str(e)[:2000])
             return True

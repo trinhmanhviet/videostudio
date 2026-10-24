@@ -46,7 +46,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     @app.get('/api/health')
     def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled}
     def public_job(j):
-        return {**j,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None}
+        with store.db() as c:owner=c.execute('SELECT id FROM connector_scopes WHERE job=?',(j['id'],)).fetchone()
+        return {**j,'connector_scope':owner['id'] if owner else None,'status':j['state'],'progress':round(len(j['checkpoints'])/9*100),'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None}
     @app.get('/api/preflight')
     def preflight(scope:str|None=None):
         result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()
@@ -79,7 +80,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         try:exchanges.pending(scope)
         except KeyError:raise HTTPException(404,'Scope not found')
         # Informational heartbeat only, never grants authorization or readiness.
-        allowed={k:data[k] for k in ('build','stage','connected','enabled') if k in data and isinstance(data[k],(str,bool))}
+        from .connector_diagnostics import sanitize_status
+        allowed=sanitize_status(data)
         import json
         with store.db() as c:
             previous=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(scope,)).fetchone()
@@ -166,6 +168,20 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
         try:return public_job(store.cancel(job_id))
         except KeyError:raise HTTPException(404,'Job not found')
+    @app.post('/api/jobs/{job_id}/resume')
+    def resume(job_id:str,request:Request):
+        same_origin(request)
+        scope=request.headers.get('x-connector-scope')
+        if not scope:raise HTTPException(422,'Connector scope required')
+        import json
+        with store.db() as c:status=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(scope,)).fetchone()
+        if not status or json.loads(status['status']).get('build')!='0.1.25' or time.time()-status['updated']>120:
+            raise HTTPException(409,'Reload connector 0.1.25 and refresh this Studio tab before continuing; no attempt budget changed')
+        # The page's REAL Resume click starts the existing extension handler.
+        # This API never invokes or simulates extension authorization itself.
+        try:return public_job(store.resume(job_id,scope))
+        except KeyError:raise HTTPException(404,'Job not found')
+        except ValueError as e:raise HTTPException(409,str(e))
     @app.get('/api/jobs/{job_id}/files/{name}')
     def file(job_id:str,name:str):
         try:j=store.get(job_id)
