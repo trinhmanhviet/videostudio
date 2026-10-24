@@ -1,0 +1,17 @@
+{
+  "version": "0.1.24",
+  "real_dom_verified": {
+    "toggle_group": "Composer mode",
+    "chat_button": "Chat",
+    "work_button": "Work",
+    "chat_composer_label": "Ask ChatGPT",
+    "work_composer_label": "Work with ChatGPT"
+  },
+  "new_tests_passed": 8,
+  "existing_tests_passed": 88,
+  "guard_before_compose": true,
+  "guard_before_send": true,
+  "workspace_changed": false,
+  "existing_receipt_logic_changed": false,
+  "installed_browser_reload_pending": true
+}
