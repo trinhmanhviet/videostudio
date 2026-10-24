@@ -98,16 +98,33 @@ class Store:
         data=dict(parent['request'], voice_id=new_voice_id)
         if not key:
             key=str(uuid.uuid4())
-        new_job, _ = self.create(data, key)
-        nid = new_job['id']
+        data=validate_request(data)
+        raw=json.dumps(data,sort_keys=True,ensure_ascii=False)
         with self.db() as c:
-            for stage in ('plan', 'research', 'script', 'images', 'music'):
+            c.execute('BEGIN IMMEDIATE')
+            j=str(uuid.uuid4())
+            self.outputs.mkdir(parents=True,exist_ok=True)
+            slug=output_slug(data['idea'])
+            name=slug+'-'+datetime.now().strftime('%Y%m%d-%H%M%S')
+            output=self.outputs/name
+            try: output.mkdir()
+            except FileExistsError:
+                output=self.outputs/(name+'-'+j[:8]); output.mkdir()
+            (output/'brief.json').write_text(json.dumps({'job_id':j,**data,'parent_job':parent_job_id},ensure_ascii=False,indent=2),encoding='utf8')
+            p_out=Path(parent['output'])
+            if p_out.is_dir():
+                import shutil
+                for f in p_out.glob('images-*.*'):
+                    shutil.copy2(f, output/f.name)
+            now=time.time()
+            c.execute('INSERT OR IGNORE INTO projects VALUES(?,?)',(data.get('project','Dự án mặc định'),now))
+            for stage in ('plan', 'research', 'script', 'music'):
                 if stage in parent['checkpoints']:
                     val=json.dumps(parent['checkpoints'][stage], ensure_ascii=False)
-                    c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)', (nid, stage, val))
-            c.execute("UPDATE jobs SET stage='speech', updated=? WHERE id=?", (time.time(), nid))
-            self.event(c, nid, 'speech', 'voice_changed', f"Đổi giọng đọc từ video {parent_job_id} sang {new_voice_id}")
-        return self.get(nid)
+                    c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)', (j, stage, val))
+            c.execute('INSERT INTO jobs(id,idem,request,state,stage,output,created,updated) VALUES(?,?,?,?,?,?,?,?)',(j,key,raw,'queued','speech',str(output),now,now))
+            self.event(c, j, 'speech', 'voice_changed', f"Đổi giọng đọc từ video {parent_job_id} sang {new_voice_id}")
+        return self.get(j)
     def get(self,j):
         with self.db() as c:
             r=c.execute('SELECT * FROM jobs WHERE id=?',(j,)).fetchone()
