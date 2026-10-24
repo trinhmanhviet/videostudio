@@ -26,12 +26,9 @@ def record_owned(path, prompt_id):
         tmp.replace(path)
 
 def free_comfy(client):
-    """Actively trigger model unload and memory garbage collection in ComfyUI."""
-    try:
-        r = client.post('free', json={'unload_models': True, 'free_memory': True}, timeout=10)
-        return r.status_code == 200
-    except Exception:
-        return False
+    """ComfyUI native model management handles model swapping safely in process memory.
+    Avoid calling POST /free which triggers an unsafe c10.dll access violation (0xc0000005) in PyTorch allocator."""
+    return True
 
 def headroom(client, devices, path):
     free = min((d.get('vram_free', 0) for d in devices), default=0)

@@ -166,7 +166,15 @@ class Pipeline:
             if receipt.exists():
                 saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
                 if not pid:raise PermanentError('Indeterminate Comfy submission; refusing duplicate GPU work')
-            else:
+                # If Comfy restarted, verify if old prompt still exists in history or queue
+                r=c.get('history/'+pid);r.raise_for_status()
+                if pid not in r.json():
+                    q=c.get('queue');q.raise_for_status();queue=q.json()
+                    running=[x[1] for x in queue.get('queue_running',[])]
+                    pending=[x[1] for x in queue.get('queue_pending',[])]
+                    if pid not in running and pid not in pending:
+                        pid=None
+            if not receipt.exists() or pid is None:
                 check()
                 q=c.get('queue');q.raise_for_status();queue=q.json()
                 if queue.get('queue_running') or queue.get('queue_pending'):
