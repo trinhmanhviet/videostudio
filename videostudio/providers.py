@@ -134,7 +134,7 @@ class Pipeline:
                 raise PermanentError('Only loopback CDP daemon permitted')
             job=getattr(getattr(self,'context',None),'job',None)
             if not job:raise PermanentError('Scoped CDP job context required')
-            r=httpx.post(f"{cdp_url}/api/chat",json={'prompt':prompt,'job_id':job},headers={'X-VS-Client':'videostudio'},timeout=210,trust_env=False)
+            r=httpx.post(f"{cdp_url}/api/chat",json={'prompt':prompt,'job_id':job},headers={'X-VS-Client':'videostudio'},timeout=360,trust_env=False)
             data=r.json()
             if r.status_code==409:
                 detail=data.get('code','CDP blocked')+': '+data.get('error','Request retained')

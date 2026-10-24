@@ -174,7 +174,7 @@ class ChromeChatGPTBridge:
             await self.page_ready('__login__')
             return self.status()
 
-    async def ask_chatgpt(self, job, prompt_text, timeout_seconds=180):
+    async def ask_chatgpt(self, job, prompt_text, timeout_seconds=300):
         async with self.job_lock:
             record = self.journal.prepare(job, prompt_text)
             if record['state'] == 'completed':
@@ -182,8 +182,8 @@ class ChromeChatGPTBridge:
             identifier = record['id']
             marker = '[VideoStudio request '+identifier+']'
             await self.connect()
-            target, session, state = await self.page_ready(job, marker)
             if record['state'] == 'prepared':
+                target, session, state = await self.page_ready(job, marker)
                 wrapped = (marker+'\n'+prompt_text+'\nReturn exactly one JSON object with this envelope: '
                            +json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
                 draft = state.get('draft','').strip()
@@ -222,6 +222,10 @@ class ChromeChatGPTBridge:
                 for kind in ('mousePressed', 'mouseReleased'):
                     await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
                 await self.evaluate(session, "(() => { const b = document.querySelector('button[aria-label=\"Send\"],button[data-testid=\"send-button\"],button[aria-label=\"Send prompt\"],button[aria-label=\"Send message\"]'); if(b && !b.disabled) b.click(); })()")
+            else:
+                target = await self.ensure_tab(job)
+                session = await self.session(target)
+                await self.cdp.command('Target.activateTarget', {'targetId':target})
             # Previously attempted request: only read its conversation, never send again.
             deadline = time.monotonic()+timeout_seconds
             previous = None
@@ -240,6 +244,8 @@ class ChromeChatGPTBridge:
                         return value['result']
                     except (ValueError, json.JSONDecodeError):
                         pass
+                if text != previous or (state and state.get('generating')):
+                    deadline = max(deadline, time.monotonic() + 90)
                 previous = text
                 await asyncio.sleep(1)
             raise IndeterminateRequest('Matching completed response unavailable; receipt retained, no automatic resubmission')
