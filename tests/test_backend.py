@@ -147,6 +147,8 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(new_j['request']['pitch'],-2)
                 self.assertEqual(new_j['stage'],'speech')
                 self.assertIn('plan',new_j['checkpoints'])
+                self.assertEqual(c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh','pitch':True}).status_code,422)
+                self.assertEqual(c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh','pitch':15}).status_code,422)
 
     def test_preflight_rejects_before_job_allocation(self):
         from fastapi.testclient import TestClient

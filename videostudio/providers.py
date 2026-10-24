@@ -361,9 +361,10 @@ class Pipeline:
             scale=2**(pitch/12.0)
             filter_args=['-af',f'rubberband=pitch={scale:.6f}:formant=preserved']
         run([self.ffmpeg,'-v','error','-y','-f','concat','-safe','0','-i',listing]+filter_args+['-c:a','pcm_s16le',out],check)
+        actual_dur=float(probe(out,self.ffprobe)['format']['duration'])
         target=j['request']['duration_seconds'];tolerance=min(5.0,max(2.0,target*.25))
-        if cursor>target or target-cursor>tolerance:raise NarrationDurationError(f'Measured narration {cursor:.2f}s does not naturally match {target}s; allowed final visual hold {tolerance:.2f}s')
-        return {'path':str(out),'duration_seconds':cursor,'utterances':utterances,'assets':assets+[asset(out)]}
+        if actual_dur>target or target-actual_dur>tolerance:raise NarrationDurationError(f'Measured narration {actual_dur:.2f}s does not naturally match {target}s; allowed final visual hold {tolerance:.2f}s')
+        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'assets':assets+[asset(out)]}
     def images(self,j,check):
         from .core import digest
         from PIL import Image,ImageStat
