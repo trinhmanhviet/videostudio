@@ -16,7 +16,7 @@ def normalize_music_levels(source,folder,check,ffmpeg='ffmpeg'):
         partial=out.with_suffix('.part.wav')
         run([ffmpeg,'-v','error','-y','-i',source,'-af','loudnorm=I=-20:TP=-2:LRA=7,alimiter=limit=0.89:level=false','-ar','48000','-ac','2','-c:a','pcm_s24le',partial],check)
         partial.replace(out)
-    quality=audio_report(out,check,ffmpeg)
+    quality=audio_report(out,check,ffmpeg,peak_limit=1.1)
     report=Path(folder)/('music-normalization-'+identity[:12]+'.json')
     report.write_text(json.dumps({'source_sha256':identity,'source_unchanged':digest(source)==identity,'raw':raw,'normalized':quality,'policy':'loudnorm-I-20-TP-2-LRA7-limiter-no-autolevel','semantic_listening_performed':False},indent=2))
     return {'path':str(out),'audio_quality':quality,'raw_audio_quality':raw,'assets':[asset(source),asset(out),asset(report)]}

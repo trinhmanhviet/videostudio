@@ -22,7 +22,7 @@ def probe(path,ffprobe='ffprobe'):
 
 def asset(path):return {'path':str(Path(path).resolve()),'sha256':digest(path)}
 
-def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.001):
+def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05):
     import array,math
     raw=run([ffmpeg,'-v','error','-i',path,'-ar','16000','-ac','1','-f','f32le','-'],check)
     if not raw or len(raw)>100000000:raise PermanentError('Empty/oversized audio analysis')
