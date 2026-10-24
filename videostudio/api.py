@@ -54,15 +54,26 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         suggestion='Kiểm tra chi tiết lỗi bên dưới và bấm Thử lại khi đã điều chỉnh.'
         if stage=='script' and 'Script quality' in err:
             reason='Kịch bản chưa đáp ứng tiêu chí kiểm chứng thực tế hoặc đang lệch khỏi trọng tâm ý tưởng ban đầu.'
-            if '[' in err and ']' in err:
+            reviews=sorted(Path(j['output']).glob('script-attempt-*.review.json'))
+            if reviews:
                 try:
-                    import ast
-                    raw_issues=err.split('Script quality/grounding retry budget exhausted: ',1)[-1]
-                    issues=ast.literal_eval(raw_issues)
-                    if isinstance(issues,list) and issues:
-                        reason=' '.join(str(x) for x in issues[:2])
-                except Exception:pass
-            suggestion='Để kịch bản vượt qua bước kiểm chứng, bạn nên bổ sung các chi tiết cụ thể (như mốc thời gian, nhân vật, địa danh, hoặc bối cảnh thực tế) vào ý tưởng video rồi tạo lại.'
+                    last=json.loads(reviews[-1].read_text(encoding='utf8'))
+                    blockers=last.get('blocking_issues') or last.get('issues') or []
+                    details=[str(x.get('reason','')) if isinstance(x,dict) else str(x) for x in blockers[:2]]
+                    if details:reason=' '.join(details)[:800]
+                except (OSError,ValueError,TypeError):pass
+                suggestion='Tool đã tự sửa có giới hạn nhưng vẫn thiếu bằng chứng cho các dữ kiện quan trọng. Hãy xem các nguồn và vấn đề được liệt kê; không có dữ kiện nào được duyệt chỉ vì hết lượt sửa.'
+            else:
+                if '[' in err and ']' in err:
+                    try:
+                        import ast
+                        issues=ast.literal_eval(err.split('Script quality/grounding retry budget exhausted: ',1)[-1])
+                        if isinstance(issues,list) and issues:reason=' '.join(str(x) for x in issues[:2])[:800]
+                    except (SyntaxError,ValueError):pass
+                suggestion='Bản job cũ không có nhật ký sửa từng câu; hãy tạo job mới để dùng cơ chế tự sửa có kiểm chứng.'
+        elif stage=='script' and 'delivery_indeterminate' in err:
+            reason='Chưa xác nhận được phản hồi ChatGPT khớp request ID; receipt gửi vẫn được giữ, không gửi lại mù quáng.'
+            suggestion='Tool tự đối soát trong số lượt thử giới hạn. Nếu vẫn dừng, kiểm tra phiên ChatGPT riêng; không nhấn gửi lại yêu cầu cũ.'
         elif stage=='speech' and 'Duration' in err:
             reason='Thời lượng lời đọc thực tế chênh lệch quá ngưỡng cho phép so với thời lượng video yêu cầu.'
             suggestion='Điều chỉnh độ dài ý tưởng hoặc tăng/giảm số giây đặt cho video để khớp với tốc độ đọc tự nhiên.'

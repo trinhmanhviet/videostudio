@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from videostudio.providers import Pipeline
+from videostudio.providers import Pipeline, UncertainDeliveryError
 from videostudio.core import PermanentError
 
 
@@ -21,10 +21,10 @@ class CDPPipelineTests(unittest.TestCase):
             self.assertEqual(self.p.llm_json('hello',lambda:None),{'done':True})
             self.assertEqual(post.call_args.kwargs['json']['job_id'],'job-a')
             self.assertEqual(post.call_args.kwargs['headers']['X-VS-Client'],'videostudio')
-    def test_uncertain_response_never_falls_back_to_extension(self):
+    def test_uncertain_response_is_retryable_but_never_falls_back_to_extension(self):
         response=SimpleNamespace(status_code=409,json=lambda:{'ok':False,'code':'delivery_indeterminate','error':'retained'})
         with patch.dict('os.environ',{'VS_LLM_TRANSPORT':'cdp'}),patch('httpx.post',return_value=response):
-            with self.assertRaises(PermanentError):self.p.llm_json('hello',lambda:None)
+            with self.assertRaises(UncertainDeliveryError):self.p.llm_json('hello',lambda:None)
         self.p.exchanges.request.assert_not_called()
     def test_remote_daemon_url_is_refused(self):
         with patch.dict('os.environ',{'VS_LLM_TRANSPORT':'cdp','VS_CDP_DAEMON_URL':'https://remote.invalid'}),patch('httpx.post') as post:
