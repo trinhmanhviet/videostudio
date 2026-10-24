@@ -9,9 +9,9 @@ import time
 from urllib.parse import urlparse
 from aiohttp import web
 from .chrome_browser import DedicatedChrome, ROOT
-from .cdp_protocol import CDPConnection
+from .cdp_protocol import CDPConnection, CDPError
 from .cdp_requests import RequestJournal, IndeterminateRequest, valid_chat_url
-from .cdp_page import snapshot_expression, composer_expression, send_button_expression
+from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, correlate_turns
 from .exchanges import parse_reply
 
 
@@ -92,12 +92,48 @@ class ChromeChatGPTBridge:
         # Only activate the tool-owned tab; no global freeze/Memory Saver changes.
         await self.cdp.command('Target.activateTarget', {'targetId':target})
         deadline = time.monotonic()+timeout
+        switched = False
+        reattachments = 0
         while time.monotonic() < deadline:
-            state = await self.evaluate(session, snapshot_expression(marker))
+            try:
+                state = await self.evaluate(session, snapshot_expression(marker))
+            except TimeoutError:
+                # A newly recreated target may still be hydrating. Retry reads only;
+                # no navigation, typing or submission is performed here.
+                await asyncio.sleep(.2)
+                continue
+            except CDPError as error:
+                transient = ('session with given id not found','no session with given id','execution context was destroyed','cannot find context')
+                if reattachments >= 2 or not any(t in str(error).lower() for t in transient):
+                    raise
+                self.sessions.pop(target, None)
+                target = await self.ensure_tab(job)
+                session = await self.session(target)
+                await self.cdp.command('Target.activateTarget', {'targetId':target})
+                reattachments += 1
+                await asyncio.sleep(.2)
+                continue
             if state and (state.get('login') or state.get('challenge')):
                 self.authenticated = False
                 raise NeedsAuthentication('Use the dedicated Chrome window to sign in or finish verification')
-            if state and valid_chat_url(state.get('url','')) and state.get('composer'):
+            if state and state.get('mode') == 'work':
+                self.authenticated = False
+                if state.get('draft','').strip():
+                    raise RuntimeError('Work draft exists; refusing to discard it by changing modes')
+                if switched:
+                    raise RuntimeError('Chat mode switch did not take effect; no prompt sent')
+                button = await self.evaluate(session, chat_mode_button_expression())
+                if not button:
+                    raise RuntimeError('Chat mode control unavailable; no prompt sent')
+                for kind in ('mousePressed','mouseReleased'):
+                    await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
+                switched = True
+                await asyncio.sleep(.5)
+                continue
+            if state and state.get('composer') and state.get('mode') != 'chat':
+                self.authenticated = False
+                raise RuntimeError('Chat mode not verified; refusing to type or send')
+            if state and valid_chat_url(state.get('url','')) and state.get('composer') and state.get('mode') == 'chat':
                 self.authenticated = True
                 self.journal.set_conversation(job, state['url'], target)
                 return target, session, state
@@ -127,15 +163,28 @@ class ChromeChatGPTBridge:
             await self.connect()
             target, session, state = await self.page_ready(job, marker)
             if record['state'] == 'prepared':
-                if state.get('draft','').strip() or state.get('generating'):
-                    raise RuntimeError('Owned tab has a draft or active generation; no overwrite or send')
-                focused = await self.evaluate(session, composer_expression())
-                if not focused:
-                    raise RuntimeError('Composer unavailable; no prompt sent')
                 wrapped = (marker+'\n'+prompt_text+'\nReturn exactly one JSON object with this envelope: '
                            +json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
-                await self.cdp.command('Input.insertText', {'text':wrapped}, session=session)
-                button = await self.evaluate(session, send_button_expression())
+                draft = state.get('draft','').strip()
+                if state.get('generating'):
+                    raise RuntimeError('Owned tab has active generation; no overwrite or send')
+                if draft:
+                    # Rich-text composers may render newline paragraphs as blank lines.
+                    # Resume only our exact text/marker modulo whitespace, never another draft.
+                    if ' '.join(draft.split()) != ' '.join(wrapped.split()):
+                        raise RuntimeError('Owned tab has a different draft; no overwrite or send')
+                else:
+                    focused = await self.evaluate(session, composer_expression())
+                    if not focused:
+                        raise RuntimeError('Composer unavailable; no prompt sent')
+                    await self.cdp.command('Input.insertText', {'text':wrapped}, session=session)
+                button = None
+                send_deadline = time.monotonic()+5
+                while time.monotonic() < send_deadline:
+                    button = await self.evaluate(session, send_button_expression())
+                    if button:
+                        break
+                    await asyncio.sleep(.2)
                 if not button:
                     raise RuntimeError('Send button unavailable; draft preserved, no request sent')
                 # Durable write BEFORE mouse input. Any crash from here is recovery-only.
@@ -146,7 +195,7 @@ class ChromeChatGPTBridge:
             deadline = time.monotonic()+timeout_seconds
             previous = None
             while time.monotonic() < deadline:
-                state = await self.evaluate(session, snapshot_expression(marker))
+                state = correlate_turns(await self.evaluate(session, snapshot_expression(marker)), marker)
                 if state and (state.get('login') or state.get('challenge')):
                     self.authenticated = False
                     raise NeedsAuthentication('Authentication required; pending request retained, not resent')

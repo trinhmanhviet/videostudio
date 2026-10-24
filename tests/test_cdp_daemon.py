@@ -47,4 +47,72 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         r=await self.client.post('/api/chat',json={'prompt':'hello'},headers={'X-VS-Client':'videostudio'})
         self.assertEqual(r.status,400)
 
+    def page_state(self,mode='chat',draft=''):
+        return {'url':'https://chatgpt.com/','composer':True,'login':False,'challenge':False,'mode':mode,'draft':draft}
+    async def setup_page(self):
+        self.bridge.ensure_tab=AsyncMock(return_value='own')
+        self.bridge.session=AsyncMock(return_value='session')
+        self.bridge.cdp=MagicMock()
+        self.bridge.cdp.command=AsyncMock(return_value={})
+        self.bridge.cdp.close=AsyncMock()
+    async def test_work_is_switched_to_chat_with_native_click_before_ready(self):
+        await self.setup_page()
+        self.bridge.evaluate=AsyncMock(side_effect=[self.page_state('work'),{'x':10,'y':20},self.page_state('chat')])
+        _,_,state=await self.bridge.page_ready('job')
+        self.assertEqual(state['mode'],'chat')
+        mouse=[c for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Input.dispatchMouseEvent']
+        self.assertEqual(len(mouse),2)
+        self.assertTrue(self.bridge.authenticated)
+    async def test_unknown_mode_fails_closed_without_typing(self):
+        await self.setup_page();self.bridge.evaluate=AsyncMock(return_value=self.page_state('unknown'))
+        with self.assertRaisesRegex(RuntimeError,'Chat mode'):
+            await self.bridge.page_ready('job',timeout=.1)
+        self.assertFalse(self.bridge.authenticated)
+    async def test_existing_work_draft_is_not_discarded_by_mode_switch(self):
+        await self.setup_page();self.bridge.evaluate=AsyncMock(return_value=self.page_state('work','unfinished work'))
+        with self.assertRaisesRegex(RuntimeError,'draft'):
+            await self.bridge.page_ready('job',timeout=.1)
+        self.assertFalse(any(c.args[0]=='Input.dispatchMouseEvent' for c in self.bridge.cdp.command.call_args_list))
+    async def test_already_chat_does_not_click_mode_again(self):
+        await self.setup_page();self.bridge.evaluate=AsyncMock(return_value=self.page_state('chat'))
+        await self.bridge.page_ready('job')
+        self.assertFalse(any(c.args[0]=='Input.dispatchMouseEvent' for c in self.bridge.cdp.command.call_args_list))
+
+    async def test_own_prepared_draft_can_resume_without_retyping(self):
+        import json
+        await self.setup_page();self.bridge.connect=AsyncMock()
+        r=self.bridge.journal.prepare('job','prompt');identifier=r['id']
+        marker='[VideoStudio request '+identifier+']'
+        wrapped=(marker+'\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
+        state=self.page_state('chat',wrapped.replace('\n','\n\n'))
+        self.bridge.page_ready=AsyncMock(return_value=('own','session',state))
+        response={'url':'https://chatgpt.com/c/own','mode':'chat','matched':True,'text':json.dumps({'request_id':identifier,'result':{'ok':True}}),'generating':False}
+        self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},response,response])
+        self.assertEqual(await self.bridge.ask_chatgpt('job','prompt'),{'ok':True})
+        self.assertFalse(any(c.args[0]=='Input.insertText' for c in self.bridge.cdp.command.call_args_list))
+    async def test_foreign_prepared_draft_is_never_overwritten(self):
+        await self.setup_page();self.bridge.connect=AsyncMock()
+        self.bridge.page_ready=AsyncMock(return_value=('own','session',self.page_state('chat','user draft')))
+        with self.assertRaisesRegex(RuntimeError,'draft'):
+            await self.bridge.ask_chatgpt('job','prompt')
+        self.assertFalse(any(c.args[0]=='Input.insertText' for c in self.bridge.cdp.command.call_args_list))
+
+    async def test_transient_page_load_evaluation_timeout_is_read_only_retried(self):
+        await self.setup_page()
+        self.bridge.evaluate=AsyncMock(side_effect=[TimeoutError('page loading'),self.page_state('chat')])
+        _,_,state=await self.bridge.page_ready('job',timeout=3)
+        self.assertEqual(state['mode'],'chat')
+        self.assertFalse(any(c.args[0].startswith('Input.') for c in self.bridge.cdp.command.call_args_list))
+
+    async def test_navigation_replaces_cdp_session_and_recovery_never_types(self):
+        from videostudio.cdp_protocol import CDPError
+        await self.setup_page()
+        self.bridge.ensure_tab=AsyncMock(side_effect=['old','new'])
+        self.bridge.session=AsyncMock(side_effect=['session1','session2'])
+        self.bridge.evaluate=AsyncMock(side_effect=[CDPError('Session with given id not found.'),self.page_state('chat')])
+        target,session,state=await self.bridge.page_ready('job',timeout=3)
+        self.assertEqual((target,session),('new','session2'))
+        self.assertEqual(state['mode'],'chat')
+        self.assertFalse(any(c.args[0].startswith('Input.') for c in self.bridge.cdp.command.call_args_list))
+
 if __name__=='__main__':unittest.main()
