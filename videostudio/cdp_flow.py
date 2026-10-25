@@ -326,8 +326,11 @@ class FlowImages:
                     await self._click_point(session,box)
                     await self.bridge.cdp.command('Input.insertText',{'text':prompt},session=session)
                     state=await self._wait_page(session,lambda s:s.get('draftMatches'),timeout=6,prompt=prompt)
-                await self._ensure_agent_and_settings(session,prompt)
-                receipt.update({'stage':'submitting','updated_at':time.time()});self._write_receipt(task_id,receipt)
+                configured=await self._ensure_agent_and_settings(session,prompt)
+                cost_line=next((x for x in configured.get('creditLines',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I)),None)
+                if not cost_line or configured.get('agentOn') is not False:
+                    raise FlowTaskError('Zero-credit/Agent-off confirmation changed before Submit; no image request sent','needs_zero_credit')
+                receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_confirmation':cost_line,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 await self._click_named(session,'Bắt đầu tạo',exact=True)
                 receipt.update({'stage':'waiting_result','updated_at':time.time()});self._write_receipt(task_id,receipt)
             if not receipt.get('stage') in ('image_ready','download_menu_open','downloading'):
