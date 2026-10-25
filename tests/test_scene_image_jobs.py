@@ -27,6 +27,30 @@ class ImageParserTests(unittest.TestCase):
         self.assertIsNone(q.correlated_download(events,'owned'))
         guid=str(uuid.uuid4());events.extend([{'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},{'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed'}}])
         self.assertEqual(q.correlated_download(events,'owned'),guid)
+    def test_image_download_deduplicates_identical_start_events_and_rejects_conflicting_guids(self):
+        q=self.module();guid=str(uuid.uuid4())
+        # Duplicate start events for the same frameId and GUID should succeed
+        dup_events=[
+            {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
+            {'method':'Page.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
+            {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
+            {'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed'}}
+        ]
+        self.assertEqual(q.correlated_download(dup_events,'owned'),guid)
+        # Conflicting GUIDs for the same frameId must be rejected
+        other_guid=str(uuid.uuid4())
+        conflicting=[
+            {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
+            {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':other_guid}},
+            {'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed'}}
+        ]
+        self.assertIsNone(q.correlated_download(conflicting,'owned'))
+        # Incomplete download must be rejected
+        incomplete=[
+            {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
+            {'method':'Browser.downloadProgress','params':{'guid':guid,'state':'inProgress'}}
+        ]
+        self.assertIsNone(q.correlated_download(incomplete,'owned'))
     def test_recovery_can_read_matching_image_under_open_viewer_without_known_mode(self):
         q=self.module();s=self.state();s['mode']='unknown';self.assertIsNotNone(q.match_image(s,'[image-marker]'))
         s['mode']='work';self.assertIsNone(q.match_image(s,'[image-marker]'))
