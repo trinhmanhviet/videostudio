@@ -14,11 +14,11 @@ from .media import asset, probe, render, verify, run
 
 def node(kind,**inputs):return {'class_type':kind,'inputs':inputs}
 
-def image_graph(prompt,seed,prefix):
+def image_graph(prompt,seed,prefix,negative_prompt='blur, watermark, distorted anatomy, text'):
     return {'1':node('UNETLoader',unet_name='qwen_image_2.1_int8_convrot.safetensors',weight_dtype='default'),
     '2':node('CLIPLoader',clip_name='qwen3vl_8b_int8_convrot.safetensors',type='qwen_image',device='default'),
     '3':node('VAELoader',vae_name='qwen_image_2.1_vae_bf16.safetensors'),
-    '4':node('TextEncodeQwenImage21',clip=['2',0],prompt=prompt,negative_prompt='blur, watermark, distorted anatomy, text',resolution=1024,vae=['3',0]),
+    '4':node('TextEncodeQwenImage21',clip=['2',0],prompt=prompt,negative_prompt=negative_prompt,resolution=1024,vae=['3',0]),
     '5':node('EmptyLatentImage',width=768,height=1376,batch_size=1),
     '6':node('KSampler',model=['1',0],seed=seed,steps=25,cfg=1,sampler_name='euler',scheduler='simple',positive=['4',0],negative=['4',1],latent_image=['5',0],denoise=1),
     '7':node('VAEDecode',samples=['6',0],vae=['3',0]),'8':node('SaveImage',images=['7',0],filename_prefix=prefix)}
@@ -539,7 +539,48 @@ class Pipeline:
         target=j['request']['duration_seconds'];tolerance=min(5.0,max(2.0,target*.25))
         if actual_dur>target or target-actual_dur>tolerance:raise NarrationDurationError(f'Measured narration {actual_dur:.2f}s does not naturally match {target}s; allowed final visual hold {tolerance:.2f}s')
         return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'assets':assets+[asset(out)]}
+    def _visual_workflow(self,j,compiled,index):
+        # Fixed prefix only for identity; output filename is derived from the resulting key.
+        return image_graph(compiled['positive'],int(j['id'].replace('-','')[:8],16)+index,'visual-conditioning-key',compiled['negative'])
+    def _required_images(self,j,check):
+        from .visual_quality import load_contracts,compile_prompt,conditioning_key,receipt_passes,review_image,atomic_json,receipt_signature
+        from PIL import Image,ImageStat
+        policy=Path(j['output'])/'visual-policy.json'
+        if not policy.exists():atomic_json(policy,{'schema_version':1,'job_id':j['id'],'mode':'required'})
+        document,utterances,contracts,contract_file=load_contracts(j)
+        if receipt_signature({}) is None:raise PermanentError('Visual quality: local receipt-signing configuration missing; no GPU submission performed')
+        entries=[];assets=[asset(contract_file),asset(policy)];reviewer=getattr(self,'visual_reviewer',None)
+        # Without a supported image transport, fail BEFORE spending GPU on unreviewable images.
+        planned=[]
+        for i,u in enumerate(utterances):
+            check();c=contracts[u['scene_id']];compiled=compile_prompt(u['visual_prompt'],document['project'],c)
+            key=conditioning_key(compiled['positive'],compiled['negative'],c,self._visual_workflow(j,compiled,i))
+            kind='images-vq-'+u['scene_id']+'-'+key[:20]
+            path=Path(j['output'])/(kind+'.png');review_path=path.with_suffix('.review.json')
+            try:r=json.loads(review_path.read_text(encoding='utf8'))
+            except (OSError,ValueError):r={}
+            if reviewer is None and not receipt_passes(r,path,c,key):raise PermanentError('Visual quality: needs_review; no verified image reviewer transport. No GPU submission performed.')
+            planned.append((i,u,c,compiled,key,kind,path,review_path,r))
+        for i,u,c,compiled,key,kind,path,review_path,r in planned:
+            check()
+            if not path.is_file():
+                graph=image_graph(compiled['positive'],int(j['id'].replace('-','')[:8],16)+i,'videostudio/'+j['id']+'-'+kind,compiled['negative'])
+                self.comfy_asset(j,kind,graph,path,check)
+            with Image.open(path) as picture:
+                picture.load()
+                if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Visual quality: technically invalid image')
+            if not receipt_passes(r,path,c,key):
+                r=review_image(path,c,key,reviewer,check);atomic_json(review_path,r)
+            if not receipt_passes(r,path,c,key):raise PermanentError('Visual quality: '+r.get('status','needs_review')+' for '+u['scene_id']+'; no automatic acceptance or resubmission')
+            entries.append({'path':str(path),'duration':u['duration'],'scene_id':u['scene_id'],'review_path':str(review_path),'conditioning_key':key})
+            assets.extend([asset(path),asset(review_path)])
+        hold=j['request']['duration_seconds']-j['checkpoints']['speech']['duration_seconds']
+        if hold<0:raise PermanentError('Visual quality: narration exceeds requested duration')
+        entries[-1]['duration']+=hold
+        return {'scenes':entries,'assets':assets,'visual_qa_status':'pass','visual_qa_required':True,'visual_qa_scope':'artifact_bound_review','reviewer_accuracy_validated':False}
     def images(self,j,check):
+        from .visual_quality import gate_mode
+        if gate_mode(j)=='required':return self._required_images(j,check)
         from .core import digest
         from PIL import Image,ImageStat
         scenes=[];assets=[]
@@ -561,7 +602,7 @@ class Pipeline:
             scenes.append({'path':str(path),'duration':u['duration']});assets.append(asset(path))
         # A short natural tail hold belongs to the final scene, not stretched speech.
         scenes[-1]['duration']+=j['request']['duration_seconds']-j['checkpoints']['speech']['duration_seconds']
-        return {'scenes':scenes,'assets':assets}
+        return {'scenes':scenes,'assets':assets,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
     def subtitles(self,j,check):
         from .captions import write_captions
         check();p=Path(j['output'])/'subtitles.srt'
@@ -586,10 +627,14 @@ class Pipeline:
         result['assets'].extend(normalized['assets'])
         return result
     def render(self,j,check):
+        from .visual_quality import require_release
+        require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'store',None):self.store.log(j['id'],'render','Đang kết hợp hình ảnh, phụ đề, âm thanh và xuất video MP4...')
         cp=j['checkpoints'];vol=j['request'].get('music_volume',0.35)
         return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe,music_volume=vol)
     def verify(self,j,check):
+        from .visual_quality import require_release
+        visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'store',None):self.store.log(j['id'],'verify','Đang kiểm tra chất lượng video thành phẩm...')
         p=j['checkpoints']['render']['video'];v=verify(p,j['request']['duration_seconds'],self.ffprobe)
         run([self.ffmpeg,'-v','error','-i',p,'-f','null','-'],check,timeout=900)
@@ -597,5 +642,5 @@ class Pipeline:
         v['audio_quality']=audio_report(p,check,self.ffmpeg)
         black=run([self.ffmpeg,'-v','error','-i',p,'-an','-vf','blackdetect=d=0.3:pix_th=0.03:pic_th=0.99,metadata=mode=print:file=-','-f','null','-'],check,timeout=900)
         if b'lavfi.black_start=' in black:raise PermanentError('Near-total black interval detected in rendered output')
-        v.update(full_video_decode_ok=True,near_total_black_check_passed=True,semantic_viewing_performed=False)
+        v.update(full_video_decode_ok=True,near_total_black_check_passed=True,semantic_viewing_performed=False,visual_quality=visual_quality)
         return v

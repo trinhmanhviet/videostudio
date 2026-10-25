@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "source_job": "E:\\Videos\\1-000-nam-tien-hoa-cua-ao-giap-chau-au-cuoc-chay-dua-giua-th-20261025-032619",
+  "limitations": [
+    "Control labels are narrow visual checks, not historical certification.",
+    "No autonomous VLM transport evaluated; these labels are not predictions.",
+    "Existing images are referenced by hash, not edited or regenerated."
+  ],
+  "cases": [
+    {
+      "case_id": "armor-0174",
+      "source_scene_index": 174,
+      "intent": "reconstruction",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\18016af8-339d-4ef1-811f-c36d6d02da70.png",
+      "image_sha256": "34f9e01a9d303b652739f08454fec7481a71f255d21934a1e6dc8d3ffbe70b91",
+      "narration": "Mỗi món có nhiệm vụ riêng và gắn với điều kiện sử dụng.",
+      "original_prompt": "Medium camera, separated protective equipment components arranged clearly on stands, historical workshop, balanced warm lighting.",
+      "expected": "fail",
+      "observations": [
+        "Disposable blue masks and clear plastic shields replace historical armor components."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "visible defects, not comprehensive historical authentication"
+    },
+    {
+      "case_id": "armor-0182",
+      "source_scene_index": 182,
+      "intent": "comparison",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\32874c01-e74a-4c66-9d2c-27a557a18022.png",
+      "image_sha256": "ee2d2585f7f6563f9145a9b361a9ed349b2050967b0d0f31e6cb69b4ffdf6892",
+      "narration": "Vật liệu khác, hình dáng khác, nhưng nhu cầu bảo vệ vẫn hiện diện.",
+      "original_prompt": "Slow orbit camera, historical steel breastplate contrasted symbolically with modern protective vest, museum gallery, soft neutral lighting.",
+      "expected": "fail",
+      "observations": [
+        "Ancient-style helmet and metal shoulders fused to one modern nylon tactical vest. Comparison objects are not separated."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "visible defects, not comprehensive historical authentication"
+    },
+    {
+      "case_id": "armor-0184",
+      "source_scene_index": 184,
+      "intent": "comparison",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\3855b436-469d-4206-a354-5ae9bc963047.png",
+      "image_sha256": "05ce866e8a9f0586341822a7bebb8af607660d59ee303f212fbb9e25455b39d5",
+      "narration": "Điểm chung là che chắn cơ thể mà vẫn giữ khả năng hoạt động.",
+      "original_prompt": "Comparative tracking camera, historical armored warrior and modern protective-equipment wearer shown in separate environments, natural daylight.",
+      "expected": "fail",
+      "observations": [
+        "Split layout exists, but historical figure is not identified as European equipment; bottom helmet mixes metal armor with transparent modern visor."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "visible defects, not comprehensive historical authentication"
+    },
+    {
+      "case_id": "armor-0156",
+      "source_scene_index": 156,
+      "intent": "reconstruction",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\f86ae0f3-46dc-46ad-81b5-3cb364ae145c.png",
+      "image_sha256": "58d2d445d2b162e59054921db5808863407886794290013cf8ff741182c9b101",
+      "narration": "Một phép thử đơn lẻ cũng chưa kể hết giá trị của trang bị.",
+      "original_prompt": "Documentary close-up camera, metal test specimen beside complete wearable armor system, workshop research table, balanced light.",
+      "expected": "fail",
+      "observations": [
+        "Modern hook-and-loop-like woven straps and contemporary workshop equipment; medieval material constraints absent."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "visible defects, not comprehensive historical authentication"
+    },
+    {
+      "case_id": "armor-0138",
+      "source_scene_index": 138,
+      "intent": "reconstruction",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\6a743afd-f224-46dd-85cb-2851752b4116.png",
+      "image_sha256": "f2f234bf2bb206c706648b5d38ee586f8eec56b6d305b630b0fd9ad0532d5fcd",
+      "narration": "Anh đưa tay lên ngang vai, rồi quay người sang bên.",
+      "original_prompt": "Smooth medium tracking camera, armored warrior raising arm to shoulder height and rotating torso, workshop courtyard, diffuse daylight.",
+      "expected": "fail",
+      "observations": [
+        "Futuristic hybrid armor and gun-like object held near head, inconsistent with requested unarmed arm/torso movement."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "visible defects, not comprehensive historical authentication"
+    },
+    {
+      "case_id": "forge-ending-control",
+      "source_scene_index": 195,
+      "intent": "reconstruction",
+      "image_path": "E:\\Videos\\1-000-nam-tien-hoa-cua-ao-giap-chau-au-cuoc-chay-dua-giua-th-20261025-032619\\images-0195.png",
+      "image_sha256": "0063e48fb2a1d4953b49813d1ce6fd2dda9721ba648078524c856820b47605a0",
+      "narration": "Ánh lửa tắt dần. Chiếc đe chìm vào im lặng.",
+      "original_prompt": "Locked-off final camera, inherited iron anvil beside resting hammer as last forge ember fades, empty timber-and-stone workshop, near-darkness fading to black.",
+      "expected": "pass",
+      "observations": [
+        "Visible anvil and resting wood-handled hammer match ending. No obvious tactical/PPE hybrid."
+      ],
+      "label_origin": "agent native pixel inspection",
+      "label_scope": "object/action control only; precise era and metallurgy not certified"
+    },
+    {
+      "case_id": "modern-ppe-control",
+      "source_scene_index": null,
+      "intent": "contemporary",
+      "image_path": "C:\\Users\\leath\\aicoworker\\openclaw\\media\\outbound\\18016af8-339d-4ef1-811f-c36d6d02da70.png",
+      "image_sha256": "34f9e01a9d303b652739f08454fec7481a71f255d21934a1e6dc8d3ffbe70b91",
+      "narration": "Display modern safety masks and face shields in a prop workshop.",
+      "original_prompt": "Two modern PPE masks and clear face shields on stands in a workshop.",
+      "expected": "pass",
+      "observations": [
+        "Disposable masks and face shields are the explicitly requested objects."
+      ],
+      "label_origin": "agent native pixel inspection + user defect reports",
+      "label_scope": "subject match under alternate modern intent only; not acceptance of original historical scene"
+    }
+  ]
+}
