@@ -23,7 +23,8 @@ class RequestJournal:
         with self.db() as c:
             c.executescript('''PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,job TEXT NOT NULL,prompt_hash TEXT NOT NULL,state TEXT NOT NULL,response TEXT);
-            CREATE TABLE IF NOT EXISTS conversations(job TEXT PRIMARY KEY,url TEXT NOT NULL,target TEXT NOT NULL);''')
+            CREATE TABLE IF NOT EXISTS conversations(job TEXT PRIMARY KEY,url TEXT NOT NULL,target TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS owned_targets(target TEXT PRIMARY KEY,purpose TEXT NOT NULL);''')
 
     @contextmanager
     def db(self):
@@ -90,3 +91,15 @@ class RequestJournal:
             raise ValueError('Only exact chatgpt.com conversation URLs allowed')
         with self.db() as c:
             c.execute('INSERT OR REPLACE INTO conversations VALUES(?,?,?)', (job, url, target))
+
+    def own_target(self,target,purpose):
+        if purpose not in ('text','image'):raise ValueError('Invalid owned target purpose')
+        with self.db() as c:c.execute('INSERT OR REPLACE INTO owned_targets VALUES(?,?)',(target,purpose))
+    def target_purpose(self,target):
+        with self.db() as c:r=c.execute('SELECT purpose FROM owned_targets WHERE target=?',(target,)).fetchone()
+        return r['purpose'] if r else None
+
+    def reusable_text_target(self,target,url):
+        if self.target_purpose(target)!='text':return False
+        with self.db() as c:r=c.execute('SELECT url FROM conversations WHERE target=? ORDER BY rowid DESC LIMIT 1',(target,)).fetchone()
+        return bool(r and r['url'].split('?')[0].rstrip('/')==url.split('?')[0].rstrip('/'))

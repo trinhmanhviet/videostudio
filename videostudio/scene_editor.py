@@ -21,6 +21,7 @@ class SceneEditor:
             CREATE TABLE IF NOT EXISTS scene_active_edits(job TEXT,scene TEXT,edit_id TEXT,PRIMARY KEY(job,scene));
             CREATE TABLE IF NOT EXISTS scene_user_approvals(job TEXT,scene TEXT,image_sha256 TEXT,timeline_sha256 TEXT,created REAL,PRIMARY KEY(job,scene));
             CREATE TABLE IF NOT EXISTS scene_exports(child TEXT PRIMARY KEY,parent TEXT,version INTEGER,confirm_all INTEGER,snapshot_sha256 TEXT);
+            CREATE TABLE IF NOT EXISTS scene_image_sources(edit TEXT PRIMARY KEY,provider TEXT NOT NULL,task_id TEXT NOT NULL,request_id TEXT NOT NULL);
             ''')
     def mode(self,j):
         with self.store.db() as c:r=c.execute('SELECT mode FROM scene_editor_heads WHERE job=?',(j['id'],)).fetchone()
@@ -48,7 +49,7 @@ class SceneEditor:
             edits={r['scene']:dict(r) for r in c.execute('SELECT a.scene,e.* FROM scene_active_edits a JOIN scene_image_edits e ON a.edit_id=e.id WHERE a.job=?',(jid,))}
             approvals={r['scene']:dict(r) for r in c.execute('SELECT * FROM scene_user_approvals WHERE job=?',(jid,))}
             history={}
-            for r in c.execute('SELECT id,scene,sha256,fit,created FROM scene_image_edits WHERE job=? ORDER BY created DESC',(jid,)):history.setdefault(r['scene'],[]).append(dict(r))
+            for r in c.execute('SELECT e.id,e.scene,e.sha256,e.fit,e.created,COALESCE(s.provider,"upload") AS provider FROM scene_image_edits e LEFT JOIN scene_image_sources s ON s.edit=e.id WHERE e.job=? ORDER BY e.created DESC',(jid,)):history.setdefault(r['scene'],[]).append(dict(r))
         for row in layout:
             sid=row['scene_id'];edit=edits.get(sid);row.update(image_path=edit['path'] if edit else row['original_path'],image_sha256=edit['sha256'] if edit else row['original_sha256'],edit_id=edit['id'] if edit else 'original',fit=edit['fit'] if edit else 'original',history=history.get(sid,[]))
             approved=approvals.get(sid)
@@ -74,7 +75,7 @@ class SceneEditor:
         for row in view['scenes']:
             if row['scene_id']==sid:return row
         raise ValueError('Scene not found')
-    def replace(self,jid,sid,raw,fit,version):
+    def replace(self,jid,sid,raw,fit,version,generated_task=None):
         if fit not in ('cover','contain'):raise ValueError('Framing must be cover or contain')
         if not isinstance(raw,bytes) or not 0<len(raw)<=MAX_UPLOAD:raise ValueError('Image upload must be between 1 byte and 20 MB')
         v=self.view(jid);self._scene(v,sid)
@@ -92,11 +93,18 @@ class SceneEditor:
         edit=uuid.uuid4().hex;folder=self.store.path.parent/'scene-edits'/jid;folder.mkdir(parents=True,exist_ok=True);path=folder/(edit+'.png')
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE');self._mutable(c,jid,version)
+            if generated_task:
+                task=c.execute("SELECT * FROM scene_image_tasks WHERE id=? AND job=? AND scene=? AND state='completed'",(generated_task,jid,sid)).fetchone()
+                if not task or task['timeline_sha256']!=v['timeline_sha256']:raise ValueError('Generated image candidate is stale or already applied')
             prepared.save(path,format='PNG');sha=digest(path)
             c.execute('INSERT INTO scene_image_edits VALUES(?,?,?,?,?,?,?)',(edit,jid,sid,str(path.resolve()),sha,fit,time.time()))
             c.execute('INSERT OR REPLACE INTO scene_active_edits VALUES(?,?,?)',(jid,sid,edit))
             # Upload is an explicit user selection, NOT model certification.
             c.execute('INSERT OR REPLACE INTO scene_user_approvals VALUES(?,?,?,?,?)',(jid,sid,sha,v['timeline_sha256'],time.time()))
+            if generated_task:
+                receipt=json.loads(task['result'])['request_id']
+                c.execute('INSERT INTO scene_image_sources VALUES(?,?,?,?)',(edit,task['provider'],generated_task,receipt))
+                c.execute("UPDATE scene_image_tasks SET state='applied',applied_edit_id=?,updated=? WHERE id=?",(edit,time.time(),generated_task))
             self._bump(c,jid);self.store.event(c,jid,'images','user_image_selected',sid)
         return self.view(jid)
     def restore(self,jid,sid,edit,version):

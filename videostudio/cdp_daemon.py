@@ -13,6 +13,7 @@ from .cdp_protocol import CDPConnection, CDPError
 from .cdp_requests import RequestJournal, IndeterminateRequest, valid_chat_url
 from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, correlate_turns
 from .exchanges import parse_reply
+from .cdp_images import ChatGPTImages, ImageAuthentication, ImageRejected
 
 
 class NeedsAuthentication(RuntimeError):
@@ -29,8 +30,10 @@ class ChromeChatGPTBridge:
         self.job_lock = asyncio.Lock()
         self.authenticated = False
         self.last_error = None
+        self.images = ChatGPTImages(self, ROOT/'data'/'chatgpt-images')
 
     def on_event(self, event):
+        if getattr(self,'images',None):self.images.on_event(event)
         if event.get('method') in ('Target.targetDestroyed', 'Target.targetCrashed'):
             self.sessions.pop(event.get('params', {}).get('targetId'), None)
 
@@ -73,7 +76,7 @@ class ChromeChatGPTBridge:
         else:
             # Reuse active ChatGPT tab if one already exists
             for t in targets:
-                if t.get('type') == 'page' and valid_chat_url(t.get('url','')):
+                if t.get('type') == 'page' and valid_chat_url(t.get('url','')) and self.journal.reusable_text_target(t.get('targetId'),t.get('url','')):
                     target = t['targetId']
                     self.journal.set_conversation(job, t.get('url', 'https://chatgpt.com/'), target)
                     break
@@ -81,18 +84,11 @@ class ChromeChatGPTBridge:
             url = saved['url'] if saved else 'https://chatgpt.com/'
             created = await self.cdp.command('Target.createTarget', {'url':url})
             target = created['targetId']
+            self.journal.own_target(target,'text')
             self.journal.set_conversation(job, url, target)
 
-        # Close all other page tabs to keep only one active tab and save RAM
-        for t in targets:
-            tid = t.get('targetId')
-            if t.get('type') == 'page' and tid != target:
-                try:
-                    await self.cdp.command('Target.closeTarget', {'targetId': tid})
-                    self.sessions.pop(tid, None)
-                except BaseException:
-                    pass
-
+        # Never close tabs merely because they are present. Uncertain image requests
+        # and owner-opened conversations remain untouched; reuse only attested text tabs.
         return target
 
     async def session(self, target):
@@ -282,6 +278,8 @@ async def create_app(bridge=None):
                 value = await bridge.open_login()
             elif request.path.endswith('/probe'):
                 value = await bridge.probe_login()
+            elif request.path == '/api/images/generate':
+                value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'))}
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
@@ -289,7 +287,10 @@ async def create_app(bridge=None):
                 value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt)}
             bridge.last_error = None
             return web.json_response(value)
-        except NeedsAuthentication as e:
+        except ImageRejected as e:
+            bridge.last_error = 'image_rejected'
+            return web.json_response({'ok':False,'code':'image_rejected','error':str(e)},status=422)
+        except (NeedsAuthentication,ImageAuthentication) as e:
             bridge.last_error = 'authentication_required'
             return web.json_response({'ok':False,'code':'authentication_required','error':str(e)}, status=409)
         except IndeterminateRequest as e:
@@ -306,7 +307,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

@@ -19,6 +19,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     pipeline.store=store
     from .scene_editor import SceneEditor
     scene_editor=SceneEditor(store);pipeline.scene_editor=scene_editor
+    from .scene_images import SceneImageJobs
+    image_jobs=SceneImageJobs(store,scene_editor)
     from .exchanges import Exchanges
     exchanges=Exchanges(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
@@ -26,7 +28,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def loop():
         while not stop.is_set():
             working.set()
-            try: did=worker.step()
+            try: did=image_jobs.step(worker.owner) or worker.step()
             except Exception:did=False
             finally:working.clear()
             if not did:stop.wait(.5)
@@ -45,9 +47,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         # checkpoint recoverable, rather than falsely changing it to success.
         for t in threads:t.join(timeout=2)
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
-    app.state.store=store;app.state.pipeline=pipeline
+    app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs
     @app.get('/api/health')
-    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled}
+    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True}
     def diagnose_job_error(j):
         err=j.get('error')
         if not err:return None
@@ -309,7 +311,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         origin=request.headers.get('origin')
         if origin and urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
     from .editor_api import register_editor_routes
-    register_editor_routes(app,store,scene_editor,same_origin,public_job)
+    register_editor_routes(app,store,scene_editor,same_origin,public_job,image_jobs)
     @app.post('/api/connector/sessions')
     def connector_session(request:Request):
         same_origin(request)

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse,Response
 from PIL import Image
 from .scene_editor import MAX_UPLOAD
 
-def register_editor_routes(app,store,editor,same_origin,public_job):
+def register_editor_routes(app,store,editor,same_origin,public_job,image_jobs):
     prefix='/api/jobs/{job_id}/scene-editor'
     def call(fn,*args):
         try:return fn(*args)
@@ -53,3 +53,30 @@ def register_editor_routes(app,store,editor,same_origin,public_job):
     @app.post(prefix+'/export')
     def export(job_id:str,data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
         same_origin(request);child=call(editor.export,job_id,data.get('version'),idempotency_key,data.get('confirm_all',False));return public_job(child)
+
+    generations=prefix+'/scenes/{scene_id}/generations'
+    @app.get(generations)
+    def image_generations(job_id:str,scene_id:str):
+        return {'items':[image_jobs.public(t) for t in call(image_jobs.list,job_id,scene_id)],'providers':['chatgpt']}
+    @app.post(generations,status_code=202)
+    def generate_scene_image(job_id:str,scene_id:str,data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
+        same_origin(request)
+        return image_jobs.public(call(image_jobs.start,job_id,scene_id,data.get('prompt'),data.get('provider','chatgpt'),idempotency_key,data.get('version')))
+    @app.get(generations+'/{task_id}')
+    def image_generation_status(job_id:str,scene_id:str,task_id:str):
+        return image_jobs.public(call(image_jobs.scoped,job_id,scene_id,task_id))
+    @app.get(generations+'/{task_id}/image')
+    def image_generation_file(job_id:str,scene_id:str,task_id:str):
+        p=call(image_jobs.candidate,job_id,scene_id,task_id)
+        with Image.open(p) as im:kind=Image.MIME.get(im.format,'application/octet-stream')
+        return FileResponse(p,media_type=kind)
+    @app.post(generations+'/{task_id}/apply')
+    def apply_image_generation(job_id:str,scene_id:str,task_id:str,data:dict,request:Request):
+        same_origin(request)
+        return public(call(image_jobs.apply,job_id,scene_id,task_id,data.get('version'),data.get('fit','cover')))
+    @app.post(generations+'/{task_id}/resume')
+    def resume_image_generation(job_id:str,scene_id:str,task_id:str,request:Request):
+        same_origin(request);return image_jobs.public(call(image_jobs.resume,job_id,scene_id,task_id))
+    @app.post(generations+'/{task_id}/cancel')
+    def cancel_image_generation(job_id:str,scene_id:str,task_id:str,request:Request):
+        same_origin(request);return image_jobs.public(call(image_jobs.cancel,job_id,scene_id,task_id))
