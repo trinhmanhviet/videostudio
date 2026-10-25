@@ -5,7 +5,7 @@ apps/worker-media/studio_media/speech.py; providers/llm/chatgpt2api.py.
 No connector/browser implementation and no model downloads. LLM URL/model/key
 must be explicitly configured; only loopback OpenAI-compatible endpoints allowed.
 """
-import importlib.util, json, os, time, shutil
+import importlib.util, json, os, time, shutil, re
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
@@ -22,6 +22,14 @@ def image_graph(prompt,seed,prefix,negative_prompt='blur, watermark, distorted a
     '5':node('EmptyLatentImage',width=768,height=1376,batch_size=1),
     '6':node('KSampler',model=['1',0],seed=seed,steps=25,cfg=1,sampler_name='euler',scheduler='simple',positive=['4',0],negative=['4',1],latent_image=['5',0],denoise=1),
     '7':node('VAEDecode',samples=['6',0],vae=['3',0]),'8':node('SaveImage',images=['7',0],filename_prefix=prefix)}
+
+def _safe_relative_output_folder(value):
+    if not isinstance(value,str):raise PermanentError('Unsafe Comfy output folder')
+    normalized=value.replace(chr(92),'/')
+    if not normalized or normalized.startswith('/') or ':' in normalized:raise PermanentError('Unsafe Comfy output folder')
+    parts=normalized.split('/')
+    if any(part in ('','.', '..') for part in parts):raise PermanentError('Unsafe Comfy output folder')
+    return '/'.join(parts)
 
 def music_graph(prompt,seconds,seed,prefix):
     return {'1':node('CheckpointLoaderSimple',ckpt_name='stable_audio_3_medium_base.safetensors'),
@@ -206,10 +214,18 @@ class Pipeline:
                 check();r=c.get('history/'+pid);r.raise_for_status();h=r.json().get(pid)
                 if h:
                     if h.get('status',{}).get('status_str')=='error':raise PermanentError('Comfy generation failed')
+                    prefix=graph['8']['inputs']['filename_prefix']
+                    prompt_record=h.get('prompt')
+                    saved_graph=prompt_record[2] if isinstance(prompt_record,list) and len(prompt_record)>2 and isinstance(prompt_record[2],dict) else None
+                    saved_prefix=saved_graph.get('8',{}).get('inputs',{}).get('filename_prefix') if saved_graph else None
+                    if saved_prefix!=prefix:raise PermanentError('Comfy history graph does not match task-specific prefix')
                     outputs=h.get('outputs',{}).get('8',{});items=outputs.get('images' if kind.startswith('images') else 'audio',[])
                     if items:
-                        a=items[0];prefix=graph['8']['inputs']['filename_prefix'];folder,name=prefix.rsplit('/',1)
-                        if a.get('type')!='output' or a.get('subfolder')!=folder or not a.get('filename','').startswith(name+'_') or '/' in a['filename'] or '\\' in a['filename']:raise PermanentError('Unsafe Comfy output')
+                        a=items[0];folder,name=prefix.rsplit('/',1)
+                        filename=a.get('filename','');subfolder=a.get('subfolder','')
+                        if (a.get('type')!='output' or _safe_relative_output_folder(subfolder)!=_safe_relative_output_folder(folder)
+                            or not isinstance(filename,str) or not filename.startswith(name+'_') or filename in ('','.','..')
+                            or '/' in filename or chr(92) in filename or ':' in filename):raise PermanentError('Unsafe Comfy output')
                         content=c.get('view',params=a);content.raise_for_status()
                         if len(content.content)>64*1024*1024:raise PermanentError('Comfy asset too large')
                         destination=Path(path);destination.parent.mkdir(parents=True,exist_ok=True)

@@ -80,6 +80,26 @@ class SceneImageJobs:
             raise
         with Image.open(output) as im:im.load();width,height=im.size
         return {'task_id':task['id'],'file_path':str(output.resolve()),'sha256':digest(output),'width':width,'height':height,'request_id':result['prompt_id'],'source':'comfy_qwen_image_2_1'}
+    def recover_existing_comfy_result(self,jid,sid,identifier):
+        """Fetch an already-finished Comfy history result after metadata canonicalization fixes; never POST a prompt."""
+        task=self.scoped(jid,sid,identifier)
+        if task['provider']!='comfy' or task['state']!='failed' or task['error']!='Unsafe Comfy output':
+            raise ValueError('Only the specifically rejected Comfy output-format task is recoverable')
+        with self.store.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            if c.execute("UPDATE scene_image_tasks SET state='running',updated=? WHERE id=? AND state='failed' AND error='Unsafe Comfy output'",(time.time(),identifier)).rowcount!=1:
+                raise ValueError('Comfy recovery task changed; not resumed')
+        current=self.get(identifier)
+        try:
+            result=self._run_comfy(current) # strict receipt path: no new /prompt
+            validated=self._validate(current,result)
+            with self.store.db() as c:
+                c.execute("UPDATE scene_image_tasks SET state='completed',result=?,error=NULL,updated=? WHERE id=? AND state='running'",(json.dumps(validated),time.time(),identifier))
+                self.store.event(c,jid,'images','comfy_existing_history_recovered',sid)
+        except Exception as error:
+            with self.store.db() as c:c.execute("UPDATE scene_image_tasks SET state='failed',error=?,updated=? WHERE id=? AND state='running'",(str(error)[:1200],time.time(),identifier))
+            raise
+        return self.get(identifier)
     def _run_chatgpt(self,task):
         url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');p=urlparse(url)
         if p.scheme!='http' or p.hostname not in ('127.0.0.1','localhost','::1') or p.username or p.password:raise ImageTaskIssue('Only loopback dedicated browser daemon allowed','failed')
