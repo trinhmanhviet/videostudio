@@ -32,7 +32,7 @@ class SceneImageJobs:
         with self.store.db() as c:ids=[r[0] for r in c.execute('SELECT id FROM scene_image_tasks WHERE job=? AND scene=? ORDER BY created DESC LIMIT 6',(jid,sid))]
         return [self.get(i) for i in ids]
     def start(self,jid,sid,prompt,provider,key,version):
-        if provider not in ('chatgpt','comfy'):raise ValueError('Only ChatGPT and Comfy scene generation are enabled; Flow is not implemented')
+        if provider not in ('chatgpt','comfy','flow'):raise ValueError('Unknown scene image provider')
         if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=12000 or '[VideoStudio image request ' in prompt:raise ValueError('Image prompt must be 1..12000 characters, without tracking markers')
         if not isinstance(key,str) or not 1<=len(key)<=150:raise ValueError('Idempotency-Key required (max 150)')
         prompt=prompt.strip();v=self.editor.view(jid);row=self.editor._scene(v,sid)
@@ -43,15 +43,16 @@ class SceneImageJobs:
                 identifier=old['id']
             else:
                 self.editor._mutable(c,jid,version)
-                if c.execute("SELECT 1 FROM scene_image_tasks WHERE job=? AND scene=? AND state IN ('queued','running','uncertain','needs_auth','needs_comfy_idle')",(jid,sid)).fetchone():raise ValueError('This scene already has a pending image request; resume or stop waiting first')
+                if c.execute("SELECT 1 FROM scene_image_tasks WHERE job=? AND scene=? AND state IN ('queued','running','uncertain','needs_auth','needs_comfy_idle','needs_zero_credit','needs_flow_check')",(jid,sid)).fetchone():raise ValueError('This scene already has a pending image request; resume or stop waiting first')
                 if c.execute("SELECT COUNT(*) FROM scene_image_tasks WHERE state IN ('queued','running')").fetchone()[0]>=10:raise ValueError('Image queue is full; wait before adding more scenes')
                 identifier=str(uuid.uuid4());now=time.time()
                 c.execute('INSERT INTO scene_image_tasks VALUES(?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL,?,?)',(identifier,key,jid,sid,prompt,provider,version,v['timeline_sha256'],row['image_sha256'],'queued',now,now))
-                self.store.event(c,jid,'images','image_generation_queued',sid+' via ChatGPT browser')
+                self.store.event(c,jid,'images','image_generation_queued',sid+' via '+provider)
         return self.get(identifier)
     def _run_provider(self,task):
         if task.get('provider')=='chatgpt':return self._run_chatgpt(task)
         if task.get('provider')=='comfy':return self._run_comfy(task)
+        if task.get('provider')=='flow':return self._run_flow(task)
         raise ImageTaskIssue('Unsupported scene image provider','failed')
     def _run_comfy(self,task):
         if self.pipeline is None:raise ImageTaskIssue('Comfy runner is not configured','failed')
@@ -100,6 +101,22 @@ class SceneImageJobs:
             with self.store.db() as c:c.execute("UPDATE scene_image_tasks SET state='failed',error=?,updated=? WHERE id=? AND state='running'",(str(error)[:1200],time.time(),identifier))
             raise
         return self.get(identifier)
+    def _run_flow(self,task):
+        url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');p=urlparse(url)
+        if p.scheme!='http' or p.hostname not in ('127.0.0.1','localhost','::1') or p.username or p.password:raise ImageTaskIssue('Only loopback dedicated browser daemon allowed','failed')
+        try:r=httpx.post(url+'/api/flow/images/generate',json={'task_id':task['id'],'job_id':task['job'],'prompt':task['prompt']},headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
+        except httpx.HTTPError as e:raise ImageTaskIssue('Flow browser result is unclear; reconcile the same request, never submit a replacement','uncertain') from e
+        try:body=r.json()
+        except ValueError as e:raise ImageTaskIssue('Flow browser response malformed; request state uncertain','uncertain') from e
+        if r.status_code!=200:
+            code=body.get('code');state=code if code in ('needs_auth','needs_zero_credit','needs_flow_check','uncertain') else 'uncertain'
+            raise ImageTaskIssue(body.get('error','Google Flow generation unavailable'),state)
+        value=body.get('data')
+        if not isinstance(value,dict) or value.get('task_id')!=task['id'] or not isinstance(value.get('request_id'),str):raise ImageTaskIssue('Flow result receipt does not match the scene task','uncertain')
+        source=(ROOT/'data'/'flow-images'/(task['id']+'.png')).resolve();received=Path(value.get('file_path','')).resolve()
+        if received!=source or not source.is_file() or digest(source)!=value.get('sha256'):raise ImageTaskIssue('Flow download path/hash is invalid','failed')
+        output=(self.download_root/(task['id']+'.png')).resolve();self.download_root.mkdir(parents=True,exist_ok=True);part=output.with_suffix('.part');shutil.copyfile(source,part);part.replace(output)
+        return {**value,'file_path':str(output),'sha256':digest(output),'source':'google_flow_nano_banana_2_1'}
     def _run_chatgpt(self,task):
         url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');p=urlparse(url)
         if p.scheme!='http' or p.hostname not in ('127.0.0.1','localhost','::1') or p.username or p.password:raise ImageTaskIssue('Only loopback dedicated browser daemon allowed','failed')
@@ -140,11 +157,11 @@ class SceneImageJobs:
     def resume(self,jid,sid,identifier):
         self.scoped(jid,sid,identifier)
         with self.store.db() as c:
-            if c.execute("UPDATE scene_image_tasks SET state='queued',error=NULL,updated=? WHERE id=? AND state IN ('uncertain','needs_auth','needs_comfy_idle')",(time.time(),identifier)).rowcount!=1:raise ValueError('Only uncertain/auth/comfy-idle requests can resume; no new task is created')
+            if c.execute("UPDATE scene_image_tasks SET state='queued',error=NULL,updated=? WHERE id=? AND state IN ('uncertain','needs_auth','needs_comfy_idle','needs_zero_credit','needs_flow_check')",(time.time(),identifier)).rowcount!=1:raise ValueError('Only uncertain/auth/comfy-idle requests can resume; no new task is created')
         return self.get(identifier)
     def cancel(self,jid,sid,identifier):
         self.scoped(jid,sid,identifier)
-        with self.store.db() as c:c.execute("UPDATE scene_image_tasks SET state='cancelled',updated=? WHERE id=? AND state IN ('queued','running','uncertain','needs_auth')",(time.time(),identifier))
+        with self.store.db() as c:c.execute("UPDATE scene_image_tasks SET state='cancelled',updated=? WHERE id=? AND state IN ('queued','running','uncertain','needs_auth','needs_zero_credit','needs_flow_check','needs_comfy_idle')",(time.time(),identifier))
         return self.get(identifier)
     def candidate(self,jid,sid,identifier):
         t=self.scoped(jid,sid,identifier);r=t.get('result')

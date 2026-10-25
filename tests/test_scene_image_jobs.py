@@ -156,7 +156,7 @@ class QueueTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t);q=self.queue(s);a=self.start(q,j);v=q.editor.view(j['id'])
             with self.assertRaises(ValueError):q.apply(j['id'],v['scenes'][1]['scene_id'],a['id'],v['version'],'cover')
-            with self.assertRaises(ValueError):q.start(j['id'],a['scene'],'prompt','flow','x',v['version'])
+            with self.assertRaises(ValueError):q.start(j['id'],a['scene'],'prompt','unknown','x',v['version'])
     def test_result_file_path_cannot_escape_expected_download_root(self):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t);q=self.queue(s);a=self.start(q,j);bad=Path(t)/'other.png';bad.write_bytes(picture());q.runner.side_effect=lambda task:{'task_id':task['id'],'file_path':str(bad),'sha256':digest(bad),'request_id':'bad'};q.step('worker');self.assertEqual(q.get(a['id'])['state'],'failed')
@@ -188,6 +188,14 @@ class ComfySceneRunnerTests(unittest.TestCase):
             self.assertEqual(caught.exception.code,'needs_comfy_idle');q.pipeline.comfy_asset.assert_called_once()
             self.assertFalse((q.download_root/(task_id+'.png')).exists())
             self.assertFalse((q.download_root/'comfy-tasks'/task_id/('images-scene-'+task_id+'-receipt.json')).exists())
+    def test_flow_provider_is_accepted_and_zero_credit_block_blocks_duplicate_scene_task(self):
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);view=q.editor.view(j['id']);sid=view['scenes'][0]['scene_id']
+            task=q.start(j['id'],sid,'Flow prompt','flow','flow-idem-key',view['version'])
+            self.assertEqual((task['provider'],task['state']),('flow','queued'))
+            with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='needs_zero_credit' WHERE id=?",(task['id'],))
+            with self.assertRaisesRegex(ValueError,'already has a pending'):q.start(j['id'],sid,'another prompt','flow','flow-second-key',view['version'])
+            resumed=q.resume(j['id'],sid,task['id']);self.assertEqual(resumed['id'],task['id']);self.assertEqual(resumed['state'],'queued')
     def test_comfy_provider_is_accepted_and_pending_deferral_blocks_duplicate_scene_task(self):
         with tempfile.TemporaryDirectory() as t:
             store,j=ready_job(t);q=QueueTests().queue(store);v=q.editor.view(j['id']);sid=v['scenes'][0]['scene_id']
@@ -196,6 +204,30 @@ class ComfySceneRunnerTests(unittest.TestCase):
             with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='needs_comfy_idle' WHERE id=?",(a['id'],))
             with self.assertRaisesRegex(ValueError,'already has a pending'):q.start(j['id'],sid,'another','comfy','second-key',v['version'])
             q.resume(j['id'],sid,a['id']);self.assertEqual(q.get(a['id'])['state'],'queued')
+
+class FlowSceneRunnerTests(unittest.TestCase):
+    def test_flow_result_enters_candidate_pipeline_without_applying(self):
+        from videostudio.scene_images import SceneImageJobs
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);sid=q.editor.view(j['id'])['scenes'][0]['scene_id'];task_id=str(uuid.uuid4());root=Path(t)
+            source=root/'data'/'flow-images'/(task_id+'.png');source.parent.mkdir(parents=True);Image.new('RGB',(1080,1920),'green').save(source,format='PNG')
+            value={'task_id':task_id,'file_path':str(source),'sha256':digest(source),'request_id':'flow-'+task_id,'width':1080,'height':1920,'source':'google_flow_nano_banana_2_1'}
+            task={'id':task_id,'job':j['id'],'scene':sid,'prompt':'scene prompt'}
+            response=__import__('httpx').Response(200,json={'ok':True,'data':value})
+            with patch('videostudio.scene_images.ROOT',root),patch('videostudio.scene_images.httpx.post',return_value=response) as post:
+                result=q._run_flow(task);validated=q._validate(task,result)
+            self.assertTrue(Path(validated['candidate_path']).is_file());self.assertEqual(validated['width'],1080);self.assertEqual(validated['height'],1920)
+            self.assertEqual(q.editor.view(j['id'])['scenes'][0]['edit_id'],'original')
+            self.assertIn('/api/flow/images/generate',post.call_args.args[0])
+    def test_nonzero_or_unconfirmed_flow_cost_becomes_resumable_without_file(self):
+        from videostudio.scene_images import SceneImageJobs,ImageTaskIssue
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);sid=q.editor.view(j['id'])['scenes'][0]['scene_id'];task={'id':str(uuid.uuid4()),'job':j['id'],'scene':sid,'prompt':'scene prompt'}
+            response=__import__('httpx').Response(409,json={'ok':False,'code':'needs_zero_credit','error':'Flow did not confirm 0 credits'})
+            with patch('videostudio.scene_images.httpx.post',return_value=response):
+                with self.assertRaises(ImageTaskIssue) as caught:q._run_flow(task)
+            self.assertEqual(caught.exception.code,'needs_zero_credit')
+            self.assertFalse((q.download_root/(task['id']+'.png')).exists())
 
 class GenerationAPITests(unittest.TestCase):
     def test_routes_are_same_origin_and_do_not_apply_implicitly(self):
@@ -208,7 +240,7 @@ class GenerationAPITests(unittest.TestCase):
             store,j=ready_job(t);app=create_app(store,FixturePipeline(),False)
             with TestClient(app) as c:
                 view=c.get('/api/jobs/'+j['id']+'/scene-editor').json();sid=view['scenes'][0]['scene_id'];base='/api/jobs/'+j['id']+'/scene-editor/scenes/'+sid+'/generations'
-                self.assertEqual(c.get(base).json()['providers'],['chatgpt','comfy'])
+                self.assertEqual(c.get(base).json()['providers'],['chatgpt','comfy','flow'])
                 data={'prompt':'one accurate scene','provider':'chatgpt','version':view['version']}
                 self.assertEqual(c.post(base,json=data,headers={'Origin':'https://evil.invalid','Idempotency-Key':'api-key'}).status_code,403)
                 started=c.post(base,json=data,headers={'Idempotency-Key':'api-key'});self.assertEqual(started.status_code,202);task=started.json();self.assertEqual(task['state'],'queued');self.assertIsNone(task['image_url'])

@@ -92,7 +92,7 @@ fs.mkdirSync(out, { recursive: true });
             return route.fulfill({ status: 202, json: task });
           }
           if (task) task = { ...task, state: 'completed', image_url: '/candidate' };
-          return route.fulfill({ json: { items: task ? [task] : [], providers: ['chatgpt'] } });
+          return route.fulfill({ json: { items: task ? [task] : [], providers: ['chatgpt','comfy','flow'] } });
         }
         if (u.pathname.endsWith('/candidate-one/apply')) {
           applied++;
@@ -116,6 +116,11 @@ fs.mkdirSync(out, { recursive: true });
 
       // Click "Vẽ lại" button
       const regenBtn = page.locator('.se-btn-green', { hasText: 'Vẽ lại' });
+      const flowRadio = page.locator('.se-provider-radios input[value="flow"]');
+      await page.waitForFunction(() => { const e=document.querySelector('.se-provider-radios input[value="flow"]'); return e && !e.disabled; });
+      await flowRadio.check();
+      assert.match(await page.locator('.se-provider-note').first().innerText(), /0 tín dụng/);
+      await page.locator('.se-provider-radios input[value="chatgpt"]').check();
       await regenBtn.click();
       assert.equal(submissions, 1);
       assert.equal(applied, 0, 'generating never applies implicitly');

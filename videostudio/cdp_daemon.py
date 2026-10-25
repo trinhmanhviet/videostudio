@@ -14,6 +14,7 @@ from .cdp_requests import RequestJournal, IndeterminateRequest, valid_chat_url
 from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, correlate_turns
 from .exchanges import parse_reply
 from .cdp_images import ChatGPTImages, ImageAuthentication, ImageRejected
+from .cdp_flow import FlowImages, FlowTaskError
 
 
 class NeedsAuthentication(RuntimeError):
@@ -31,9 +32,11 @@ class ChromeChatGPTBridge:
         self.authenticated = False
         self.last_error = None
         self.images = ChatGPTImages(self, ROOT/'data'/'chatgpt-images')
+        self.flow_images = FlowImages(self, ROOT/'data'/'flow-images')
 
     def on_event(self, event):
         if getattr(self,'images',None):self.images.on_event(event)
+        if getattr(self,'flow_images',None):self.flow_images.on_event(event)
         if event.get('method') in ('Target.targetDestroyed', 'Target.targetCrashed'):
             self.sessions.pop(event.get('params', {}).get('targetId'), None)
 
@@ -280,6 +283,8 @@ async def create_app(bridge=None):
                 value = await bridge.probe_login()
             elif request.path == '/api/images/generate':
                 value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'))}
+            elif request.path == '/api/flow/images/generate':
+                value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'))}
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
@@ -296,6 +301,9 @@ async def create_app(bridge=None):
         except IndeterminateRequest as e:
             bridge.last_error = 'delivery_indeterminate'
             return web.json_response({'ok':False,'code':'delivery_indeterminate','error':str(e)}, status=409)
+        except FlowTaskError as e:
+            bridge.last_error = e.code
+            return web.json_response({'ok':False,'code':e.code,'error':str(e)}, status=409)
         except web.HTTPException:
             raise
         except Exception as e:
@@ -307,7 +315,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/images/generate'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

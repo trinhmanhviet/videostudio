@@ -137,6 +137,13 @@
     border-radius: 6px;
     border: 1px solid #1a271e;
   }
+  .se-provider-note {
+    display: block;
+    color: #9ca3af;
+    font-size: 10.5px;
+    line-height: 1.35;
+    margin: 0 2px 3px;
+  }
   .se-radio-item {
     display: flex;
     align-items: center;
@@ -293,7 +300,7 @@
   const caches=new Map(), PAGE_SIZE=12;
   let job=null,state=null,busy=false,epoch=0,timers=new Set(),priorView='viewGallery',workspaceScroll=0;
   const base=(id=job)=>'/api/jobs/'+encodeURIComponent(id)+'/scene-editor';
-  const cache=()=>{if(!caches.has(job))caches.set(job,{page:0,filter:'all',scroll:0,drafts:new Map(),expanded:new Set(),tasks:new Map(),requestKeys:new Map(),providers:new Map()});return caches.get(job);};
+  const cache=()=>{if(!caches.has(job))caches.set(job,{page:0,filter:'all',scroll:0,drafts:new Map(),expanded:new Set(),tasks:new Map(),requestKeys:new Map(),providers:new Map(),providersAvailable:['chatgpt','comfy']});return caches.get(job);};
   function message(text,error=false){$('sePageMessage').textContent=text;$('sePageMessage').style.color=error?'#fca5a5':'var(--accent)';}
   async function request(path,opts={}){const r=await fetch(path,{...opts,headers:{'Content-Type':'application/json',...opts.headers},signal:AbortSignal.timeout(120000)});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d;}
   const imageURL=(s,edit)=>base()+'/scenes/'+encodeURIComponent(s.scene_id)+'/image?edit='+encodeURIComponent(edit)+'&thumb=true';
@@ -346,7 +353,7 @@
       const top=node('div',undefined,'se-card-top'),wrap=node('div',undefined,'se-card-img-wrap'),img=node('img',undefined,'se-main-image');img.loading='lazy';img.decoding='async';img.src=s.image_url+(s.image_url.includes('?')?'&':'?')+'thumb=true';img.alt='Ảnh cảnh '+(s.index+1);img.style.objectFit=s.fit==='contain'?'contain':'cover';wrap.append(img);top.append(wrap);
       const side=node('div',undefined,'se-card-ctrls'),file=node('input');file.type='file';file.accept='image/png,image/jpeg,image/webp';file.hidden=true;file.setAttribute('aria-label','Tải ảnh cảnh '+(s.index+1));
       const browse=node('button','Browse','se-btn-green'),regen=node('button','Vẽ lại','se-btn-green');browse.type=regen.type='button';browse.dataset.requiresEdit=regen.dataset.requiresEdit='true';browse.onclick=()=>file.click();side.append(file,browse,regen);
-      const radios=node('div',undefined,'se-provider-radios');for(const [provider,label] of [['chatgpt','ChatGPT'],['flow','Flow'],['comfy','Comfy']]){const disabled=provider==='flow',l=node('label',undefined,'se-radio-item'+(disabled?' is-disabled':'')),r=node('input');r.type='radio';r.name='provider_'+s.scene_id;r.value=provider;r.checked=(c.providers?.get(s.scene_id)||'chatgpt')===provider;if(disabled){r.dataset.permDisabled='true';r.disabled=true;l.title='Google Flow chưa được tích hợp';}r.onchange=()=>{if(r.checked)c.providers.set(s.scene_id,provider);};l.append(document.createTextNode(label),r);radios.append(l);}side.append(radios);top.append(side);card.append(top,node('p',s.narration,'se-narration'));
+      const radios=node('div',undefined,'se-provider-radios');for(const [provider,label] of [['chatgpt','ChatGPT'],['flow','Flow'],['comfy','Comfy']]){const disabled=!c.providersAvailable.includes(provider),l=node('label',undefined,'se-radio-item'+(disabled?' is-disabled':'')),r=node('input');r.type='radio';r.name='provider_'+s.scene_id;r.value=provider;r.checked=(c.providers?.get(s.scene_id)||'chatgpt')===provider;if(disabled){r.dataset.permDisabled='true';r.disabled=true;l.title=provider==='flow'?'Google Flow chưa khả dụng trên máy chủ này':'Provider chưa khả dụng';}r.onchange=()=>{if(r.checked)c.providers.set(s.scene_id,provider);};l.append(document.createTextNode(label),r);radios.append(l);}const providerNote=node('small','Flow chỉ tạo khi Tác nhân tắt và trang xác nhận chi phí 0 tín dụng; ảnh tải về 2K.','se-provider-note');side.append(radios,providerNote);top.append(side);card.append(top,node('p',s.narration,'se-narration'));
       const audio=node('audio',undefined,'se-audio');audio.controls=true;audio.preload='none';audio.src=s.audio_url;card.append(audio);
       const select=node('select',undefined,'se-history-select');select.setAttribute('aria-label','Chọn ảnh cảnh '+(s.index+1));select.dataset.requiresEdit='true';card.append(select);
       const toggle=node('button','Sửa mô tả vẽ','se-prompt-toggle'),box=node('div',undefined,'se-prompt-box'),prompt=node('textarea',undefined,'se-prompt-input');toggle.type='button';prompt.value=c.drafts.get(s.scene_id)??s.visual_prompt??'';prompt.maxLength=12000;prompt.setAttribute('aria-label','Mô tả vẽ cảnh '+(s.index+1));box.hidden=!c.expanded.has(s.scene_id);toggle.setAttribute('aria-expanded',String(!box.hidden));prompt.oninput=()=>c.drafts.set(s.scene_id,prompt.value);toggle.onclick=()=>{box.hidden=!box.hidden;toggle.setAttribute('aria-expanded',String(!box.hidden));if(box.hidden)c.expanded.delete(s.scene_id);else c.expanded.add(s.scene_id);};box.append(prompt);card.append(toggle,box);
@@ -354,7 +361,7 @@
       card.updateOptions=()=>{
         select.replaceChildren(new Option('Ảnh gốc','original'));
         for(const h of s.history||[])select.append(new Option(new Date(h.created*1000).toLocaleString()+' · '+(h.provider==='chatgpt'?'ChatGPT':h.provider==='comfy'?'ComfyUI':'Tải lên'),h.id));
-        for(const t of c.tasks.get(s.scene_id)||[])if(t.state==='completed'&&t.image_url)select.append(new Option((t.provider==='comfy'?'ComfyUI · ':'ChatGPT · ')+new Date(t.created*1000).toLocaleString(),'candidate:'+t.id));
+        for(const t of c.tasks.get(s.scene_id)||[])if(t.state==='completed'&&t.image_url)select.append(new Option((t.provider==='comfy'?'ComfyUI · ':t.provider==='flow'?'Google Flow · ':'ChatGPT · ')+new Date(t.created*1000).toLocaleString(),'candidate:'+t.id));
         select.value=s.edit_id;
       };card.updateOptions();
       select.onchange=async()=>{const value=select.value;if(value===s.edit_id)return;let preview,pathSuffix,data;
@@ -370,18 +377,18 @@
       let loading=false;
       card.loadCandidates=async()=>{
         if(!alive()||loading)return;loading=true;
-        try{const d=await request(endpoint);if(!alive())return;if(busy){schedule(card.loadCandidates,300);return;}c.tasks.set(s.scene_id,d.items||[]);card.updateOptions();
-          const pending=(d.items||[]).find(t=>['queued','running','uncertain','needs_auth','needs_comfy_idle'].includes(t.state));regen.dataset.pending=String(!!pending);
+        try{const d=await request(endpoint);if(!alive())return;if(busy){schedule(card.loadCandidates,300);return;}c.tasks.set(s.scene_id,d.items||[]);c.providersAvailable=d.providers||c.providersAvailable;for(const r of radios.querySelectorAll('input[type=radio]')){const available=c.providersAvailable.includes(r.value);r.disabled=!available;r.dataset.permDisabled=String(!available);r.parentElement.classList.toggle('is-disabled',!available);if(!available&&r.checked){const fallback=radios.querySelector('input[value="chatgpt"]');fallback.checked=true;c.providers.set(s.scene_id,'chatgpt');}}card.updateOptions();
+          const pending=(d.items||[]).find(t=>['queued','running','uncertain','needs_auth','needs_comfy_idle','needs_zero_credit','needs_flow_check'].includes(t.state));regen.dataset.pending=String(!!pending);
           card.querySelectorAll('.se-recovery').forEach(e=>e.remove());
-          if(pending){status.textContent=pending.error|| (pending.state==='needs_comfy_idle'?'ComfyUI đang bận; chọn thử lại khi rảnh.':(['queued','running'].includes(pending.state)?'Đang tạo ảnh…':'Yêu cầu cần kiểm tra, không tự gửi lại'));
-            if(['uncertain','needs_auth','needs_comfy_idle'].includes(pending.state))for(const [action,label] of [['resume','Kiểm tra yêu cầu cũ'],['cancel','Dừng chờ']]){const b=node('button',label,'secondary se-recovery');b.type='button';b.onclick=async()=>{if(busy)return;busy=true;controls();try{await request(endpoint+'/'+pending.id+'/'+action,{method:'POST',body:'{}'});}catch(e){status.textContent=e.message;}finally{busy=false;controls();card.loadCandidates();}};card.append(b);}
+          if(pending){status.textContent=pending.error|| (pending.state==='needs_comfy_idle'?'ComfyUI đang bận; chọn thử lại khi rảnh.':pending.state==='needs_zero_credit'?'Flow chưa xác nhận 0 tín dụng; chưa gửi yêu cầu tạo.':pending.state==='needs_flow_check'?'Flow cần kiểm tra lại; không tự gửi trùng.':(['queued','running'].includes(pending.state)?'Đang tạo ảnh…':'Yêu cầu cần kiểm tra, không tự gửi lại'));
+            if(['uncertain','needs_auth','needs_comfy_idle','needs_zero_credit','needs_flow_check'].includes(pending.state))for(const [action,label] of [['resume','Kiểm tra yêu cầu cũ'],['cancel','Dừng chờ']]){const b=node('button',label,'secondary se-recovery');b.type='button';b.onclick=async()=>{if(busy)return;busy=true;controls();try{await request(endpoint+'/'+pending.id+'/'+action,{method:'POST',body:'{}'});}catch(e){status.textContent=e.message;}finally{busy=false;controls();card.loadCandidates();}};card.append(b);}
             if(['queued','running'].includes(pending.state))schedule(card.loadCandidates,3000);
           }else if((d.items||[]).some(t=>t.state==='completed'))status.textContent='Ảnh tạo lại sẵn sàng trong dropdown';
           controls();
         }catch(e){if(alive())status.textContent=e.message;}finally{loading=false;}
       };
       regen.onclick=async()=>{if(busy||!state?.editable||regen.dataset.pending==='true')return;const text=prompt.value.trim();if(!text){status.textContent='Nhập mô tả trước khi vẽ';return;}
-        const provider=radios.querySelector('input:checked')?.value||'chatgpt';const identity=JSON.stringify({prompt:text,version:state.version,provider}),saved=c.requestKeys.get(s.scene_id);const key=saved?.identity===identity?saved.key:uid();c.requestKeys.set(s.scene_id,{identity,key});busy=true;controls();status.textContent=provider==='comfy'?'Đang xếp ảnh vào ComfyUI…':'Đang gửi yêu cầu tới ChatGPT…';
+        const provider=radios.querySelector('input:checked')?.value||'chatgpt';const identity=JSON.stringify({prompt:text,version:state.version,provider}),saved=c.requestKeys.get(s.scene_id);const key=saved?.identity===identity?saved.key:uid();c.requestKeys.set(s.scene_id,{identity,key});busy=true;controls();status.textContent=provider==='flow'?'Đang kiểm tra Flow, cấu hình và chi phí 0 tín dụng…':provider==='comfy'?'Đang xếp ảnh vào ComfyUI…':'Đang gửi yêu cầu tới ChatGPT…';
         try{await request(endpoint,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({prompt:text,provider,version:state.version})});c.requestKeys.delete(s.scene_id);regen.dataset.pending='true';if(alive())schedule(card.loadCandidates,500);}catch(e){if(alive())status.textContent=e.message;}finally{busy=false;controls();}
       };
       return card;

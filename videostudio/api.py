@@ -49,7 +49,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
     app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs
     @app.get('/api/health')
-    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True}
+    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True}
     def diagnose_job_error(j):
         err=j.get('error')
         if not err:return None
