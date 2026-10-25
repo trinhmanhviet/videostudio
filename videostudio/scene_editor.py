@@ -162,7 +162,7 @@ class SceneEditor:
                 manifest=output/'visual-edit-snapshot.json';atomic_json(manifest,snap)
                 cps={s:copy.deepcopy(parent['checkpoints'][s]) for s in ('plan','research','script','speech','subtitles','music')}
                 images=[{'path':r['image_path'],'duration':r['duration'],'scene_id':r['scene_id']} for r in v['scenes']]
-                cps['images']={'scenes':images,'assets':[asset(r['path']) for r in images]+[asset(manifest)],'editor_snapshot':str(manifest),'visual_qa_status':'user_approved' if head['mode']=='careful' else 'not_checked','visual_qa_required':False,'review_source':'user_selection' if head['mode']=='careful' else 'quick','automatic_visual_review':False}
+                cps['images']={'scenes':images,'assets':[asset(r['path']) for r in images]+[asset(manifest)],'editor_snapshot':str(manifest),'visual_qa_status':'not_checked','visual_qa_required':False,'review_source':'quick','automatic_visual_review':False}
                 if parent['state']=='completed' and parent['checkpoints'].get('verify',{}).get('verified') is True:
                     video=Path(parent['checkpoints']['render']['video'])
                     video_asset=next((a for a in parent['checkpoints']['render'].get('assets',[]) if Path(a['path']).resolve()==video.resolve()),None)

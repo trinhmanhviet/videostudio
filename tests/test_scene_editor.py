@@ -83,7 +83,7 @@ class EditorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t,'careful');e=self.editor(s);v=e.view(j['id'])
             child=e.export(j['id'],v['version'],'approved',False)
-            self.assertEqual(child['checkpoints']['images']['visual_qa_status'],'user_approved');self.assertNotIn('verify',child['checkpoints'])
+            self.assertEqual(child['checkpoints']['images']['visual_qa_status'],'not_checked');self.assertNotIn('verify',child['checkpoints'])
             self.assertEqual(e.export(j['id'],v['version'],'approved',False)['id'],child['id'])
     def test_invalid_upload_rejected_without_new_revision(self):
         with tempfile.TemporaryDirectory() as t:

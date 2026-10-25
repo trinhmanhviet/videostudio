@@ -279,6 +279,8 @@
   let workspaceScrollY = 0;
   let editorScrollY = 0;
   let candidateTimers = [];
+  let previousViewId = 'viewWorkspace';
+  const promptDrafts = new Map();
 
   const $ = id => document.getElementById(id);
   const node = (tag, content, cls) => {
@@ -488,7 +490,9 @@
       const promptBox = node('div', undefined, 'se-prompt-box');
       promptBox.hidden = true;
       const promptInput = node('textarea', undefined, 'se-prompt-input');
-      promptInput.value = s.visual_prompt || s.narration || '';
+      const draftKey = job + ':' + s.scene_id;
+      promptInput.value = promptDrafts.has(draftKey) ? promptDrafts.get(draftKey) : (s.visual_prompt || s.narration || '');
+      promptInput.oninput = () => { promptDrafts.set(draftKey, promptInput.value); };
       promptInput.maxLength = 12000;
       promptInput.placeholder = 'Mô tả hình ảnh bằng tiếng Anh hoặc tiếng Việt...';
       promptBox.append(promptInput);
@@ -576,6 +580,7 @@
 
       // Function to poll and load ChatGPT candidates for this scene
       async function loadCandidates() {
+        if (!card.isConnected || $('viewSceneEditor')?.hidden) return;
         try {
           const genData = await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations');
           const items = genData.items || [];
@@ -685,6 +690,8 @@
     const viewWorkspace = document.getElementById('viewWorkspace');
     const viewEditor = document.getElementById('viewSceneEditor');
 
+    previousViewId = (viewWorkspace && !viewWorkspace.hidden) ? 'viewWorkspace' : 'viewGallery';
+
     if (viewGallery) viewGallery.hidden = true;
     if (viewWorkspace) viewWorkspace.hidden = true;
     if (viewEditor) viewEditor.hidden = false;
@@ -720,8 +727,7 @@
     const viewWorkspace = document.getElementById('viewWorkspace');
     const viewGallery = document.getElementById('viewGallery');
 
-    // If activeProject is defined, restore workspace
-    if (window.activeProject && viewWorkspace) {
+    if (previousViewId === 'viewWorkspace' && viewWorkspace) {
       viewWorkspace.hidden = false;
     } else if (viewGallery) {
       viewGallery.hidden = false;
