@@ -4,7 +4,20 @@
   const style=document.createElement('style');style.textContent=`
   .se-overlay{position:fixed;inset:0;background:#000b;z-index:1100;padding:clamp(8px,2vw,24px);display:flex;justify-content:center;align-items:center}
   .se-shell{width:100%;max-width:1500px;max-height:94vh;overflow:auto;border:1px solid var(--line);background:var(--bg);border-radius:14px;padding:18px}
-  .se-top{position:sticky;top:-18px;z-index:2;background:var(--bg);padding:14px 0;border-bottom:1px solid var(--line)}
+  .se-overlay[hidden]{display:none}
+  .se-shell{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-width:0}
+  .se-top{position:sticky;top:-18px;z-index:2;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line)}
+  .se-heading{display:flex;align-items:center;gap:8px}.se-heading h2{font-size:20px;margin:0;flex:1;min-width:0}.se-heading button{min-height:44px;justify-content:center}
+  .se-top #seCount{display:block;margin:2px 0;font-size:12px}.se-settings{padding:12px 0;border-bottom:1px solid var(--line)}
+  .se-message:empty{display:none}
+  @media(max-width:640px),(max-height:500px){
+    .se-overlay{padding:0;align-items:stretch}
+    .se-shell{max-height:100vh;max-height:100dvh;width:100%;border-radius:0;border:0;padding:12px;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .se-top{top:-12px;padding:8px 0}.se-heading{gap:6px}.se-heading h2{font-size:16px;line-height:1.2;white-space:nowrap}.se-heading button{font-size:12px;padding:8px}
+    .se-shell .se-grid{grid-template-columns:minmax(0,1fr);margin-top:8px}.se-card{padding:10px;min-width:0}.se-card .se-image{height:56vh;height:56svh;max-height:620px;aspect-ratio:auto;object-fit:contain}
+    .se-card button,.se-card select{min-height:44px;font-size:14px}.se-card input[type=file]{min-height:44px}.se-card h3{font-size:14px}.se-message{font-size:12px;margin:6px 0}
+    .se-settings .se-toolbar{gap:8px}.se-settings label{margin:4px 0}.se-settings .se-toolbar select{flex:1;min-width:0}.se-settings .se-confirm{font-size:12px}.se-settings .se-confirm input{flex-shrink:0}
+  }
   .se-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.se-toolbar h2{margin:0;flex:1}.se-toolbar select{width:auto;max-width:100%}
   .se-summary{font-size:13px;color:var(--muted);margin:8px 0}.se-message{white-space:pre-wrap;margin:8px 0}.se-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;margin-top:14px}
   .se-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card)}.se-card h3{margin:0 0 8px;font-size:15px}
@@ -13,10 +26,12 @@
   .se-approval{display:inline-block;font-size:12px;margin:8px 0;color:var(--accent)}.se-confirm{display:flex;gap:8px;align-items:center;font-size:13px;max-width:700px}.se-confirm input{width:auto}
   `;document.head.append(style);
   const overlay=document.createElement('div');overlay.className='se-overlay';overlay.hidden=true;
-  overlay.innerHTML=`<section class="se-shell" role="dialog" aria-modal="true" aria-labelledby="seTitle"><div class="se-top"><div class="se-toolbar"><h2 id="seTitle">Ảnh từng cảnh</h2><button type="button" id="seReload" class="secondary">Làm mới cảnh</button><button type="button" id="seClose" class="secondary">Đóng</button></div><p class="se-summary">Đổi ảnh giữ nguyên lời đọc, thời lượng, phụ đề và nhạc. Video gốc không bị ghi đè.</p><div class="se-toolbar"><label for="seMode">Chế độ</label><select id="seMode"><option value="quick">Nhanh</option><option value="careful">Kiểm kỹ (duyệt thủ công)</option></select><select id="seFilter" aria-label="Lọc cảnh"><option value="all">Tất cả cảnh</option><option value="pending">Chưa duyệt</option><option value="edited">Đã thay ảnh</option></select><span id="seCount" class="se-summary"></span></div><div id="seMessage" class="se-message" role="status"></div><div class="se-toolbar"><label class="se-confirm"><input id="seKeepAll" type="checkbox">Tôi đồng ý giữ các ảnh hiện tại còn lại khi xuất bản Kiểm kỹ.</label><button type="button" id="seExport">Xuất phiên bản mới</button></div><small class="se-summary">Duyệt ở đây là lựa chọn của bạn, không phải AI chứng nhận đúng lịch sử/khoa học.</small></div><div id="seGrid" class="se-grid"></div></section>`;
+  overlay.innerHTML=`<section class="se-shell" role="dialog" aria-modal="true" aria-labelledby="seTitle"><div class="se-top"><div class="se-heading"><h2 id="seTitle">Ảnh từng cảnh</h2><button type="button" id="seOptionsToggle" class="secondary" aria-expanded="false" aria-controls="seSettings">Tùy chọn / Xuất</button><button type="button" id="seClose" class="secondary">Đóng</button></div><span id="seCount" class="se-summary"></span></div><div id="seSettings" class="se-settings" hidden><button type="button" id="seReload" class="secondary">Làm mới cảnh</button><p class="se-summary">Đổi ảnh giữ nguyên lời đọc, thời lượng, phụ đề và nhạc. Video gốc không bị ghi đè.</p><div class="se-toolbar"><label for="seMode">Chế độ</label><select id="seMode"><option value="quick">Nhanh</option><option value="careful">Kiểm kỹ (duyệt thủ công)</option></select><select id="seFilter" aria-label="Lọc cảnh"><option value="all">Tất cả cảnh</option><option value="pending">Chưa duyệt</option><option value="edited">Đã thay ảnh</option></select></div><div class="se-toolbar"><label class="se-confirm"><input id="seKeepAll" type="checkbox">Tôi đồng ý giữ các ảnh hiện tại còn lại khi xuất bản Kiểm kỹ.</label><button type="button" id="seExport">Xuất phiên bản mới</button></div><small class="se-summary">Duyệt ở đây là lựa chọn của bạn, không phải AI chứng nhận đúng lịch sử/khoa học.</small></div><div id="seMessage" class="se-message" role="status"></div><div id="seGrid" class="se-grid"></div></section>`;
   document.body.append(overlay);
   const el=id=>overlay.querySelector('#'+id);
-  let state=null,busy=false,job=null,exportIdentity=null,objectURLs=[];
+  let state=null,busy=false,job=null,exportIdentity=null,objectURLs=[],previousBodyOverflow='';
+  function showSettings(open){el('seSettings').hidden=!open;el('seOptionsToggle').setAttribute('aria-expanded',String(open));if(open)overlay.querySelector('.se-shell').scrollTop=0;}
+  el('seOptionsToggle').onclick=()=>showSettings(el('seSettings').hidden);
   const node=(tag,content,cls)=>{const e=document.createElement(tag);if(content!==undefined)e.textContent=content;if(cls)e.className=cls;return e;};
   const clock=s=>{const n=Math.max(0,Math.floor(Number(s)||0));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');};
   const base=()=>'/api/jobs/'+encodeURIComponent(job)+'/scene-editor';
@@ -65,8 +80,8 @@
     el('seGrid').replaceChildren(...cards);shell.scrollTop=scroll;controls();
   }
   async function refresh(){if(busy)return;busy=true;controls();message('Đang nạp cảnh...');try{state=await jsonRequest(base());render();message(state.editable?'Chọn cảnh cần sửa; có thể chuyển mode mà không mất ảnh đã thay.':'Job đang chạy. Chờ tạo ảnh xong trước khi sửa.');}catch(e){message(e.message,true);}finally{busy=false;controls();}}
-  window.openSceneEditor=async jid=>{if(busy)return;job=jid;state=null;exportIdentity=null;overlay.hidden=false;el('seKeepAll').checked=false;el('seGrid').replaceChildren();await refresh();};
-  function close(){if(busy)return;overlay.querySelectorAll('audio').forEach(a=>a.pause());objectURLs.forEach(u=>URL.revokeObjectURL(u));objectURLs=[];overlay.hidden=true;}
+  window.openSceneEditor=async jid=>{if(busy)return;job=jid;state=null;exportIdentity=null;if(overlay.hidden)previousBodyOverflow=document.body.style.overflow;document.body.style.overflow='hidden';overlay.hidden=false;showSettings(false);overlay.querySelector('.se-shell').scrollTop=0;el('seKeepAll').checked=false;el('seGrid').replaceChildren();await refresh();};
+  function close(){if(busy)return;overlay.querySelectorAll('audio').forEach(a=>a.pause());objectURLs.forEach(u=>URL.revokeObjectURL(u));objectURLs=[];overlay.hidden=true;document.body.style.overflow=previousBodyOverflow;}
   el('seClose').onclick=close;el('seReload').onclick=refresh;el('seFilter').onchange=()=>state&&render();
   el('seMode').onchange=()=>mutation('/mode',{mode:el('seMode').value});
   overlay.addEventListener('play',e=>overlay.querySelectorAll('audio').forEach(a=>{if(a!==e.target)a.pause();}),true);

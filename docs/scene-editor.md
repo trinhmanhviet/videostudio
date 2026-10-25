@@ -38,3 +38,6 @@ C:\Python312\python.exe -m scripts.verify_scene_editor_smoke
 ```
 
 Local evidence is under `data/editor-smoke/<run>/smoke-verification.json`. This is a mechanics/continuity test, not a claim that replacement fixture imagery matches the story or that a VLM detects historical errors. Autonomous multimodal review remains unavailable/unvalidated.
+
+## Mobile layout correction
+The original sticky toolbar occupied 513px of a 390x740 viewport (only106px of the first image visible) and546px at360x640 (no visible image). The header is now83px; settings/export collapse into a separate non-sticky panel. Small screens use the full dynamic viewport, a single scene column and complete contained images limited to56svh. Background scroll locks only while the editor is open. Real Chromium regression uses isolated context widths360/390/480, landscape844x390 and desktop1280x900, checks image visibility, later-scene scrolling, settings/export access and close/scroll restoration. Run: node scripts/test_scene_editor_layout.cjs. The live196-scene armor editor was read-only verified at actual390x740, image414px high, without changing scene assets.
