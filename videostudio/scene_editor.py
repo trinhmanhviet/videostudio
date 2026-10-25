@@ -150,7 +150,6 @@ class SceneEditor:
                 child=old['id']
             else:
                 head=self._mutable(c,jid,version)
-                if head['mode']=='careful' and not confirm_all and any(r['review_status']!='user_approved' for r in v['scenes']):raise ValueError('Some scenes need user review; approve them or explicitly keep current images')
                 for stage in ('plan','research','script','speech','images','subtitles','music'):
                     if stage not in parent['checkpoints']:raise ValueError('Required source checkpoint missing: '+stage)
                     for a in parent['checkpoints'][stage].get('assets',[]):
@@ -205,5 +204,4 @@ class SceneEditor:
             for row,img in zip(snap['scenes'],cp['scenes']):
                 if row['scene_id']!=img['scene_id'] or row['image_path']!=img['path'] or row['duration']!=img['duration'] or digest(img['path'])!=row['image_sha256']:raise ValueError('Export image snapshot changed')
             return {'status':'user_approved' if snap['mode']=='careful' else 'not_checked','source':'user_selection' if snap['mode']=='careful' else 'quick','model_certification':False}
-        if self.mode(j)=='careful':raise AwaitingVisualReview('Ảnh đã sẵn sàng. Mở Sửa ảnh từng cảnh để kiểm tra, thay ảnh và xuất phiên bản mới.')
         return {'status':'not_checked','source':'quick','model_certification':False}

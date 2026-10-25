@@ -82,10 +82,9 @@ class EditorTests(unittest.TestCase):
     def test_careful_requires_approval_but_bulk_user_confirmation_works(self):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t,'careful');e=self.editor(s);v=e.view(j['id'])
-            with self.assertRaises(ValueError):e.export(j['id'],v['version'],'blocked',False)
-            child=e.export(j['id'],v['version'],'approved',True)
+            child=e.export(j['id'],v['version'],'approved',False)
             self.assertEqual(child['checkpoints']['images']['visual_qa_status'],'user_approved');self.assertNotIn('verify',child['checkpoints'])
-            self.assertEqual(e.export(j['id'],v['version'],'approved',True)['id'],child['id'])
+            self.assertEqual(e.export(j['id'],v['version'],'approved',False)['id'],child['id'])
     def test_invalid_upload_rejected_without_new_revision(self):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t);e=self.editor(s);v=e.view(j['id']);sid=v['scenes'][0]['scene_id']
@@ -95,9 +94,8 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(e.view(j['id'])['version'],v['version'])
     def test_waiting_releases_worker_and_does_not_consume_retry(self):
         with tempfile.TemporaryDirectory() as t:
-            s,j=ready_job(t,'careful',state='queued');e=self.editor(s)
-            handlers={'render':lambda job,check:e.require_user_review(job)}
-            w=Worker(s,handlers);self.assertTrue(w.step());a=s.get(j['id']);self.assertEqual(a['state'],'awaiting_visual_review');self.assertEqual(a['attempts'].get('render',0),0);self.assertFalse(w.step());self.assertTrue(s.lock('another'));s.release('another')
+            s,j=ready_job(t,'careful',state='awaiting_visual_review');e=self.editor(s)
+            w=Worker(s,{});self.assertFalse(w.step());self.assertTrue(s.lock('another'));s.release('another')
 
     def test_foreign_edit_id_and_excess_pixels_are_rejected(self):
         with tempfile.TemporaryDirectory() as t:

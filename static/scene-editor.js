@@ -278,6 +278,7 @@
   let objectURLs = [];
   let workspaceScrollY = 0;
   let editorScrollY = 0;
+  let candidateTimers = [];
 
   const $ = id => document.getElementById(id);
   const node = (tag, content, cls) => {
@@ -304,7 +305,12 @@
     const view = $('viewSceneEditor');
     if (!view) return;
     view.querySelectorAll('button, select, input').forEach(e => {
-      if (e.id !== 'btnBackFromEditor') e.disabled = busy;
+      if (e.id === 'btnBackFromEditor') return;
+      if (e.dataset.permDisabled === 'true') {
+        e.disabled = true;
+        return;
+      }
+      e.disabled = busy;
     });
   }
 
@@ -341,6 +347,8 @@
   }
 
   function render() {
+    candidateTimers.forEach(t => clearTimeout(t));
+    candidateTimers = [];
     objectURLs.forEach(u => URL.revokeObjectURL(u));
     objectURLs = [];
 
@@ -457,6 +465,7 @@
       rFlowInput.name = radioName;
       rFlowInput.value = 'flow';
       rFlowInput.disabled = true;
+      rFlowInput.dataset.permDisabled = 'true';
       rFlow.title = 'Google Flow chưa bật';
       rFlow.append(document.createTextNode('Flow'), rFlowInput);
 
@@ -466,6 +475,7 @@
       rComfyInput.name = radioName;
       rComfyInput.value = 'comfy';
       rComfyInput.disabled = true;
+      rComfyInput.dataset.permDisabled = 'true';
       rComfy.title = 'Comfy tạo từng cảnh chưa bật';
       rComfy.append(document.createTextNode('Comfy'), rComfyInput);
 
@@ -541,6 +551,7 @@
         }
         tWrap.onclick = onClick;
         thumbsGrid.append(tWrap);
+        return tWrap;
       }
 
       // Add Original thumb
@@ -572,7 +583,7 @@
           if (running) {
             regenBtn.disabled = true;
             cardStatus.textContent = 'Đang vẽ ảnh trên ChatGPT...';
-            setTimeout(loadCandidates, 3000);
+            candidateTimers.push(setTimeout(loadCandidates, 3000));
           } else {
             regenBtn.disabled = false;
           }
@@ -580,23 +591,27 @@
           // Add completed candidates to thumbsGrid if not already there
           items.forEach(cand => {
             if (cand.state === 'completed' && cand.image_url) {
-              addThumb(
-                cand.image_url,
-                'Ứng viên mới',
-                false,
-                async () => {
-                  cardStatus.textContent = 'Đang áp dụng ảnh ứng viên...';
-                  try {
-                    await mutation(
-                      '/scenes/' + encodeURIComponent(s.scene_id) + '/generations/' + encodeURIComponent(cand.id) + '/apply',
-                      { fit: 'cover' }
-                    );
-                  } catch (e) {
-                    cardStatus.textContent = e.message;
-                    cardStatus.className = 'se-card-status is-error';
+              const existing = thumbsGrid.querySelector(`[data-cand-id="${cand.id}"]`);
+              if (!existing) {
+                const tWrap = addThumb(
+                  cand.image_url,
+                  'Ứng viên mới',
+                  false,
+                  async () => {
+                    cardStatus.textContent = 'Đang áp dụng ảnh ứng viên...';
+                    try {
+                      await mutation(
+                        '/scenes/' + encodeURIComponent(s.scene_id) + '/generations/' + encodeURIComponent(cand.id) + '/apply',
+                        { fit: 'cover' }
+                      );
+                    } catch (e) {
+                      cardStatus.textContent = e.message;
+                      cardStatus.className = 'se-card-status is-error';
+                    }
                   }
-                }
-              );
+                );
+                if (tWrap) tWrap.dataset.candId = cand.id;
+              }
             }
           });
         } catch (_) {}
@@ -688,6 +703,9 @@
 
   function closeSceneEditor() {
     if (busy) return;
+
+    candidateTimers.forEach(t => clearTimeout(t));
+    candidateTimers = [];
 
     // Pause all audio
     const viewEditor = document.getElementById('viewSceneEditor');
