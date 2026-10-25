@@ -54,9 +54,70 @@ class ImageParserTests(unittest.TestCase):
         q=self.module();s=self.state();s['mode']='unknown';self.assertIsNotNone(q.match_image(s,'[image-marker]'))
         s['mode']='work';self.assertIsNone(q.match_image(s,'[image-marker]'))
         s['mode']='unknown';s['login']=True;self.assertIsNone(q.match_image(s,'[image-marker]'))
+    def test_download_control_must_be_stable_after_reflow(self):
+        q=self.module();p1={'control':'viewer-download','x':100,'y':200,'width':44,'height':40};p2={'control':'viewer-download','x':120,'y':200,'width':44,'height':40}
+        self.assertFalse(q.stable_control_point(p1,p2));self.assertTrue(q.stable_control_point(p2,dict(p2)))
+    def test_download_events_record_rejected_frame_without_sensitive_url_or_filename(self):
+        q=self.module().ChatGPTImages(Mock(),Path('.'));q.active_frame='owned-frame';q.attempt={'steps':[],'events':[]};q.attempt_started=__import__('time').monotonic();guid=str(uuid.uuid4())
+        q.on_event({'method':'Browser.downloadWillBegin','params':{'frameId':'foreign-frame','guid':str(uuid.uuid4()),'url':'https://signed.invalid/x','suggestedFilename':'private.png'}})
+        q.on_event({'method':'Browser.downloadWillBegin','params':{'frameId':'owned-frame','guid':guid,'url':'https://signed.invalid/x','suggestedFilename':'private.png'}})
+        q.on_event({'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed','receivedBytes':2048,'totalBytes':2048}})
+        self.assertEqual([e['accepted'] for e in q.attempt['events']],[False,True,True])
+        self.assertEqual(len(q.events),2)
+        self.assertTrue(all('url' not in e and 'suggestedFilename' not in e for e in q.attempt['events']))
+    def test_download_attempt_diagnostics_are_unique_and_preserve_prior_failure(self):
+        q=self.module().ChatGPTImages(Mock(),Path('.'))
+        with tempfile.TemporaryDirectory() as t:
+            for ident,label in [('a'*32,'first failed'),('b'*32,'resume succeeded')]:
+                q.attempt={'attempt_id':ident,'steps':[{'phase':label}],'events':[]};q._save_attempt(Path(t))
+            files=sorted(Path(t).glob('download-attempt-*.json'))
+            self.assertEqual(len(files),2)
+            self.assertIn('first failed',json.loads(files[0].read_text())['steps'][0]['phase'])
+            self.assertIn('resume succeeded',json.loads(files[1].read_text())['steps'][0]['phase'])
     def test_wrapper_requests_image_not_json(self):
         q=self.module();wrapped=q.image_prompt('draw an apple','f'*64)
         self.assertIn('draw an apple',wrapped);self.assertIn('[VideoStudio image request '+('f'*64)+']',wrapped);self.assertNotIn('Return exactly one JSON',wrapped)
+
+class DownloadControlTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fresh_viewer_reflow_is_resampled_until_bounds_stabilize(self):
+        from videostudio.cdp_images import ChatGPTImages
+        class Bridge:
+            def __init__(self):
+                self.points=iter([
+                    {'x':100,'y':200,'width':44,'height':40},
+                    {'x':120,'y':200,'width':44,'height':40},
+                    {'x':120,'y':200,'width':44,'height':40}
+                ])
+                self.calls=0
+            async def evaluate(self,session,expression):
+                self.calls+=1;return next(self.points)
+        bridge=Bridge();image=ChatGPTImages(bridge,Path('.'));image.attempt={'attempt_id':'test','steps':[],'events':[]};image.attempt_started=__import__('time').monotonic()
+        point=await image._stable_control_point('session','download-control',1,'viewer-download')
+        self.assertEqual(bridge.calls,3);self.assertEqual((point['x'],point['y']),(120,200))
+        self.assertEqual(image.attempt['steps'][-1]['phase'],'control_stable')
+    async def test_disappearing_control_never_returns_stale_coordinates(self):
+        from videostudio.cdp_images import ChatGPTImages
+        class Bridge:
+            async def evaluate(self,session,expression):return None
+        image=ChatGPTImages(Bridge(),Path('.'));self.assertIsNone(await image._stable_control_point('session','download-control',.01,'viewer-download'))
+    async def test_restore_failure_does_not_mask_primary_error_and_is_logged(self):
+        from videostudio.cdp_images import ChatGPTImages,IndeterminateRequest
+        class CDP:
+            async def command(self,*args,**kwargs):raise OSError('restore failed')
+        class Bridge:cdp=CDP()
+        image=ChatGPTImages(Bridge(),Path('.'));image.active_frame='owned';image.attempt_started=__import__('time').monotonic()
+        with tempfile.TemporaryDirectory() as t:
+            image.attempt={'attempt_id':'after-success','steps':[],'events':[]}
+            await image._finish_download_attempt(Path(t),None)
+            self.assertTrue(image.download_behavior_uncertain)
+            self.assertTrue((Path(t)/'download-attempt-after-success.json').is_file())
+            image.attempt={'attempt_id':'after-error','steps':[],'events':[]};image.attempt_started=__import__('time').monotonic()
+            with self.assertRaisesRegex(ValueError,'original download failure'):
+                try:raise ValueError('original download failure')
+                finally:await image._finish_download_attempt(Path(t),__import__('sys').exc_info()[1])
+            self.assertTrue(image.download_behavior_uncertain)
+            traces=sorted(Path(t).glob('download-attempt-*.json'));self.assertEqual(len(traces),2)
+            self.assertEqual(traces[1].read_text(encoding='utf8').count('download_behavior_restore_failed'),1)
 
 class QueueTests(unittest.TestCase):
     def queue(self,s):
@@ -123,6 +184,64 @@ class GenerationAPITests(unittest.TestCase):
                 self.assertEqual(c.get('/api/jobs/'+j['id']+'/scene-editor').json()['version'],view['version'])
 
 class AsyncImageRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fresh_download_arms_capture_before_opening_viewer_and_keeps_events_during_click(self):
+        from videostudio.cdp_images import ChatGPTImages
+        from PIL import Image
+        class Bridge:
+            def __init__(self,url,marker,image):
+                self.url=url;self.marker=marker;self.image_data=image;self.viewer_open=False;self.point_values=iter([100,120,120,140,140,140]);self.preview_calls=0;self.eval_calls=[]
+                self.cdp=CDP(self)
+            async def evaluate(self,session,expression):
+                self.eval_calls.append(expression)
+                if 'const base=' in expression:
+                    return {'mode':'unknown','login':False,'challenge':False,'url':self.url,'image_turns':[{'user':self.marker,'state':'complete','images':[self.image_data]}]}
+                if "querySelectorAll('[role=dialog]')" in expression:
+                    if not self.viewer_open:return None
+                    x=next(self.point_values)
+                    return {'x':x,'y':200,'width':44,'height':40}
+                if 'button[data-testid="generated-image-preview"]' in expression:
+                    self.preview_calls+=1;return {'x':50,'y':100,'width':80,'height':90}
+                raise AssertionError('Unexpected page expression')
+        class CDP:
+            def __init__(self,owner):self.owner=owner;self.calls=[];self.capture_armed=False;self.download_path=None;self.releases=0;self.download_click=(None,None);self.events_arrived_inside_click=False
+            async def command(self,method,params=None,session=None,timeout=10):
+                params=params or {};self.calls.append((method,dict(params)))
+                if method=='Page.getFrameTree':return {'frameTree':{'frame':{'id':'owned-frame'}}}
+                if method=='Browser.setDownloadBehavior':
+                    if params.get('behavior')=='allowAndName':self.capture_armed=True;self.download_path=Path(params['downloadPath'])
+                    else:self.capture_armed=False
+                    return {}
+                if method=='Input.dispatchMouseEvent' and params.get('type')=='mouseReleased':
+                    self.releases+=1
+                    if self.releases==1:self.owner.viewer_open=True
+                    elif self.releases==2:
+                        self.download_click=(params['x'],params['y']);self.events_arrived_inside_click=self.capture_armed
+                        self.assert_download()
+                    return {}
+                return {}
+            def assert_download(self):
+                assert self.capture_armed and self.download_path
+                guid=str(uuid.uuid4());self.download_path.mkdir(parents=True,exist_ok=True)
+                Image.effect_noise((512,912),80).convert('RGB').save(self.download_path/guid,format='PNG')
+                frame='owned-frame';self.owner.image.on_event({'method':'Browser.downloadWillBegin','params':{'frameId':frame,'guid':guid,'url':'https://signed.invalid/never-log-this','suggestedFilename':'private.png'}})
+                self.owner.image.on_event({'method':'Browser.downloadProgress','params':{'guid':guid,'state':'inProgress','receivedBytes':100,'totalBytes':2000}})
+                self.owner.image.on_event({'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed','receivedBytes':2000,'totalBytes':2000}})
+        task=str(uuid.uuid4());url='https://chatgpt.com/c/owned';marker='[VideoStudio image request '+'d'*64+']';found={'src':'blob:https://chatgpt.com/image','width':941,'height':1672,'loaded':True}
+        with tempfile.TemporaryDirectory() as t:
+            bridge=Bridge(url,marker,found);image=ChatGPTImages(bridge,Path(t));bridge.image=image;image.download_behavior_uncertain=True
+            result=await image._download(task,'target','session',marker,found,url)
+            self.assertEqual(result['width'],512);self.assertEqual(result['height'],912);self.assertEqual(result['sha256'],digest(Path(result['file_path'])))
+            reset_index=next(i for i,(m,p) in enumerate(bridge.cdp.calls) if m=='Browser.setDownloadBehavior' and p.get('behavior')=='default')
+            allow_index=next(i for i,(m,p) in enumerate(bridge.cdp.calls) if m=='Browser.setDownloadBehavior' and p.get('behavior')=='allowAndName')
+            self.assertLess(reset_index,allow_index);self.assertFalse(image.download_behavior_uncertain)
+            preview_index=next(i for i,(m,p) in enumerate(bridge.cdp.calls) if m=='Input.dispatchMouseEvent' and p.get('type')=='mouseReleased')
+            self.assertLess(allow_index,preview_index);self.assertTrue(bridge.cdp.events_arrived_inside_click);self.assertEqual(bridge.cdp.download_click,(140,200))
+            self.assertNotIn('Input.insertText',[m for m,_ in bridge.cdp.calls])
+            traces=list((Path(t)/'downloads'/task).glob('download-attempt-*.json'));self.assertEqual(len(traces),1)
+            trace=json.loads(traces[0].read_text(encoding='utf8'));phases=[x['phase'] for x in trace['steps']]
+            self.assertIn('control_reflowed_before_click',phases);self.assertIn('download_click_acknowledged',phases)
+            self.assertEqual([e['accepted'] for e in trace['events']],[True,True,True])
+
     async def test_sending_receipt_recovers_matching_image_without_send(self):
         from unittest.mock import AsyncMock,MagicMock
         from videostudio.cdp_images import ChatGPTImages

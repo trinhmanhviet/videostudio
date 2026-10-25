@@ -1,5 +1,5 @@
 """ChatGPT image UI adapter for the dedicated browser, never a private API client."""
-import asyncio,json,re,time,uuid,shutil
+import asyncio,json,re,sys,time,uuid,shutil
 from pathlib import Path
 from urllib.parse import urlparse
 from PIL import Image
@@ -44,15 +44,46 @@ def correlated_download(events,frame):
     except (ValueError,TypeError,AttributeError):return None
     return guid if any(e.get('method')=='Browser.downloadProgress' and e.get('params',{}).get('guid')==guid and e['params'].get('state')=='completed' for e in events) else None
 
+def stable_control_point(previous,current):
+    keys=('control','x','y','width','height')
+    return bool(previous and current and all(previous.get(k)==current.get(k) for k in keys))
+
 class ChatGPTImages:
     def __init__(self,bridge,root):
-        self.bridge=bridge;self.root=Path(root);self.events=[];self.changed=asyncio.Event();self.active_frame=None;self.download_guid=None;self.too_large=False
+        self.bridge=bridge;self.root=Path(root);self.events=[];self.changed=asyncio.Event();self.active_frame=None;self.download_guid=None;self.too_large=False;self.attempt=None;self.attempt_started=None;self.download_behavior_uncertain=False
+    def _record(self,phase,**data):
+        if self.attempt is None:return
+        self.attempt['steps'].append({'at':time.time(),'elapsed_ms':round((time.monotonic()-self.attempt_started)*1000),'phase':phase,**data})
+    def _record_event(self,event,accepted):
+        p=event.get('params',{})
+        item={'at':time.time(),'method':event.get('method'),'accepted':accepted}
+        for key in ('frameId','guid','state','receivedBytes','totalBytes'):
+            if key in p:item[key]=p[key]
+        if self.attempt is not None:self.attempt['events'].append(item)
+    def _save_attempt(self,folder):
+        if self.attempt is None:return
+        try:(folder/('download-attempt-'+self.attempt['attempt_id']+'.json')).write_text(json.dumps(self.attempt,indent=2),encoding='utf8')
+        except Exception:pass
+        self.attempt=None;self.attempt_started=None
+    async def _finish_download_attempt(self,folder,primary_error=None):
+        try:
+            await self.bridge.cdp.command('Browser.setDownloadBehavior',{'behavior':'default','eventsEnabled':False})
+            self.download_behavior_uncertain=False;self._record('download_behavior_restored',acknowledged=True)
+        except Exception as error:
+            self.download_behavior_uncertain=True
+            self._record('download_behavior_restore_failed',error_type=type(error).__name__)
+        finally:
+            self.active_frame=None;self._save_attempt(folder)
     def on_event(self,event):
         if not self.active_frame:return
         method=event.get('method');p=event.get('params',{})
-        if method=='Browser.downloadWillBegin' and p.get('frameId')==self.active_frame:
+        if method=='Browser.downloadWillBegin':
+            accepted=p.get('frameId')==self.active_frame;self._record_event(event,accepted)
+            if not accepted:return
             self.download_guid=p.get('guid');self.events.append(event);self.changed.set()
-        elif method=='Browser.downloadProgress' and p.get('guid')==self.download_guid:
+        elif method=='Browser.downloadProgress':
+            accepted=p.get('guid')==self.download_guid;self._record_event(event,accepted)
+            if not accepted:return
             self.events.append(event)
             if max(p.get('receivedBytes',0),p.get('totalBytes',0))>MAX_IMAGE:self.too_large=True
             self.changed.set()
@@ -136,26 +167,70 @@ class ChatGPTImages:
                     await b.cdp.command('Target.closeTarget',{'targetId':target});b.sessions.pop(target,None)
             except Exception:pass
             return value
+    async def _stable_control_point(self,session,expression,timeout,control):
+        deadline=time.monotonic()+timeout;previous=None
+        while time.monotonic()<deadline:
+            point=await self.bridge.evaluate(session,expression)
+            if point:
+                point['control']=control
+                self._record('control_observed',control=control,bounds={k:point.get(k) for k in ('x','y','width','height')})
+                if stable_control_point(previous,point):
+                    self._record('control_stable',control=control,bounds={k:point.get(k) for k in ('x','y','width','height')})
+                    return point
+            previous=point
+            await asyncio.sleep(.2)
+        return None
     async def _download(self,task_id,target,session,marker,found,url):
-        b=self.bridge
+        b=self.bridge;folder=self.root/'downloads'/task_id;folder.mkdir(parents=True,exist_ok=True)
         await b.cdp.command('Target.activateTarget',{'targetId':target})
         current=await b.evaluate(session,image_snapshot(marker))
         if current.get('login') or current.get('challenge'):raise ImageAuthentication('Authentication required before image download')
         if current.get('url')!=url or match_image(current,marker)!=found:raise IndeterminateRequest('Image/conversation changed before download; generation not resent')
-        # The viewer is correlated by its image source, not by an arbitrary Download on the page.
-        download_expr=r'''(()=>{const dialogs=[...document.querySelectorAll('[role=dialog]')].filter(d=>[...d.querySelectorAll('img')].some(i=>i.currentSrc===SOURCE));const bs=[...new Set(dialogs.flatMap(d=>[...d.querySelectorAll('button[aria-label="Download"],button[aria-label="Save"]')]))].filter(e=>e.getBoundingClientRect().width);if(bs.length!==1)return null;const r=bs[0].getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()'''.replace('SOURCE',json.dumps(found['src']))
-        point=await b.evaluate(session,download_expr)
-        if not point:
-            expr=r'''(()=>{const turns=[...document.querySelectorAll('[data-talvt-turn-state]')].filter(t=>{const h=[...t.querySelectorAll('h4')].find(h=>/^(You said:|Bạn đã nói:|Bạn nói:)$/i.test(h.textContent.trim()));return h?.parentElement?.textContent.includes(MARKER)});if(turns.length!==1)return null;const bs=[...turns[0].querySelectorAll('button[data-testid="generated-image-preview"]')].filter(e=>e.querySelector('img')?.currentSrc===SOURCE);if(bs.length!==1)return null;bs[0].scrollIntoView({block:'center'});const r=bs[0].getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()'''.replace('MARKER',json.dumps(marker)).replace('SOURCE',json.dumps(found['src']))
-            await self._click(session,await b.evaluate(session,expr));deadline=time.monotonic()+8
-            while time.monotonic()<deadline:
-                point=await b.evaluate(session,download_expr)
-                if point:break
-                await asyncio.sleep(.2)
-        if not point:raise IndeterminateRequest('Generated image exists but no matching Download UI; do not regenerate')
-        folder=self.root/'downloads'/task_id;folder.mkdir(parents=True,exist_ok=True);self.events=[];self.download_guid=None;self.too_large=False;self.active_frame=(await b.cdp.command('Page.getFrameTree',session=session))['frameTree']['frame']['id'];self.changed.clear()
+        self.events=[];self.download_guid=None;self.too_large=False;self.changed.clear();self.attempt_started=time.monotonic();self.active_frame=None
+        self.attempt={'attempt_id':uuid.uuid4().hex,'task_id':task_id,'target_id':target,'session_id':session,'started_at':time.time(),'frame_id':None,'steps':[],'events':[]}
         try:
-            await b.cdp.command('Browser.setDownloadBehavior',{'behavior':'allowAndName','downloadPath':str(folder.resolve()),'eventsEnabled':True});await self._click(session,point);deadline=time.monotonic()+45;guid=None
+            self.active_frame=(await b.cdp.command('Page.getFrameTree',session=session))['frameTree']['frame']['id'];self.attempt['frame_id']=self.active_frame
+            self._record('capture_armed',frame_id=self.active_frame)
+        except Exception as e:
+            self._record('failure',error_type=type(e).__name__,error=str(e)[:400]);self._save_attempt(folder);raise
+        # Arm browser-level capture before opening the image viewer or measuring controls.
+        download_expr=r'''(()=>{const dialogs=[...document.querySelectorAll('[role=dialog]')].filter(d=>[...d.querySelectorAll('img')].some(i=>i.currentSrc===SOURCE));const bs=[...new Set(dialogs.flatMap(d=>[...d.querySelectorAll('button[aria-label="Download"],button[aria-label="Save"]')]))].filter(e=>e.getBoundingClientRect().width);if(bs.length!==1)return null;const r=bs[0].getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);if(bs[0].disabled||!hit||!(hit===bs[0]||bs[0].contains(hit)))return null;return {x,y,width:Math.round(r.width),height:Math.round(r.height)}})()'''.replace('SOURCE',json.dumps(found['src']))
+        preview_expr=r'''(()=>{const turns=[...document.querySelectorAll('[data-talvt-turn-state]')].filter(t=>{const h=[...t.querySelectorAll('h4')].find(h=>/^(You said:|Bạn đã nói:|Bạn nói:)$/i.test(h.textContent.trim()));return h?.parentElement?.textContent.includes(MARKER)});if(turns.length!==1)return null;const bs=[...turns[0].querySelectorAll('button[data-testid="generated-image-preview"]')].filter(e=>e.querySelector('img')?.currentSrc===SOURCE);if(bs.length!==1)return null;bs[0].scrollIntoView({block:'center'});const r=bs[0].getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);if(bs[0].disabled||!hit||!(hit===bs[0]||bs[0].contains(hit)))return null;return {x,y,width:Math.round(r.width),height:Math.round(r.height)}})()'''.replace('MARKER',json.dumps(marker)).replace('SOURCE',json.dumps(found['src']))
+        try:
+            if self.download_behavior_uncertain:
+                await b.cdp.command('Browser.setDownloadBehavior',{'behavior':'default','eventsEnabled':False})
+                self.download_behavior_uncertain=False
+                self._record('previous_download_behavior_reset',acknowledged=True)
+            self._record('download_behavior_enable_begin')
+            await b.cdp.command('Browser.setDownloadBehavior',{'behavior':'allowAndName','downloadPath':str(folder.resolve()),'eventsEnabled':True})
+            self._record('download_behavior_enabled',acknowledged=True)
+            point=await self._stable_control_point(session,download_expr,2,'viewer-download')
+            if not point:
+                preview=await self._stable_control_point(session,preview_expr,5,'matching-image-preview')
+                if not preview:raise IndeterminateRequest('Matching image preview control unavailable; generation not resent')
+                self._record('preview_click_begin',bounds={k:preview.get(k) for k in ('x','y','width','height')})
+                await self._click(session,preview)
+                self._record('preview_click_acknowledged')
+                point=await self._stable_control_point(session,download_expr,8,'viewer-download')
+            if not point:raise IndeterminateRequest('Generated image exists but no stable matching Download control; generation not resent')
+            self._record('viewer_ready',control=point['control'],bounds={k:point.get(k) for k in ('x','y','width','height')})
+            # Re-query immediately before the click; if the viewer reflowed, stabilize the new bounds first.
+            fresh=await b.evaluate(session,download_expr)
+            if not fresh:
+                self._record('control_missing_before_click')
+                point=await self._stable_control_point(session,download_expr,3,'viewer-download')
+                if not point:raise IndeterminateRequest('Matching Download control disappeared; generation not resent')
+            else:
+                fresh['control']='viewer-download'
+                if not stable_control_point(point,fresh):
+                    self._record('control_reflowed_before_click',previous={k:point.get(k) for k in ('x','y','width','height')},current={k:fresh.get(k) for k in ('x','y','width','height')})
+                    point=await self._stable_control_point(session,download_expr,3,'viewer-download')
+                    if not point:raise IndeterminateRequest('Download control kept moving; generation not resent')
+                else:point=fresh
+            self._record('download_click_begin',bounds={k:point.get(k) for k in ('x','y','width','height')})
+            await self._click(session,point)
+            self._record('download_click_acknowledged')
+            deadline=time.monotonic()+45;guid=None
             while time.monotonic()<deadline:
                 if self.too_large:
                     if self.download_guid:await b.cdp.command('Browser.cancelDownload',{'guid':self.download_guid})
@@ -167,21 +242,17 @@ class ChatGPTImages:
                 try:await asyncio.wait_for(self.changed.wait(),min(2,max(.1,deadline-time.monotonic())))
                 except asyncio.TimeoutError:pass
             if not guid:raise IndeterminateRequest('Owned image download not confirmed; generation not resent')
+            self._record('download_correlated',guid=guid)
             p=folder/guid
             if not p.is_file() or not 1000<p.stat().st_size<=MAX_IMAGE:raise ImageRejected('Downloaded image file missing or invalid size')
             with Image.open(p) as im:
                 if im.format not in ('PNG','JPEG','WEBP') or min(im.size)<512 or max(im.size)>8192 or im.width*im.height>20_000_000:raise ImageRejected('Downloaded image invalid format/dimensions')
                 im.load();width,height=im.size;fmt=im.format
             destination=self.root/(task_id+'.png');part=destination.with_suffix('.part');shutil.copyfile(p,part);part.replace(destination)
+            self._record('image_validated',bytes=destination.stat().st_size,width=width,height=height,format=fmt,sha256=digest(destination))
             return {'task_id':task_id,'file_path':str(destination.resolve()),'sha256':digest(destination),'width':width,'height':height,'format':fmt,'conversation_url':url,'download_guid':guid,'download_frame':self.active_frame,'source':'chatgpt_visible_download'}
+        except Exception as e:
+            self._record('failure',error_type=type(e).__name__,error=str(e)[:400])
+            raise
         finally:
-            try:
-                (folder/'download-diagnostics.json').write_text(json.dumps({
-                    'active_frame':self.active_frame,
-                    'download_guid':self.download_guid,
-                    'events_count':len(self.events),
-                    'events':[{'method':e.get('method'),'params':{k:v for k,v in e.get('params',{}).items() if k not in ('url',)}} for e in self.events]
-                },indent=2),encoding='utf8')
-            except Exception:pass
-            self.active_frame=None
-            await b.cdp.command('Browser.setDownloadBehavior',{'behavior':'default','eventsEnabled':False})
+            await self._finish_download_attempt(folder,sys.exc_info()[1])
