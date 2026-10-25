@@ -27,7 +27,7 @@ class ComfyAssetTransportTests(unittest.TestCase):
         if req.method=='GET' and req.url.path=='/view':return httpx.Response(200,content=self.png,headers={'Content-Type':'image/png'})
         return httpx.Response(500,json={'unexpected':req.method+' '+req.url.path})
     def client_patch(self):return patch('videostudio.providers.httpx.Client',side_effect=lambda **kw:self.real_client(base_url=kw.get('base_url'),timeout=kw.get('timeout'),transport=self.transport))
-    def call(self,check=lambda:None):return self.pipeline.comfy_asset({'id':self.task_id,'output':str(self.out)},'images-scene-'+self.task_id,self.graph,self.path,check,strict_resume=True)
+    def call(self,check=lambda:None,skip_vram_check=False):return self.pipeline.comfy_asset({'id':self.task_id,'output':str(self.out)},'images-scene-'+self.task_id,self.graph,self.path,check,strict_resume=True,skip_vram_check=skip_vram_check)
     def test_fresh_prompt_history_view_receipt_and_resume_without_duplicate_post(self):
         with self.client_patch(),patch('videostudio.gpu.headroom',return_value=(16*1024**3,False)),patch('videostudio.gpu.record_owned'),patch('videostudio.gpu.free_comfy') as free:
             value=self.call()
@@ -47,6 +47,15 @@ class ComfyAssetTransportTests(unittest.TestCase):
             with self.client_patch():
                 with self.assertRaises(Exception):self.call()
             self.assertFalse(any(m=='POST' and p=='/prompt' for m,p in self.calls))
+    def test_manual_scene_bypass_skips_vram_stats_and_headroom(self):
+        with self.client_patch(),patch('videostudio.gpu.headroom') as head,patch('videostudio.gpu.record_owned'):
+            value=self.call(skip_vram_check=True)
+        self.assertEqual(value['prompt_id'],'prompt-'+self.task_id);head.assert_not_called()
+        self.assertNotIn(('GET','/system_stats'),self.calls);self.assertEqual(sum(1 for m,p in self.calls if m=='POST' and p=='/prompt'),1)
+    def test_bulk_default_still_rejects_insufficient_vram(self):
+        with self.client_patch(),patch('videostudio.gpu.headroom',return_value=(0,False)):
+            with self.assertRaisesRegex(RuntimeError,'Insufficient free VRAM'):self.call()
+        self.assertIn(('GET','/system_stats'),self.calls);self.assertNotIn(('POST','/prompt'),self.calls)
     def test_busy_shared_queue_never_submits_or_changes_queue(self):
         def busy(req):
             self.calls.append((req.method,req.url.path))
@@ -54,8 +63,8 @@ class ComfyAssetTransportTests(unittest.TestCase):
             return httpx.Response(500)
         transport=httpx.MockTransport(busy)
         with patch('videostudio.providers.httpx.Client',side_effect=lambda **kw:self.real_client(base_url=kw.get('base_url'),timeout=kw.get('timeout'),transport=transport)),patch('videostudio.gpu.headroom') as head:
-            with self.assertRaisesRegex(RuntimeError,'busy with other work'):self.call()
-            head.assert_not_called();self.assertNotIn(('POST','/prompt'),self.calls);self.assertFalse((self.out/('images-scene-'+self.task_id+'-receipt.json')).exists())
+            with self.assertRaisesRegex(RuntimeError,'busy with other work'):self.call(skip_vram_check=True)
+            head.assert_not_called();self.assertNotIn(('GET','/system_stats'),self.calls);self.assertNotIn(('POST','/prompt'),self.calls);self.assertFalse((self.out/('images-scene-'+self.task_id+'-receipt.json')).exists())
     def test_unknown_receipts_never_resubmit(self):
         kind='images-scene-'+self.task_id;receipt=self.out/(kind+'-receipt.json')
         for body in ({'state':'submitting'},{'prompt_id':'old-pid'}):
@@ -90,7 +99,7 @@ class ComfySceneQueueTests(unittest.TestCase):
                 p=q.download_root/(current['id']+'.png');p.parent.mkdir(parents=True,exist_ok=True);Image.new('RGB',(768,1376),'green').save(p)
                 return {'task_id':current['id'],'file_path':str(p),'sha256':digest(p),'request_id':'existing-comfy-prompt','width':768,'height':1376,'source':'comfy_qwen_image_2_1'}
             q.pipeline=Mock()
-            def fetch_existing(identity,kind,graph,path,check,strict_resume=False):
+            def fetch_existing(identity,kind,graph,path,check,strict_resume=False,skip_vram_check=False):
                 runner({'id':task['id']});Path(path).write_bytes((q.download_root/(task['id']+'.png')).read_bytes());check();return {'prompt_id':'existing-comfy-prompt'}
             q.pipeline.comfy_asset.side_effect=fetch_existing;recovered=q.recover_existing_comfy_result(j['id'],sid,task['id'])
             self.assertEqual(recovered['state'],'completed');self.assertEqual(recovered['result']['request_id'],'existing-comfy-prompt');self.assertEqual(q.editor.view(j['id'])['scenes'][0]['edit_id'],'original');q.pipeline.comfy_asset.assert_called_once()

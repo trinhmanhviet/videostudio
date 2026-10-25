@@ -169,7 +169,7 @@ class Pipeline:
         d=json.loads(choice['message']['content'])
         if not isinstance(d,dict):raise ValueError('LLM JSON object required')
         return d
-    def comfy_asset(self,j,kind,graph,path,check,strict_resume=False):
+    def comfy_asset(self,j,kind,graph,path,check,strict_resume=False,*,skip_vram_check=False):
         """Persist prompt ID before polling; restart reattaches, never blindly resubmits.
         An indeterminate POST is failed closed and requires a new job, because Comfy
         does not provide a server-side idempotency key. No global /interrupt calls.
@@ -196,13 +196,15 @@ class Pipeline:
                 q=c.get('queue');q.raise_for_status();queue=q.json()
                 if queue.get('queue_running') or queue.get('queue_pending'):
                     raise RuntimeError('ComfyUI busy with other work; no submission/unload/interrupt performed')
-                stats=c.get('system_stats');stats.raise_for_status()
-                devices=stats.json().get('devices',[])
-                minimum=int(os.getenv('VS_MIN_FREE_VRAM_MB','8192'))*1024*1024
-                from .gpu import headroom, free_comfy
-                available,owned=headroom(c,devices,self.gpu_ownership)
-                if not devices or available<minimum:
-                    raise RuntimeError(f'Insufficient free VRAM ({available//(1024*1024)}MB < {minimum//(1024*1024)}MB)')
+                from .gpu import free_comfy
+                if not skip_vram_check:
+                    stats=c.get('system_stats');stats.raise_for_status()
+                    devices=stats.json().get('devices',[])
+                    minimum=int(os.getenv('VS_MIN_FREE_VRAM_MB','8192'))*1024*1024
+                    from .gpu import headroom
+                    available,owned=headroom(c,devices,self.gpu_ownership)
+                    if not devices or available<minimum:
+                        raise RuntimeError(f'Insufficient free VRAM ({available//(1024*1024)}MB < {minimum//(1024*1024)}MB)')
                 receipt.write_text(json.dumps({'state':'submitting'}))
                 r=c.post('prompt',json={'prompt':graph,'client_id':'videostudio-'+j['id']});r.raise_for_status();pid=r.json().get('prompt_id')
                 if not pid:raise PermanentError('Comfy rejected workflow')

@@ -68,7 +68,7 @@ class SceneImageJobs:
             if current['state']=='cancelled':raise ImageTaskIssue('Đã dừng chờ trong VideoStudio; không gửi lệnh interrupt tới ComfyUI.','cancelled')
             if current['state']!='running':raise ImageTaskIssue('Trạng thái task đã đổi; giữ receipt Comfy và dừng polling an toàn.','cancelled')
         try:
-            result=self.pipeline.comfy_asset(task_identity,'images-scene-'+task['id'],graph,output,check,strict_resume=True)
+            result=self.pipeline.comfy_asset(task_identity,'images-scene-'+task['id'],graph,output,check,strict_resume=True,skip_vram_check=True)
         except Exception as e:
             text=str(e)
             if 'busy with other work' in text or 'Insufficient free VRAM' in text:
