@@ -112,7 +112,8 @@ const fixture = {
       assert.ok(await firstCard.locator('.se-btn-green', { hasText: 'Browse' }).isVisible(), 'Browse button visible');
       assert.ok(await firstCard.locator('.se-btn-green', { hasText: 'Vẽ lại' }).isVisible(), 'Vẽ lại button visible');
       assert.ok(await firstCard.locator('.se-provider-radios').isVisible(), 'Provider radios visible');
-      assert.ok(await firstCard.locator('.se-thumbs-grid').isVisible(), 'Thumbnail grid visible');
+      assert.equal(await firstCard.locator('.se-thumbs-grid').count(), 0, 'No thumbnail grid');
+      assert.ok(await firstCard.locator('.se-prompt-toggle').isVisible(), 'Prompt toggle below dropdown');
 
       // Verify Back button works and restores view
       await page.locator('#btnBackFromEditor').click();

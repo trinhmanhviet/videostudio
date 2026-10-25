@@ -73,7 +73,7 @@ fs.mkdirSync(out, { recursive: true });
             body: fs.readFileSync(path.join(root, 'static/scene-generation-ui.js'), 'utf8')
           });
         }
-        if (u.pathname.includes('/image') || u.pathname === '/original' || u.pathname.startsWith('/candidate')) {
+        if (u.pathname.includes('/image') || u.pathname === '/original' || u.pathname === '/candidate') {
           return route.fulfill({
             contentType: 'image/svg+xml',
             body: '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="640"><rect width="360" height="640" fill="' + (u.pathname.includes('candidate') ? '#843b28' : '#53664b') + '"/><text x="30" y="300" fill="white" font-size="28">' + (u.pathname.includes('candidate') ? 'Candidate' : 'Original') + '</text></svg>'
@@ -102,7 +102,8 @@ fs.mkdirSync(out, { recursive: true });
             ...view.scenes[0],
             image_url: '/candidate?selected=true',
             edit_id: 'generated-edit',
-            image_sha256: 'candidate'
+            image_sha256: 'candidate',
+            history: [{ id: 'generated-edit', provider: 'chatgpt', created: 1 }]
           };
           return route.fulfill({ json: view });
         }
@@ -120,13 +121,13 @@ fs.mkdirSync(out, { recursive: true });
       assert.equal(applied, 0, 'generating never applies implicitly');
 
       // Wait for candidate thumbnail to appear in grid
-      const candidateThumb = page.locator('.se-thumb-wrap', { hasText: 'Ứng viên mới' });
-      await candidateThumb.waitFor();
+      const candidateSelect = page.locator('.se-history-select');
+      await page.waitForFunction(() => !!document.querySelector('option[value="candidate:candidate-one"]'));
 
       await page.screenshot({ path: path.join(out, `mockup-card-${width}.png`) });
 
       // Click candidate thumb to apply
-      await candidateThumb.click();
+      await candidateSelect.selectOption('candidate:candidate-one');
       await page.waitForFunction(() => {
         const img = document.querySelector('.se-main-image');
         return img && img.getAttribute('src').includes('selected=true');

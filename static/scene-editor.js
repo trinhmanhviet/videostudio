@@ -269,538 +269,139 @@
     color: #fca5a5;
   }
   `;
+  style.textContent += `
+  body.scene-editor-active main{width:80vw;max-width:none;margin-inline:auto;padding-inline:0}
+  #viewSceneEditor{max-width:none;width:100%}
+  .se-grid{grid-template-columns:repeat(4,minmax(0,1fr));align-items:start}
+  .se-card{min-width:0;padding:12px;box-shadow:none}
+  .se-card-top{grid-template-columns:minmax(0,1fr) minmax(82px,34%);gap:10px}
+  .se-card-img-wrap{min-width:0}.se-provider-radios{padding:8px}
+  .se-btn-green{font-size:13px;padding:8px;min-height:40px}
+  .se-prompt-input{min-height:100px;box-sizing:border-box;font-size:13px}
+  .se-prompt-toggle{min-height:32px}.se-pager{display:flex;justify-content:center;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}
+  .se-narration{min-height:0}.se-card-status:empty{display:none}
+  .se-page-header{z-index:10}.se-history-select{min-width:0}
+  @media(max-width:1100px){body.scene-editor-active main{width:94vw}.se-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:600px){body.scene-editor-active main{width:calc(100% - 24px)}.se-grid{grid-template-columns:minmax(0,1fr)}}
+  `;
   document.head.append(style);
 
-  let state = null;
-  let busy = false;
-  let job = null;
-  let exportIdentity = null;
-  let objectURLs = [];
-  let workspaceScrollY = 0;
-  let editorScrollY = 0;
-  let candidateTimers = [];
-  let previousViewId = 'viewWorkspace';
-  const promptDrafts = new Map();
-  const expandedPrompts = new Set();
-
-  const $ = id => document.getElementById(id);
-  const node = (tag, content, cls) => {
-    const e = document.createElement(tag);
-    if (content !== undefined) e.textContent = content;
-    if (cls) e.className = cls;
-    return e;
-  };
-  const clock = s => {
-    const n = Math.max(0, Math.floor(Number(s) || 0));
-    return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
-  };
-  const base = () => '/api/jobs/' + encodeURIComponent(job) + '/scene-editor';
-
-  function message(s, error = false) {
-    const el = $('sePageMessage');
-    if (!el) return;
-    el.textContent = s;
-    el.style.color = error ? '#fca5a5' : 'var(--accent)';
+  const $=id=>document.getElementById(id);
+  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
+  const uid=()=>globalThis.crypto?.randomUUID?.()||('vs-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+  const clock=s=>{const n=Math.max(0,Math.floor(Number(s)||0));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');};
+  const caches=new Map(), PAGE_SIZE=12;
+  let job=null,state=null,busy=false,epoch=0,timers=new Set(),priorView='viewGallery',workspaceScroll=0;
+  const base=(id=job)=>'/api/jobs/'+encodeURIComponent(id)+'/scene-editor';
+  const cache=()=>{if(!caches.has(job))caches.set(job,{page:0,filter:'all',scroll:0,drafts:new Map(),expanded:new Set(),tasks:new Map(),requestKeys:new Map()});return caches.get(job);};
+  function message(text,error=false){$('sePageMessage').textContent=text;$('sePageMessage').style.color=error?'#fca5a5':'var(--accent)';}
+  async function request(path,opts={}){const r=await fetch(path,{...opts,headers:{'Content-Type':'application/json',...opts.headers},signal:AbortSignal.timeout(120000)});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d;}
+  const imageURL=(s,edit)=>base()+'/scenes/'+encodeURIComponent(s.scene_id)+'/image?edit='+encodeURIComponent(edit)+'&thumb=true';
+  function clearPolling(){epoch++;for(const t of timers)clearTimeout(t);timers.clear();}
+  function controls(){
+    const view=$('viewSceneEditor');
+    view.querySelectorAll('button,select,input,textarea').forEach(e=>{if(e.id==='btnBackFromEditor')return;e.disabled=busy||e.dataset.permDisabled==='true'||(e.dataset.requiresEdit==='true'&&!state?.editable)||e.dataset.pending==='true'||e.dataset.boundary==='true';});
   }
-
-  function setBusy(val) {
-    busy = val;
-    const view = $('viewSceneEditor');
-    if (!view) return;
-    view.querySelectorAll('button, select, input').forEach(e => {
-      if (e.id === 'btnBackFromEditor') return;
-      if (e.dataset.permDisabled === 'true') {
-        e.disabled = true;
-        return;
+  function pager(){
+    let p=$('sePagination');if(p)return p;
+    p=node('nav',undefined,'se-pager');p.id='sePagination';p.setAttribute('aria-label','Phân trang cảnh');$('sePageGrid').after(p);return p;
+  }
+  function schedule(fn,ms){const t=setTimeout(()=>{timers.delete(t);fn();},ms);timers.add(t);}
+  async function mutate(path,payload,s,card,preview,value){
+    if(busy||!state?.editable)return false;
+    const jid=job,token=epoch,img=card.querySelector('.se-main-image'),select=card.querySelector('.se-history-select');
+    const oldSrc=img.getAttribute('src'),oldValue=s.edit_id;
+    busy=true;controls();if(preview)img.src=preview;if(value)select.value=value;
+    const status=card.querySelector('.se-card-status');status.textContent='Đang lưu lựa chọn…';message('Đang lưu lựa chọn ảnh…');
+    try{
+      const result=await request(base(jid)+path,{method:'POST',body:JSON.stringify({...payload,version:state.version})});
+      if(job!==jid)return true;
+      state=result;cache().state=result;cache().exportKey=null;
+      const row=result.scenes.find(x=>x.scene_id===s.scene_id);
+      if(card.isConnected&&epoch===token&&row){
+        Object.assign(s,row);img.src=s.image_url+(s.image_url.includes('?')?'&':'?')+'thumb=true';img.style.objectFit=s.fit==='contain'?'contain':'cover';
+        if(path.endsWith('/apply'))cache().tasks.delete(s.scene_id);
+        card.updateOptions();status.textContent='Đã lưu';
       }
-      e.disabled = busy;
-    });
+      $('sePageCount').textContent=state.scenes.length+' cảnh';message('Đã lưu ảnh đã chọn.');return true;
+    }catch(e){
+      if(card.isConnected&&epoch===token){img.src=oldSrc;select.value=oldValue;status.textContent='Chưa lưu: '+e.message;}
+      message('Không lưu được lựa chọn: '+e.message,true);return false;
+    }finally{busy=false;controls();}
   }
-
-  async function jsonRequest(path, options = {}) {
-    const r = await fetch(path, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-      signal: AbortSignal.timeout(120000)
-    });
-    const data = await r.json().catch(() => ({ detail: 'Phản hồi không hợp lệ' }));
-    if (!r.ok) {
-      throw Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data));
-    }
-    return data;
-  }
-
-  async function mutation(path, payload) {
-    if (busy || !state?.editable) return;
-    setBusy(true);
-    message('Đang lưu thay đổi...');
-    try {
-      state = await jsonRequest(base() + path, {
-        method: 'POST',
-        body: JSON.stringify({ ...payload, version: state.version })
-      });
-      exportIdentity = null;
-      render();
-      message('Đã cập nhật ảnh cảnh. Lời đọc, phụ đề và timeline vẫn giữ nguyên.');
-    } catch (e) {
-      message(e.message + ' (Hãy thử bấm Làm mới nếu phiên bản bị lệch).', true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function render() {
-    candidateTimers.forEach(t => clearTimeout(t));
-    candidateTimers = [];
-    objectURLs.forEach(u => URL.revokeObjectURL(u));
-    objectURLs = [];
-
-    const grid = $('sePageGrid');
-    if (!grid || !state) return;
-
-    // Header info
-    const editedCount = state.scenes.filter(s => s.edit_id !== 'original').length;
-    const titleEl = $('sePageTitle');
-    if (titleEl) titleEl.textContent = 'Ảnh từng cảnh (Bản ' + state.version + ')';
-    const countEl = $('sePageCount');
-    if (countEl) countEl.textContent = `${state.scenes.length} cảnh${editedCount > 0 ? ` · ${editedCount} đã sửa` : ''}`;
-
-    const filter = $('sePageFilter')?.value || 'all';
-    const rows = state.scenes.filter(s => filter === 'all' || (filter === 'edited' && s.edit_id !== 'original'));
-
-    const cards = rows.map(s => {
-      const card = node('article', undefined, 'se-card');
-      card.dataset.sceneId = s.scene_id;
-
-      // 1. Header: Cảnh X · start - end (duration s)
-      const headerText = `Cảnh ${s.index + 1} · ${clock(s.start)} - ${clock(s.start + s.duration)} (${Number(s.duration).toFixed(2)}s)`;
-      card.append(node('div', headerText, 'se-card-header'));
-
-      // 2. Top Row: Left Image (9:16) + Right Controls
-      const topRow = node('div', undefined, 'se-card-top');
-
-      // 2a. Left: Image container
-      const imgWrap = node('div', undefined, 'se-card-img-wrap');
-      const mainImg = node('img', undefined, 'se-main-image');
-      mainImg.loading = 'lazy';
-      mainImg.src = s.image_url + '&thumb=true';
-      mainImg.alt = `Ảnh cảnh ${s.index + 1}`;
-      mainImg.style.objectFit = s.fit === 'contain' ? 'contain' : 'cover';
-      imgWrap.append(mainImg);
-      topRow.append(imgWrap);
-
-      // 2b. Right: Controls (Browse, Vẽ lại, Radios)
-      const ctrls = node('div', undefined, 'se-card-ctrls');
-
-      // Hidden file input
-      const fileInput = node('input');
-      fileInput.type = 'file';
-      fileInput.accept = 'image/png,image/jpeg,image/webp';
-      fileInput.style.display = 'none';
-      ctrls.append(fileInput);
-
-      // Browse button
-      const browseBtn = node('button', 'Browse', 'se-btn-green');
-      browseBtn.type = 'button';
-      browseBtn.title = 'Tải ảnh từ máy tính lên để thay cho cảnh này';
-      browseBtn.onclick = () => fileInput.click();
-      ctrls.append(browseBtn);
-
-      // Status indicator
-      const cardStatus = node('div', undefined, 'se-card-status');
-
-      // File change -> Upload immediately
-      fileInput.onchange = async () => {
-        const f = fileInput.files[0];
-        if (!f) return;
-        if (f.size > 20 * 1024 * 1024) {
-          cardStatus.textContent = 'Ảnh tối đa 20 MB.';
-          cardStatus.className = 'se-card-status is-error';
-          fileInput.value = '';
-          return;
-        }
-        setBusy(true);
-        browseBtn.disabled = true;
-        cardStatus.textContent = 'Đang tải lên...';
-        cardStatus.className = 'se-card-status';
-        try {
-          state = await jsonRequest(
-            base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/image?fit=cover&version=' + state.version,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': f.type || 'application/octet-stream' },
-              body: f
-            }
-          );
-          exportIdentity = null;
-          render();
-          message('Đã áp dụng ảnh tải lên cho Cảnh ' + (s.index + 1));
-        } catch (err) {
-          cardStatus.textContent = err.message;
-          cardStatus.className = 'se-card-status is-error';
-        } finally {
-          setBusy(false);
-          browseBtn.disabled = false;
-        }
+  function render(){
+    clearPolling();const token=epoch,jid=job,c=cache();
+    const filtered=state.scenes.filter(s=>c.filter!=='edited'||s.edit_id!=='original');const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));c.page=Math.min(Math.max(c.page,0),pages-1);
+    $('sePageTitle').textContent='Ảnh từng cảnh';$('sePageCount').textContent=state.scenes.length+' cảnh';$('sePageFilter').value=c.filter;
+    const grid=$('sePageGrid');grid.replaceChildren(...filtered.slice(c.page*PAGE_SIZE,(c.page+1)*PAGE_SIZE).map(makeCard));
+    const p=pager(),prev=node('button','← Trước','secondary'),next=node('button','Sau →','secondary');prev.type=next.type='button';prev.id='sePrevPage';next.id='seNextPage';prev.dataset.boundary=String(c.page===0);next.dataset.boundary=String(c.page===pages-1);
+    const pageText=node('span',`Trang ${c.page+1} / ${pages} · ${filtered.length?c.page*PAGE_SIZE+1:0}-${Math.min((c.page+1)*PAGE_SIZE,filtered.length)} / ${filtered.length} cảnh`);pageText.id='sePageNumber';
+    const change=n=>{if(busy)return;c.page=n;render();$('viewSceneEditor').scrollIntoView({block:'start'});};prev.onclick=()=>change(c.page-1);next.onclick=()=>change(c.page+1);p.replaceChildren(prev,pageText,next);controls();
+    // Mount before starting network reads. Only visible page cards request candidates.
+    for(const card of grid.children)card.loadCandidates();
+    function makeCard(s){
+      const card=node('article',undefined,'se-card');card.dataset.sceneId=s.scene_id;const alive=()=>job===jid&&epoch===token&&card.isConnected&&!$('viewSceneEditor').hidden;
+      const path='/scenes/'+encodeURIComponent(s.scene_id),endpoint=base(jid)+path+'/generations';
+      card.append(node('div',`Cảnh ${s.index+1} · ${clock(s.start)} - ${clock(s.start+s.duration)} (${Number(s.duration).toFixed(2)}s)`,'se-card-header'));
+      const top=node('div',undefined,'se-card-top'),wrap=node('div',undefined,'se-card-img-wrap'),img=node('img',undefined,'se-main-image');img.loading='lazy';img.decoding='async';img.src=s.image_url+(s.image_url.includes('?')?'&':'?')+'thumb=true';img.alt='Ảnh cảnh '+(s.index+1);img.style.objectFit=s.fit==='contain'?'contain':'cover';wrap.append(img);top.append(wrap);
+      const side=node('div',undefined,'se-card-ctrls'),file=node('input');file.type='file';file.accept='image/png,image/jpeg,image/webp';file.hidden=true;file.setAttribute('aria-label','Tải ảnh cảnh '+(s.index+1));
+      const browse=node('button','Browse','se-btn-green'),regen=node('button','Vẽ lại','se-btn-green');browse.type=regen.type='button';browse.dataset.requiresEdit=regen.dataset.requiresEdit='true';browse.onclick=()=>file.click();side.append(file,browse,regen);
+      const radios=node('div',undefined,'se-provider-radios');for(const [provider,label] of [['chatgpt','ChatGPT'],['flow','Flow'],['comfy','Comfy']]){const l=node('label',undefined,'se-radio-item'+(provider!=='chatgpt'?' is-disabled':'')),r=node('input');r.type='radio';r.name='provider_'+s.scene_id;r.value=provider;r.checked=provider==='chatgpt';if(provider!=='chatgpt'){r.dataset.permDisabled='true';r.disabled=true;l.title='Chưa hỗ trợ tạo riêng từng cảnh';}l.append(document.createTextNode(label),r);radios.append(l);}side.append(radios);top.append(side);card.append(top,node('p',s.narration,'se-narration'));
+      const audio=node('audio',undefined,'se-audio');audio.controls=true;audio.preload='none';audio.src=s.audio_url;card.append(audio);
+      const select=node('select',undefined,'se-history-select');select.setAttribute('aria-label','Chọn ảnh cảnh '+(s.index+1));select.dataset.requiresEdit='true';card.append(select);
+      const toggle=node('button','Sửa mô tả vẽ','se-prompt-toggle'),box=node('div',undefined,'se-prompt-box'),prompt=node('textarea',undefined,'se-prompt-input');toggle.type='button';prompt.value=c.drafts.get(s.scene_id)??s.visual_prompt??'';prompt.maxLength=12000;prompt.setAttribute('aria-label','Mô tả vẽ cảnh '+(s.index+1));box.hidden=!c.expanded.has(s.scene_id);toggle.setAttribute('aria-expanded',String(!box.hidden));prompt.oninput=()=>c.drafts.set(s.scene_id,prompt.value);toggle.onclick=()=>{box.hidden=!box.hidden;toggle.setAttribute('aria-expanded',String(!box.hidden));if(box.hidden)c.expanded.delete(s.scene_id);else c.expanded.add(s.scene_id);};box.append(prompt);card.append(toggle,box);
+      const status=node('div',undefined,'se-card-status');status.setAttribute('role','status');card.append(status);
+      card.updateOptions=()=>{
+        select.replaceChildren(new Option('Ảnh gốc','original'));
+        for(const h of s.history||[])select.append(new Option(new Date(h.created*1000).toLocaleString()+' · '+(h.provider==='chatgpt'?'ChatGPT':'Tải lên'),h.id));
+        for(const t of c.tasks.get(s.scene_id)||[])if(t.state==='completed'&&t.image_url)select.append(new Option('Ảnh tạo lại · '+new Date(t.created*1000).toLocaleString(),'candidate:'+t.id));
+        select.value=s.edit_id;
+      };card.updateOptions();
+      select.onchange=async()=>{const value=select.value;if(value===s.edit_id)return;let preview,pathSuffix,data;
+        if(value.startsWith('candidate:')){const id=value.slice(10),task=(c.tasks.get(s.scene_id)||[]).find(t=>t.id===id);if(!task){select.value=s.edit_id;return;}preview=task.image_url;pathSuffix=path+'/generations/'+encodeURIComponent(id)+'/apply';data={fit:'cover'};}
+        else{preview=imageURL(s,value);pathSuffix=path+'/restore';data={edit_id:value};}
+        const ok=await mutate(pathSuffix,data,s,card,preview,value);if(ok&&alive())card.loadCandidates();
       };
-
-      // Vẽ lại button
-      const regenBtn = node('button', 'Vẽ lại', 'se-btn-green');
-      regenBtn.type = 'button';
-      regenBtn.title = 'Yêu cầu vẽ lại ảnh cho cảnh này';
-      ctrls.append(regenBtn);
-
-      // Provider radio buttons (ChatGPT, Flow, Comfy)
-      const radioBox = node('div', undefined, 'se-provider-radios');
-      const radioName = 'provider_' + s.scene_id;
-
-      const rChat = node('label', undefined, 'se-radio-item');
-      const rChatInput = node('input');
-      rChatInput.type = 'radio';
-      rChatInput.name = radioName;
-      rChatInput.value = 'chatgpt';
-      rChatInput.checked = true;
-      rChat.append(document.createTextNode('Chatgpt'), rChatInput);
-
-      const rFlow = node('label', undefined, 'se-radio-item is-disabled');
-      const rFlowInput = node('input');
-      rFlowInput.type = 'radio';
-      rFlowInput.name = radioName;
-      rFlowInput.value = 'flow';
-      rFlowInput.disabled = true;
-      rFlowInput.dataset.permDisabled = 'true';
-      rFlow.title = 'Google Flow chưa bật';
-      rFlow.append(document.createTextNode('Flow'), rFlowInput);
-
-      const rComfy = node('label', undefined, 'se-radio-item is-disabled');
-      const rComfyInput = node('input');
-      rComfyInput.type = 'radio';
-      rComfyInput.name = radioName;
-      rComfyInput.value = 'comfy';
-      rComfyInput.disabled = true;
-      rComfyInput.dataset.permDisabled = 'true';
-      rComfy.title = 'Comfy tạo từng cảnh chưa bật';
-      rComfy.append(document.createTextNode('Comfy'), rComfyInput);
-
-      radioBox.append(rChat, rFlow, rComfy);
-      ctrls.append(radioBox);
-
-      // Prompt editing toggle
-      const promptToggle = node('button', '✏️ Sửa mô tả vẽ', 'se-prompt-toggle');
-      promptToggle.type = 'button';
-      const promptBox = node('div', undefined, 'se-prompt-box');
-      const draftKey = job + ':' + s.scene_id;
-      promptBox.hidden = !expandedPrompts.has(draftKey);
-      const promptInput = node('textarea', undefined, 'se-prompt-input');
-      promptInput.value = promptDrafts.has(draftKey) ? promptDrafts.get(draftKey) : (s.visual_prompt || s.narration || '');
-      promptInput.oninput = () => { promptDrafts.set(draftKey, promptInput.value); };
-      promptInput.maxLength = 12000;
-      promptInput.placeholder = 'Mô tả hình ảnh bằng tiếng Anh hoặc tiếng Việt...';
-      promptBox.append(promptInput);
-
-      promptToggle.onclick = () => {
-        promptBox.hidden = !promptBox.hidden;
-        if (!promptBox.hidden) expandedPrompts.add(draftKey);
-        else expandedPrompts.delete(draftKey);
+      file.onchange=async()=>{
+        const f=file.files[0];if(!f||busy||!state?.editable)return;if(f.size>20*1024*1024){status.textContent='Ảnh tối đa 20 MB';return;}
+        busy=true;controls();status.textContent='Đang tải ảnh…';const old=img.src,url=URL.createObjectURL(f);img.src=url;
+        try{const v=await request(base(jid)+path+'/image?fit=cover&version='+state.version,{method:'POST',headers:{'Content-Type':f.type||'application/octet-stream'},body:f});if(job===jid){state=v;c.state=v;c.exportKey=null;const row=v.scenes.find(x=>x.scene_id===s.scene_id);if(alive()){Object.assign(s,row);img.src=imageURL(s,s.edit_id);card.updateOptions();status.textContent='Đã lưu ảnh tải lên';}}}catch(e){if(alive()){img.src=old;status.textContent='Không tải được: '+e.message;}}finally{URL.revokeObjectURL(url);busy=false;controls();file.value='';}
       };
-      ctrls.append(promptToggle, promptBox);
-
-      // Append status under controls
-      ctrls.append(cardStatus);
-      topRow.append(ctrls);
-      card.append(topRow);
-
-      // 3. Middle Section: Narration + Audio Player
-      const narrP = node('p', s.narration, 'se-narration');
-      card.append(narrP);
-
-      const audio = node('audio', undefined, 'se-audio');
-      audio.controls = true;
-      audio.preload = 'none';
-      audio.src = s.audio_url;
-      card.append(audio);
-
-      // 4. Bottom Section: History Dropdown + Thumbnail Grid
-      const historySelect = node('select', undefined, 'se-history-select');
-      historySelect.setAttribute('aria-label', `Lịch sử ảnh cảnh ${s.index + 1}`);
-
-      // Original option
-      historySelect.append(new Option('Ảnh gốc · cắt vừa', 'original'));
-
-      // Populate history items
-      (s.history || []).forEach(h => {
-        const timeStr = new Date(h.created * 1000).toLocaleString();
-        const fitStr = h.fit === 'contain' ? 'toàn ảnh' : 'cắt vừa';
-        const provStr = h.provider === 'chatgpt' ? 'ChatGPT' : 'Tải lên';
-        historySelect.append(new Option(`${timeStr} · ${fitStr} (${provStr})`, h.id));
-      });
-      historySelect.value = s.edit_id;
-
-      // Handle dropdown change -> restore
-      historySelect.onchange = () => {
-        mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: historySelect.value });
+      let loading=false;
+      card.loadCandidates=async()=>{
+        if(!alive()||loading)return;loading=true;
+        try{const d=await request(endpoint);if(!alive())return;if(busy){schedule(card.loadCandidates,300);return;}c.tasks.set(s.scene_id,d.items||[]);card.updateOptions();
+          const pending=(d.items||[]).find(t=>['queued','running','uncertain','needs_auth'].includes(t.state));regen.dataset.pending=String(!!pending);
+          card.querySelectorAll('.se-recovery').forEach(e=>e.remove());
+          if(pending){status.textContent=pending.error||(['queued','running'].includes(pending.state)?'Đang tạo ảnh…':'Yêu cầu cần kiểm tra, không tự gửi lại');
+            if(['uncertain','needs_auth'].includes(pending.state))for(const [action,label] of [['resume','Kiểm tra yêu cầu cũ'],['cancel','Dừng chờ']]){const b=node('button',label,'secondary se-recovery');b.type='button';b.onclick=async()=>{if(busy)return;busy=true;controls();try{await request(endpoint+'/'+pending.id+'/'+action,{method:'POST',body:'{}'});}catch(e){status.textContent=e.message;}finally{busy=false;controls();card.loadCandidates();}};card.append(b);}
+            if(['queued','running'].includes(pending.state))schedule(card.loadCandidates,3000);
+          }else if((d.items||[]).some(t=>t.state==='completed'))status.textContent='Ảnh tạo lại sẵn sàng trong dropdown';
+          controls();
+        }catch(e){if(alive())status.textContent=e.message;}finally{loading=false;}
       };
-      card.append(historySelect);
-
-      // Thumbnail Grid (4 columns, scrollable)
-      const thumbsGrid = node('div', undefined, 'se-thumbs-grid');
-
-      // Helper to append a thumbnail
-      function addThumb(imgSrc, label, isActive, onClick) {
-        const tWrap = node('div', undefined, 'se-thumb-wrap' + (isActive ? ' is-active' : ''));
-        const tImg = node('img', undefined, 'se-thumb-img');
-        tImg.loading = 'lazy';
-        tImg.src = imgSrc;
-        tImg.alt = label;
-        tWrap.append(tImg);
-        if (label) {
-          tWrap.append(node('span', label, 'se-thumb-badge'));
-        }
-        tWrap.onclick = onClick;
-        thumbsGrid.append(tWrap);
-        return tWrap;
-      }
-
-      // Add Original thumb
-      addThumb(
-        `/api/jobs/${job}/scene-editor/scenes/${s.scene_id}/image?edit=original&thumb=true`,
-        'Ảnh gốc',
-        s.edit_id === 'original',
-        () => mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: 'original' })
-      );
-
-      // Add Revisions thumbs
-      (s.history || []).forEach(h => {
-        addThumb(
-          `/api/jobs/${job}/scene-editor/scenes/${s.scene_id}/image?edit=${h.id}&thumb=true`,
-          h.provider === 'chatgpt' ? 'ChatGPT' : 'Đã sửa',
-          s.edit_id === h.id,
-          () => mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: h.id })
-        );
-      });
-
-      card.append(thumbsGrid);
-
-      // Function to poll and load ChatGPT candidates for this scene
-      async function loadCandidates() {
-        const thisJob = job;
-        if (!card.isConnected || $('viewSceneEditor')?.hidden || thisJob !== job) return;
-        try {
-          const genData = await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations');
-          if (!card.isConnected || $('viewSceneEditor')?.hidden || thisJob !== job) return;
-          const items = genData.items || [];
-          const running = items.find(t => ['queued', 'running'].includes(t.state));
-          if (running) {
-            regenBtn.disabled = true;
-            cardStatus.textContent = 'Đang vẽ ảnh trên ChatGPT...';
-            candidateTimers.push(setTimeout(loadCandidates, 3000));
-          } else {
-            regenBtn.disabled = false;
-          }
-
-          // Add completed candidates to thumbsGrid if not already there
-          items.forEach(cand => {
-            if (cand.state === 'completed' && cand.image_url) {
-              const existing = thumbsGrid.querySelector(`[data-cand-id="${cand.id}"]`);
-              if (!existing) {
-                const tWrap = addThumb(
-                  cand.image_url,
-                  'Ứng viên mới',
-                  false,
-                  async () => {
-                    cardStatus.textContent = 'Đang áp dụng ảnh ứng viên...';
-                    try {
-                      await mutation(
-                        '/scenes/' + encodeURIComponent(s.scene_id) + '/generations/' + encodeURIComponent(cand.id) + '/apply',
-                        { fit: 'cover' }
-                      );
-                    } catch (e) {
-                      cardStatus.textContent = e.message;
-                      cardStatus.className = 'se-card-status is-error';
-                    }
-                  }
-                );
-                if (tWrap) tWrap.dataset.candId = cand.id;
-              }
-            }
-          });
-        } catch (_) {}
-      }
-
-      // Check candidates initially
-      loadCandidates();
-
-      // Hook "Vẽ lại" button
-      regenBtn.onclick = async () => {
-        const text = promptInput.value.trim() || s.visual_prompt || s.narration;
-        if (!text) {
-          cardStatus.textContent = 'Nhập mô tả hình ảnh cần vẽ.';
-          cardStatus.className = 'se-card-status is-error';
-          return;
-        }
-        setBusy(true);
-        regenBtn.disabled = true;
-        cardStatus.textContent = 'Đang gửi yêu cầu tới ChatGPT...';
-        cardStatus.className = 'se-card-status';
-        try {
-          const key = crypto.randomUUID();
-          await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations', {
-            method: 'POST',
-            headers: { 'Idempotency-Key': key },
-            body: JSON.stringify({ prompt: text, provider: 'chatgpt', version: state.version })
-          });
-          cardStatus.textContent = 'Đã gửi! Đang vẽ trên ChatGPT...';
-          setTimeout(loadCandidates, 2500);
-        } catch (e) {
-          cardStatus.textContent = e.message;
-          cardStatus.className = 'se-card-status is-error';
-          regenBtn.disabled = false;
-        } finally {
-          setBusy(false);
-        }
+      regen.onclick=async()=>{if(busy||!state?.editable||regen.dataset.pending==='true')return;const text=prompt.value.trim();if(!text){status.textContent='Nhập mô tả trước khi vẽ';return;}
+        const identity=JSON.stringify({prompt:text,version:state.version}),saved=c.requestKeys.get(s.scene_id);const key=saved?.identity===identity?saved.key:uid();c.requestKeys.set(s.scene_id,{identity,key});busy=true;controls();status.textContent='Đang gửi yêu cầu…';
+        try{await request(endpoint,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({prompt:text,provider:'chatgpt',version:state.version})});c.requestKeys.delete(s.scene_id);regen.dataset.pending='true';if(alive())schedule(card.loadCandidates,500);}catch(e){if(alive())status.textContent=e.message;}finally{busy=false;controls();}
       };
-
       return card;
-    });
-
-    grid.replaceChildren(...cards);
-  }
-
-  async function refresh() {
-    if (busy || !job) return;
-    setBusy(true);
-    message('Đang tải dữ liệu cảnh...');
-    try {
-      state = await jsonRequest(base());
-      render();
-      message('Đã nạp ' + state.scenes.length + ' cảnh.');
-    } catch (e) {
-      message(e.message, true);
-    } finally {
-      setBusy(false);
     }
   }
-
-  window.openSceneEditor = async (jid) => {
-    if (busy) return;
-    job = jid;
-    state = null;
-    exportIdentity = null;
-
-    // Save previous scroll position
-    workspaceScrollY = window.scrollY || document.documentElement.scrollTop;
-
-    // Switch views
-    const viewGallery = document.getElementById('viewGallery');
-    const viewWorkspace = document.getElementById('viewWorkspace');
-    const viewEditor = document.getElementById('viewSceneEditor');
-
-    previousViewId = (viewWorkspace && !viewWorkspace.hidden) ? 'viewWorkspace' : 'viewGallery';
-
-    if (viewGallery) viewGallery.hidden = true;
-    if (viewWorkspace) viewWorkspace.hidden = true;
-    if (viewEditor) viewEditor.hidden = false;
-
-    // Update URL hash without jumping
-    if (location.hash !== '#/editor/' + encodeURIComponent(jid)) {
-      location.hash = '#/editor/' + encodeURIComponent(jid);
-    }
-
-    // Scroll to top of editor
-    window.scrollTo(0, editorScrollY || 0);
-
-    // Initial load
-    await refresh();
+  async function refresh(){if(busy||!job)return;const jid=job;busy=true;controls();message('Đang nạp cảnh…');try{const v=await request(base(jid));if(job!==jid)return;state=v;cache().state=v;render();message('Chọn ảnh bằng dropdown. Ảnh tạo lại chỉ được dùng khi bạn chọn.');}catch(e){message(e.message,true);}finally{busy=false;controls();}}
+  window.openSceneEditor=async jid=>{
+    if(busy)return;const visible=!$('viewSceneEditor').hidden;if(visible&&jid===job)return;
+    if(visible&&job)cache().scroll=window.scrollY;
+    if(!visible){workspaceScroll=window.scrollY;priorView=!$('viewWorkspace').hidden?'viewWorkspace':'viewGallery';}
+    clearPolling();job=jid;const c=cache();state=c.state||null;
+    $('viewGallery').hidden=$('viewWorkspace').hidden=true;$('viewSceneEditor').hidden=false;document.body.classList.add('scene-editor-active');
+    const hash='#/editor/'+encodeURIComponent(jid);if(location.hash!==hash)location.hash=hash;
+    if(state){render();await request(base(jid)).then(v=>{if(job===jid&&v.version!==state.version){state=v;c.state=v;render();}}).catch(()=>{});}else await refresh();
+    requestAnimationFrame(()=>window.scrollTo(0,c.scroll||0));
   };
-
-  function closeSceneEditor() {
-    if (busy) return;
-
-    candidateTimers.forEach(t => clearTimeout(t));
-    candidateTimers = [];
-
-    // Pause all audio
-    const viewEditor = document.getElementById('viewSceneEditor');
-    if (viewEditor) {
-      viewEditor.querySelectorAll('audio').forEach(a => a.pause());
-      viewEditor.hidden = true;
-    }
-
-    editorScrollY = window.scrollY || document.documentElement.scrollTop;
-
-    // Restore workspace or gallery
-    const viewWorkspace = document.getElementById('viewWorkspace');
-    const viewGallery = document.getElementById('viewGallery');
-
-    if (previousViewId === 'viewWorkspace' && viewWorkspace) {
-      viewWorkspace.hidden = false;
-    } else if (viewGallery) {
-      viewGallery.hidden = false;
-    }
-
-    // Restore scroll position
-    window.scrollTo(0, workspaceScrollY || 0);
-
-    // Clean hash
-    if (location.hash.startsWith('#/editor')) {
-      history.replaceState(null, '', location.pathname + location.search);
-    }
-  }
-
-  // Bind top bar events
-  const btnBack = document.getElementById('btnBackFromEditor');
-  if (btnBack) btnBack.onclick = closeSceneEditor;
-
-  const btnReload = document.getElementById('sePageReload');
-  if (btnReload) btnReload.onclick = refresh;
-
-  const filterSelect = document.getElementById('sePageFilter');
-  if (filterSelect) filterSelect.onchange = () => state && render();
-
-  const btnExport = document.getElementById('sePageExport');
-  if (btnExport) {
-    btnExport.onclick = async () => {
-      if (busy || !state?.editable) return;
-      setBusy(true);
-      message('Đang chốt ảnh và tạo phiên bản xuất mới...');
-      try {
-        const key = crypto.randomUUID();
-        const child = await jsonRequest(base() + '/export', {
-          method: 'POST',
-          headers: { 'Idempotency-Key': key },
-          body: JSON.stringify({ version: state.version, confirm_all: true })
-        });
-        message('Đã xuất phiên bản video mới: ' + child.id.slice(0, 8) + '. Đang dựng video với các ảnh đã chọn!');
-        if (typeof window.loadJobs === 'function') await window.loadJobs();
-      } catch (e) {
-        message('Lỗi xuất video: ' + e.message, true);
-      } finally {
-        setBusy(false);
-      }
-    };
-  }
-
-  // Handle browser Back / Forward navigation
-  window.addEventListener('hashchange', () => {
-    const match = location.hash.match(/^#\/editor\/([^?&]+)/);
-    const viewEditor = document.getElementById('viewSceneEditor');
-    if (match) {
-      const targetJob = decodeURIComponent(match[1]);
-      if (targetJob !== job || (viewEditor && viewEditor.hidden)) {
-        window.openSceneEditor(targetJob);
-      }
-    } else {
-      if (viewEditor && !viewEditor.hidden) {
-        closeSceneEditor();
-      }
-    }
-  });
-
-  // Check initial hash on load
-  window.addEventListener('DOMContentLoaded', () => {
-    const match = location.hash.match(/^#\/editor\/([^?&]+)/);
-    if (match) {
-      window.openSceneEditor(decodeURIComponent(match[1]));
-    }
-  });
+  function close(){if(busy)return;cache().scroll=window.scrollY;clearPolling();$('viewSceneEditor').querySelectorAll('audio').forEach(a=>a.pause());$('viewSceneEditor').hidden=true;document.body.classList.remove('scene-editor-active');$(priorView).hidden=false;window.scrollTo(0,workspaceScroll);if(location.hash.startsWith('#/editor/'))history.back();}
+  $('btnBackFromEditor').onclick=close;$('sePageReload').onclick=refresh;$('sePageFilter').onchange=()=>{if(busy)return;cache().filter=$('sePageFilter').value;cache().page=0;render();};
+  $('sePageExport').onclick=async()=>{if(busy||!state?.editable)return;const c=cache(),identity=String(state.version);if(c.exportKey?.identity!==identity)c.exportKey={identity,key:uid()};busy=true;controls();try{const result=await request(base()+'/export',{method:'POST',headers:{'Idempotency-Key':c.exportKey.key},body:JSON.stringify({version:state.version,confirm_all:true})});message('Đã tạo phiên bản '+result.id.slice(0,8)+', đang dựng video.');}catch(e){message(e.message,true);}finally{busy=false;controls();}};
+  window.addEventListener('hashchange',()=>{const m=location.hash.match(/^#\/editor\/([^?&]+)/);if(m)window.openSceneEditor(decodeURIComponent(m[1]));else if(!$('viewSceneEditor').hidden)close();});
+  const initial=()=>{const m=location.hash.match(/^#\/editor\/([^?&]+)/);if(m)window.openSceneEditor(decodeURIComponent(m[1]));};
+  if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',initial);else initial();
 })();
