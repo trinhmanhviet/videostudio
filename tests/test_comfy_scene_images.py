@@ -81,6 +81,20 @@ class ComfyAssetTransportTests(unittest.TestCase):
         self.assertNotIn(('POST','/interrupt'),self.calls);self.assertNotIn(('POST','/free'),self.calls)
 
 class ComfySceneQueueTests(unittest.TestCase):
+    def test_one_off_recovery_promotes_only_known_failed_comfy_task_without_applying(self):
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=SceneImageJobs(store);view=q.editor.view(j['id']);sid=view['scenes'][0]['scene_id']
+            task=q.start(j['id'],sid,'Qwen scene','comfy','recover-key',view['version'])
+            with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='failed',error='Unsafe Comfy output' WHERE id=?",(task['id'],))
+            def runner(current):
+                p=q.download_root/(current['id']+'.png');p.parent.mkdir(parents=True,exist_ok=True);Image.new('RGB',(768,1376),'green').save(p)
+                return {'task_id':current['id'],'file_path':str(p),'sha256':digest(p),'request_id':'existing-comfy-prompt','width':768,'height':1376,'source':'comfy_qwen_image_2_1'}
+            q.pipeline=Mock()
+            def fetch_existing(identity,kind,graph,path,check,strict_resume=False):
+                runner({'id':task['id']});Path(path).write_bytes((q.download_root/(task['id']+'.png')).read_bytes());check();return {'prompt_id':'existing-comfy-prompt'}
+            q.pipeline.comfy_asset.side_effect=fetch_existing;recovered=q.recover_existing_comfy_result(j['id'],sid,task['id'])
+            self.assertEqual(recovered['state'],'completed');self.assertEqual(recovered['result']['request_id'],'existing-comfy-prompt');self.assertEqual(q.editor.view(j['id'])['scenes'][0]['edit_id'],'original');q.pipeline.comfy_asset.assert_called_once()
+            with self.assertRaisesRegex(ValueError,'Only the specifically rejected'):q.recover_existing_comfy_result(j['id'],sid,task['id'])
     def test_comfy_candidate_uses_existing_task_and_apply_is_explicit(self):
         with tempfile.TemporaryDirectory() as t:
             store,j=ready_job(t);q=SceneImageJobs(store);view=q.editor.view(j['id']);sid=view['scenes'][0]['scene_id'];task=q.start(j['id'],sid,'Qwen scene','comfy','comfy-key',view['version'])
