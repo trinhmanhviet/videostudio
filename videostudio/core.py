@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 STAGES = ('plan','research','script','speech','images','subtitles','music','render','verify')
 class Cancelled(Exception): pass
+class AwaitingVisualReview(Exception): pass
 class PermanentError(Exception): pass
 
 def digest(path):
@@ -22,7 +23,7 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
@@ -30,6 +31,7 @@ def validate_request(data):
     d=data['duration_seconds']
     if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=7200: raise ValueError('Duration must be 8–7200 seconds')
     res=dict(data,idea=data['idea'].strip())
+    if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
     if 'project' in data:
         if not isinstance(data['project'],str) or not 1<=len(data['project'].strip())<=200:raise ValueError('Invalid project name')
         res['project']=data['project'].strip()
@@ -146,7 +148,7 @@ class Store:
     def cancel(self,j):
         self.get(j)
         with self.db() as c:
-            c.execute("UPDATE jobs SET cancel=1,state=CASE WHEN state IN ('queued','retrying') THEN 'cancelled' ELSE state END,updated=? WHERE id=?",(time.time(),j));self.event(c,j,None,'cancel_requested')
+            c.execute("UPDATE jobs SET cancel=1,state=CASE WHEN state IN ('queued','retrying','awaiting_visual_review') THEN 'cancelled' ELSE state END,updated=? WHERE id=?",(time.time(),j));self.event(c,j,None,'cancel_requested')
         return self.get(j)
     def attempt_limit(self,j,stage,base=3):
         with self.db() as c:r=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
@@ -228,6 +230,11 @@ class Worker:
                 with s.db() as c:
                     c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)',(jid,stage,json.dumps(value)))
                     c.execute('UPDATE jobs SET state=?,error=NULL,next_at=0,updated=? WHERE id=?',('completed' if stage=='verify' else 'queued',time.time(),jid));s.event(c,jid,stage,'completed')
+            except AwaitingVisualReview as e:
+                with s.db() as c:
+                    c.execute('UPDATE attempts SET count=MAX(0,count-1) WHERE job=? AND stage=?',(jid,stage))
+                    c.execute("UPDATE jobs SET state='awaiting_visual_review',error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),jid))
+                    s.event(c,jid,stage,'awaiting_visual_review',str(e)[:1000])
             except Cancelled:
                 with s.db() as c:c.execute("UPDATE jobs SET state='cancelled',updated=? WHERE id=?",(time.time(),jid));s.event(c,jid,stage,'cancelled')
             except Exception as e:

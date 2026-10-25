@@ -133,6 +133,9 @@ def gate_mode(j=None):
             except (OSError,ValueError,TypeError) as e:raise PermanentError('Visual quality: invalid persisted policy') from e
     mode=os.getenv('VS_VISUAL_QA','legacy')
     if mode not in ('legacy','required'):raise PermanentError('Visual quality: invalid VS_VISUAL_QA mode')
+    # User-facing quick/careful use technical/manual review; autonomous required
+    # remains a distinct opt-in integration. Existing required policy cannot downgrade.
+    if j and j.get('request',{}).get('quality_mode') in ('quick','careful'):mode='legacy'
     return 'required' if pinned else mode
 
 def load_contracts(j):

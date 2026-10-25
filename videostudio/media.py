@@ -95,6 +95,26 @@ def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffp
         if p.poll() is None:p.kill();p.communicate()
     return {'video':str(target),'assets':[asset(target)]}
 
+def render_visual_revision(scenes,audio_source,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffprobe='ffprobe'):
+    """Change visuals only; stream-copy the verified original soundtrack unchanged."""
+    verify(audio_source,seconds,ffprobe)
+    target=Path(output);tmp=target.with_name(target.stem+'.part.mp4')
+    track=visual_track(scenes,target.parent/'visual-track.mp4',check,ffmpeg)
+    sub=Path(subtitles).name
+    args=[ffmpeg,'-v','error','-y','-i',str(track.resolve()),'-i',str(Path(audio_source).resolve()),'-vf','subtitles=filename='+sub,'-map','0:v:0','-map','1:a:0','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',str(tmp.resolve())]
+    p=subprocess.Popen(args,cwd=target.parent,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE);start=time.monotonic()
+    try:
+        while True:
+            check()
+            try:_,err=p.communicate(timeout=.25);break
+            except subprocess.TimeoutExpired:
+                if time.monotonic()-start>900:raise TimeoutError('Visual revision render timed out')
+        if p.returncode:raise RuntimeError(err.decode(errors='replace')[-3000:])
+        verify(tmp,seconds,ffprobe);tmp.replace(target)
+    finally:
+        if p.poll() is None:p.kill();p.communicate()
+    return {'video':str(target),'audio_stream_copied':True,'assets':[asset(target)]}
+
 def verify(path,seconds,ffprobe='ffprobe'):
     data=probe(path,ffprobe); kinds={s['codec_type'] for s in data['streams']}
     actual=float(data['format']['duration'])

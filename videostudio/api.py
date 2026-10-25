@@ -17,6 +17,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
     pipeline.store=store
+    from .scene_editor import SceneEditor
+    scene_editor=SceneEditor(store);pipeline.scene_editor=scene_editor
     from .exchanges import Exchanges
     exchanges=Exchanges(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
@@ -96,6 +98,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             'progress':round(len(j['checkpoints'])/9*100),
             'output_url':'/api/jobs/'+j['id']+'/files/video.mp4' if j['state']=='completed' else None,
             'project':j.get('request',{}).get('project','Dự án mặc định'),
+            'quality_mode':scene_editor.mode(j),
+            'visual_quality':j.get('checkpoints',{}).get('verify',{}).get('visual_quality',{'status':'not_checked'}),
             'diagnostics':diag,
             'latest_event':latest_event,
             'events':events[-30:]
@@ -304,6 +308,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         from urllib.parse import urlparse
         origin=request.headers.get('origin')
         if origin and urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
+    from .editor_api import register_editor_routes
+    register_editor_routes(app,store,scene_editor,same_origin,public_job)
     @app.post('/api/connector/sessions')
     def connector_session(request:Request):
         same_origin(request)

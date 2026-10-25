@@ -627,14 +627,24 @@ class Pipeline:
         result['assets'].extend(normalized['assets'])
         return result
     def render(self,j,check):
+        if getattr(self,'scene_editor',None):self.scene_editor.require_user_review(j)
         from .visual_quality import require_release
         require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'store',None):self.store.log(j['id'],'render','Đang kết hợp hình ảnh, phụ đề, âm thanh và xuất video MP4...')
         cp=j['checkpoints'];vol=j['request'].get('music_volume',0.35)
+        reused=cp['images'].get('reuse_audio')
+        if reused:
+            from .core import digest
+            from .media import render_visual_revision
+            if digest(reused['path'])!=reused['sha256']:raise PermanentError('Verified original soundtrack source changed')
+            return render_visual_revision(cp['images']['scenes'],reused['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe)
         return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',j['request']['duration_seconds'],check,self.ffmpeg,self.ffprobe,music_volume=vol)
     def verify(self,j,check):
         from .visual_quality import require_release
         visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
+        if getattr(self,'scene_editor',None):
+            manual=self.scene_editor.require_user_review(j)
+            if manual['status']=='user_approved':visual_quality=manual
         if getattr(self,'store',None):self.store.log(j['id'],'verify','Đang kiểm tra chất lượng video thành phẩm...')
         p=j['checkpoints']['render']['video'];v=verify(p,j['request']['duration_seconds'],self.ffprobe)
         run([self.ffmpeg,'-v','error','-i',p,'-f','null','-'],check,timeout=900)
