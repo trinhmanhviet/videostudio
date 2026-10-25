@@ -1,102 +1,777 @@
-/* Per-scene visual editor. Never requests TTS, script generation, or GPU images. */
+/* VideoStudio Per-Scene Visual Editor - Dedicated Page View */
 (() => {
   'use strict';
-  const style=document.createElement('style');style.textContent=`
-  .se-overlay{position:fixed;inset:0;background:#000b;z-index:1100;padding:clamp(8px,2vw,24px);display:flex;justify-content:center;align-items:center}
-  .se-shell{width:100%;max-width:1500px;max-height:94vh;overflow:auto;border:1px solid var(--line);background:var(--bg);border-radius:14px;padding:18px}
-  .se-overlay[hidden]{display:none}
-  .se-shell{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-width:0}
-  .se-top{position:sticky;top:-18px;z-index:2;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line)}
-  .se-heading{display:flex;align-items:center;gap:8px}.se-heading h2{font-size:20px;margin:0;flex:1;min-width:0}.se-heading button{min-height:44px;justify-content:center}
-  .se-top #seCount{display:block;margin:2px 0;font-size:12px}.se-settings{padding:12px 0;border-bottom:1px solid var(--line)}
-  .se-message:empty{display:none}
-  @media(max-width:640px),(max-height:500px){
-    .se-overlay{padding:0;align-items:stretch}
-    .se-shell{max-height:100vh;max-height:100dvh;width:100%;border-radius:0;border:0;padding:12px;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
-    .se-top{top:-12px;padding:8px 0}.se-heading{gap:6px}.se-heading h2{font-size:16px;line-height:1.2;white-space:nowrap}.se-heading button{font-size:12px;padding:8px}
-    .se-shell .se-grid{grid-template-columns:minmax(0,1fr);margin-top:8px}.se-card{padding:10px;min-width:0}.se-card .se-image{height:56vh;height:56svh;max-height:620px;aspect-ratio:auto;object-fit:contain}
-    .se-card button,.se-card select{min-height:44px;font-size:14px}.se-card input[type=file]{min-height:44px}.se-card h3{font-size:14px}.se-message{font-size:12px;margin:6px 0}
-    .se-settings .se-toolbar{gap:8px}.se-settings label{margin:4px 0}.se-settings .se-toolbar select{flex:1;min-width:0}.se-settings .se-confirm{font-size:12px}.se-settings .se-confirm input{flex-shrink:0}
+  const style = document.createElement('style');
+  style.textContent = `
+  #viewSceneEditor {
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding-bottom: 60px;
   }
-  .se-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.se-toolbar h2{margin:0;flex:1}.se-toolbar select{width:auto;max-width:100%}
-  .se-summary{font-size:13px;color:var(--muted);margin:8px 0}.se-message{white-space:pre-wrap;margin:8px 0}.se-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;margin-top:14px}
-  .se-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card)}.se-card h3{margin:0 0 8px;font-size:15px}
-  .se-image{display:block;width:100%;height:auto;aspect-ratio:9/16;object-fit:contain;background:#080808;border-radius:6px}.se-card p{font-size:13px;line-height:1.5;min-height:38px}.se-card audio{width:100%;height:36px}
-  .se-card input[type=file]{width:100%;font-size:12px;padding:8px 0}.se-card select{font-size:12px}.se-card button{font-size:12px;padding:7px 9px}.se-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
-  .se-approval{display:inline-block;font-size:12px;margin:8px 0;color:var(--accent)}.se-confirm{display:flex;gap:8px;align-items:center;font-size:13px;max-width:700px}.se-confirm input{width:auto}
-  .se-generation{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}.se-generation summary{cursor:pointer;min-height:44px;display:list-item;padding:10px 0;font-weight:600;color:var(--accent)}
-  .se-generation-body{display:grid;gap:8px}.se-generation-body p{min-height:0}.se-generation-note{display:block;font-size:12px;line-height:1.4}.se-generation-status{font-size:12px;overflow-wrap:anywhere}
-  .se-generation-result{display:grid;gap:8px;border-top:1px solid var(--line);padding:12px 0}.se-generated-image{width:100%;max-height:55svh;object-fit:contain;background:#080808;border-radius:8px}.se-generation textarea{min-height:110px;font-size:14px;resize:vertical}
-  `;document.head.append(style);
-  const overlay=document.createElement('div');overlay.className='se-overlay';overlay.hidden=true;
-  overlay.innerHTML=`<section class="se-shell" role="dialog" aria-modal="true" aria-labelledby="seTitle"><div class="se-top"><div class="se-heading"><h2 id="seTitle">Ảnh từng cảnh</h2><button type="button" id="seOptionsToggle" class="secondary" aria-expanded="false" aria-controls="seSettings">Tùy chọn / Xuất</button><button type="button" id="seClose" class="secondary">Đóng</button></div><span id="seCount" class="se-summary"></span></div><div id="seSettings" class="se-settings" hidden><button type="button" id="seReload" class="secondary">Làm mới cảnh</button><p class="se-summary">Đổi ảnh giữ nguyên lời đọc, thời lượng, phụ đề và nhạc. Video gốc không bị ghi đè.</p><div class="se-toolbar"><label for="seMode">Chế độ</label><select id="seMode"><option value="quick">Nhanh</option><option value="careful">Kiểm kỹ (duyệt thủ công)</option></select><select id="seFilter" aria-label="Lọc cảnh"><option value="all">Tất cả cảnh</option><option value="pending">Chưa duyệt</option><option value="edited">Đã thay ảnh</option></select></div><div class="se-toolbar"><label class="se-confirm"><input id="seKeepAll" type="checkbox">Tôi đồng ý giữ các ảnh hiện tại còn lại khi xuất bản Kiểm kỹ.</label><button type="button" id="seExport">Xuất phiên bản mới</button></div><small class="se-summary">Duyệt ở đây là lựa chọn của bạn, không phải AI chứng nhận đúng lịch sử/khoa học.</small></div><div id="seMessage" class="se-message" role="status"></div><div id="seGrid" class="se-grid"></div></section>`;
-  document.body.append(overlay);
-  const el=id=>overlay.querySelector('#'+id);
-  let state=null,busy=false,job=null,exportIdentity=null,objectURLs=[],previousBodyOverflow='';
-  function showSettings(open){el('seSettings').hidden=!open;el('seOptionsToggle').setAttribute('aria-expanded',String(open));if(open)overlay.querySelector('.se-shell').scrollTop=0;}
-  el('seOptionsToggle').onclick=()=>showSettings(el('seSettings').hidden);
-  const node=(tag,content,cls)=>{const e=document.createElement(tag);if(content!==undefined)e.textContent=content;if(cls)e.className=cls;return e;};
-  const clock=s=>{const n=Math.max(0,Math.floor(Number(s)||0));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');};
-  const base=()=>'/api/jobs/'+encodeURIComponent(job)+'/scene-editor';
-  function message(s,error=false){el('seMessage').textContent=s;el('seMessage').style.color=error?'#fca5a5':'var(--accent)';}
-  function controls(){overlay.querySelectorAll('button,select,input').forEach(e=>e.disabled=busy);if(state&&!state.editable){el('seMode').disabled=true;el('seKeepAll').disabled=true;el('seExport').disabled=true;el('seGrid').querySelectorAll('button,select,input').forEach(e=>e.disabled=true);}}
-  async function jsonRequest(path,options={}){
-    const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(120000)});
-    const data=await r.json().catch(()=>({detail:'Phản hồi không hợp lệ'}));if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail||data));return data;
+  .se-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(12, 17, 14, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 12px;
   }
-  async function mutation(path,payload){
-    if(busy||!state?.editable)return;busy=true;controls();message('Đang lưu...');
-    try{state=await jsonRequest(base()+path,{method:'POST',body:JSON.stringify({...payload,version:state.version})});el('seKeepAll').checked=false;exportIdentity=null;render();message('Đã lưu. Lời đọc và thời lượng không thay đổi.');}
-    catch(e){message(e.message+' Nếu dữ liệu đã đổi ở cửa sổ khác, bấm Làm mới cảnh.',true);}finally{busy=false;controls();}
+  @media(max-width: 640px) {
+    .se-page-header {
+      padding: 6px 0;
+      gap: 6px !important;
+    }
+    .se-page-header h2 {
+      font-size: 15px !important;
+    }
+    .se-page-header button, .se-page-header select {
+      font-size: 12px !important;
+      padding: 6px 8px !important;
+      min-height: 36px;
+    }
+    .se-page-header .badge {
+      font-size: 11px !important;
+    }
   }
-  function render(){
-    objectURLs.forEach(u=>URL.revokeObjectURL(u));objectURLs=[];
-    const shell=overlay.querySelector('.se-shell'),scroll=shell.scrollTop;
-    el('seMode').value=state.mode;
-    const pending=state.scenes.filter(s=>s.review_status!=='user_approved').length;
-    el('seCount').textContent=`${state.scenes.length} cảnh · ${pending} chưa duyệt · bản biên tập ${state.version}`;
-    const filter=el('seFilter').value;
-    const rows=state.scenes.filter(s=>filter==='all'||(filter==='pending'&&s.review_status!=='user_approved')||(filter==='edited'&&s.edit_id!=='original'));
-    const cards=rows.map(s=>{
-      const c=node('article',undefined,'se-card');c.dataset.sceneId=s.scene_id;
-      c.append(node('h3',`Cảnh ${s.index+1} · ${clock(s.start)} - ${clock(s.start+s.duration)} (${Number(s.duration).toFixed(2)}s)`));
-      const img=node('img',undefined,'se-image');img.loading='lazy';img.src=s.image_url+'&thumb=true';img.alt=`Ảnh cảnh ${s.index+1}`;c.append(img);
-      c.append(node('p',s.narration));const audio=node('audio');audio.controls=true;audio.preload='none';audio.src=s.audio_url;audio.setAttribute('aria-label',`Lời đọc cảnh ${s.index+1}`);c.append(audio);
-      c.append(node('span',s.review_status==='user_approved'?'Bạn đã chọn / duyệt ảnh này':'Chưa được bạn duyệt','se-approval'));
-      const file=node('input');file.type='file';file.accept='image/png,image/jpeg,image/webp';file.setAttribute('aria-label',`Thay ảnh cảnh ${s.index+1}`);c.append(file);
-      const fit=node('select');fit.setAttribute('aria-label',`Cách đặt ảnh cảnh ${s.index+1}`);fit.append(new Option('Cắt vừa khung (không kéo méo)','cover'),new Option('Giữ toàn ảnh, thêm viền','contain'));fit.value=s.fit==='contain'?'contain':'cover';c.append(fit);
-      const actions=node('div',undefined,'se-actions');const use=node('button','Dùng ảnh này');use.type='button';use.className='secondary';
-      file.onchange=()=>{const f=file.files[0];if(!f)return;if(f.size>20*1024*1024){message('Ảnh tối đa 20 MB.',true);file.value='';return;}const u=URL.createObjectURL(f);objectURLs.push(u);img.src=u;img.style.objectFit=fit.value;};
-      fit.onchange=()=>img.style.objectFit=fit.value;
-      use.onclick=async()=>{
-        const f=file.files[0];if(!f){message('Chọn ảnh PNG, JPEG hoặc WebP trước.',true);return;}if(busy)return;busy=true;controls();message('Đang tải và chuẩn hóa ảnh...');
-        try{state=await jsonRequest(base()+'/scenes/'+encodeURIComponent(s.scene_id)+'/image?fit='+fit.value+'&version='+state.version,{method:'POST',headers:{'Content-Type':f.type||'application/octet-stream'},body:f});exportIdentity=null;el('seKeepAll').checked=false;render();message('Đã thay ảnh. Lời đọc và timeline vẫn giữ nguyên.');}
-        catch(e){message(e.message,true);}finally{busy=false;controls();}
-      };
-      const approve=node('button','Duyệt ảnh hiện tại','secondary');approve.type='button';approve.onclick=()=>mutation('/scenes/'+encodeURIComponent(s.scene_id)+'/approve',{image_sha256:s.image_sha256});
-      const large=node('button','Xem ảnh lớn','secondary');large.type='button';large.onclick=()=>{img.src=s.image_url;img.style.height=img.style.height?'':'min(70vh, 650px)';};actions.append(use,approve,large);c.append(actions);
-      const history=node('select');history.setAttribute('aria-label',`Lịch sử ảnh cảnh ${s.index+1}`);history.append(new Option('Ảnh gốc','original'));for(const h of s.history)history.append(new Option(new Date(h.created*1000).toLocaleString()+' · '+(h.fit==='contain'?'toàn ảnh':'cắt vừa'),h.id));history.value=s.edit_id;c.append(history);
-      const restore=node('button','Khôi phục bản ảnh đã chọn','secondary');restore.type='button';restore.onclick=()=>mutation('/scenes/'+encodeURIComponent(s.scene_id)+'/restore',{edit_id:history.value});c.append(restore);
-      if(window.createSceneGenerationPanel)c.append(window.createSceneGenerationPanel(s,fit,{base:base(),request:jsonRequest,version:()=>state.version,editable:()=>state?.editable&&!busy,isOpen:()=>!overlay.hidden,apply:path=>mutation(path,{fit:fit.value})}));
-      if(!state.editable)c.querySelectorAll('button,select,input').forEach(x=>x.disabled=true);
-      return c;
-    });
-    el('seGrid').replaceChildren(...cards);shell.scrollTop=scroll;controls();
+  .se-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+    gap: 16px;
+    margin-top: 14px;
   }
-  async function refresh(){if(busy)return;busy=true;controls();message('Đang nạp cảnh...');try{state=await jsonRequest(base());render();message(state.editable?'Chọn cảnh cần sửa; có thể chuyển mode mà không mất ảnh đã thay.':'Job đang chạy. Chờ tạo ảnh xong trước khi sửa.');}catch(e){message(e.message,true);}finally{busy=false;controls();}}
-  window.openSceneEditor=async jid=>{if(busy)return;job=jid;state=null;exportIdentity=null;if(overlay.hidden)previousBodyOverflow=document.body.style.overflow;document.body.style.overflow='hidden';overlay.hidden=false;showSettings(false);overlay.querySelector('.se-shell').scrollTop=0;el('seKeepAll').checked=false;el('seGrid').replaceChildren();await refresh();};
-  function close(){if(busy)return;overlay.querySelectorAll('audio').forEach(a=>a.pause());objectURLs.forEach(u=>URL.revokeObjectURL(u));objectURLs=[];overlay.hidden=true;document.body.style.overflow=previousBodyOverflow;}
-  el('seClose').onclick=close;el('seReload').onclick=refresh;el('seFilter').onchange=()=>state&&render();
-  el('seMode').onchange=()=>mutation('/mode',{mode:el('seMode').value});
-  overlay.addEventListener('play',e=>overlay.querySelectorAll('audio').forEach(a=>{if(a!==e.target)a.pause();}),true);
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden)close();});
-  el('seExport').onclick=async()=>{
-    if(busy||!state?.editable)return;
-    const confirm=el('seKeepAll').checked;
-    if(state.mode==='careful'&&!confirm&&state.scenes.some(s=>s.review_status!=='user_approved')){message('Hãy duyệt các cảnh còn lại, hoặc đánh dấu đồng ý giữ ảnh hiện tại.',true);return;}
-    const identity=JSON.stringify({job,version:state.version,confirm});if(!exportIdentity||exportIdentity.identity!==identity)exportIdentity={identity,key:crypto.randomUUID()};
-    busy=true;controls();message('Đang chốt ảnh và tạo phiên bản xuất mới...');
-    try{const child=await jsonRequest(base()+'/export',{method:'POST',headers:{'Idempotency-Key':exportIdentity.key},body:JSON.stringify({version:state.version,confirm_all:confirm})});message('Đã tạo phiên bản '+child.id.slice(0,8)+'. Chỉ dựng lại phần hình và xuất MP4; video gốc vẫn giữ nguyên.');if(typeof loadJobs==='function')await loadJobs();}
-    catch(e){message(e.message,true);}finally{busy=false;controls();}
+  @media(max-width: 680px) {
+    .se-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+  }
+  .se-card {
+    background: #0d1410;
+    border: 1px solid #1f2e24;
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .se-card-header {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #f3f4f6;
+    margin-bottom: 2px;
+    letter-spacing: -0.01em;
+  }
+  .se-card-top {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: 14px;
+    align-items: start;
+  }
+  @media(max-width: 380px) {
+    .se-card-top {
+      grid-template-columns: 1fr 115px;
+      gap: 10px;
+    }
+  }
+  .se-card-img-wrap {
+    width: 100%;
+    aspect-ratio: 9/16;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #233529;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .se-main-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+  }
+  .se-card-ctrls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .se-btn-green {
+    background: #16a34a;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+  }
+  .se-btn-green:hover:not(:disabled) {
+    background: #15803d;
+    transform: translateY(-1px);
+  }
+  .se-btn-green:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .se-provider-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+    background: #080d0a;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #1a271e;
+  }
+  .se-radio-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13.5px;
+    color: #e5e7eb;
+    cursor: pointer;
+    user-select: none;
+  }
+  .se-radio-item input[type="radio"] {
+    margin: 0;
+    accent-color: #16a34a;
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+  }
+  .se-radio-item.is-disabled {
+    color: #6b7280;
+    cursor: not-allowed;
+  }
+  .se-radio-item.is-disabled input {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .se-prompt-toggle {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 0;
+    text-align: left;
+    text-decoration: underline;
+    opacity: 0.85;
+  }
+  .se-prompt-toggle:hover {
+    color: var(--accent);
+    opacity: 1;
+  }
+  .se-prompt-box {
+    margin-top: 4px;
+  }
+  .se-prompt-input {
+    width: 100%;
+    min-height: 60px;
+    font-size: 12px;
+    background: #080d0a;
+    border: 1px solid #233529;
+    color: #e5e7eb;
+    border-radius: 4px;
+    padding: 6px;
+    resize: vertical;
+  }
+  .se-narration {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #d1d5db;
+    margin: 2px 0;
+    min-height: 38px;
+  }
+  .se-audio {
+    width: 100%;
+    height: 36px;
+    border-radius: 6px;
+    margin: 2px 0;
+  }
+  .se-history-select {
+    width: 100%;
+    font-size: 12.5px;
+    background: #080d0a;
+    border: 1px solid #233529;
+    color: #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .se-thumbs-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    max-height: 185px;
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: #233529 #080d0a;
+  }
+  .se-thumb-wrap {
+    position: relative;
+    aspect-ratio: 9/16;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid #1a271e;
+    background: #000;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .se-thumb-wrap:hover {
+    transform: scale(1.03);
+    border-color: #2e4737;
+  }
+  .se-thumb-wrap.is-active {
+    border-color: #16a34a;
+    box-shadow: 0 0 8px rgba(22, 163, 74, 0.4);
+  }
+  .se-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .se-thumb-badge {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 8.5px;
+    background: rgba(0,0,0,0.75);
+    color: #e5e7eb;
+    text-align: center;
+    padding: 1px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .se-card-status {
+    font-size: 12px;
+    color: var(--accent);
+    min-height: 18px;
+  }
+  .se-card-status.is-error {
+    color: #fca5a5;
+  }
+  `;
+  document.head.append(style);
+
+  let state = null;
+  let busy = false;
+  let job = null;
+  let exportIdentity = null;
+  let objectURLs = [];
+  let workspaceScrollY = 0;
+  let editorScrollY = 0;
+
+  const $ = id => document.getElementById(id);
+  const node = (tag, content, cls) => {
+    const e = document.createElement(tag);
+    if (content !== undefined) e.textContent = content;
+    if (cls) e.className = cls;
+    return e;
   };
+  const clock = s => {
+    const n = Math.max(0, Math.floor(Number(s) || 0));
+    return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+  };
+  const base = () => '/api/jobs/' + encodeURIComponent(job) + '/scene-editor';
+
+  function message(s, error = false) {
+    const el = $('sePageMessage');
+    if (!el) return;
+    el.textContent = s;
+    el.style.color = error ? '#fca5a5' : 'var(--accent)';
+  }
+
+  function setBusy(val) {
+    busy = val;
+    const view = $('viewSceneEditor');
+    if (!view) return;
+    view.querySelectorAll('button, select, input').forEach(e => {
+      if (e.id !== 'btnBackFromEditor') e.disabled = busy;
+    });
+  }
+
+  async function jsonRequest(path, options = {}) {
+    const r = await fetch(path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      signal: AbortSignal.timeout(120000)
+    });
+    const data = await r.json().catch(() => ({ detail: 'Phản hồi không hợp lệ' }));
+    if (!r.ok) {
+      throw Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail || data));
+    }
+    return data;
+  }
+
+  async function mutation(path, payload) {
+    if (busy || !state?.editable) return;
+    setBusy(true);
+    message('Đang lưu thay đổi...');
+    try {
+      state = await jsonRequest(base() + path, {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, version: state.version })
+      });
+      exportIdentity = null;
+      render();
+      message('Đã cập nhật ảnh cảnh. Lời đọc, phụ đề và timeline vẫn giữ nguyên.');
+    } catch (e) {
+      message(e.message + ' (Hãy thử bấm Làm mới nếu phiên bản bị lệch).', true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function render() {
+    objectURLs.forEach(u => URL.revokeObjectURL(u));
+    objectURLs = [];
+
+    const grid = $('sePageGrid');
+    if (!grid || !state) return;
+
+    // Header info
+    const editedCount = state.scenes.filter(s => s.edit_id !== 'original').length;
+    const titleEl = $('sePageTitle');
+    if (titleEl) titleEl.textContent = 'Ảnh từng cảnh (Bản ' + state.version + ')';
+    const countEl = $('sePageCount');
+    if (countEl) countEl.textContent = `${state.scenes.length} cảnh${editedCount > 0 ? ` · ${editedCount} đã sửa` : ''}`;
+
+    const filter = $('sePageFilter')?.value || 'all';
+    const rows = state.scenes.filter(s => filter === 'all' || (filter === 'edited' && s.edit_id !== 'original'));
+
+    const cards = rows.map(s => {
+      const card = node('article', undefined, 'se-card');
+      card.dataset.sceneId = s.scene_id;
+
+      // 1. Header: Cảnh X · start - end (duration s)
+      const headerText = `Cảnh ${s.index + 1} · ${clock(s.start)} - ${clock(s.start + s.duration)} (${Number(s.duration).toFixed(2)}s)`;
+      card.append(node('div', headerText, 'se-card-header'));
+
+      // 2. Top Row: Left Image (9:16) + Right Controls
+      const topRow = node('div', undefined, 'se-card-top');
+
+      // 2a. Left: Image container
+      const imgWrap = node('div', undefined, 'se-card-img-wrap');
+      const mainImg = node('img', undefined, 'se-main-image');
+      mainImg.loading = 'lazy';
+      mainImg.src = s.image_url + '&thumb=true';
+      mainImg.alt = `Ảnh cảnh ${s.index + 1}`;
+      mainImg.style.objectFit = s.fit === 'contain' ? 'contain' : 'cover';
+      imgWrap.append(mainImg);
+      topRow.append(imgWrap);
+
+      // 2b. Right: Controls (Browse, Vẽ lại, Radios)
+      const ctrls = node('div', undefined, 'se-card-ctrls');
+
+      // Hidden file input
+      const fileInput = node('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/png,image/jpeg,image/webp';
+      fileInput.style.display = 'none';
+      ctrls.append(fileInput);
+
+      // Browse button
+      const browseBtn = node('button', 'Browse', 'se-btn-green');
+      browseBtn.type = 'button';
+      browseBtn.title = 'Tải ảnh từ máy tính lên để thay cho cảnh này';
+      browseBtn.onclick = () => fileInput.click();
+      ctrls.append(browseBtn);
+
+      // Status indicator
+      const cardStatus = node('div', undefined, 'se-card-status');
+
+      // File change -> Upload immediately
+      fileInput.onchange = async () => {
+        const f = fileInput.files[0];
+        if (!f) return;
+        if (f.size > 20 * 1024 * 1024) {
+          cardStatus.textContent = 'Ảnh tối đa 20 MB.';
+          cardStatus.className = 'se-card-status is-error';
+          fileInput.value = '';
+          return;
+        }
+        setBusy(true);
+        browseBtn.disabled = true;
+        cardStatus.textContent = 'Đang tải lên...';
+        cardStatus.className = 'se-card-status';
+        try {
+          state = await jsonRequest(
+            base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/image?fit=cover&version=' + state.version,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': f.type || 'application/octet-stream' },
+              body: f
+            }
+          );
+          exportIdentity = null;
+          render();
+          message('Đã áp dụng ảnh tải lên cho Cảnh ' + (s.index + 1));
+        } catch (err) {
+          cardStatus.textContent = err.message;
+          cardStatus.className = 'se-card-status is-error';
+        } finally {
+          setBusy(false);
+          browseBtn.disabled = false;
+        }
+      };
+
+      // Vẽ lại button
+      const regenBtn = node('button', 'Vẽ lại', 'se-btn-green');
+      regenBtn.type = 'button';
+      regenBtn.title = 'Yêu cầu vẽ lại ảnh cho cảnh này';
+      ctrls.append(regenBtn);
+
+      // Provider radio buttons (ChatGPT, Flow, Comfy)
+      const radioBox = node('div', undefined, 'se-provider-radios');
+      const radioName = 'provider_' + s.scene_id;
+
+      const rChat = node('label', undefined, 'se-radio-item');
+      const rChatInput = node('input');
+      rChatInput.type = 'radio';
+      rChatInput.name = radioName;
+      rChatInput.value = 'chatgpt';
+      rChatInput.checked = true;
+      rChat.append(document.createTextNode('Chatgpt'), rChatInput);
+
+      const rFlow = node('label', undefined, 'se-radio-item is-disabled');
+      const rFlowInput = node('input');
+      rFlowInput.type = 'radio';
+      rFlowInput.name = radioName;
+      rFlowInput.value = 'flow';
+      rFlowInput.disabled = true;
+      rFlow.title = 'Google Flow chưa bật';
+      rFlow.append(document.createTextNode('Flow'), rFlowInput);
+
+      const rComfy = node('label', undefined, 'se-radio-item is-disabled');
+      const rComfyInput = node('input');
+      rComfyInput.type = 'radio';
+      rComfyInput.name = radioName;
+      rComfyInput.value = 'comfy';
+      rComfyInput.disabled = true;
+      rComfy.title = 'Comfy tạo từng cảnh chưa bật';
+      rComfy.append(document.createTextNode('Comfy'), rComfyInput);
+
+      radioBox.append(rChat, rFlow, rComfy);
+      ctrls.append(radioBox);
+
+      // Prompt editing toggle
+      const promptToggle = node('button', '✏️ Sửa mô tả vẽ', 'se-prompt-toggle');
+      promptToggle.type = 'button';
+      const promptBox = node('div', undefined, 'se-prompt-box');
+      promptBox.hidden = true;
+      const promptInput = node('textarea', undefined, 'se-prompt-input');
+      promptInput.value = s.visual_prompt || s.narration || '';
+      promptInput.maxLength = 12000;
+      promptInput.placeholder = 'Mô tả hình ảnh bằng tiếng Anh hoặc tiếng Việt...';
+      promptBox.append(promptInput);
+
+      promptToggle.onclick = () => {
+        promptBox.hidden = !promptBox.hidden;
+      };
+      ctrls.append(promptToggle, promptBox);
+
+      // Append status under controls
+      ctrls.append(cardStatus);
+      topRow.append(ctrls);
+      card.append(topRow);
+
+      // 3. Middle Section: Narration + Audio Player
+      const narrP = node('p', s.narration, 'se-narration');
+      card.append(narrP);
+
+      const audio = node('audio', undefined, 'se-audio');
+      audio.controls = true;
+      audio.preload = 'none';
+      audio.src = s.audio_url;
+      card.append(audio);
+
+      // 4. Bottom Section: History Dropdown + Thumbnail Grid
+      const historySelect = node('select', undefined, 'se-history-select');
+      historySelect.setAttribute('aria-label', `Lịch sử ảnh cảnh ${s.index + 1}`);
+
+      // Original option
+      historySelect.append(new Option('Ảnh gốc · cắt vừa', 'original'));
+
+      // Populate history items
+      (s.history || []).forEach(h => {
+        const timeStr = new Date(h.created * 1000).toLocaleString();
+        const fitStr = h.fit === 'contain' ? 'toàn ảnh' : 'cắt vừa';
+        const provStr = h.provider === 'chatgpt' ? 'ChatGPT' : 'Tải lên';
+        historySelect.append(new Option(`${timeStr} · ${fitStr} (${provStr})`, h.id));
+      });
+      historySelect.value = s.edit_id;
+
+      // Handle dropdown change -> restore
+      historySelect.onchange = () => {
+        mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: historySelect.value });
+      };
+      card.append(historySelect);
+
+      // Thumbnail Grid (4 columns, scrollable)
+      const thumbsGrid = node('div', undefined, 'se-thumbs-grid');
+
+      // Helper to append a thumbnail
+      function addThumb(imgSrc, label, isActive, onClick) {
+        const tWrap = node('div', undefined, 'se-thumb-wrap' + (isActive ? ' is-active' : ''));
+        const tImg = node('img', undefined, 'se-thumb-img');
+        tImg.loading = 'lazy';
+        tImg.src = imgSrc;
+        tImg.alt = label;
+        tWrap.append(tImg);
+        if (label) {
+          tWrap.append(node('span', label, 'se-thumb-badge'));
+        }
+        tWrap.onclick = onClick;
+        thumbsGrid.append(tWrap);
+      }
+
+      // Add Original thumb
+      addThumb(
+        `/api/jobs/${job}/scene-editor/scenes/${s.scene_id}/image?edit=original&thumb=true`,
+        'Ảnh gốc',
+        s.edit_id === 'original',
+        () => mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: 'original' })
+      );
+
+      // Add Revisions thumbs
+      (s.history || []).forEach(h => {
+        addThumb(
+          `/api/jobs/${job}/scene-editor/scenes/${s.scene_id}/image?edit=${h.id}&thumb=true`,
+          h.provider === 'chatgpt' ? 'ChatGPT' : 'Đã sửa',
+          s.edit_id === h.id,
+          () => mutation('/scenes/' + encodeURIComponent(s.scene_id) + '/restore', { edit_id: h.id })
+        );
+      });
+
+      card.append(thumbsGrid);
+
+      // Function to poll and load ChatGPT candidates for this scene
+      async function loadCandidates() {
+        try {
+          const genData = await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations');
+          const items = genData.items || [];
+          const running = items.find(t => ['queued', 'running'].includes(t.state));
+          if (running) {
+            regenBtn.disabled = true;
+            cardStatus.textContent = 'Đang vẽ ảnh trên ChatGPT...';
+            setTimeout(loadCandidates, 3000);
+          } else {
+            regenBtn.disabled = false;
+          }
+
+          // Add completed candidates to thumbsGrid if not already there
+          items.forEach(cand => {
+            if (cand.state === 'completed' && cand.image_url) {
+              addThumb(
+                cand.image_url,
+                'Ứng viên mới',
+                false,
+                async () => {
+                  cardStatus.textContent = 'Đang áp dụng ảnh ứng viên...';
+                  try {
+                    await mutation(
+                      '/scenes/' + encodeURIComponent(s.scene_id) + '/generations/' + encodeURIComponent(cand.id) + '/apply',
+                      { fit: 'cover' }
+                    );
+                  } catch (e) {
+                    cardStatus.textContent = e.message;
+                    cardStatus.className = 'se-card-status is-error';
+                  }
+                }
+              );
+            }
+          });
+        } catch (_) {}
+      }
+
+      // Check candidates initially
+      loadCandidates();
+
+      // Hook "Vẽ lại" button
+      regenBtn.onclick = async () => {
+        const text = promptInput.value.trim() || s.visual_prompt || s.narration;
+        if (!text) {
+          cardStatus.textContent = 'Nhập mô tả hình ảnh cần vẽ.';
+          cardStatus.className = 'se-card-status is-error';
+          return;
+        }
+        setBusy(true);
+        regenBtn.disabled = true;
+        cardStatus.textContent = 'Đang gửi yêu cầu tới ChatGPT...';
+        cardStatus.className = 'se-card-status';
+        try {
+          const key = crypto.randomUUID();
+          await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': key },
+            body: JSON.stringify({ prompt: text, provider: 'chatgpt', version: state.version })
+          });
+          cardStatus.textContent = 'Đã gửi! Đang vẽ trên ChatGPT...';
+          setTimeout(loadCandidates, 2500);
+        } catch (e) {
+          cardStatus.textContent = e.message;
+          cardStatus.className = 'se-card-status is-error';
+          regenBtn.disabled = false;
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      return card;
+    });
+
+    grid.replaceChildren(...cards);
+  }
+
+  async function refresh() {
+    if (busy || !job) return;
+    setBusy(true);
+    message('Đang tải dữ liệu cảnh...');
+    try {
+      state = await jsonRequest(base());
+      render();
+      message('Đã nạp ' + state.scenes.length + ' cảnh.');
+    } catch (e) {
+      message(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  window.openSceneEditor = async (jid) => {
+    if (busy) return;
+    job = jid;
+    state = null;
+    exportIdentity = null;
+
+    // Save previous scroll position
+    workspaceScrollY = window.scrollY || document.documentElement.scrollTop;
+
+    // Switch views
+    const viewGallery = document.getElementById('viewGallery');
+    const viewWorkspace = document.getElementById('viewWorkspace');
+    const viewEditor = document.getElementById('viewSceneEditor');
+
+    if (viewGallery) viewGallery.hidden = true;
+    if (viewWorkspace) viewWorkspace.hidden = true;
+    if (viewEditor) viewEditor.hidden = false;
+
+    // Update URL hash without jumping
+    if (location.hash !== '#/editor/' + encodeURIComponent(jid)) {
+      location.hash = '#/editor/' + encodeURIComponent(jid);
+    }
+
+    // Scroll to top of editor
+    window.scrollTo(0, editorScrollY || 0);
+
+    // Initial load
+    await refresh();
+  };
+
+  function closeSceneEditor() {
+    if (busy) return;
+
+    // Pause all audio
+    const viewEditor = document.getElementById('viewSceneEditor');
+    if (viewEditor) {
+      viewEditor.querySelectorAll('audio').forEach(a => a.pause());
+      viewEditor.hidden = true;
+    }
+
+    editorScrollY = window.scrollY || document.documentElement.scrollTop;
+
+    // Restore workspace or gallery
+    const viewWorkspace = document.getElementById('viewWorkspace');
+    const viewGallery = document.getElementById('viewGallery');
+
+    // If activeProject is defined, restore workspace
+    if (window.activeProject && viewWorkspace) {
+      viewWorkspace.hidden = false;
+    } else if (viewGallery) {
+      viewGallery.hidden = false;
+    }
+
+    // Restore scroll position
+    window.scrollTo(0, workspaceScrollY || 0);
+
+    // Clean hash
+    if (location.hash.startsWith('#/editor')) {
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  }
+
+  // Bind top bar events
+  const btnBack = document.getElementById('btnBackFromEditor');
+  if (btnBack) btnBack.onclick = closeSceneEditor;
+
+  const btnReload = document.getElementById('sePageReload');
+  if (btnReload) btnReload.onclick = refresh;
+
+  const filterSelect = document.getElementById('sePageFilter');
+  if (filterSelect) filterSelect.onchange = () => state && render();
+
+  const btnExport = document.getElementById('sePageExport');
+  if (btnExport) {
+    btnExport.onclick = async () => {
+      if (busy || !state?.editable) return;
+      setBusy(true);
+      message('Đang chốt ảnh và tạo phiên bản xuất mới...');
+      try {
+        const key = crypto.randomUUID();
+        const child = await jsonRequest(base() + '/export', {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify({ version: state.version, confirm_all: true })
+        });
+        message('Đã xuất phiên bản video mới: ' + child.id.slice(0, 8) + '. Đang dựng video với các ảnh đã chọn!');
+        if (typeof window.loadJobs === 'function') await window.loadJobs();
+      } catch (e) {
+        message('Lỗi xuất video: ' + e.message, true);
+      } finally {
+        setBusy(false);
+      }
+    };
+  }
+
+  // Handle browser Back / Forward navigation
+  window.addEventListener('hashchange', () => {
+    const match = location.hash.match(/^#\/editor\/([^?&]+)/);
+    const viewEditor = document.getElementById('viewSceneEditor');
+    if (match) {
+      const targetJob = decodeURIComponent(match[1]);
+      if (targetJob !== job || (viewEditor && viewEditor.hidden)) {
+        window.openSceneEditor(targetJob);
+      }
+    } else {
+      if (viewEditor && !viewEditor.hidden) {
+        closeSceneEditor();
+      }
+    }
+  });
+
+  // Check initial hash on load
+  window.addEventListener('DOMContentLoaded', () => {
+    const match = location.hash.match(/^#\/editor\/([^?&]+)/);
+    if (match) {
+      window.openSceneEditor(decodeURIComponent(match[1]));
+    }
+  });
 })();

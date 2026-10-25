@@ -52,7 +52,7 @@ def register_editor_routes(app,store,editor,same_origin,public_job,image_jobs):
         same_origin(request);return public(call(editor.approve,job_id,scene_id,data.get('image_sha256'),data.get('version')))
     @app.post(prefix+'/export')
     def export(job_id:str,data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
-        same_origin(request);child=call(editor.export,job_id,data.get('version'),idempotency_key,data.get('confirm_all',False));return public_job(child)
+        same_origin(request);child=call(editor.export,job_id,data.get('version'),idempotency_key,data.get('confirm_all',True));return public_job(child)
 
     generations=prefix+'/scenes/{scene_id}/generations'
     @app.get(generations)
