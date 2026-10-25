@@ -32,7 +32,6 @@ class ImageParserTests(unittest.TestCase):
         # Duplicate start events for the same frameId and GUID should succeed
         dup_events=[
             {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
-            {'method':'Page.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
             {'method':'Browser.downloadWillBegin','params':{'frameId':'owned','guid':guid}},
             {'method':'Browser.downloadProgress','params':{'guid':guid,'state':'completed'}}
         ]

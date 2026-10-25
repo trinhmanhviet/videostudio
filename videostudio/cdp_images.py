@@ -36,13 +36,13 @@ def match_image(state,marker):
     return image
 
 def correlated_download(events,frame):
-    starts=[e['params'] for e in events if e.get('method') in ('Browser.downloadWillBegin','Page.downloadWillBegin') and e.get('params',{}).get('frameId')==frame]
+    starts=[e['params'] for e in events if e.get('method')=='Browser.downloadWillBegin' and e.get('params',{}).get('frameId')==frame]
     guids=list(dict.fromkeys(s.get('guid','') for s in starts if s.get('guid')))
     if len(guids)!=1:return None
     guid=guids[0]
     try:uuid.UUID(guid)
     except (ValueError,TypeError,AttributeError):return None
-    return guid if any(e.get('method') in ('Browser.downloadProgress','Page.downloadProgress') and e.get('params',{}).get('guid')==guid and e['params'].get('state')=='completed' for e in events) else None
+    return guid if any(e.get('method')=='Browser.downloadProgress' and e.get('params',{}).get('guid')==guid and e['params'].get('state')=='completed' for e in events) else None
 
 class ChatGPTImages:
     def __init__(self,bridge,root):
@@ -50,9 +50,9 @@ class ChatGPTImages:
     def on_event(self,event):
         if not self.active_frame:return
         method=event.get('method');p=event.get('params',{})
-        if method in ('Browser.downloadWillBegin','Page.downloadWillBegin') and p.get('frameId')==self.active_frame:
+        if method=='Browser.downloadWillBegin' and p.get('frameId')==self.active_frame:
             self.download_guid=p.get('guid');self.events.append(event);self.changed.set()
-        elif method in ('Browser.downloadProgress','Page.downloadProgress') and p.get('guid')==self.download_guid:
+        elif method=='Browser.downloadProgress' and p.get('guid')==self.download_guid:
             self.events.append(event)
             if max(p.get('receivedBytes',0),p.get('totalBytes',0))>MAX_IMAGE:self.too_large=True
             self.changed.set()
