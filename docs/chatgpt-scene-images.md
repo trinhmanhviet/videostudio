@@ -1,14 +1,17 @@
 # ChatGPT browser scene-image candidates
 
 ## Scope
-ChatGPT is the first added regeneration provider. Google Flow is deliberately NOT implemented; no dormant private Flow endpoint is guessed. ComfyUI remains the existing bulk-production image provider; this change does not add a per-scene Comfy regeneration button or change its preferred Qwen model.
+ChatGPT is the first added regeneration provider. Google Flow is deliberately NOT implemented; no dormant private Flow endpoint is guessed. Per-scene Comfy regeneration now reuses the existing Qwen Image 2.1 graph and candidate queue; ChatGPT remains available.
 
 No new Chrome, OAuth credentials, paid image API or account is required. `cdp_images.py` is an adapter inside the existing dedicated CDP daemon and shares its browser/job lock, connection, authentication and durable RequestJournal. The result is an image file instead of JSON. Existing text requests retain their current response contract.
 
 ## User workflow
-Open **Xem / sửa ảnh từng cảnh**, expand **Tạo lại bằng ChatGPT**, edit the scene visual prompt, click **Tạo ảnh ứng viên**. The tool sends ONLY the text description, not the original scene image/audio, to the dedicated logged-in ChatGPT web session. It uses that account's image quota. Generation is persistent and may take minutes. Close/reopen the editor and expand the same scene's section to see its recent requests.
+Open **Xem / sửa ảnh từng cảnh**, choose **ChatGPT** or **Comfy**, edit the scene visual prompt using the collapsible prompt editor, and click **Vẽ lại**. ChatGPT sends only the text description to the dedicated logged-in browser. Comfy uses the existing Qwen Image 2.1 graph on the shared ComfyUI service. Both consume the corresponding account/GPU resources. Generation is persistent and may take minutes. Close/reopen the editor to inspect recent requests.
 
-The resulting candidate has a preview and **Dùng ảnh ChatGPT này** button. Until selected, neither editor version nor active image changes. Applying uses the existing cover/contain selection and immutable image-history mechanism, leaving speech, timing, captions, music and original MP4 intact. New exports are still separate jobs. This does NOT certify image content/historical truth.
+Completed candidates appear in that scene's image dropdown, labeled by provider. Choosing one explicitly applies it through the immutable image-history mechanism; until selection, the active image does not change. Speech, timing, captions, music and original MP4 remain intact. New exports are separate jobs. This does NOT certify image content/historical truth.
+
+## Per-scene Comfy safety
+The candidate queue and task/editor version validation are shared with ChatGPT. Comfy tasks use the existing Qwen Image 2.1 `image_graph` and `Pipeline.comfy_asset` queue/VRAM checks, with a unique directory, receipt and filename prefix per task. Output is downloaded into the exact task artifact path and passes the same hash, dimensions, format and candidate-root validation. The Comfy queue is checked before any submission; if occupied or VRAM is insufficient, task state becomes `needs_comfy_idle` and the user may retry that same task later. An ambiguous receipt never triggers a blind new POST. Per-scene strict mode will not send `/free`, `/interrupt`, delete queue items, restart or reconfigure ComfyUI. The service is shared with Multigen; an already submitted prompt may continue on Comfy if VideoStudio stops waiting locally.
 
 No batch generation/automatic retry loop is enabled. At most ten queued/running image tasks are accepted; only one pending task per scene is allowed. Operators must explicitly resume uncertain/auth tasks, or stop waiting. Stopping tool waiting does not promise to cancel a request already running inside ChatGPT; no unrelated ChatGPT Stop button is clicked.
 

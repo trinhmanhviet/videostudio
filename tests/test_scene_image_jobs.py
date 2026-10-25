@@ -164,6 +164,39 @@ class QueueTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t);q=self.queue(s);self.start(q,j);s.lock('production');self.assertFalse(q.step('images'));q.runner.assert_not_called();s.release('production')
 
+class ComfySceneRunnerTests(unittest.TestCase):
+    def test_comfy_runner_uses_isolated_qwen_receipt_and_common_candidate_validation(self):
+        from videostudio.scene_images import SceneImageJobs
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);sid=q.editor.view(j['id'])['scenes'][0]['scene_id'];created=q.start(j['id'],sid,'Qwen scene prompt','comfy','comfy-runner-key',q.editor.view(j['id'])['version']);task_id=created['id']
+            with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='running' WHERE id=?",(task_id,))
+            task=q.get(task_id)
+            def run(journal_job,kind,graph,path,check,strict_resume=False):
+                Image.new('RGB',(768,1376),'green').save(path,format='PNG')
+                self.assertEqual(kind,'images-scene-'+task_id);self.assertTrue(strict_resume);self.assertEqual(graph['4']['inputs']['prompt'],'Qwen scene prompt');self.assertTrue(Path(journal_job['output']).name==task_id)
+                check();return {'prompt_id':'comfy-prompt-'+task_id}
+            q.pipeline=Mock(comfy_asset=Mock(side_effect=run))
+            result=q._run_comfy(task);validated=q._validate(task,result)
+            self.assertEqual(result['request_id'],'comfy-prompt-'+task_id);self.assertEqual((result['width'],result['height']),(768,1376))
+            self.assertTrue(Path(validated['candidate_path']).is_file());q.pipeline.comfy_asset.assert_called_once()
+    def test_busy_comfy_maps_to_resumable_idle_state_without_receipt_or_candidate(self):
+        from videostudio.scene_images import SceneImageJobs,ImageTaskIssue
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);task_id=str(uuid.uuid4());sid=q.editor.view(j['id'])['scenes'][0]['scene_id'];task={'id':task_id,'job':j['id'],'scene':sid,'prompt':'prompt'}
+            q.pipeline=Mock(comfy_asset=Mock(side_effect=RuntimeError('ComfyUI busy with other work; no submission/unload/interrupt performed')))
+            with self.assertRaises(ImageTaskIssue) as caught:q._run_comfy(task)
+            self.assertEqual(caught.exception.code,'needs_comfy_idle');q.pipeline.comfy_asset.assert_called_once()
+            self.assertFalse((q.download_root/(task_id+'.png')).exists())
+            self.assertFalse((q.download_root/'comfy-tasks'/task_id/('images-scene-'+task_id+'-receipt.json')).exists())
+    def test_comfy_provider_is_accepted_and_pending_deferral_blocks_duplicate_scene_task(self):
+        with tempfile.TemporaryDirectory() as t:
+            store,j=ready_job(t);q=QueueTests().queue(store);v=q.editor.view(j['id']);sid=v['scenes'][0]['scene_id']
+            a=q.start(j['id'],sid,'qwen prompt','comfy','comfy-key',v['version'])
+            self.assertEqual(a['provider'],'comfy');self.assertEqual(a['state'],'queued')
+            with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='needs_comfy_idle' WHERE id=?",(a['id'],))
+            with self.assertRaisesRegex(ValueError,'already has a pending'):q.start(j['id'],sid,'another','comfy','second-key',v['version'])
+            q.resume(j['id'],sid,a['id']);self.assertEqual(q.get(a['id'])['state'],'queued')
+
 class GenerationAPITests(unittest.TestCase):
     def test_routes_are_same_origin_and_do_not_apply_implicitly(self):
         from fastapi.testclient import TestClient
@@ -175,12 +208,15 @@ class GenerationAPITests(unittest.TestCase):
             store,j=ready_job(t);app=create_app(store,FixturePipeline(),False)
             with TestClient(app) as c:
                 view=c.get('/api/jobs/'+j['id']+'/scene-editor').json();sid=view['scenes'][0]['scene_id'];base='/api/jobs/'+j['id']+'/scene-editor/scenes/'+sid+'/generations'
+                self.assertEqual(c.get(base).json()['providers'],['chatgpt','comfy'])
                 data={'prompt':'one accurate scene','provider':'chatgpt','version':view['version']}
                 self.assertEqual(c.post(base,json=data,headers={'Origin':'https://evil.invalid','Idempotency-Key':'api-key'}).status_code,403)
                 started=c.post(base,json=data,headers={'Idempotency-Key':'api-key'});self.assertEqual(started.status_code,202);task=started.json();self.assertEqual(task['state'],'queued');self.assertIsNone(task['image_url'])
                 self.assertEqual(c.post(base,json=data,headers={'Idempotency-Key':'api-key'}).json()['id'],task['id'])
                 self.assertEqual(c.get(base+'/'+task['id']+'/image').status_code,422)
                 self.assertEqual(c.post(base+'/'+task['id']+'/cancel',json={}).json()['state'],'cancelled')
+                comfy=c.post(base,json={'prompt':'qwen scene','provider':'comfy','version':view['version']},headers={'Idempotency-Key':'comfy-api-key'})
+                self.assertEqual(comfy.status_code,202);self.assertEqual(comfy.json()['provider'],'comfy')
                 self.assertEqual(c.get('/api/jobs/'+j['id']+'/scene-editor').json()['version'],view['version'])
 
 class AsyncImageRecoveryTests(unittest.IsolatedAsyncioTestCase):

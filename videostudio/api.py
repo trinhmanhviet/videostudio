@@ -20,7 +20,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     from .scene_editor import SceneEditor
     scene_editor=SceneEditor(store);pipeline.scene_editor=scene_editor
     from .scene_images import SceneImageJobs
-    image_jobs=SceneImageJobs(store,scene_editor)
+    image_jobs=SceneImageJobs(store,scene_editor);image_jobs.pipeline=pipeline
     from .exchanges import Exchanges
     exchanges=Exchanges(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
@@ -49,7 +49,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
     app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs
     @app.get('/api/health')
-    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True}
+    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True}
     def diagnose_job_error(j):
         err=j.get('error')
         if not err:return None

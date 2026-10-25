@@ -7,7 +7,7 @@ const screenshot='C:/Users/leath/aicoworker/openclaw/workspace-main/tmp/editor-p
  try{
  const page=await browser.newPage({viewport:{width:1280,height:900}});page.setDefaultTimeout(6000);
  let view={job_id:'fixture',version:0,editable:true,scenes:Array.from({length:196},(_,i)=>({scene_id:'s'+i,index:i,start:i*3,duration:3,narration:'Lời đọc mẫu được giữ nguyên.',visual_prompt:'Original prompt '+i,image_url:'/picture?edit=original',audio_url:'/audio',edit_id:'original',history:[{id:'old'+i,created:1,provider:'upload'}]}))};
- let posts=0,gets=0,fail=false,release=null,releasePoll=null,delayPoll=false,recovery=true,resumed=0,generations=0;const errors=[];
+ let posts=0,gets=0,fail=false,release=null,releasePoll=null,delayPoll=false,recovery=true,resumed=0,generations=0,submittedProvider=null;const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{const req=route.request(),u=new URL(req.url()),p=u.pathname;
  if(p==='/')return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,'static/index.html'),'utf8')});
@@ -19,7 +19,7 @@ const screenshot='C:/Users/leath/aicoworker/openclaw/workspace-main/tmp/editor-p
  if(p.endsWith('/scene-editor'))return route.fulfill({json:view});
  if(p.endsWith('/resume')){resumed++;recovery=false;return route.fulfill({json:{id:'pending',state:'queued'}});}
  if(p.endsWith('/generations')){
-  if(req.method()==='POST'){generations++;assert.equal(req.postDataJSON().provider,'chatgpt');return route.fulfill({status:202,json:{id:'new',state:'queued'}});}
+  if(req.method()==='POST'){generations++;submittedProvider=req.postDataJSON().provider;return route.fulfill({status:202,json:{id:'new',state:'queued',provider:submittedProvider}});}
   gets++;if(recovery&&p.includes('/s1/'))return route.fulfill({json:{items:[{id:'pending',state:'uncertain',error:'Needs recovery'}]}});if(delayPoll&&p.includes('/s12/')){delayPoll=false;await new Promise(r=>releasePoll=r);return route.fulfill({json:{items:[{id:'late',state:'completed',image_url:'/late',created:1}]}});}
   return route.fulfill({json:{items:[{id:'cand',state:'completed',image_url:'/candidate',created:1}]}});
  }
@@ -58,7 +58,7 @@ const screenshot='C:/Users/leath/aicoworker/openclaw/workspace-main/tmp/editor-p
  await page.locator('#btnBackFromEditor').evaluate(e=>e.click());await page.waitForFunction(()=>document.querySelector('#viewSceneEditor').hidden);assert.equal(await page.locator('#viewWorkspace').isVisible(),true);assert.equal(await page.locator('#idea').inputValue(),'workspace draft');
  await page.evaluate(()=>openSceneEditor('fixture'));await page.waitForFunction(()=>scrollY>300);assert.ok(Math.abs((await page.evaluate(()=>scrollY))-editorScroll)<3);assert.equal(await page.locator('textarea.se-prompt-input').first().inputValue(),'Saved draft');
  await page.goBack();await page.waitForFunction(()=>document.querySelector('#viewSceneEditor').hidden);await page.goForward();await page.waitForFunction(()=>!document.querySelector('#viewSceneEditor').hidden);
- await page.locator('.se-card').first().locator('button').filter({hasText:'Vẽ lại'}).click();assert.equal(generations,1);await page.waitForFunction(()=>!document.querySelector('#sePageExport').disabled);
+ await page.locator('.se-card').first().locator('input[value="comfy"]').check();assert.equal(await page.locator('.se-card').first().locator('input[value="comfy"]').isChecked(),true);await page.locator('.se-card').first().locator('button').filter({hasText:'Vẽ lại'}).click();assert.equal(generations,1);assert.equal(submittedProvider,'comfy');await page.waitForFunction(()=>!document.querySelector('#sePageExport').disabled);
  for(let i=0;i<16;i++)await page.locator('#seNextPage').click();assert.equal(await page.locator('.se-card').count(),4);assert.ok((await page.locator('#sePageNumber').textContent()).includes('17 / 17'));
  for(let i=0;i<16;i++)await page.locator('#sePrevPage').click();
  await page.evaluate(()=>window.scrollTo(0,200));await page.screenshot({path:screenshot});

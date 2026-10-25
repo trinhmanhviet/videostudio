@@ -161,7 +161,7 @@ class Pipeline:
         d=json.loads(choice['message']['content'])
         if not isinstance(d,dict):raise ValueError('LLM JSON object required')
         return d
-    def comfy_asset(self,j,kind,graph,path,check):
+    def comfy_asset(self,j,kind,graph,path,check,strict_resume=False):
         """Persist prompt ID before polling; restart reattaches, never blindly resubmits.
         An indeterminate POST is failed closed and requires a new job, because Comfy
         does not provide a server-side idempotency key. No global /interrupt calls.
@@ -181,6 +181,7 @@ class Pipeline:
                     running=[x[1] for x in queue.get('queue_running',[])]
                     pending=[x[1] for x in queue.get('queue_pending',[])]
                     if pid not in running and pid not in pending:
+                        if strict_resume:raise PermanentError('Comfy receipt is absent from history and queue; refusing duplicate scene-image submission')
                         pid=None
             if not receipt.exists() or pid is None:
                 check()
@@ -211,12 +212,14 @@ class Pipeline:
                         if a.get('type')!='output' or a.get('subfolder')!=folder or not a.get('filename','').startswith(name+'_') or '/' in a['filename'] or '\\' in a['filename']:raise PermanentError('Unsafe Comfy output')
                         content=c.get('view',params=a);content.raise_for_status()
                         if len(content.content)>64*1024*1024:raise PermanentError('Comfy asset too large')
-                        Path(path).write_bytes(content.content)
-                        # Sequential GPU pipeline: actively unload model to free VRAM for next task
-                        try:
-                            free_comfy(c)
-                        except Exception:
-                            pass
+                        destination=Path(path);destination.parent.mkdir(parents=True,exist_ok=True)
+                        part=destination.with_name(destination.name+'.part');part.write_bytes(content.content);part.replace(destination)
+                        # Bulk pipeline may call the safe helper; per-scene strict mode leaves shared Comfy untouched.
+                        if not strict_resume:
+                            try:
+                                free_comfy(c)
+                            except Exception:
+                                pass
                         return {'path':str(path),'prompt_id':pid,'assets':[asset(path)]}
                 time.sleep(.5)
             raise TimeoutError('Comfy history timeout; persisted prompt will be reattached')

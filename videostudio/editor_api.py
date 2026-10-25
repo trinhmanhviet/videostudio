@@ -57,7 +57,7 @@ def register_editor_routes(app,store,editor,same_origin,public_job,image_jobs):
     generations=prefix+'/scenes/{scene_id}/generations'
     @app.get(generations)
     def image_generations(job_id:str,scene_id:str):
-        return {'items':[image_jobs.public(t) for t in call(image_jobs.list,job_id,scene_id)],'providers':['chatgpt']}
+        return {'items':[image_jobs.public(t) for t in call(image_jobs.list,job_id,scene_id)],'providers':['chatgpt','comfy']}
     @app.post(generations,status_code=202)
     def generate_scene_image(job_id:str,scene_id:str,data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
         same_origin(request)
