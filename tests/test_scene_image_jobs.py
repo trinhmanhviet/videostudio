@@ -171,9 +171,9 @@ class ComfySceneRunnerTests(unittest.TestCase):
             store,j=ready_job(t);q=QueueTests().queue(store);sid=q.editor.view(j['id'])['scenes'][0]['scene_id'];created=q.start(j['id'],sid,'Qwen scene prompt','comfy','comfy-runner-key',q.editor.view(j['id'])['version']);task_id=created['id']
             with store.db() as c:c.execute("UPDATE scene_image_tasks SET state='running' WHERE id=?",(task_id,))
             task=q.get(task_id)
-            def run(journal_job,kind,graph,path,check,strict_resume=False):
+            def run(journal_job,kind,graph,path,check,strict_resume=False,skip_vram_check=False):
                 Image.new('RGB',(768,1376),'green').save(path,format='PNG')
-                self.assertEqual(kind,'images-scene-'+task_id);self.assertTrue(strict_resume);self.assertEqual(graph['4']['inputs']['prompt'],'Qwen scene prompt');self.assertTrue(Path(journal_job['output']).name==task_id)
+                self.assertEqual(kind,'images-scene-'+task_id);self.assertTrue(strict_resume);self.assertTrue(skip_vram_check);self.assertEqual(graph['4']['inputs']['prompt'],'Qwen scene prompt');self.assertTrue(Path(journal_job['output']).name==task_id)
                 check();return {'prompt_id':'comfy-prompt-'+task_id}
             q.pipeline=Mock(comfy_asset=Mock(side_effect=run))
             result=q._run_comfy(task);validated=q._validate(task,result)
