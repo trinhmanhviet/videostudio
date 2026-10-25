@@ -281,6 +281,7 @@
   let candidateTimers = [];
   let previousViewId = 'viewWorkspace';
   const promptDrafts = new Map();
+  const expandedPrompts = new Set();
 
   const $ = id => document.getElementById(id);
   const node = (tag, content, cls) => {
@@ -488,9 +489,9 @@
       const promptToggle = node('button', '✏️ Sửa mô tả vẽ', 'se-prompt-toggle');
       promptToggle.type = 'button';
       const promptBox = node('div', undefined, 'se-prompt-box');
-      promptBox.hidden = true;
-      const promptInput = node('textarea', undefined, 'se-prompt-input');
       const draftKey = job + ':' + s.scene_id;
+      promptBox.hidden = !expandedPrompts.has(draftKey);
+      const promptInput = node('textarea', undefined, 'se-prompt-input');
       promptInput.value = promptDrafts.has(draftKey) ? promptDrafts.get(draftKey) : (s.visual_prompt || s.narration || '');
       promptInput.oninput = () => { promptDrafts.set(draftKey, promptInput.value); };
       promptInput.maxLength = 12000;
@@ -499,6 +500,8 @@
 
       promptToggle.onclick = () => {
         promptBox.hidden = !promptBox.hidden;
+        if (!promptBox.hidden) expandedPrompts.add(draftKey);
+        else expandedPrompts.delete(draftKey);
       };
       ctrls.append(promptToggle, promptBox);
 
@@ -580,9 +583,11 @@
 
       // Function to poll and load ChatGPT candidates for this scene
       async function loadCandidates() {
-        if (!card.isConnected || $('viewSceneEditor')?.hidden) return;
+        const thisJob = job;
+        if (!card.isConnected || $('viewSceneEditor')?.hidden || thisJob !== job) return;
         try {
           const genData = await jsonRequest(base() + '/scenes/' + encodeURIComponent(s.scene_id) + '/generations');
+          if (!card.isConnected || $('viewSceneEditor')?.hidden || thisJob !== job) return;
           const items = genData.items || [];
           const running = items.find(t => ['queued', 'running'].includes(t.state));
           if (running) {

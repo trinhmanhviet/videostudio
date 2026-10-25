@@ -203,5 +203,5 @@ class SceneEditor:
             if len(snap['scenes'])!=len(cp['scenes']):raise ValueError('Export snapshot scene count changed')
             for row,img in zip(snap['scenes'],cp['scenes']):
                 if row['scene_id']!=img['scene_id'] or row['image_path']!=img['path'] or row['duration']!=img['duration'] or digest(img['path'])!=row['image_sha256']:raise ValueError('Export image snapshot changed')
-            return {'status':'user_approved' if snap['mode']=='careful' else 'not_checked','source':'user_selection' if snap['mode']=='careful' else 'quick','model_certification':False}
+            return {'status':'not_checked','source':'quick','model_certification':False}
         return {'status':'not_checked','source':'quick','model_certification':False}
