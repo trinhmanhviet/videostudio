@@ -16,8 +16,9 @@
 - Modify `D:\Projects\videostudio\static\index.html`: add the initial video form selector, serialize the selected provider, and bump the Scene Editor script cache key.
 - Modify `D:\Projects\videostudio\videostudio\providers.py`: route each initial scene image through Flow, ChatGPT, or Comfy; preserve Comfy fallback for legacy jobs and strict visual-QA gates.
 - Modify `D:\Projects\videostudio\videostudio\cdp_flow.py`: persist one Flow project per video job and safely correlate sequential outputs within that project.
+- Modify `D:\Projects\videostudio\videostudio\editor_api.py`: default a rerender API request with no provider to Flow while preserving explicit values.
 - Modify `D:\Projects\videostudio\static\scene-editor.js`: default first-use rerender selection to Flow and keep all three providers selectable.
-- Add/modify tests in `D:\Projects\videostudio\tests\test_backend.py`, `D:\Projects\videostudio\tests\test_cdp_flow.py`, `D:\Projects\videostudio\tests\test_image_provider_routing.py`, and `D:\Projects\videostudio\scripts\test_scene_generation_ui.cjs`.
+- Add/modify tests in `D:\Projects\videostudio\tests\test_backend.py`, `D:\Projects\videostudio\tests\test_cdp_flow.py`, `D:\Projects\videostudio\tests\test_image_provider_routing.py`, `D:\Projects\videostudio\tests\test_scene_image_jobs.py`, and `D:\Projects\videostudio\scripts\test_initial_image_provider_ui.cjs` / `test_scene_generation_ui.cjs`.
 - No changes to Comfy graphs, account auth, browser profiles, or private Flow endpoints.
 
 ## Task 1: Add a validated provider field with legacy-compatible defaults
@@ -182,7 +183,7 @@ scene_task_id=str(uuid.uuid5(uuid.UUID(j['id']),f'bulk-scene-image:{i}'))
 provider=j['request'].get('image_provider','comfy')
 ```
 
-Keep the current Comfy branch unchanged for `comfy`. For ChatGPT and Flow, POST only to the existing loopback daemon routes, verify response task ID/path/hash, copy the validated image into `Path(j['output']) / f'images-{i:04}.png'`, then write the same durable per-image checkpoint. Use `trust_env=False`, loopback URL validation, and serialized calls. Do not use private Flow APIs or cookies.
+Keep the current Comfy branch unchanged for `comfy`. For ChatGPT and Flow, derive the stable task ID with UUID5, then POST only to the existing loopback daemon routes (`/api/images/generate` or `/api/flow/images/generate`). Verify task ID, expected local path, SHA-256, and image dimensions; copy the validated image into `Path(j['output']) / f'images-{i:04}.png'`, then atomically write a checkpoint containing hash, prompt, provider, and scene task ID. Use `trust_env=False`, loopback URL validation, and serialized calls. Map `needs_zero_credit` to a terminal user-visible job failure before Generate; on ambiguous delivery preserve the Flow receipt and do not auto-resubmit. Do not use private Flow APIs or cookies.
 
 - [ ] **Step 3: Preserve strict visual-QA mode**
 
@@ -210,32 +211,47 @@ git commit -m "feat(images): route initial scene assets by provider"
 ## Task 5: Default Scene Editor rerenders to Flow and test the submitted provider
 
 **Files:**
+- Modify `videostudio/editor_api.py`
 - Modify `static/scene-editor.js`
+- Modify `tests/test_scene_image_jobs.py`
 - Modify `scripts/test_scene_generation_ui.cjs`
 
-- [ ] **Step 1: Add a failing test**
+- [ ] **Step 1: Add failing API and UI tests**
 
-In the isolated Scene Editor regression, wait for provider discovery, assert Flow is the checked radio on a fresh scene, then select ChatGPT and Comfy in turn and verify the POST body uses the selected provider. Assert a completed Flow rerender adds a candidate option but does not change the active `edit_id` until the user explicitly selects it.
+In `GenerationAPITests`, POST a rerender request with no `provider` and assert the returned task has `provider == 'flow'`. Keep the existing explicit ChatGPT and Comfy assertions. In the isolated Scene Editor regression, assert Flow is the checked radio on a fresh scene, then select ChatGPT and Comfy in turn and verify each POST body uses that provider. Assert a completed Flow rerender adds a candidate option but does not change the active `edit_id` until the user explicitly selects it.
 
-Run: `node scripts/test_scene_generation_ui.cjs`
-Expected: FAIL because the fresh scene currently defaults to ChatGPT.
+Run:
 
-- [ ] **Step 2: Change the first-use default and keep provider discovery**
+```powershell
+C:\Python312\python.exe -m unittest discover -s tests -p 'test_scene_image_jobs.py' -q
+node scripts/test_scene_generation_ui.cjs
+```
 
-In `makeCard`, replace the first-use fallback `'chatgpt'` with `'flow'` for the checked radio and provider cache. Keep the API-reported `providers` list authoritative; if Flow is unavailable, disable it and select the existing ChatGPT fallback. Reorder visible radios to Flow, ChatGPT, Comfy. Preserve per-scene selections in the existing cache.
+Expected: FAIL because the API and fresh-scene UI currently default to ChatGPT.
 
-- [ ] **Step 3: Run the UI regression**
+- [ ] **Step 2: Default rerender requests to Flow**
 
-Run: `node scripts/test_scene_generation_ui.cjs`
-Expected: PASS at 390 and 1280 widths; Flow selected by default; chosen provider is posted; candidate remains unapplied.
+In `editor_api.py`, change the default provider expression to `data.get('provider','flow')`. In `scene-editor.js`, replace first-use fallbacks `c.providers?.get(s.scene_id)||'chatgpt'` with `c.providers?.get(s.scene_id)||'flow'`, set the initial radio order to Flow, ChatGPT, Comfy, and make the Flow radio default selected. Keep the API-reported `providers` list authoritative; if Flow is unavailable, disable it and select the ChatGPT fallback. Preserve explicit per-scene choices in the existing cache.
+
+- [ ] **Step 3: Run focused API and UI regressions**
+
+Run:
+
+```powershell
+C:\Python312\python.exe -m unittest discover -s tests -p 'test_scene_image_jobs.py' -q
+node scripts/test_scene_generation_ui.cjs
+node --check static/scene-editor.js
+```
+
+Expected: PASS at 390 and 1280 widths; Flow selected by default; chosen provider posted; candidate remains unapplied.
 
 - [ ] **Step 4: Bump the Scene Editor asset version and commit**
 
-Change `/scene-editor.js?v=20261026-flow1` to a new version only if this identifier was already used by a prior deployment; otherwise use it as the version. Then:
+Use a fresh query value such as `scene-editor.js?v=20261026-flow2` in `static/index.html` so an open browser does not keep the ChatGPT-default bundle. Then:
 
 ```powershell
-git add static/scene-editor.js static/index.html scripts/test_scene_generation_ui.cjs
-git commit -m "feat(ui): default new image generation to Flow"
+git add videostudio/editor_api.py static/scene-editor.js static/index.html tests/test_scene_image_jobs.py scripts/test_scene_generation_ui.cjs
+git commit -m "feat(ui): default rerender provider to Flow"
 ```
 
 ## Task 6: Full verification and one conditional live smoke image
