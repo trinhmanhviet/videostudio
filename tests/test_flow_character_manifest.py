@@ -59,6 +59,19 @@ class FlowCharacterManifestTests(unittest.TestCase):
         validate_flow_character_manifest(script)
         self.assertEqual(script['flow_character_manifest_version'], 1)
 
+    def test_scene_mentions_use_registered_flow_names_in_scene_order(self):
+        mother_id='22222222-2222-4222-8222-222222222222'
+        father_id='11111111-1111-4111-8111-111111111111'
+        references={
+            'father':{'character_id':father_id,'name':'father','project_url':'https://flow.google.com/project/abc'},
+            'mother':{'character_id':mother_id,'name':'mother','project_url':'https://flow.google.com/project/abc'},
+        }
+        mentions=Pipeline._flow_scene_mentions({'character_ids':['mother','father']},references)
+        self.assertEqual(mentions,[
+            {'character_id':mother_id,'name':'mother','project_url':'https://flow.google.com/project/abc'},
+            {'character_id':father_id,'name':'father','project_url':'https://flow.google.com/project/abc'},
+        ])
+
     def test_flow_script_prompt_requests_manifest_without_rewriting_scene_text(self):
         p = Pipeline.__new__(Pipeline)
         script = self.valid_script()
@@ -104,25 +117,27 @@ class FlowCharacterManifestTests(unittest.TestCase):
             self.assertEqual(final['characters'], script['characters'])
             self.assertEqual([s['character_ids'] for s in final['scenes']], [['father'], ['father']])
 
-    def test_portrait_task_id_and_receipt_are_stable_across_retries(self):
+    def test_native_character_receipt_is_stable_across_retries_without_portrait_uploads(self):
         job_id = 'd4e93c6c-f93e-49e5-9c88-0cd29b719e0d'
+        character_id = '11111111-1111-4111-8111-111111111111'
+        project_url = 'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
         p = Pipeline.__new__(Pipeline);calls=[]
-        def generate(provider, job, index, prompt, path, check, *, task_id=None, reference_media_ids=None):
-            calls.append((provider,task_id,prompt,reference_media_ids))
-            Path(path).parent.mkdir(parents=True,exist_ok=True);Path(path).write_bytes(b'portrait-bytes')
-            import hashlib
-            return {'task_id':task_id,'media_id':'11111111-1111-4111-8111-111111111111','project_url':'https://flow.google.com/project/abc','sha256':hashlib.sha256(b'portrait-bytes').hexdigest(),'width':768,'height':1024}
-        p._browser_scene_image=Mock(side_effect=generate)
+        def create(job, character, prompt, check, *, task_id=None):
+            calls.append((character['character_id'], task_id, prompt))
+            return {'task_id':task_id,'character_id':character_id,'name':character['character_id'],'project_url':project_url}
+        p._browser_flow_character=Mock(side_effect=create)
         with tempfile.TemporaryDirectory() as tmp:
             script=validate_flow_character_manifest(self.valid_script())
             job={'id':job_id,'output':tmp,'checkpoints':{'script':script}}
-            first,assets=p._flow_character_portraits(job,lambda:None)
-            second,_=p._flow_character_portraits(job,lambda:None)
-            expected=str(__import__('uuid').uuid5(__import__('uuid').UUID(job_id),'flow-character-reference:father'))
+            first,assets=p._flow_native_characters(job,lambda:None)
+            second,_=p._flow_native_characters(job,lambda:None)
+            expected=str(__import__('uuid').uuid5(__import__('uuid').UUID(job_id),'flow-native-character:father'))
             self.assertEqual(first['father']['task_id'],expected)
-            self.assertEqual(second['father']['media_id'],'11111111-1111-4111-8111-111111111111')
+            self.assertEqual(second['father']['character_id'],character_id)
+            self.assertEqual(second['father']['name'],'father')
             self.assertEqual(len(calls),1)
-            self.assertEqual(len(assets),2)
+            self.assertEqual(len(assets),1)
+            self.assertFalse((Path(tmp)/'flow-character-references'/'father.png').exists())
             self.assertTrue((Path(tmp)/'flow-character-references.json').is_file())
 
 

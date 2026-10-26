@@ -97,45 +97,53 @@ class InitialImageProviderRoutingTests(unittest.TestCase):
         ]}
         for index in (0,2):self.job['checkpoints']['speech']['utterances'][index]['character_ids']=['father']
 
-    def test_flow_scene_requests_use_ordered_portrait_media_ids_and_reuse_receipts(self):
-        self.job['request']['image_provider']='flow';self._flow_character_script();reference_id=str(uuid.uuid4())
-        reference={'media_id':reference_id,'sha256':'a'*64,'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}
-        self.pipeline._flow_character_portraits=Mock(return_value=({'father':reference},[]))
+    def test_flow_scene_requests_use_native_character_names_and_reuse_receipts(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        reference={'character_id':entity_id,'name':'father','project_url':project}
+        self.pipeline._flow_native_characters=Mock(return_value=({'father':reference},[]))
         calls,post=self._remote_fixture('flow')
         with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
             result=self.pipeline.images(self.job,lambda:None)
-            self.assertEqual(result['reference_mode'],'flow_portraits')
-            self.assertEqual([body.get('reference_media_ids',[]) for _,body in calls],[[reference_id],[],[reference_id]])
-            self.assertEqual(calls[0][1]['reference_identity'],[{'character_id':'father','media_id':reference_id,'sha256':'a'*64,'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}])
-            self.assertIn('attached character portrait references',calls[0][1]['prompt'])
+            self.assertEqual(result['reference_mode'],'native_flow_characters')
+            mentions=[body.get('character_mentions',[]) for _,body in calls]
+            self.assertEqual(mentions,[[{'character_id':entity_id,'name':'father','project_url':project}],[],[{'character_id':entity_id,'name':'father','project_url':project}]])
+            self.assertNotIn('reference_media_ids',calls[0][1])
             checkpoint=json.loads((self.output/'images-0000.checkpoint.json').read_text(encoding='utf8'))
-            self.assertEqual(checkpoint['reference_media_ids'],[reference_id])
+            self.assertEqual(checkpoint['character_mentions'],mentions[0])
             self.pipeline.images(self.job,lambda:None)
         self.assertEqual(len(calls),3,'scene receipts must prevent duplicate Flow generations')
 
-    def test_changed_flow_reference_never_overwrites_existing_scene_image(self):
-        self.job['request']['image_provider']='flow';self._flow_character_script();first_id=str(uuid.uuid4())
-        reference={'media_id':first_id,'sha256':'a'*64,'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}
-        self.pipeline._flow_character_portraits=Mock(return_value=({'father':reference},[]))
+    def test_changed_native_character_never_overwrites_existing_scene_image(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();first_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        reference={'character_id':first_id,'name':'father','project_url':project};self.pipeline._flow_native_characters=Mock(return_value=({'father':reference},[]))
         calls,post=self._remote_fixture('flow')
         with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
-            self.pipeline.images(self.job,lambda:None)
-            original=digest(self.output/'images-0000.png')
-            second_id=str(uuid.uuid4());changed_reference={'media_id':second_id,'sha256':'b'*64,'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'};self.pipeline._flow_character_portraits=Mock(return_value=({'father':changed_reference},[]))
+            self.pipeline.images(self.job,lambda:None);original=digest(self.output/'images-0000.png')
+            changed={'character_id':str(uuid.uuid4()),'name':'father','project_url':project};self.pipeline._flow_native_characters=Mock(return_value=({'father':changed},[]))
             with self.assertRaisesRegex(PermanentError,'refusing to overwrite'):
                 self.pipeline.images(self.job,lambda:None)
             self.assertEqual(digest(self.output/'images-0000.png'),original)
         self.assertEqual(len(calls),3)
 
-    def test_flow_reference_mode_blocks_before_any_portrait_until_ui_verified(self):
+    def test_removing_native_character_never_overwrites_an_existing_scene(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();self.job['checkpoints']['speech']['utterances'][0]['character_ids']=[]
+        entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        self.pipeline._flow_native_characters=Mock(return_value=({'father':{'character_id':entity_id,'name':'father','project_url':project}},[]))
+        path=self.output/'images-0000.png';Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG')
+        checkpoint=path.with_suffix('.checkpoint.json');checkpoint.write_text(json.dumps({'sha256':digest(path),'prompt':'prompt zero','provider':'flow','character_mentions':[{'character_id':entity_id,'name':'father','project_url':project}]}),encoding='utf8')
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
+            with self.assertRaisesRegex(PermanentError,'refusing to overwrite'):
+                self.pipeline.images(self.job,lambda:None)
+
+    def test_native_character_mode_blocks_before_any_creation_until_ui_verified(self):
         self.job['request']['image_provider']='flow';self._flow_character_script()
-        self.pipeline._flow_character_portraits=Mock(side_effect=AssertionError('portrait must not be submitted'))
+        self.pipeline._flow_native_characters=Mock(side_effect=AssertionError('Character must not be created'))
         calls,post=self._remote_fixture('flow')
         with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'0'},clear=False):
-            with self.assertRaisesRegex(PermanentError,'not live-verified'):
+            with self.assertRaisesRegex(PermanentError,'not enabled'):
                 self.pipeline.images(self.job,lambda:None)
         self.assertEqual(calls,[])
-        self.pipeline._flow_character_portraits.assert_not_called()
+        self.pipeline._flow_native_characters.assert_not_called()
 
 if __name__=='__main__':
     unittest.main()

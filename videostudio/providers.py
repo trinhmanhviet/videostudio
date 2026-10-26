@@ -673,7 +673,32 @@ class Pipeline:
         if hold<0:raise PermanentError('Visual quality: narration exceeds requested duration')
         entries[-1]['duration']+=hold
         return {'scenes':entries,'assets':assets,'visual_qa_status':'pass','visual_qa_required':True,'visual_qa_scope':'artifact_bound_review','reviewer_accuracy_validated':False}
-    def _browser_scene_image(self,provider,j,index,prompt,path,check,*,task_id=None,reference_media_ids=None,reference_identity=None):
+    def _browser_flow_character(self,j,character,prompt,check,*,task_id):
+        base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
+        if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
+        try:task_id=str(uuid.UUID(task_id))
+        except (ValueError,TypeError,AttributeError) as error:raise PermanentError('Flow Character task ID must be a UUID') from error
+        character_id=character.get('character_id');name=character_id
+        if not isinstance(character_id,str) or not _FLOW_CHARACTER_ID.fullmatch(character_id):raise PermanentError('Invalid Flow character manifest ID')
+        check()
+        payload={'task_id':task_id,'job_id':j['id'],'character_id':character_id,'name':name,'prompt':prompt}
+        try:r=httpx.post(base+'/api/flow/characters/create',json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
+        except httpx.HTTPError as error:raise UncertainDeliveryError('Flow Character creation result uncertain; reconcile the same durable Character receipt, never create a replacement') from error
+        try:body=r.json()
+        except ValueError as error:raise UncertainDeliveryError(f'Flow Character response malformed (HTTP {r.status_code}); reconcile same receipt') from error
+        if r.status_code!=200:
+            code=body.get('code');message=body.get('error','Flow Character creation unavailable')
+            if code in ('uncertain','delivery_indeterminate','browser_unavailable'):raise UncertainDeliveryError(message)
+            if code in ('needs_zero_credit','needs_flow_check','needs_auth','authentication_required'):raise PermanentError(message)
+            raise PermanentError(message)
+        result=body.get('data');project_url=result.get('project_url') if isinstance(result,dict) else None;parsed_project=urlparse(project_url or '')
+        if not isinstance(result,dict) or result.get('task_id')!=task_id or result.get('name')!=name or not isinstance(result.get('character_id'),str) or not isinstance(result.get('project_url'),str) or parsed_project.scheme!='https' or parsed_project.hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',parsed_project.path):
+            raise UncertainDeliveryError('Native Flow Character receipt failed task/name/entity/project validation')
+        try:uuid.UUID(result['character_id'])
+        except (ValueError,TypeError,AttributeError) as error:raise UncertainDeliveryError('Native Flow Character entity ID is invalid') from error
+        return {'task_id':task_id,'character_id':result['character_id'],'name':name,'project_url':project_url}
+
+    def _browser_scene_image(self,provider,j,index,prompt,path,check,*,task_id=None,character_mentions=None):
         if provider not in ('chatgpt','flow'):raise PermanentError('Unsupported browser image provider')
         base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
         if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
@@ -683,21 +708,21 @@ class Pipeline:
         else:
             try:task_id=str(uuid.UUID(task_id))
             except (ValueError,TypeError,AttributeError) as e:raise PermanentError('Browser image task ID must be a UUID') from e
-        refs=[] if reference_media_ids is None else reference_media_ids
-        if not isinstance(refs,list) or any(not isinstance(media_id,str) for media_id in refs) or len(refs)>16 or len(refs)!=len(set(refs)):
-            raise PermanentError('Flow reference media IDs must be a unique list of at most 16 items')
-        for media_id in refs:
-            try:uuid.UUID(media_id)
-            except (ValueError,TypeError,AttributeError) as e:raise PermanentError('Invalid Flow reference media ID') from e
-        if provider!='flow' and refs:raise PermanentError('Reference media are supported only through Flow')
+        mentions=[] if character_mentions is None else character_mentions
+        if not isinstance(mentions,list) or len(mentions)>8:raise PermanentError('Flow character_mentions must be a list of at most eight native Characters')
+        seen_ids=set();seen_names=set()
+        for item in mentions:
+            if not isinstance(item,dict) or not isinstance(item.get('character_id'),str) or not isinstance(item.get('name'),str) or not isinstance(item.get('project_url'),str):raise PermanentError('Invalid native Flow Character mention')
+            try:uuid.UUID(item['character_id'])
+            except (ValueError,TypeError,AttributeError) as error:raise PermanentError('Invalid native Flow Character entity ID') from error
+            if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,39}',item['name']):raise PermanentError('Invalid registered Flow Character name')
+            parsed=urlparse(item['project_url'])
+            if parsed.scheme!='https' or parsed.hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',parsed.path):raise PermanentError('Invalid native Flow Character project URL')
+            if item['character_id'] in seen_ids or item['name'].casefold() in seen_names:raise PermanentError('Duplicate native Flow Character mention')
+            seen_ids.add(item['character_id']);seen_names.add(item['name'].casefold())
+        if provider!='flow' and mentions:raise PermanentError('Native Character mentions are supported only through Flow')
         if provider=='flow':
-            route='/api/flow/images/generate';payload={'task_id':task_id,'job_id':j['id'],'prompt':prompt};root=ROOT/'data'/'flow-images'
-            identity=[] if reference_identity is None else reference_identity
-            if not isinstance(identity,list) or len(identity)!=len(refs) or any(not isinstance(item,dict) or item.get('media_id')!=media_id for media_id,item in zip(refs,identity)):
-                raise PermanentError('Flow reference identity does not match the ordered reference media IDs')
-            if refs:
-                payload['reference_media_ids']=refs;payload['reference_identity']=identity
-
+            route='/api/flow/images/generate';payload={'task_id':task_id,'job_id':j['id'],'prompt':prompt,'character_mentions':mentions};root=ROOT/'data'/'flow-images'
         else:route='/api/images/generate';payload={'task_id':task_id,'prompt':prompt};root=ROOT/'data'/'chatgpt-images'
         check()
         try:r=httpx.post(base+route,json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
@@ -734,48 +759,50 @@ class Pipeline:
                 'Head-and-shoulders, neutral expression, plain light-gray background, even natural lighting, front three-quarter view. '
                 'No props, no scene-specific action, no extra person, no text.')
 
-    def _flow_character_portraits(self,j,check):
+    @staticmethod
+    def _flow_scene_mentions(scene,references):
+        mentions=[]
+        for cid in scene.get('character_ids',[]):
+            reference=references.get(cid)
+            if reference is None:continue
+            mentions.append({'character_id':reference['character_id'],'name':reference['name'],'project_url':reference['project_url']})
+        return mentions
+
+    def _flow_native_characters(self,j,check):
         script=j.get('checkpoints',{}).get('script',{})
-        if script.get('flow_character_manifest_version')!=FLOW_CHARACTER_MANIFEST_VERSION:
-            return {},[]
+        if script.get('flow_character_manifest_version')!=FLOW_CHARACTER_MANIFEST_VERSION:return {},[]
         validate_flow_character_manifest(script)
-        from .core import digest
         import hashlib
-        output=Path(j['output']);portrait_dir=output/'flow-character-references';references={};entries=[];assets=[]
+        output=Path(j['output']);receipt_dir=output/'flow-character-references';references={};entries=[];assets=[]
         for character in script['characters']:
-            cid=character['character_id']
-            scene_indices=[i for i,scene in enumerate(script['scenes']) if cid in scene['character_ids']]
+            cid=character['character_id'];scene_indices=[i for i,scene in enumerate(script['scenes']) if cid in scene['character_ids']]
             if len(scene_indices)<2:continue
             check();prompt=self._flow_portrait_prompt(character);prompt_sha=hashlib.sha256(prompt.encode('utf8')).hexdigest()
-            task_id=str(uuid.uuid5(uuid.UUID(j['id']),f'flow-character-reference:{cid}'))
-            portrait=portrait_dir/(cid+'.png');receipt_path=portrait.with_suffix('.receipt.json')
-            saved={}
+            task_id=str(uuid.uuid5(uuid.UUID(j['id']),f'flow-native-character:{cid}'));name=cid
+            receipt_path=receipt_dir/(cid+'.receipt.json');saved={}
             if receipt_path.is_file():
                 try:saved=json.loads(receipt_path.read_text(encoding='utf8'))
-                except (OSError,ValueError):raise PermanentError('Flow portrait receipt is invalid for '+cid)
-            if saved and (saved.get('task_id')!=task_id or saved.get('prompt_sha256')!=prompt_sha):
-                raise PermanentError('Flow portrait identity changed after a durable task receipt; refusing duplicate generation for '+cid)
-            if portrait.exists() and not saved:raise PermanentError('Flow portrait file exists without a receipt; refusing to overwrite '+cid)
-            if portrait.is_file() and saved:
-                if digest(portrait)!=saved.get('sha256') or not saved.get('media_id') or not saved.get('project_url'):
-                    raise PermanentError('Saved Flow portrait failed receipt/media validation for '+cid)
-                result=saved
+                except (OSError,ValueError):raise PermanentError('Flow Character receipt is invalid for '+cid)
+            if saved:
+                if saved.get('task_id')!=task_id or saved.get('prompt_sha256')!=prompt_sha or saved.get('name')!=name:
+                    raise PermanentError('Flow Character identity changed after a durable receipt; refusing duplicate creation for '+cid)
+                if not isinstance(saved.get('character_id'),str) or not saved.get('project_url'):
+                    raise PermanentError('Saved Flow Character receipt lacks its registered entity ID/project for '+cid)
             else:
-                result=self._browser_scene_image('flow',j,-1,prompt,portrait,check,task_id=task_id)
+                result=self._browser_flow_character(j,character,prompt,check,task_id=task_id)
                 project_url=result.get('project_url');parsed=urlparse(project_url or '')
-                if not result.get('media_id') or parsed.hostname!='flow.google.com' or not parsed.path.startswith('/project/'):
-                    raise PermanentError('Flow portrait lacks a verified project/media receipt for '+cid)
-                saved={'schema_version':1,'character_id':cid,'task_id':task_id,'prompt_sha256':prompt_sha,'media_id':result['media_id'],'project_url':project_url,'path':str(portrait),'sha256':result['sha256'],'width':result['width'],'height':result['height'],'scene_indices':scene_indices}
+                if result.get('task_id')!=task_id or result.get('name')!=name or not result.get('character_id') or parsed.hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',parsed.path):
+                    raise PermanentError('Flow native Character result lacks a verified registered name/project/entity ID for '+cid)
+                saved={'schema_version':2,'character_id':result['character_id'],'character_manifest_id':cid,'name':name,'task_id':task_id,'prompt_sha256':prompt_sha,'project_url':project_url,'scene_indices':scene_indices}
                 receipt_path.parent.mkdir(parents=True,exist_ok=True);part=receipt_path.with_suffix('.part.json');part.write_text(json.dumps(saved,ensure_ascii=False,indent=2),encoding='utf8');part.replace(receipt_path)
-                result=saved
             reference={**saved,'appearance_evidence':character['appearance_evidence'],'scene_indices':scene_indices}
-            references[cid]=reference;entries.append(reference);assets.append(asset(portrait))
-        project_urls={entry['project_url'] for entry in entries}
-        media_ids=[entry['media_id'] for entry in entries]
-        if len(media_ids)!=len(set(media_ids)):raise PermanentError('Two Flow characters resolved to the same portrait media ID')
-        if len(project_urls)>1:raise PermanentError('Flow character portraits resolved to multiple projects; refusing cross-project references')
+            references[cid]=reference;entries.append(reference)
+        project_urls={entry['project_url'].split('?')[0].rstrip('/') for entry in entries}
+        entity_ids=[entry['character_id'] for entry in entries]
+        if len(entity_ids)!=len(set(entity_ids)):raise PermanentError('Two Flow manifest characters resolved to one native Character entity')
+        if len(project_urls)>1:raise PermanentError('Flow Characters resolved to multiple projects; refusing cross-project @mentions')
         manifest_path=output/'flow-character-references.json'
-        manifest={'schema_version':1,'job_id':j['id'],'project_url':next(iter(project_urls),None),'characters':entries}
+        manifest={'schema_version':2,'job_id':j['id'],'project_url':next(iter(project_urls),None),'characters':entries}
         part=manifest_path.with_suffix('.part.json');part.write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf8');part.replace(manifest_path)
         assets.append(asset(manifest_path))
         return references,assets
@@ -795,9 +822,9 @@ class Pipeline:
             if script_checkpoint.get('flow_character_manifest_version')==FLOW_CHARACTER_MANIFEST_VERSION:
                 recurring=[character for character in script_checkpoint.get('characters',[]) if sum(character['character_id'] in scene.get('character_ids',[]) for scene in script_checkpoint.get('scenes',[]))>=2]
                 if recurring and os.getenv('VS_FLOW_REFERENCE_UI_VERIFIED')!='1':
-                    raise PermanentError('Flow reference attachment is not live-verified; no portrait or scene image was submitted')
-                references,reference_assets=self._flow_character_portraits(j,check);assets.extend(reference_assets)
-                reference_mode='flow_portraits' if references else 'flow_no_recurring_characters'
+                    raise PermanentError('Native Flow Character/@name path is not enabled; no Character or scene image was generated')
+                references,reference_assets=self._flow_native_characters(j,check);assets.extend(reference_assets)
+                reference_mode='native_flow_characters' if references else 'flow_no_recurring_characters'
             else:
                 reference_mode='legacy_text_only'
         total=len(j['checkpoints']['speech']['utterances'])
@@ -807,14 +834,13 @@ class Pipeline:
             kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
             saved=json.loads(checkpoint.read_text(encoding='utf8')) if checkpoint.is_file() else {}
             saved_provider=saved.get('provider','comfy')
-            scene_reference_identity=[{'character_id':cid,'media_id':references[cid]['media_id'],'sha256':references[cid]['sha256'],'project_url':references[cid]['project_url']} for cid in u.get('character_ids',[]) if cid in references]
-            scene_reference_ids=[item['media_id'] for item in scene_reference_identity]
+            scene_mentions=self._flow_scene_mentions(u,references) if provider=='flow' else []
+            legacy_reference_data=saved.get('reference_media_ids',[]) or saved.get('reference_identity',[])
+            saved_mentions=saved.get('character_mentions',[])
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt'] and saved_provider==provider and not legacy_reference_data and saved_mentions==scene_mentions
+            if path.is_file() and not reusable and (scene_mentions or saved_mentions or legacy_reference_data):
+                raise PermanentError('Existing scene image has different native Flow Character conditioning; refusing to overwrite '+kind)
             sent_prompt=u['visual_prompt']
-            if scene_reference_ids:
-                sent_prompt += "\nUse the attached character portrait references only to preserve recurring character identity; follow the scene action, setting, and camera."
-            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt'] and saved_provider==provider and saved.get('reference_media_ids',[])==scene_reference_ids and saved.get('reference_identity',[])==scene_reference_identity
-            if path.is_file() and not reusable and scene_reference_ids:
-                raise PermanentError('Existing scene image has different Flow reference conditioning; refusing to overwrite '+kind)
             if not reusable:
                 check()
                 if provider=='comfy':
@@ -823,14 +849,14 @@ class Pipeline:
                     self.comfy_asset(j,kind,graph,path,check)
                     receipt={'task_id':kind,'request_id':None,'width':None,'height':None,'source':'comfy'}
                 else:
-                    receipt=self._browser_scene_image(provider,j,i,sent_prompt,path,check,reference_media_ids=scene_reference_ids if provider=='flow' else None,reference_identity=scene_reference_identity if provider=='flow' else None)
+                    receipt=self._browser_scene_image(provider,j,i,sent_prompt,path,check,character_mentions=scene_mentions if provider=='flow' else None)
                 with Image.open(path) as picture:
                     picture.load()
                     if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid/near-uniform scene image')
                     receipt.update(width=picture.width,height=picture.height)
-                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'submitted_prompt':sent_prompt,'provider':provider,'task_id':receipt['task_id'],'request_id':receipt.get('request_id'),'width':receipt['width'],'height':receipt['height'],'reference_media_ids':scene_reference_ids,'reference_identity':scene_reference_identity,'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
+                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'submitted_prompt':sent_prompt,'provider':provider,'task_id':receipt['task_id'],'request_id':receipt.get('request_id'),'width':receipt['width'],'height':receipt['height'],'character_mentions':scene_mentions,'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
                 temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
-            scenes.append({'path':str(path),'duration':u['duration'],'reference_media_ids':scene_reference_ids});assets.append(asset(path))
+            scenes.append({'path':str(path),'duration':u['duration'],'character_mentions':scene_mentions});assets.append(asset(path))
         # A short natural tail hold belongs to the final scene, not stretched speech.
         scenes[-1]['duration']+=j['request']['duration_seconds']-j['checkpoints']['speech']['duration_seconds']
         return {'scenes':scenes,'assets':assets,'image_provider':provider,'character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}

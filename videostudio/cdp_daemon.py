@@ -283,8 +283,10 @@ async def create_app(bridge=None):
                 value = await bridge.probe_login()
             elif request.path == '/api/images/generate':
                 value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'))}
+            elif request.path == '/api/flow/characters/create':
+                value = {'ok':True, 'data':await bridge.flow_images.create_character(body.get('task_id'),body.get('job_id'),body.get('character_id'),body.get('name'),body.get('prompt'))}
             elif request.path == '/api/flow/images/generate':
-                value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),reference_media_ids=body.get('reference_media_ids'),reference_identity=body.get('reference_identity'))}
+                value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),character_mentions=body.get('character_mentions'))}
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
@@ -315,7 +317,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/images/generate'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

@@ -33,6 +33,16 @@ class FakeBridge:
 
 
 class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
+    def test_native_character_mentions_validate_entity_name_and_project(self):
+        job_id=str(uuid.uuid4());entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        mentions=[{'character_id':entity_id,'name':'NguoiCha','project_url':project}]
+        self.assertEqual(FlowImages._validate_character_mentions(job_id,mentions),mentions)
+        with self.assertRaisesRegex(FlowTaskError,'Duplicate native Character'):
+            FlowImages._validate_character_mentions(job_id,mentions*2)
+        second={'character_id':str(uuid.uuid4()),'name':'Mother','project_url':'https://flow.google.com/project/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}
+        with self.assertRaisesRegex(FlowTaskError,'same Flow project'):
+            FlowImages._validate_character_mentions(job_id,mentions+[second])
+
     async def test_job_project_registry_reuses_one_flow_project_across_scenes(self):
         job_id=str(uuid.uuid4());task_id=str(uuid.uuid4());project_url='https://flow.google.com/project/abc'
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,6 +101,20 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c.args[0] for c in bridge.cdp.command.await_args_list], ['Target.getTargets', 'Target.createTarget'])
         self.assertEqual(bridge.cdp.command.await_args_list[1].args[1]['url'], 'https://flow.google.com/')
 
+    async def test_native_character_creation_stops_before_generate_without_zero_credit_line(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());character_id='father';name='father';prompt='neutral portrait prompt';project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        with tempfile.TemporaryDirectory() as tmp:
+            flow=FlowImages(FakeBridge([]),Path(tmp));receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':project,'stage':'project_ready'}
+            state={'url':project,'composerAvailable':True,'draftEmpty':True,'generateDisabled':True}
+            flow._target=AsyncMock(return_value='flow-tab');flow._session=AsyncMock(return_value='session');flow._ensure_project=AsyncMock(return_value=(receipt,state))
+            flow._click_named=AsyncMock();flow._wait_page=AsyncMock(return_value={'url':project+'/character','composerAvailable':True})
+            flow._eval=AsyncMock(side_effect=[{'x':10,'y':10,'text':''},{'prompt':prompt,'models':1,'generate':[{'disabled':False,'rect':{'x':5,'y':5}}],'credits':[]}])
+            flow._click_point=AsyncMock();flow._write_receipt=__import__('unittest.mock',fromlist=['Mock']).Mock()
+            with self.assertRaises(FlowTaskError) as caught:
+                await flow.create_character(task_id,job_id,character_id,name,prompt)
+            self.assertEqual(caught.exception.code,'needs_zero_credit')
+            flow._write_receipt.assert_not_called()
+
     async def test_agent_must_be_off_and_exact_zero_credit_text_required(self):
         bridge = FakeBridge([])
         flow = FlowImages(bridge, Path('unused'))
@@ -121,13 +145,13 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bridge=FakeBridge([]);flow=FlowImages(bridge,Path(tmp));receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':'https://flow.google.com/project/abc','target_id':'one','stage':'project_ready'}
             flow._write_receipt(task_id,receipt);flow._target=AsyncMock(return_value='one');flow._session=AsyncMock(return_value='session')
-            flow._ensure_project=AsyncMock(return_value=(receipt,{'url':receipt['project_url']}));flow._prompt_box=AsyncMock(return_value={'x':1,'y':1,'text':prompt})
+            flow._ensure_project=AsyncMock(return_value=(receipt,{'url':receipt['project_url']}));flow._attach_character_mentions=AsyncMock(return_value={'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[]})
             flow._ensure_agent_and_settings=AsyncMock(side_effect=FlowTaskError('Flow did not confirm zero credits','needs_zero_credit'));flow._click_named=AsyncMock()
             with self.assertRaises(FlowTaskError) as caught:await flow.generate(task_id,job_id,prompt)
             self.assertEqual(caught.exception.code,'needs_zero_credit')
             self.assertNotIn('Bắt đầu tạo',[c.args[1] for c in flow._click_named.await_args_list])
-            self.assertEqual(flow._read_receipt(task_id)['stage'],'references_attached')
-            self.assertEqual(flow._read_receipt(task_id)['reference_media_ids'],[])
+            self.assertEqual(flow._read_receipt(task_id)['stage'],'characters_attached')
+            self.assertEqual(flow._read_receipt(task_id)['character_mentions'],[])
 
     async def test_2k_download_is_correlated_to_flow_frame_and_saved_as_png(self):
         from PIL import Image
@@ -183,53 +207,39 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(flow._read_receipt(task_id)['stage'],'submitting')
 
 
-    async def test_reference_attachment_requires_visible_exact_media_id(self):
-        media_id=str(uuid.uuid4());flow=FlowImages(FakeBridge([]),Path('unused'))
-        flow._image=AsyncMock(return_value=[{'media_id':media_id,'x':100,'y':200}])
-        flow._click_media_control=AsyncMock();flow._click_named=AsyncMock()
-        flow._wait_page=AsyncMock(return_value={'attachedMediaIds':[media_id]})
-        state=await flow._attach_reference('session',media_id,'scene prompt')
-        flow._click_media_control.assert_awaited_once_with('session',media_id,'Tuỳ chọn khác')
-        flow._click_named.assert_awaited_once_with('session','Thêm vào câu lệnh',exact=True)
-        self.assertEqual(state['attachedMediaIds'],[media_id])
+    async def test_native_character_mentions_insert_and_verify_exact_entity_chip(self):
+        entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        mention={'character_id':entity_id,'name':'father','project_url':project}
+        flow=FlowImages(FakeBridge([]),Path('unused'))
+        flow._snapshot=AsyncMock(return_value={'draftMatches':False,'mentionEntityIds':[],'attachedMediaIds':[]})
+        flow._prompt_box=AsyncMock(return_value={'x':10,'y':10,'text':''})
+        flow._eval=AsyncMock(return_value=[{'name':'father','active':True,'selected':False}])
+        flow._wait_page=AsyncMock(side_effect=[{'mentionEntityIds':[entity_id],'attachedMediaIds':[]},{'draftMatches':True,'mentionEntityIds':[entity_id],'attachedMediaIds':[]}])
+        result=await flow._attach_character_mentions('session','A man looks across a field.',[mention])
+        self.assertEqual(result['mentionEntityIds'],[entity_id])
+        inserted=[c.args[1].get('text') for c in flow.bridge.cdp.command.await_args_list if c.args[0]=='Input.insertText']
+        self.assertEqual(inserted,['@',' ','A man looks across a field.'])
+        self.assertTrue(any(c.args[1].get('key')=='Enter' for c in flow.bridge.cdp.command.await_args_list if c.args[0]=='Input.dispatchKeyEvent'))
 
-    async def test_reference_attachment_fails_closed_if_media_id_is_not_exposed(self):
-        media_id=str(uuid.uuid4());flow=FlowImages(FakeBridge([]),Path('unused'))
-        flow._image=AsyncMock(return_value=[{'media_id':media_id,'x':100,'y':200}])
-        flow._click_media_control=AsyncMock();flow._click_named=AsyncMock()
-        flow._wait_page=AsyncMock(return_value={'attachedMediaIds':[]})
-        with self.assertRaisesRegex(FlowTaskError,'did not expose exactly one attached reference'):
-            await flow._attach_reference('session',media_id,'scene prompt')
-
-    async def test_reference_not_in_job_project_blocks_before_attachment_or_generate(self):
-        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());media_id=str(uuid.uuid4());prompt='scene prompt'
+    async def test_native_character_from_another_job_project_blocks_before_prompt_or_generate(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());prompt='scene prompt';other='https://flow.google.com/project/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+        mention={'character_id':str(uuid.uuid4()),'name':'father','project_url':other}
         flow=FlowImages(FakeBridge([]),Path('unused'));flow._target=AsyncMock(return_value='target');flow._session=AsyncMock(return_value='session')
-        receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':'https://flow.google.com/project/abc','target_id':'target','stage':'project_ready','baseline_media_ids':[]}
+        receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc','target_id':'target','stage':'project_ready','baseline_media_ids':[]}
         state={'url':receipt['project_url'],'largeImages':[],'attachedMediaIds':[],'draftEmpty':True,'generateDisabled':True}
-        flow._ensure_project=AsyncMock(return_value=(receipt,state));flow._attach_reference=AsyncMock();flow._click_named=AsyncMock()
-        identity=[{'character_id':'father','media_id':media_id,'sha256':'a'*64,'project_url':receipt['project_url']}]
-        with self.assertRaises(FlowTaskError) as caught:
-            await flow.generate(task_id,job_id,prompt,reference_media_ids=[media_id],reference_identity=identity)
+        flow._ensure_project=AsyncMock(return_value=(receipt,state));flow._attach_character_mentions=AsyncMock();flow._click_named=AsyncMock()
+        with self.assertRaises(FlowTaskError) as caught:await flow.generate(task_id,job_id,prompt,character_mentions=[mention])
         self.assertEqual(caught.exception.code,'needs_flow_check')
-        flow._attach_reference.assert_not_awaited();flow._click_named.assert_not_awaited()
+        flow._attach_character_mentions.assert_not_awaited();flow._click_named.assert_not_awaited()
 
-    async def test_reference_change_on_existing_receipt_is_never_resubmitted(self):
-        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());old=str(uuid.uuid4());new=str(uuid.uuid4());prompt='same scene prompt'
+    async def test_changed_native_character_mentions_are_never_resubmitted(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());prompt='same scene prompt';project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc';entity=str(uuid.uuid4())
+        old=[{'character_id':entity,'name':'father','project_url':project}]
+        changed=[{'character_id':entity,'name':'dad','project_url':project}]
         with tempfile.TemporaryDirectory() as tmp:
-            flow=FlowImages(FakeBridge([]),Path(tmp));flow._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'reference_media_ids':[old],'stage':'project_ready'})
-            identity=[{'character_id':'father','media_id':new,'sha256':'b'*64,'project_url':'https://flow.google.com/project/abc'}]
-            with self.assertRaisesRegex(FlowTaskError,'reference media set differs'):
-                await flow.generate(task_id,job_id,prompt,reference_media_ids=[new],reference_identity=identity)
-            flow.bridge.cdp.command.assert_not_awaited()
-
-    async def test_reference_content_hash_change_fails_before_cached_result(self):
-        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());media_id=str(uuid.uuid4());prompt='same prompt';project='https://flow.google.com/project/abc'
-        old=[{'character_id':'father','media_id':media_id,'sha256':'a'*64,'project_url':project}]
-        changed=[{'character_id':'father','media_id':media_id,'sha256':'b'*64,'project_url':project}]
-        with tempfile.TemporaryDirectory() as tmp:
-            flow=FlowImages(FakeBridge([]),Path(tmp));flow._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'reference_media_ids':[media_id],'reference_identity':old,'stage':'project_ready'})
-            with self.assertRaisesRegex(FlowTaskError,'reference content/character identity differs'):
-                await flow.generate(task_id,job_id,prompt,reference_media_ids=[media_id],reference_identity=changed)
+            flow=FlowImages(FakeBridge([]),Path(tmp));flow._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'character_mentions':old,'stage':'project_ready'})
+            with self.assertRaisesRegex(FlowTaskError,'mention set differs'):
+                await flow.generate(task_id,job_id,prompt,character_mentions=changed)
             flow.bridge.cdp.command.assert_not_awaited()
 
 if __name__=='__main__':
