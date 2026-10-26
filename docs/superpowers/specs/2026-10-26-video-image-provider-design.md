@@ -1,7 +1,7 @@
 # Video image-provider selection
 
-**Status:** User-approved design, awaiting written-spec review before implementation  
-**Date:** 2026-10-26  
+**Status:** User-approved design, awaiting written-spec review before implementation
+**Date:** 2026-10-26
 **Project:** `D:\Projects\videostudio`
 
 ## Goal
