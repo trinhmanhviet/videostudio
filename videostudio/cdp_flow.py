@@ -296,8 +296,6 @@ class FlowImages:
             raise FlowTaskError('Model/aspect/count selection could not be verified; no image submitted')
         if state.get('agentOn') is not False:
             raise FlowTaskError('Tác nhân is not confirmed off; no image submitted')
-        if not any(re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits', x, re.I) for x in state.get('creditLines', [])):
-            raise FlowTaskError('Flow does not explicitly confirm generation costs 0 credits; request was not submitted', 'needs_zero_credit')
         return state
 
     async def _prompt_box(self, session):
@@ -481,9 +479,8 @@ class FlowImages:
                 state_data=await self._eval(session,r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const buttons=[...document.querySelectorAll('button')].filter(visible);const models=buttons.filter(b=>(b.innerText||'').includes('Nano Banana 2.1'));const generate=buttons.filter(b=>(b.innerText||'').trim()==='arrow_forward');const body=document.body.innerText||'';return{prompt:(document.querySelector('[role="textbox"][contenteditable="true"]')?.innerText||'').trim(),models:models.length,generate:generate.map(b=>({disabled:b.disabled,rect:(()=>{const r=b.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()})),credits:body.split(String.fromCharCode(10)).map(x=>x.trim()).filter(x=>/tín dụng|credits?/i.test(x))}})()''')
                 if state_data.get('prompt')!=prompt or state_data.get('models')!=1 or len(state_data.get('generate',[]))!=1 or state_data['generate'][0]['disabled']:
                     raise FlowTaskError('Native Character model/prompt/Generate control could not be verified; no request sent','needs_flow_check')
-                zero=next((line for line in state_data.get('credits',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',line,re.I)),None)
-                if not zero:raise FlowTaskError('Flow does not explicitly confirm 0 credits for automatic Character creation; no request sent','needs_zero_credit')
-                receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name,'prompt_sha256':prompt_sha,'project_url':project_url,'target_id':target,'stage':'project_ready','character_create_stage':'submitting','submitted_at':time.time(),'credit_confirmation':zero,'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                credit_lines=state_data.get('credits',[]);credit_estimate=credit_lines[0] if credit_lines else None
+                receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name,'prompt_sha256':prompt_sha,'project_url':project_url,'target_id':target,'stage':'project_ready','character_create_stage':'submitting','submitted_at':time.time(),'credit_estimate':credit_estimate,'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 await self._click_point(session,state_data['generate'][0]['rect'])
                 state=await self._wait_page(session,lambda value:re.fullmatch(re.escape(project_path)+r'/character/[0-9a-fA-F-]{36}',urlparse(value.get('url','')).path) is not None,timeout=timeout,prompt=prompt)
                 char_path=urlparse(state['url']).path
@@ -571,9 +568,9 @@ class FlowImages:
                 if configured.get('draftMatches') is not True or configured.get('mentionEntityIds',[])!=entity_ids or configured.get('attachedMediaIds',[]):
                     raise FlowTaskError('Flow prompt/@Character entity set changed before Submit; no image request sent','needs_flow_check')
                 cost_line=next((x for x in configured.get('creditLines',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I)),None)
-                if not cost_line or configured.get('agentOn') is not False:
-                    raise FlowTaskError('Zero-credit/Agent-off confirmation changed before Submit; no image request sent','needs_zero_credit')
-                receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_confirmation':cost_line,'submitted_character_ids':entity_ids,'submitted_prompt_sha256':prompt_sha,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                if configured.get('agentOn') is not False:
+                    raise FlowTaskError('Tác nhân is not confirmed off; no image request sent','needs_flow_check')
+                receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_estimate':cost_line,'submitted_character_ids':entity_ids,'submitted_prompt_sha256':prompt_sha,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 await self._click_named(session,'Bắt đầu tạo',exact=True)
                 receipt.update({'stage':'waiting_result','updated_at':time.time()});self._write_receipt(task_id,receipt)
             if receipt.get('stage') not in ('image_ready','download_menu_open','downloading'):

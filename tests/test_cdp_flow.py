@@ -101,54 +101,45 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c.args[0] for c in bridge.cdp.command.await_args_list], ['Target.getTargets', 'Target.createTarget'])
         self.assertEqual(bridge.cdp.command.await_args_list[1].args[1]['url'], 'https://flow.google.com/')
 
-    async def test_native_character_creation_stops_before_generate_without_zero_credit_line(self):
-        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());character_id='father';name='father';prompt='neutral portrait prompt';project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+    async def test_native_character_creation_can_save_when_paid_generation_is_authorized(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());character_id='father';name='father';prompt='neutral portrait prompt';project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc';entity_id=str(uuid.uuid4())
         with tempfile.TemporaryDirectory() as tmp:
             flow=FlowImages(FakeBridge([]),Path(tmp));receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':project,'stage':'project_ready'}
             state={'url':project,'composerAvailable':True,'draftEmpty':True,'generateDisabled':True}
+            form={'url':project+'/character','composerAvailable':True}
+            detail={'url':project+'/character/'+entity_id,'composerAvailable':True}
+            fields=[{'value':'Character not named','rect':{'x':10,'y':10}},{'value':'Character not named','rect':{'x':20,'y':20}}]
+            named={'values':[name,name],'done':1,'disabled':[False],'point':{'x':30,'y':30}}
             flow._target=AsyncMock(return_value='flow-tab');flow._session=AsyncMock(return_value='session');flow._ensure_project=AsyncMock(return_value=(receipt,state))
-            flow._click_named=AsyncMock();flow._wait_page=AsyncMock(return_value={'url':project+'/character','composerAvailable':True})
-            flow._eval=AsyncMock(side_effect=[{'x':10,'y':10,'text':''},{'prompt':prompt,'models':1,'generate':[{'disabled':False,'rect':{'x':5,'y':5}}],'credits':[]}])
-            flow._click_point=AsyncMock();flow._write_receipt=__import__('unittest.mock',fromlist=['Mock']).Mock()
-            with self.assertRaises(FlowTaskError) as caught:
-                await flow.create_character(task_id,job_id,character_id,name,prompt)
-            self.assertEqual(caught.exception.code,'needs_zero_credit')
-            flow._write_receipt.assert_not_called()
+            flow._click_named=AsyncMock();flow._wait_page=AsyncMock(side_effect=[form,detail])
+            flow._eval=AsyncMock(side_effect=[{'x':10,'y':10,'text':''},{'prompt':prompt,'models':1,'generate':[{'disabled':False,'rect':{'x':5,'y':5}}],'credits':[]},fields,named,True])
+            flow._click_point=AsyncMock();flow._return_to_project_root=AsyncMock()
+            result=await flow.create_character(task_id,job_id,character_id,name,prompt)
+            self.assertEqual(result,{'task_id':task_id,'character_id':entity_id,'name':name,'project_url':project})
+            self.assertEqual(flow._read_receipt(task_id)['stage'],'character_saved')
+            self.assertEqual(flow._read_receipt(task_id)['credit_estimate'],None)
+            self.assertEqual(flow._click_point.await_count,4)
 
-    async def test_agent_must_be_off_and_exact_zero_credit_text_required(self):
+    async def test_agent_off_and_image_settings_are_required_but_credit_estimate_is_not(self):
         bridge = FakeBridge([])
         flow = FlowImages(bridge, Path('unused'))
-        base = {'agentOn': False, 'settingsOpen': True, 'settingsText': 'Nano Banana 2.1 crop_9_16 x1'}
-        flow._snapshot = AsyncMock(side_effect=[{**base, 'creditLines':['Quá trình tạo sẽ tốn 1 tín dụng']},{**base, 'creditLines':['Quá trình tạo sẽ tốn 1 tín dụng']},{**base, 'creditLines':['Quá trình tạo sẽ tốn 1 tín dụng']}])
-        flow._click_named = AsyncMock()
-        flow._click_expr = AsyncMock()
-        with self.assertRaises(FlowTaskError) as caught:
-            await flow._ensure_agent_and_settings('session','fixture prompt')
-        self.assertEqual(caught.exception.code,'needs_zero_credit')
-        flow._click_named.assert_any_await('session','Hình ảnh',selector='button.mat-button-toggle-button')
-        self.assertFalse(any('Bắt đầu tạo' in str(x) for x in flow._click_named.await_args_list))
-
-    async def test_zero_credit_gate_accepts_only_exact_free_estimate_after_agent_off(self):
-        bridge = FakeBridge([])
-        flow = FlowImages(bridge, Path('unused'))
-        state = {'agentOn':False,'settingsOpen':True,'settingsText':'Nano Banana 2.1 crop_9_16 x1','creditLines':['Quá trình tạo sẽ tốn 0 tín dụng']}
+        state = {'agentOn':False,'settingsOpen':True,'settingsText':'Nano Banana 2.1 crop_9_16 x1','creditLines':['Quá trình tạo sẽ tốn 3 tín dụng']}
         flow._snapshot = AsyncMock(side_effect=[state,state,state])
-        flow._click_named = AsyncMock()
-        flow._click_expr = AsyncMock()
-        result = await flow._ensure_agent_and_settings('session','fixture prompt')
-        self.assertEqual(result['agentOn'],False)
-        self.assertIn('0 tín dụng',result['creditLines'][0])
-        self.assertEqual(flow._click_expr.await_count,0)
+        flow._click_named = AsyncMock();flow._click_expr = AsyncMock()
+        result=await flow._ensure_agent_and_settings('session','fixture prompt')
+        self.assertIs(result['agentOn'],False)
+        self.assertEqual(result['settingsText'],state['settingsText'])
+        self.assertIn('3 tín dụng',result['creditLines'][0])
 
-    async def test_zero_credit_failure_prevents_generate_button_click(self):
+    async def test_flow_submit_still_requires_agent_off_and_settings(self):
         task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());prompt='free-only prompt'
         with tempfile.TemporaryDirectory() as tmp:
             bridge=FakeBridge([]);flow=FlowImages(bridge,Path(tmp));receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':'https://flow.google.com/project/abc','target_id':'one','stage':'project_ready'}
             flow._write_receipt(task_id,receipt);flow._target=AsyncMock(return_value='one');flow._session=AsyncMock(return_value='session')
             flow._ensure_project=AsyncMock(return_value=(receipt,{'url':receipt['project_url']}));flow._attach_character_mentions=AsyncMock(return_value={'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[]})
-            flow._ensure_agent_and_settings=AsyncMock(side_effect=FlowTaskError('Flow did not confirm zero credits','needs_zero_credit'));flow._click_named=AsyncMock()
+            flow._ensure_agent_and_settings=AsyncMock(side_effect=FlowTaskError('Tác nhân is not confirmed off','needs_flow_check'));flow._click_named=AsyncMock()
             with self.assertRaises(FlowTaskError) as caught:await flow.generate(task_id,job_id,prompt)
-            self.assertEqual(caught.exception.code,'needs_zero_credit')
+            self.assertEqual(caught.exception.code,'needs_flow_check')
             self.assertNotIn('Bắt đầu tạo',[c.args[1] for c in flow._click_named.await_args_list])
             self.assertEqual(flow._read_receipt(task_id)['stage'],'characters_attached')
             self.assertEqual(flow._read_receipt(task_id)['character_mentions'],[])

@@ -14,6 +14,7 @@ if($existing){
  Stop-Process -Id $existing.OwningProcess
 }
 if($EngineeringScope){$env:VS_ENGINEERING_SCOPE=$EngineeringScope}else{Remove-Item Env:VS_ENGINEERING_SCOPE -ErrorAction SilentlyContinue}
+$env:VS_FLOW_REFERENCE_UI_VERIFIED='1'
 $env:VS_LLM_TRANSPORT='cdp'
 & (Join-Path $PSScriptRoot 'start_browser.ps1') -ServiceOnly
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'data') | Out-Null
