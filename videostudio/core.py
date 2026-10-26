@@ -23,14 +23,16 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
     if not isinstance(data['voice_id'],str) or not 1<=len(data['voice_id'])<=200: raise ValueError('Invalid voice')
     d=data['duration_seconds']
     if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=7200: raise ValueError('Duration must be 8–7200 seconds')
-    res=dict(data,idea=data['idea'].strip())
+    provider=data.get('image_provider','flow')
+    if provider not in ('flow','chatgpt','comfy'):raise ValueError('image_provider must be flow, chatgpt, or comfy')
+    res=dict(data,idea=data['idea'].strip(),image_provider=provider)
     if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
     if 'project' in data:
         if not isinstance(data['project'],str) or not 1<=len(data['project'].strip())<=200:raise ValueError('Invalid project name')

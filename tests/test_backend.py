@@ -68,6 +68,12 @@ class DurableTests(unittest.TestCase):
         j,_=self.s.create(REQUEST,'key');h=self.handlers([]);h['verify']=lambda j,c:{};w=Worker(self.s,h,backoff=0)
         while w.step():pass
         self.assertEqual(self.s.get(j['id'])['state'],'failed')
+    def test_image_provider_defaults_to_flow_and_validates_choices(self):
+        self.assertEqual(validate_request(REQUEST)['image_provider'],'flow')
+        for provider in ('flow','chatgpt','comfy'):
+            self.assertEqual(validate_request({**REQUEST,'image_provider':provider})['image_provider'],provider)
+        for provider in ('unknown','',None,2):
+            with self.assertRaises(ValueError):validate_request({**REQUEST,'image_provider':provider})
     def test_duration_validation(self):
         for d in (True,-1,0,7201,'30',float('nan')):
             with self.assertRaises(ValueError):validate_request(dict(REQUEST,duration_seconds=d))
@@ -114,7 +120,7 @@ class ApiTests(unittest.TestCase):
                 self.assertTrue(c.get('/api/preflight').json()['ready'])
                 self.assertEqual(c.get('/').status_code,200)
                 r=c.post('/api/jobs',json=REQUEST,headers={'Idempotency-Key':'a'});self.assertEqual(r.status_code,201)
-                jid=r.json()['job']['id']
+                jid=r.json()['job']['id'];self.assertEqual(r.json()['job']['request']['image_provider'],'flow')
                 self.assertFalse(c.post('/api/jobs',json=REQUEST,headers={'Idempotency-Key':'a'}).json()['created'])
                 self.assertEqual(c.post('/api/jobs',json=REQUEST).status_code,422)
                 self.assertEqual(c.post('/api/jobs',json=REQUEST,headers={'Idempotency-Key':'b','Origin':'https://evil.example'}).status_code,403)

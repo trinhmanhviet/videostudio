@@ -86,9 +86,9 @@ fs.mkdirSync(out, { recursive: true });
           if (req.method() === 'POST') {
             submissions++;
             const b = req.postDataJSON();
-            assert.equal(b.provider, 'chatgpt');
+            assert.equal(b.provider, 'flow');
             assert.ok(b.prompt.includes('red apple'));
-            task = { id: 'candidate-one', state: 'queued', provider: 'chatgpt', prompt: b.prompt };
+            task = { id: 'candidate-one', state: 'queued', provider: 'flow', prompt: b.prompt };
             return route.fulfill({ status: 202, json: task });
           }
           if (task) task = { ...task, state: 'completed', image_url: '/candidate' };
@@ -103,7 +103,7 @@ fs.mkdirSync(out, { recursive: true });
             image_url: '/candidate?selected=true',
             edit_id: 'generated-edit',
             image_sha256: 'candidate',
-            history: [{ id: 'generated-edit', provider: 'chatgpt', created: 1 }]
+            history: [{ id: 'generated-edit', provider: 'flow', created: 1 }]
           };
           return route.fulfill({ json: view });
         }
@@ -118,9 +118,13 @@ fs.mkdirSync(out, { recursive: true });
       const regenBtn = page.locator('.se-btn-green', { hasText: 'Vẽ lại' });
       const flowRadio = page.locator('.se-provider-radios input[value="flow"]');
       await page.waitForFunction(() => { const e=document.querySelector('.se-provider-radios input[value="flow"]'); return e && !e.disabled; });
-      await flowRadio.check();
+      assert.equal(await flowRadio.isChecked(), true, 'fresh rerender selection defaults to Flow');
       assert.match(await page.locator('.se-provider-note').first().innerText(), /0 tín dụng/);
       await page.locator('.se-provider-radios input[value="chatgpt"]').check();
+      assert.match(await page.locator('.se-provider-note').first().innerText(), /ChatGPT/i);
+      await page.locator('.se-provider-radios input[value="comfy"]').check();
+      assert.match(await page.locator('.se-provider-note').first().innerText(), /Qwen/i);
+      await flowRadio.check();
       await regenBtn.click();
       assert.equal(submissions, 1);
       assert.equal(applied, 0, 'generating never applies implicitly');

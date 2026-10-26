@@ -30,6 +30,7 @@ class FlowImages:
         self.bridge = bridge
         self.root = Path(root)
         self.tasks = self.root / 'tasks'
+        self.projects = self.root / 'projects'
         self.events = []
         self.active_frame = None
         self.download_guid = None
@@ -83,6 +84,50 @@ class FlowImages:
             raise FlowTaskError('Flow receipt does not match this scene request', 'uncertain')
         return value
 
+    @staticmethod
+    def _valid_project_url(job_id, url):
+        try:uuid.UUID(job_id)
+        except (ValueError,TypeError,AttributeError):return False
+        parsed=urlparse(url or '')
+        return parsed.scheme=='https' and parsed.hostname=='flow.google.com' and bool(re.fullmatch(r'/project/[A-Za-z0-9-]+/?',parsed.path))
+
+    def _project_registry_path(self,job_id):
+        try:uuid.UUID(job_id)
+        except (ValueError,TypeError,AttributeError) as error:raise FlowTaskError('Flow project mapping requires a UUID job id','uncertain') from error
+        return self.projects/(job_id+'.json')
+
+    def _save_project_registry(self,job_id,project_url):
+        if not self._valid_project_url(job_id,project_url):raise FlowTaskError('Refusing to store an invalid Flow project URL','uncertain')
+        self.projects.mkdir(parents=True,exist_ok=True);path=self._project_registry_path(job_id);part=path.with_suffix('.json.part')
+        part.write_text(json.dumps({'job_id':job_id,'project_url':project_url.split('?')[0],'created_at':time.time()},ensure_ascii=False,indent=2),encoding='utf8');part.replace(path)
+
+    def _load_project_registry(self,job_id):
+        path=self._project_registry_path(job_id)
+        if path.is_file():
+            value=json.loads(path.read_text(encoding='utf8'))
+            if value.get('job_id')!=job_id or not self._valid_project_url(job_id,value.get('project_url')):raise FlowTaskError('Flow project registry is invalid; refusing a new project','uncertain')
+            return value
+        # Migrate earlier per-task receipts when they all point at one project for this job.
+        projects=set()
+        if self.tasks.is_dir():
+            for receipt_path in self.tasks.glob('*.json'):
+                try:value=json.loads(receipt_path.read_text(encoding='utf8'))
+                except (OSError,ValueError):continue
+                if value.get('job_id')==job_id and value.get('project_url'):
+                    if not self._valid_project_url(job_id,value['project_url']):raise FlowTaskError('Legacy Flow receipt contains an invalid project URL','uncertain')
+                    projects.add(value['project_url'].split('?')[0])
+        if len(projects)>1:raise FlowTaskError('Existing Flow receipts for this video point at multiple projects; refusing to mix assets','uncertain')
+        if projects:
+            url=projects.pop();self._save_project_registry(job_id,url)
+            return {'job_id':job_id,'project_url':url}
+        return None
+
+    @staticmethod
+    def _new_media(baseline,images):
+        before=set(baseline or []);new=[image for image in images if image.get('media_id') and image['media_id'] not in before]
+        if len(new)>1:raise FlowTaskError('More than one new Flow media item appeared; refusing ambiguous scene match','uncertain')
+        return new[0] if new else None
+
     async def _eval(self, session, expression, timeout=8):
         result = await self.bridge.cdp.command(
             'Runtime.evaluate', {'expression': expression, 'returnByValue': True}, session=session, timeout=timeout)
@@ -117,7 +162,7 @@ class FlowImages:
 
     async def _snapshot(self, session, prompt=''):
         prompt_js = json.dumps(prompt, ensure_ascii=False)
-        expression = r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const norm=s=>(s||'').replace(/\s+/g,' ').trim();const body=document.body.innerText||'';const lines=body.split('\n').map(x=>x.trim()).filter(Boolean);const box=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');const draft=box?norm(box.innerText||box.textContent):'';const agent=document.querySelector('button.agent-mode-chip');let agentOn=null;if(agent){const p=agent.getAttribute('aria-pressed');if(p==='true')agentOn=true;else if(p==='false')agentOn=false;else{const m=getComputedStyle(agent).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);if(m){const y=(.2126*+m[1]+.7152*+m[2]+.0722*+m[3])/255;if(y>.78)agentOn=true;else if(y<.28)agentOn=false;}}}const imgs=[...document.images].filter(i=>visible(i)&&i.complete&&i.naturalWidth>=512&&i.naturalHeight>=512).map(i=>{let r=i.getBoundingClientRect();return{width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}});const genButton=document.querySelector('button[aria-label="Bắt đầu tạo"]');const genDisabled=!genButton||genButton.disabled;const credit=lines.filter(x=>/tín dụng|credit/i.test(x));const exact=norm(draft)===norm(PROMPT);const settingsOpen=document.querySelectorAll('button.mat-button-toggle-button').length>=8;return{url:location.href,title:document.title,login:/accounts\.google\.com/i.test(location.href)||/đăng nhập vào google|sign in to google/i.test(body.slice(0,900)),challenge:/captcha|verify you are human|xác minh bạn là người/i.test(body.slice(0,1200)),draftLength:draft.length,draftEmpty:!draft,composerAvailable:!!box,draftMatches:exact,agentOn,creditLines:credit,settingsOpen,settingsText:(document.querySelector('button.settings-trigger-button')?.innerText||''),generateDisabled:genDisabled,largeImages:imgs};})()'''
+        expression = r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const norm=s=>(s||'').replace(/\s+/g,' ').trim();const body=document.body.innerText||'';const lines=body.split('\n').map(x=>x.trim()).filter(Boolean);const box=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');const draft=box?norm(box.innerText||box.textContent):'';const agent=document.querySelector('button.agent-mode-chip');let agentOn=null;if(agent){const p=agent.getAttribute('aria-pressed');if(p==='true')agentOn=true;else if(p==='false')agentOn=false;else{const m=getComputedStyle(agent).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);if(m){const y=(.2126*+m[1]+.7152*+m[2]+.0722*+m[3])/255;if(y>.78)agentOn=true;else if(y<.28)agentOn=false;}}}const imgs=[...document.querySelectorAll('img[data-media-id]')].filter(i=>visible(i)&&i.complete&&i.naturalWidth>=512&&i.naturalHeight>=512).map(i=>{let r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}});const genButton=document.querySelector('button[aria-label="Bắt đầu tạo"]');const genDisabled=!genButton||genButton.disabled;const credit=lines.filter(x=>/tín dụng|credit/i.test(x));const exact=norm(draft)===norm(PROMPT);const settingsOpen=document.querySelectorAll('button.mat-button-toggle-button').length>=8;return{url:location.href,title:document.title,login:/accounts\.google\.com/i.test(location.href)||/đăng nhập vào google|sign in to google/i.test(body.slice(0,900)),challenge:/captcha|verify you are human|xác minh bạn là người/i.test(body.slice(0,1200)),draftLength:draft.length,draftEmpty:!draft,composerAvailable:!!box,draftMatches:exact,agentOn,creditLines:credit,settingsOpen,settingsText:(document.querySelector('button.settings-trigger-button')?.innerText||''),generateDisabled:genDisabled,largeImages:imgs};})()'''
         return await self._eval(session, expression.replace('PROMPT', prompt_js))
 
     async def _target(self):
@@ -156,32 +201,55 @@ class FlowImages:
         state = await self._snapshot(session, prompt)
         if state.get('login') or state.get('challenge'):
             raise FlowTaskError('Google Flow requires sign-in or verification in the dedicated Chrome window', 'needs_auth')
+        registry=self._load_project_registry(job_id)
         if receipt:
-            project_url = receipt.get('project_url')
+            project_url=receipt.get('project_url')
             if not project_url:
-                raise FlowTaskError('Project creation outcome is unclear; refusing to create another project', 'uncertain')
-            if urlparse(project_url).hostname != 'flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+/?', urlparse(project_url).path):
-                raise FlowTaskError('Saved Flow project URL is invalid', 'uncertain')
-            if state['url'].split('?')[0].rstrip('/') != project_url.split('?')[0].rstrip('/'):
+                raise FlowTaskError('Project creation outcome is unclear; refusing to create another project','uncertain')
+            if not self._valid_project_url(job_id,project_url):
+                raise FlowTaskError('Saved Flow project URL is invalid','uncertain')
+            if registry and registry.get('project_url')!=project_url.split('?')[0]:
+                raise FlowTaskError('Task receipt conflicts with this video’s Flow project registry','uncertain')
+            if not registry:self._save_project_registry(job_id,project_url)
+            project_path=project_url.split('?')[0].rstrip('/')
+            if state['url'].split('?')[0].rstrip('/')!=project_path:
                 if receipt.get('stage') in ('submitting','waiting_result','image_ready','download_menu_open','downloading'):
                     raise FlowTaskError('Submitted Flow request is open in another project; refusing to navigate or resubmit','uncertain')
                 if not state.get('draftEmpty') or not state.get('generateDisabled'):
                     raise FlowTaskError('Flow tab has a draft or generation in progress; refusing to change project')
-                await self.bridge.cdp.command('Page.navigate', {'url': project_url}, session=session)
-                state = await self._wait_page(session, lambda s: s['url'].split('?')[0].rstrip('/') == project_url.split('?')[0].rstrip('/'), prompt=prompt)
-            return receipt, state
+                await self.bridge.cdp.command('Page.navigate',{'url':project_url},session=session)
+                state=await self._wait_page(session,lambda s:s['url'].split('?')[0].rstrip('/')==project_path and s.get('composerAvailable'),prompt=prompt)
+            elif not state.get('composerAvailable'):
+                state=await self._wait_page(session,lambda s:s['url'].split('?')[0].rstrip('/')==project_path and s.get('composerAvailable'),prompt=prompt)
+            if 'baseline_media_ids' not in receipt and receipt.get('stage')=='project_ready':
+                receipt['baseline_media_ids']=[x['media_id'] for x in state.get('largeImages',[]) if x.get('media_id')]
+                self._write_receipt(task_id,receipt)
+            return receipt,state
+        if registry:
+            project_url=registry['project_url'];project_path=project_url.rstrip('/')
+            if state['url'].split('?')[0].rstrip('/')!=project_path:
+                if not state.get('draftEmpty') or not state.get('generateDisabled'):
+                    raise FlowTaskError('Flow tab has a draft or generation in progress; refusing to switch to the video project')
+                await self.bridge.cdp.command('Page.navigate',{'url':project_url},session=session)
+                state=await self._wait_page(session,lambda s:s['url'].split('?')[0].rstrip('/')==project_path and s.get('composerAvailable'),prompt=prompt)
+            elif not state.get('composerAvailable'):
+                state=await self._wait_page(session,lambda s:s['url'].split('?')[0].rstrip('/')==project_path and s.get('composerAvailable'),prompt=prompt)
+            receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':hashlib.sha256(prompt.encode('utf8')).hexdigest(),'project_url':project_url,'target_id':target,'stage':'project_ready','baseline_media_ids':[x['media_id'] for x in state.get('largeImages',[]) if x.get('media_id')],'created_at':time.time()}
+            self._write_receipt(task_id,receipt)
+            return receipt,state
         if state.get('draftLength') or not state.get('generateDisabled'):
             raise FlowTaskError('Flow demo project has a draft or active request; refusing to replace it')
-        self._write_receipt(task_id, {'task_id': task_id, 'job_id': job_id, 'prompt_sha256': hashlib.sha256(prompt.encode('utf8')).hexdigest(), 'stage': 'creating_project', 'created_at': time.time()})
-        if not re.fullmatch(r'/+', urlparse(state['url']).path or '/'):
-            await self._click_named(session, 'Trang chủ', exact=True)
-            state = await self._wait_page(session, lambda s: bool(re.fullmatch(r'/+', urlparse(s['url']).path or '/')), timeout=25, prompt=prompt)
-        # The user explicitly demonstrated the visible "Dự án mới" action.
-        await self._click_named(session, 'Dự án mới', selector='button,[role=button],a')
-        state = await self._wait_page(session, lambda s: bool(re.fullmatch(r'/project/[A-Za-z0-9-]+/?', urlparse(s['url']).path)) and s.get('composerAvailable'), timeout=35, prompt=prompt)
-        receipt = {'task_id': task_id, 'job_id': job_id, 'prompt_sha256': hashlib.sha256(prompt.encode('utf8')).hexdigest(), 'project_url': state['url'].split('?')[0], 'target_id': target, 'stage': 'project_ready', 'created_at': time.time()}
-        self._write_receipt(task_id, receipt)
-        return receipt, state
+        self._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':hashlib.sha256(prompt.encode('utf8')).hexdigest(),'stage':'creating_project','created_at':time.time()})
+        if not re.fullmatch(r'/+',urlparse(state['url']).path or '/'):
+            await self._click_named(session,'Trang chủ',exact=True)
+            state=await self._wait_page(session,lambda s:bool(re.fullmatch(r'/+',urlparse(s['url']).path or '/')),timeout=25,prompt=prompt)
+        await self._click_named(session,'Dự án mới',selector='button,[role=button],a')
+        state=await self._wait_page(session,lambda s:bool(re.fullmatch(r'/project/[A-Za-z0-9-]+/?',urlparse(s['url']).path)) and s.get('composerAvailable'),timeout=35,prompt=prompt)
+        project_url=state['url'].split('?')[0]
+        self._save_project_registry(job_id,project_url)
+        receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':hashlib.sha256(prompt.encode('utf8')).hexdigest(),'project_url':project_url,'target_id':target,'stage':'project_ready','baseline_media_ids':[x['media_id'] for x in state.get('largeImages',[]) if x.get('media_id')],'created_at':time.time()}
+        self._write_receipt(task_id,receipt)
+        return receipt,state
 
     async def _ensure_agent_and_settings(self, session, prompt):
         state = await self._snapshot(session, prompt)
@@ -216,9 +284,15 @@ class FlowImages:
         return await self._eval(session, r'''(()=>{const e=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,text:(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim()}})()''')
 
     async def _image(self, session):
-        return await self._eval(session, r'''(()=>{const a=[...document.images].filter(i=>{const r=i.getBoundingClientRect(),s=getComputedStyle(i);return r.width>40&&r.height>40&&s.display!=='none'&&i.complete&&i.naturalWidth>=512&&i.naturalHeight>=512});return a.map(i=>{const r=i.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||''}})})()''')
+        return await self._eval(session, r'''(()=>{const a=[...document.querySelectorAll('img[data-media-id]')].filter(i=>{const r=i.getBoundingClientRect(),s=getComputedStyle(i);return r.width>40&&r.height>40&&s.display!=='none'&&i.complete&&i.naturalWidth>=512&&i.naturalHeight>=512});return a.map(i=>{const r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||''}})})()''')
 
-    async def _download_2k(self, task_id, target, session, receipt, prompt, timeout=75):
+    async def _click_media_control(self,session,media_id,name):
+        expression=r'''(()=>{const norm=s=>(s||'').replace(/\s+/g,' ').trim().toLocaleLowerCase(),wanted=norm(NAME);const img=document.querySelector('img[data-media-id="'+MEDIA+'"]'),card=img?.closest('flow-grid-tile-container');if(!card)return null;const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const matches=[...card.querySelectorAll('button,[role=button]')].filter(visible).filter(e=>norm(e.innerText)===wanted||norm(e.getAttribute('aria-label'))===wanted);if(matches.length!==1)return null;const r=matches[0].getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()'''.replace('NAME',json.dumps(name,ensure_ascii=False)).replace('MEDIA',json.dumps(media_id))
+        point=await self._eval(session,expression)
+        if not point:raise FlowTaskError('Could not find exactly one '+name+' control on the matched Flow media card','uncertain')
+        await self._click_point(session,point);await asyncio.sleep(.2)
+
+    async def _download_2k(self, task_id, target, session, receipt, prompt, media_id=None, timeout=75):
         folder = self.root / 'downloads' / task_id
         folder.mkdir(parents=True, exist_ok=True)
         if receipt.get('stage') == 'downloaded':
@@ -234,12 +308,17 @@ class FlowImages:
                 self.bridge.images.download_behavior_uncertain = False
             await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior':'allowAndName','downloadPath':str(folder.resolve()),'eventsEnabled':True})
             images = await self._image(session)
-            if len(images) != 1:
-                raise FlowTaskError('Expected exactly one generated image in the isolated Flow project; refusing ambiguous download', 'uncertain')
-            img = images[0]
+            if media_id:
+                matches=[image for image in images if image.get('media_id')==media_id]
+                if len(matches)!=1:raise FlowTaskError('The task-specific Flow media card is missing or ambiguous; refusing to download another scene','uncertain')
+                img=matches[0]
+            elif len(images)==1:
+                img=images[0]
+            else:
+                raise FlowTaskError('Flow media ID is required when a project contains multiple images','uncertain')
             await self.bridge.cdp.command('Input.dispatchMouseEvent', {'type':'mouseMoved','x':img['x'],'y':img['y']}, session=session)
             await asyncio.sleep(.35)
-            await self._click_named(session, 'Tuỳ chọn khác', exact=True)
+            await self._click_media_control(session,img['media_id'],'Tuỳ chọn khác')
             await self._click_named(session, 'Tải xuống')
             receipt.update({'stage':'download_menu_open','updated_at':time.time()}); self._write_receipt(task_id, receipt)
             await self._click_named(session, '2K')
@@ -263,7 +342,7 @@ class FlowImages:
                 destination=(self.root/(task_id+'.png')).resolve();part=destination.with_suffix('.part')
                 im.convert('RGB').save(part,format='PNG',optimize=True)
             part.replace(destination)
-            receipt.update({'stage':'downloaded','download_path':str(destination),'download_sha256':digest(destination),'width':width,'height':height,'format':fmt,'download_guid':self.download_guid,'updated_at':time.time()});self._write_receipt(task_id,receipt)
+            receipt.update({'stage':'downloaded','download_path':str(destination),'download_sha256':digest(destination),'width':width,'height':height,'format':fmt,'download_guid':self.download_guid,'media_id':media_id,'updated_at':time.time()});self._write_receipt(task_id,receipt)
             return receipt
         finally:
             self.active_frame = None
@@ -314,9 +393,18 @@ class FlowImages:
             if receipt.get('stage') in ('submitting','waiting_result','image_ready','download_menu_open','downloading'):
                 if state['url'].split('?')[0].rstrip('/')!=receipt.get('project_url','').split('?')[0].rstrip('/'):
                     raise FlowTaskError('Flow project changed during recovery; no new request sent','uncertain')
-                images=await self._image(session)
-                if not images:
-                    raise FlowTaskError('Flow generation outcome is unclear; inspect the same project before resuming','uncertain')
+                baseline=receipt.get('baseline_media_ids')
+                if baseline is None:raise FlowTaskError('Flow receipt lacks its baseline media IDs; refusing to guess a result','uncertain')
+                if receipt.get('stage') in ('submitting','waiting_result'):
+                    state=await self._wait_page(session,lambda s:self._new_media(baseline,s.get('largeImages',[])) is not None,timeout=timeout,prompt=prompt)
+                    media=self._new_media(baseline,state.get('largeImages',[]))
+                    receipt.update({'stage':'image_ready','media_id':media['media_id'],'result_dimensions':media,'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                else:
+                    media_id=receipt.get('media_id')
+                    if not media_id:raise FlowTaskError('Flow receipt lacks media ID; refusing to download another scene','uncertain')
+                    images=await self._image(session)
+                    if len([x for x in images if x.get('media_id')==media_id])!=1:
+                        raise FlowTaskError('The task-specific Flow media card is missing; no new image will be submitted','uncertain')
             else:
                 # Refuse to overwrite any human draft; only an empty or exact matching draft is safe.
                 box=await self._prompt_box(session)
@@ -333,9 +421,13 @@ class FlowImages:
                 receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_confirmation':cost_line,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 await self._click_named(session,'Bắt đầu tạo',exact=True)
                 receipt.update({'stage':'waiting_result','updated_at':time.time()});self._write_receipt(task_id,receipt)
-            if not receipt.get('stage') in ('image_ready','download_menu_open','downloading'):
-                state=await self._wait_page(session,lambda s:len(s.get('largeImages',[]))==1,timeout=timeout,prompt=prompt)
-                receipt.update({'stage':'image_ready','updated_at':time.time(),'result_dimensions':state['largeImages'][0]});self._write_receipt(task_id,receipt)
-            receipt=await self._download_2k(task_id,target,session,receipt,prompt)
+            if receipt.get('stage') not in ('image_ready','download_menu_open','downloading'):
+                baseline=receipt.get('baseline_media_ids')
+                if baseline is None:raise FlowTaskError('Flow receipt lacks its baseline media IDs; refusing to guess a result','uncertain')
+                state=await self._wait_page(session,lambda s:self._new_media(baseline,s.get('largeImages',[])) is not None,timeout=timeout,prompt=prompt)
+                media=self._new_media(baseline,state.get('largeImages',[]))
+                receipt.update({'stage':'image_ready','media_id':media['media_id'],'updated_at':time.time(),'result_dimensions':media});self._write_receipt(task_id,receipt)
+            if not receipt.get('media_id'):raise FlowTaskError('Flow receipt lacks the completed media ID; refusing ambiguous download','uncertain')
+            receipt=await self._download_2k(task_id,target,session,receipt,prompt,media_id=receipt['media_id'])
             output=Path(receipt['download_path'])
             return {'task_id':task_id,'file_path':str(output),'sha256':digest(output),'width':receipt['width'],'height':receipt['height'],'request_id':'flow-'+task_id,'source':'google_flow_nano_banana_2_1','format':'PNG','flow_download_format':receipt.get('format'),'project_url':receipt.get('project_url'),'download_guid':receipt.get('download_guid')}

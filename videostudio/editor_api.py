@@ -61,7 +61,7 @@ def register_editor_routes(app,store,editor,same_origin,public_job,image_jobs):
     @app.post(generations,status_code=202)
     def generate_scene_image(job_id:str,scene_id:str,data:dict,request:Request,idempotency_key:str|None=Header(default=None)):
         same_origin(request)
-        return image_jobs.public(call(image_jobs.start,job_id,scene_id,data.get('prompt'),data.get('provider','chatgpt'),idempotency_key,data.get('version')))
+        return image_jobs.public(call(image_jobs.start,job_id,scene_id,data.get('prompt'),data.get('provider','flow'),idempotency_key,data.get('version')))
     @app.get(generations+'/{task_id}')
     def image_generation_status(job_id:str,scene_id:str,task_id:str):
         return image_jobs.public(call(image_jobs.scoped,job_id,scene_id,task_id))

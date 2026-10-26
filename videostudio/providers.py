@@ -5,12 +5,14 @@ apps/worker-media/studio_media/speech.py; providers/llm/chatgpt2api.py.
 No connector/browser implementation and no model downloads. LLM URL/model/key
 must be explicitly configured; only loopback OpenAI-compatible endpoints allowed.
 """
-import importlib.util, json, os, time, shutil, re
+import importlib.util, json, os, time, shutil, re, uuid
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
-from .core import PermanentError, Cancelled
+from .core import PermanentError, Cancelled, digest
 from .media import asset, probe, render, verify, run
+
+ROOT=Path(__file__).resolve().parents[1]
 
 def node(kind,**inputs):return {'class_type':kind,'inputs':inputs}
 
@@ -599,31 +601,76 @@ class Pipeline:
         if hold<0:raise PermanentError('Visual quality: narration exceeds requested duration')
         entries[-1]['duration']+=hold
         return {'scenes':entries,'assets':assets,'visual_qa_status':'pass','visual_qa_required':True,'visual_qa_scope':'artifact_bound_review','reviewer_accuracy_validated':False}
+    def _browser_scene_image(self,provider,j,index,prompt,path,check):
+        if provider not in ('chatgpt','flow'):raise PermanentError('Unsupported browser image provider')
+        base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
+        if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
+        try:task_id=str(uuid.uuid5(uuid.UUID(j['id']),f'bulk-scene-image:{index}'))
+        except (ValueError,TypeError,AttributeError) as e:raise PermanentError('Video job ID must be a UUID for durable scene image receipts') from e
+        if provider=='flow':route='/api/flow/images/generate';payload={'task_id':task_id,'job_id':j['id'],'prompt':prompt};root=ROOT/'data'/'flow-images'
+        else:route='/api/images/generate';payload={'task_id':task_id,'prompt':prompt};root=ROOT/'data'/'chatgpt-images'
+        check()
+        try:r=httpx.post(base+route,json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
+        except httpx.HTTPError as e:raise UncertainDeliveryError('Browser image result uncertain; reconcile the same scene receipt, never issue a replacement task') from e
+        try:body=r.json()
+        except ValueError as e:raise UncertainDeliveryError(f'Browser image response malformed (HTTP {r.status_code}); same scene receipt must be reconciled') from e
+        if r.status_code!=200:
+            code=body.get('code');message=body.get('error','Browser image generation unavailable')
+            if code in ('uncertain','delivery_indeterminate','browser_unavailable'):raise UncertainDeliveryError(message)
+            if code in ('needs_zero_credit','needs_flow_check','needs_auth','authentication_required','image_rejected'):
+                raise PermanentError(message)
+            raise PermanentError(message)
+        result=body.get('data')
+        if not isinstance(result,dict) or result.get('task_id')!=task_id or not isinstance(result.get('sha256'),str):raise UncertainDeliveryError('Browser image receipt does not match the stable scene task')
+        source=(root/(task_id+'.png')).resolve();received=Path(result.get('file_path','')).resolve()
+        if received!=source or not source.is_file() or not 1000<source.stat().st_size<=20*1024*1024 or digest(source)!=result['sha256']:raise PermanentError('Browser image path/hash/size validation failed')
+        from PIL import Image
+        destination=Path(path);destination.parent.mkdir(parents=True,exist_ok=True);part=destination.with_suffix('.part')
+        try:
+            with Image.open(source) as picture:
+                if picture.format not in ('PNG','JPEG','WEBP') or min(picture.size)<512 or max(picture.size)>8192 or picture.width*picture.height>20_000_000:raise PermanentError('Browser scene image format/dimensions invalid')
+                picture.load();width,height=picture.size;picture.convert('RGB').save(part,format='PNG',optimize=True)
+            part.replace(destination)
+        finally:part.unlink(missing_ok=True)
+        return {'task_id':task_id,'request_id':result.get('request_id') or result.get('download_guid') or task_id,'width':width,'height':height,'sha256':digest(destination),'source':provider}
+
     def images(self,j,check):
         from .visual_quality import gate_mode
-        if gate_mode(j)=='required':return self._required_images(j,check)
+        provider=j.get('request',{}).get('image_provider','comfy')
+        if provider not in ('flow','chatgpt','comfy'):raise PermanentError('Unknown initial image provider')
+        if gate_mode(j)=='required':
+            if provider!='comfy':raise PermanentError('Required visual-QA mode currently supports Comfy only; no image submitted')
+            return self._required_images(j,check)
         from .core import digest
         from PIL import Image,ImageStat
         scenes=[];assets=[]
         total=len(j['checkpoints']['speech']['utterances'])
         for i,u in enumerate(j['checkpoints']['speech']['utterances']):
             check()
-            if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo hình ảnh: cảnh {i+1}/{total} (ComfyUI Qwen 2.1)...')
+            if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo hình ảnh: cảnh {i+1}/{total} ({provider})...')
             kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
-            saved=json.loads(checkpoint.read_text()) if checkpoint.is_file() else {}
-            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt']
+            saved=json.loads(checkpoint.read_text(encoding='utf8')) if checkpoint.is_file() else {}
+            saved_provider=saved.get('provider','comfy')
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt'] and saved_provider==provider
             if not reusable:
-                prefix='videostudio/'+j['id']+'-'+kind
-                graph=image_graph(u['visual_prompt'],int(j['id'].replace('-','')[:8],16)+i,prefix)
-                self.comfy_asset(j,kind,graph,path,check)
+                check()
+                if provider=='comfy':
+                    prefix='videostudio/'+j['id']+'-'+kind
+                    graph=image_graph(u['visual_prompt'],int(j['id'].replace('-','')[:8],16)+i,prefix)
+                    self.comfy_asset(j,kind,graph,path,check)
+                    receipt={'task_id':kind,'request_id':None,'width':None,'height':None,'source':'comfy'}
+                else:
+                    receipt=self._browser_scene_image(provider,j,i,u['visual_prompt'],path,check)
                 with Image.open(path) as picture:
                     picture.load()
                     if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid/near-uniform scene image')
-                checkpoint.write_text(json.dumps({'sha256':digest(path),'prompt':u['visual_prompt']}))
+                    receipt.update(width=picture.width,height=picture.height)
+                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'provider':provider,'task_id':receipt['task_id'],'request_id':receipt.get('request_id'),'width':receipt['width'],'height':receipt['height']}
+                temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
             scenes.append({'path':str(path),'duration':u['duration']});assets.append(asset(path))
         # A short natural tail hold belongs to the final scene, not stretched speech.
         scenes[-1]['duration']+=j['request']['duration_seconds']-j['checkpoints']['speech']['duration_seconds']
-        return {'scenes':scenes,'assets':assets,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
+        return {'scenes':scenes,'assets':assets,'image_provider':provider,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
     def subtitles(self,j,check):
         from .captions import write_captions
         check();p=Path(j['output'])/'subtitles.srt'
