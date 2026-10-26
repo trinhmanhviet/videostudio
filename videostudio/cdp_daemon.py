@@ -173,6 +173,47 @@ class ChromeChatGPTBridge:
             await self.page_ready('__login__')
             return self.status()
 
+    async def ensure_high_effort(self, session):
+        expression=r'''(() => {
+          const visible=e=>{const r=e?.getBoundingClientRect();return !!r&&r.width>0&&r.height>0};
+          const button=[...document.querySelectorAll('button')].find(e=>visible(e)&&e.getAttribute('aria-label')==='Select ChatGPT model');
+          const label=button?.innerText||'';
+          const thumb=[...document.querySelectorAll('[role="slider"][aria-valuemax]')].find(visible);
+          const track=thumb?.parentElement;
+          const tr=visible(track)?track.getBoundingClientRect():null;
+          const b=button?.getBoundingClientRect();
+          const value=thumb?Number(thumb.getAttribute('aria-valuenow')):null;
+          const max=thumb?Number(thumb.getAttribute('aria-valuemax')):null;
+          return JSON.stringify({high:/\bHigh\b/i.test(label)||(value!==null&&max!==null&&value>=max),
+            button:b?{x:b.x+b.width/2,y:b.y+b.height/2}:null,
+            slider:tr?{track:{x:tr.x,y:tr.y+tr.height/2,width:tr.width},value,max}:null});
+        })()'''
+        async def state():
+            raw=await self.evaluate(session,expression)
+            if isinstance(raw,str):
+                try:return json.loads(raw)
+                except ValueError:pass
+            return raw if isinstance(raw,dict) else {}
+        current=await state()
+        if current.get('high'):return
+        button=current.get('button')
+        if not isinstance(button,dict):raise RuntimeError('ChatGPT High reasoning control unavailable; no request sent')
+        for kind in ('mousePressed','mouseReleased'):
+            await self.cdp.command('Input.dispatchMouseEvent',{'type':kind,'x':button['x'],'y':button['y'],'button':'left','clickCount':1},session=session)
+        slider=None
+        deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            current=await state();slider=current.get('slider')
+            if isinstance(slider,dict) and isinstance(slider.get('track'),dict) and slider.get('max',0)>0:break
+            await asyncio.sleep(.1)
+        if not isinstance(slider,dict):raise RuntimeError('ChatGPT reasoning slider unavailable; no request sent')
+        track=slider['track']
+        for kind in ('mousePressed','mouseReleased'):
+            await self.cdp.command('Input.dispatchMouseEvent',{'type':kind,'x':track['x']+track['width']-2,'y':track['y'],'button':'left','clickCount':1},session=session)
+        verified=await state()
+        if not verified.get('high'):
+            raise RuntimeError('ChatGPT High reasoning effort could not be verified; no request sent')
+
     async def ask_chatgpt(self, job, prompt_text, timeout_seconds=300):
         async with self.job_lock:
             record = self.journal.prepare(job, prompt_text)
@@ -188,12 +229,10 @@ class ChromeChatGPTBridge:
                 draft = state.get('draft','').strip()
                 if state.get('generating'):
                     raise RuntimeError('Owned tab has active generation; no overwrite or send')
-                if draft:
-                    # Rich-text composers may render newline paragraphs as blank lines.
-                    # Resume only our exact text/marker modulo whitespace, never another draft.
-                    if ' '.join(draft.split()) != ' '.join(wrapped.split()):
-                        raise RuntimeError('Owned tab has a different draft; no overwrite or send')
-                else:
+                if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()):
+                    raise RuntimeError('Owned tab has a different draft; no overwrite or send')
+                await self.ensure_high_effort(session)
+                if not draft:
                     focused = await self.evaluate(session, composer_expression())
                     if not focused:
                         raise RuntimeError('Composer unavailable; no prompt sent')

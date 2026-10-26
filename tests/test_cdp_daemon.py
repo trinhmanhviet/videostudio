@@ -113,7 +113,14 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
     async def test_own_prepared_draft_can_resume_without_retyping(self):
         import json
         await self.setup_page();self.bridge.connect=AsyncMock()
-        r=self.bridge.journal.prepare('job','prompt');identifier=r['id']
+        r=self.bridge.journal.prepare('job','prompt');identifier=r['id'];order=[]
+        async def verified_high(session):
+            self.assertEqual(self.bridge.journal.get(identifier)['state'],'prepared');order.append('high')
+        self.bridge.ensure_high_effort=AsyncMock(side_effect=verified_high)
+        async def record_input(method,*args,**kwargs):
+            if method=='Input.dispatchMouseEvent':order.append('mouse')
+            return {}
+        self.bridge.cdp.command=AsyncMock(side_effect=record_input)
         marker='[VideoStudio request '+identifier+']'
         wrapped=(marker+'\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
         state=self.page_state('chat',wrapped.replace('\n','\n\n'))
@@ -121,6 +128,8 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         response={'url':'https://chatgpt.com/c/own','mode':'chat','matched':True,'text':json.dumps({'request_id':identifier,'result':{'ok':True}}),'generating':False}
         self.bridge.evaluate=AsyncMock(side_effect=[{'x':1,'y':2},state,None,response,response])
         self.assertEqual(await self.bridge.ask_chatgpt('job','prompt'),{'ok':True})
+        self.bridge.ensure_high_effort.assert_awaited_once_with('session')
+        self.assertLess(order.index('high'),order.index('mouse'))
         self.assertFalse(any(c.args[0]=='Input.insertText' for c in self.bridge.cdp.command.call_args_list))
     async def test_foreign_prepared_draft_is_never_overwritten(self):
         await self.setup_page();self.bridge.connect=AsyncMock()
@@ -150,7 +159,7 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
     async def test_work_change_after_claim_aborts_before_mouse_dispatch(self):
         import json
         from videostudio.cdp_requests import IndeterminateRequest
-        await self.setup_page();self.bridge.connect=AsyncMock()
+        await self.setup_page();self.bridge.connect=AsyncMock();self.bridge.ensure_high_effort=AsyncMock()
         r=self.bridge.journal.prepare('job','prompt');identifier=r['id']
         wrapped=('[VideoStudio request '+identifier+']\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
         state=self.page_state('chat',wrapped)
@@ -167,7 +176,7 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_crash_after_mouse_press_retains_sending_and_restart_never_resubmits(self):
         import json
-        await self.setup_page();self.bridge.connect=AsyncMock()
+        await self.setup_page();self.bridge.connect=AsyncMock();self.bridge.ensure_high_effort=AsyncMock()
         record=self.bridge.journal.prepare('job','prompt');identifier=record['id']
         wrapped=('[VideoStudio request '+identifier+']\n'+'prompt'+'\nReturn exactly one JSON object with this envelope: '+json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
         state=self.page_state('chat',wrapped)

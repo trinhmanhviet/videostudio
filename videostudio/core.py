@@ -23,7 +23,7 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
@@ -32,7 +32,11 @@ def validate_request(data):
     if isinstance(d,bool) or not isinstance(d,(int,float)) or not 8<=d<=7200: raise ValueError('Duration must be 8–7200 seconds')
     provider=data.get('image_provider','flow')
     if provider not in ('flow','chatgpt','comfy'):raise ValueError('image_provider must be flow, chatgpt, or comfy')
+    mode=data.get('workflow_mode')
+    if 'workflow_mode' in data and mode not in ('research','provided_narration'):raise ValueError('workflow_mode must be research or provided_narration')
+    if mode=='provided_narration' and not any(line.strip() for line in data['idea'].splitlines()):raise ValueError('Provide at least one non-empty narration line')
     res=dict(data,idea=data['idea'].strip(),image_provider=provider)
+    if mode is not None:res['workflow_mode']=mode
     if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
     if 'project' in data:
         if not isinstance(data['project'],str) or not 1<=len(data['project'].strip())<=200:raise ValueError('Invalid project name')
