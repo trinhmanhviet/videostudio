@@ -186,4 +186,13 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result,{'ok':True})
         self.assertFalse(any(c.args[0].startswith('Input.') for c in self.bridge.cdp.command.call_args_list))
 
+    async def test_flow_image_route_passes_reference_media_ids_to_visible_ui_adapter(self):
+        import uuid
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());media_id=str(uuid.uuid4())
+        identity=[{'character_id':'father','media_id':media_id,'sha256':'a'*64,'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}]
+        self.bridge.flow_images.generate=AsyncMock(return_value={'task_id':task_id,'media_id':'result-media'})
+        response=await self.client.post('/api/flow/images/generate',json={'task_id':task_id,'job_id':job_id,'prompt':'portrait','reference_media_ids':[media_id],'reference_identity':identity},headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(response.status,200)
+        self.bridge.flow_images.generate.assert_awaited_once_with(task_id,job_id,'portrait',reference_media_ids=[media_id],reference_identity=identity)
+
 if __name__=='__main__':unittest.main()

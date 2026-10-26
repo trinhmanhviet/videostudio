@@ -126,7 +126,8 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(FlowTaskError) as caught:await flow.generate(task_id,job_id,prompt)
             self.assertEqual(caught.exception.code,'needs_zero_credit')
             self.assertNotIn('Bắt đầu tạo',[c.args[1] for c in flow._click_named.await_args_list])
-            self.assertEqual(flow._read_receipt(task_id)['stage'],'project_ready')
+            self.assertEqual(flow._read_receipt(task_id)['stage'],'references_attached')
+            self.assertEqual(flow._read_receipt(task_id)['reference_media_ids'],[])
 
     async def test_2k_download_is_correlated_to_flow_frame_and_saved_as_png(self):
         from PIL import Image
@@ -181,6 +182,55 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             flow._click_named.assert_not_awaited()
             self.assertEqual(flow._read_receipt(task_id)['stage'],'submitting')
 
+
+    async def test_reference_attachment_requires_visible_exact_media_id(self):
+        media_id=str(uuid.uuid4());flow=FlowImages(FakeBridge([]),Path('unused'))
+        flow._image=AsyncMock(return_value=[{'media_id':media_id,'x':100,'y':200}])
+        flow._click_media_control=AsyncMock();flow._click_named=AsyncMock()
+        flow._wait_page=AsyncMock(return_value={'attachedMediaIds':[media_id]})
+        state=await flow._attach_reference('session',media_id,'scene prompt')
+        flow._click_media_control.assert_awaited_once_with('session',media_id,'Tuỳ chọn khác')
+        flow._click_named.assert_awaited_once_with('session','Thêm vào câu lệnh',exact=True)
+        self.assertEqual(state['attachedMediaIds'],[media_id])
+
+    async def test_reference_attachment_fails_closed_if_media_id_is_not_exposed(self):
+        media_id=str(uuid.uuid4());flow=FlowImages(FakeBridge([]),Path('unused'))
+        flow._image=AsyncMock(return_value=[{'media_id':media_id,'x':100,'y':200}])
+        flow._click_media_control=AsyncMock();flow._click_named=AsyncMock()
+        flow._wait_page=AsyncMock(return_value={'attachedMediaIds':[]})
+        with self.assertRaisesRegex(FlowTaskError,'did not expose exactly one attached reference'):
+            await flow._attach_reference('session',media_id,'scene prompt')
+
+    async def test_reference_not_in_job_project_blocks_before_attachment_or_generate(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());media_id=str(uuid.uuid4());prompt='scene prompt'
+        flow=FlowImages(FakeBridge([]),Path('unused'));flow._target=AsyncMock(return_value='target');flow._session=AsyncMock(return_value='session')
+        receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'project_url':'https://flow.google.com/project/abc','target_id':'target','stage':'project_ready','baseline_media_ids':[]}
+        state={'url':receipt['project_url'],'largeImages':[],'attachedMediaIds':[],'draftEmpty':True,'generateDisabled':True}
+        flow._ensure_project=AsyncMock(return_value=(receipt,state));flow._attach_reference=AsyncMock();flow._click_named=AsyncMock()
+        identity=[{'character_id':'father','media_id':media_id,'sha256':'a'*64,'project_url':receipt['project_url']}]
+        with self.assertRaises(FlowTaskError) as caught:
+            await flow.generate(task_id,job_id,prompt,reference_media_ids=[media_id],reference_identity=identity)
+        self.assertEqual(caught.exception.code,'needs_flow_check')
+        flow._attach_reference.assert_not_awaited();flow._click_named.assert_not_awaited()
+
+    async def test_reference_change_on_existing_receipt_is_never_resubmitted(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());old=str(uuid.uuid4());new=str(uuid.uuid4());prompt='same scene prompt'
+        with tempfile.TemporaryDirectory() as tmp:
+            flow=FlowImages(FakeBridge([]),Path(tmp));flow._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'reference_media_ids':[old],'stage':'project_ready'})
+            identity=[{'character_id':'father','media_id':new,'sha256':'b'*64,'project_url':'https://flow.google.com/project/abc'}]
+            with self.assertRaisesRegex(FlowTaskError,'reference media set differs'):
+                await flow.generate(task_id,job_id,prompt,reference_media_ids=[new],reference_identity=identity)
+            flow.bridge.cdp.command.assert_not_awaited()
+
+    async def test_reference_content_hash_change_fails_before_cached_result(self):
+        task_id=str(uuid.uuid4());job_id=str(uuid.uuid4());media_id=str(uuid.uuid4());prompt='same prompt';project='https://flow.google.com/project/abc'
+        old=[{'character_id':'father','media_id':media_id,'sha256':'a'*64,'project_url':project}]
+        changed=[{'character_id':'father','media_id':media_id,'sha256':'b'*64,'project_url':project}]
+        with tempfile.TemporaryDirectory() as tmp:
+            flow=FlowImages(FakeBridge([]),Path(tmp));flow._write_receipt(task_id,{'task_id':task_id,'job_id':job_id,'prompt_sha256':__import__('hashlib').sha256(prompt.encode()).hexdigest(),'reference_media_ids':[media_id],'reference_identity':old,'stage':'project_ready'})
+            with self.assertRaisesRegex(FlowTaskError,'reference content/character identity differs'):
+                await flow.generate(task_id,job_id,prompt,reference_media_ids=[media_id],reference_identity=changed)
+            flow.bridge.cdp.command.assert_not_awaited()
 
 if __name__=='__main__':
     unittest.main()

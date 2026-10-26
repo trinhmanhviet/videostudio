@@ -284,7 +284,7 @@ async def create_app(bridge=None):
             elif request.path == '/api/images/generate':
                 value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'))}
             elif request.path == '/api/flow/images/generate':
-                value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'))}
+                value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),reference_media_ids=body.get('reference_media_ids'),reference_identity=body.get('reference_identity'))}
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
