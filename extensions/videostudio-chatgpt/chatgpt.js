@@ -2,9 +2,10 @@
   if(location.origin!=='https://chatgpt.com'||window.top!==window)return;
   const visible=n=>!!n?.getClientRects().length&&getComputedStyle(n).visibility!=='hidden';
   const editor=()=>[...document.querySelectorAll('#prompt-textarea,[contenteditable="true"][role="textbox"],textarea')].find(visible);
-  const user=()=>[...document.querySelectorAll('[data-message-author-role="user"]')].filter(visible).at(-1);
-  const assistants=()=>[...document.querySelectorAll('[data-message-author-role="assistant"]')].filter(visible);
+  const user=()=>[...document.querySelectorAll('[data-message-author-role="user"],[data-content-search-unit-key$=":user"]')].filter(visible).at(-1);
+  const assistants=()=>[...document.querySelectorAll('[data-message-author-role="assistant"],[data-content-search-unit-key$=":assistant"]')].filter(visible);
   const text=n=>n?.innerText?.trim()??n?.textContent?.trim()??'';
+  const userText=n=>text(n?.querySelector('[data-user-message-bubble] .whitespace-pre-wrap,.whitespace-pre-wrap')||n).replace(/^You said:\s*/u,'').trim();
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   const error=async (id,reason)=>chrome.runtime.sendMessage({kind:'uncertain',id,reason}).catch(()=>{});
   let occupied=false;
@@ -32,18 +33,18 @@
       if(!button||button.disabled)throw Error('Send button unavailable');
       // From here delivery is uncertain even if the tab reloads. Background persisted dispatching first.
       button.click();
-      for(let i=0;i<80;i++){await wait(250);if(text(user())===prompt.trim())break;}
-      if(text(user())!==prompt.trim())throw Error('Exact user-turn receipt missing');
+      for(let i=0;i<80;i++){await wait(250);if(userText(user())===prompt.trim())break;}
+      if(userText(user())!==prompt.trim())throw Error('Exact user-turn receipt missing');
       const sent=await chrome.runtime.sendMessage({kind:'sent',id});if(!sent.ok)throw Error('Background rejected send receipt');
       for(let i=0;i<720;i++){
         await wait(500);const answers=assistants();const node=answers.at(-1);
         if(!node||!user()||!(user().compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
         const stop=[...document.querySelectorAll('button')].some(n=>visible(n)&&/stop (generating|response)|stop-button/i.test(`${n.getAttribute('aria-label')} ${n.getAttribute('data-testid')}`));
-        const turn=node.closest('[data-talvt-turn-state],[data-testid^="conversation-turn-"]')||node;
+        const turn=node.closest('[data-talvt-turn-state],[data-testid^="conversation-turn-"],[data-content-search-unit-key]')||node;
         const complete=turn.getAttribute('data-talvt-turn-state')==='complete'||[...turn.querySelectorAll('[role="status"],[aria-live]')].some(n=>/response complete|phản hồi hoàn tất/i.test(text(n)))||[...turn.querySelectorAll('button')].some(n=>/good-response|bad-response|rate response/i.test(`${n.getAttribute('data-testid')} ${n.getAttribute('aria-label')}`));
         if(stop||!complete)continue;
         const codes=[...node.querySelectorAll('pre code')];if(codes.length>1)throw Error('Multiple reply blocks');
-        const response=codes.length===1?codes[0].textContent:text(node);
+        const response=codes.length===1?codes[0].textContent:text(node.querySelector('.markdown,.prose,[data-markdown-text-style="assistant-message"]')||node).replace(/^ChatGPT said:\s*/u,'').trim();
         if(!response||response.length>700000)throw Error('Reply missing or too large');
         const accepted=await chrome.runtime.sendMessage({kind:'reply',id,text:response});if(!accepted.ok)throw Error('Reply correlation rejected');return;
       }

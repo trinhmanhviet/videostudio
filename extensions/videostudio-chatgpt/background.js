@@ -1,4 +1,4 @@
-import {start,claim,result,studioScope} from './protocol.mjs';
+import {start,claim,result,studioScope,canStart,acknowledge} from './protocol.mjs';
 const KEY='videostudio_bridge_v1';
 const get=async()=> (await chrome.storage.local.get(KEY))[KEY]??null;
 const put=async state=>chrome.storage.local.set({[KEY]:state});
@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
     if(message?.kind==='start'){
       if(!studioSender(sender,message.scope))throw Error('Studio origin/scope mismatch');
-      const old=await get();if(old?.active)throw Error('Bridge already active; stop it before starting another');
+      const old=await get();if(!canStart(old))throw Error('Previous request is active or unresolved; inspect its receipt before starting another');
       const tab=await chrome.tabs.create({url:'https://chatgpt.com/',active:true});
       const state={...start({studioTab:sender.tab.id,chatTab:tab.id,scope:message.scope}),active:true};await put(state);return {ok:true};
     }
@@ -16,6 +16,10 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message?.kind==='stop'){
       if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab)throw Error('Not owner');
       await put({...state,active:false});return {ok:true};
+    }
+    if(message?.kind==='imported'){
+      if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab||!acknowledge(state,message))throw Error('Uncorrelated import receipt');
+      await put(state);return {ok:true};
     }
     if(message?.kind==='claim'){
       if(!studioSender(sender,state.scope)||!claim(state,{...message,studioTab:sender.tab.id,chatTab:state.chatTab,scope:state.scope}))throw Error('Unowned or conflicting request');

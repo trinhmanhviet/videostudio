@@ -4,10 +4,15 @@ export function studioScope(url,project,run){
 }
 export const receiptPath=(scope,id)=>`/api/v1/projects/${encodeURIComponent(scope)}/runs/${encodeURIComponent(scope)}/chatgpt-exchanges/${encodeURIComponent(id)}`;
 export const start=({studioTab,chatTab,scope})=>({studioTab,chatTab,scope,job:null});
+export const canStart=state=>!state?.active&&!state?.job;
 export function claim(state,{studioTab,chatTab,scope,id,version,prompt}){
   if(state.studioTab!==studioTab||state.chatTab!==chatTab||state.scope!==scope||typeof id!=='string'||!id||!Number.isInteger(version)||typeof prompt!=='string')return false;
   if(state.job)return state.job.id===id&&state.job.version===version&&state.job.prompt===prompt;
   state.job={id,version,prompt,phase:'claimed'};return true;
+}
+export function acknowledge(state,{id,version,accepted}){
+  if(state.job?.phase!=='reply'||state.job.id!==id||state.job.version!==version||accepted!==true)return false;
+  state.job=null;return true;
 }
 export function result(state,{chatTab,id,text}){
   if(state.chatTab!==chatTab||state.job?.id!==id||state.job.phase!=='sent'||typeof text!=='string')return false;

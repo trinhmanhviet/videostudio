@@ -1,6 +1,6 @@
 (()=>{
   const scope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1];
-  if(location.origin!=='http://localhost:8877'||!scope)return;
+  if(location.origin!=='http://localhost:8877'||(!scope&&location.pathname!=='/'))return;
   const root=document.createElement('aside');root.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;font:13px system-ui';
   const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Idle — click Start to open a dedicated ChatGPT tab.</p><button id="start">Start</button><button id="stop">Stop</button></section>';
   document.documentElement.append(root);
@@ -15,13 +15,15 @@
       const answer=await api(`${base}/${encodeURIComponent(job.id)}/response`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_version:job.version,response_text:job.text})});
       if(answer.id!==job.id||answer.version!==job.version||answer.accepted!==true)throw Error('Import receipt mismatch');
     }
+    const ack=await send({kind:'imported',id:job.id,version:job.version,accepted:true});
+    if(!ack.ok)throw Error('Import acknowledgement failed; inspect receipt before continuing');
     status.textContent=`Imported ${job.id}`;
   }
   async function tick(){
     if(!active||busy)return;busy=true;
     try{
       const state=await send({kind:'snapshot'});if(!state.ok)throw Error(state.error);
-      if(state.job?.phase==='reply'){await importReply(state.job);active=false;return;}
+      if(state.job?.phase==='reply'){await importReply(state.job);return;}
       if(state.job){status.textContent=`${state.job.id}: ${state.job.phase}; no automatic resend`;return;}
       const pending=await api(`/api/v1/projects/${scope}/runs/${scope}/chatgpt-exchanges`);
       const item=pending.items?.[0];if(!item)return;
