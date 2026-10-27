@@ -1,0 +1,7 @@
+# VideoStudio ChatGPT Bridge (isolated)
+
+Load this folder as an unpacked extension in regular Chrome. No debugging or automation launch flags. Sign in to ChatGPT yourself. Open the local VideoStudio production page at `http://localhost:8877`. Click **Start** in the extension's Studio panel: this creates a connector session and navigates to its exact production URL. Click **Start** again there to explicitly authorize that scope and open one dedicated ChatGPT tab. Do not use that tab for other conversations. The connector handles text-only requests; image work remains elsewhere.
+
+The extension reads/writes only same-origin Studio exchange APIs from the Studio content script. The ChatGPT script uses the visible composer and visible conversation only; it does not read cookies or call private ChatGPT APIs. The background persists a dispatching state before sending a prompt, so a reload, changed DOM, timeout, uncertain receipt or ambiguous response blocks automatic resend. **Stop** disables further polling; it does not close or navigate the ChatGPT tab. Existing uncertain requests require manual inspection; this version deliberately offers no automatic recovery/resend UI. One exchange per Start; after import, Stop then Start a fresh session if needed.
+
+Run `node --test tests/*.test.mjs` from this folder. Tests are fixture-only; no live prompt is sent by tests. The actual Chrome flow remains unverified until the owner loads this extension and approves a smoke test.
