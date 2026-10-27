@@ -1,4 +1,4 @@
-import json, tempfile, unittest, wave, math, struct
+import json, tempfile, unittest, wave, math, struct, shutil, subprocess
 from pathlib import Path
 from unittest.mock import patch
 from videostudio.core import Store, Worker, STAGES, PermanentError, validate_request, output_slug
@@ -20,6 +20,24 @@ class DurableTests(unittest.TestCase):
         a,new=self.s.create(REQUEST,'key');b,new2=self.s.create(REQUEST,'key');c,_=self.s.create(REQUEST,'other')
         self.assertTrue(new);self.assertFalse(new2);self.assertEqual(a['id'],b['id']);self.assertNotEqual(a['output'],c['output'])
         with self.assertRaises(ValueError):self.s.create(dict(REQUEST,idea='Different'),'key')
+    def test_flow_batch_size_validation_and_legacy_idempotency(self):
+        self.assertEqual(validate_request(REQUEST)['flow_batch_size'],1)
+        for size in (1,10,20,30):
+            self.assertEqual(validate_request({**REQUEST,'flow_batch_size':size})['flow_batch_size'],size)
+        for size in (True,False,0,2,31,'10',10.0,None):
+            with self.subTest(size=size),self.assertRaises(ValueError):
+                validate_request({**REQUEST,'flow_batch_size':size})
+        with self.assertRaises(ValueError):
+            validate_request({**REQUEST,'image_provider':'comfy','flow_batch_size':10})
+        first,_=self.s.create(REQUEST,'legacy')
+        with self.s.db() as connection:
+            legacy=dict(first['request']);legacy.pop('flow_batch_size')
+            connection.execute('UPDATE jobs SET request=? WHERE id=?',(json.dumps(legacy,sort_keys=True,ensure_ascii=False),first['id']))
+        replay,created=self.s.create({**REQUEST,'flow_batch_size':1},'legacy')
+        self.assertFalse(created);self.assertEqual(replay['id'],first['id'])
+        with self.assertRaisesRegex(ValueError,'different request'):
+            self.s.create({**REQUEST,'flow_batch_size':10},'legacy')
+
     def test_output_directory_transliterates_vietnamese_title(self):
         j,_=self.s.create({**REQUEST,'idea':'Cá trích ướp muối'},'vietnamese-title')
         self.assertRegex(Path(j['output']).name,r'^ca-trich-uop-muoi-\d{8}-\d{6}$')
@@ -107,6 +125,61 @@ class MediaTests(unittest.TestCase):
             with self.assertRaises(PermanentError):render(p/'image.png',p/'speech.wav',p/'music.wav',p/'subtitles.srt',p/'bad.mp4',8,lambda:None)
 
 class ApiTests(unittest.TestCase):
+    def test_flow_batch_size_admission_and_health(self):
+        from fastapi.testclient import TestClient
+        from videostudio.api import create_app
+        class FakePipeline:
+            def handlers(self):return {}
+            def preflight(self):return {'ready':True,'checks':[]}
+        with tempfile.TemporaryDirectory() as t:
+            store=Store(Path(t)/'jobs.db',Path(t)/'out')
+            with patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'0','VS_FLOW_BATCH_VALIDATED_SIZES':'10,20,30'}),TestClient(create_app(store,FakePipeline(),False)) as client:
+                self.assertEqual(client.get('/api/health').json()['flow_batch_sizes'],[1])
+                blocked=client.post('/api/jobs',json={**REQUEST,'flow_batch_size':10},headers={'Idempotency-Key':'blocked'})
+                self.assertEqual(blocked.status_code,422)
+                self.assertEqual(store.list(),[])
+            with patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'}),TestClient(create_app(store,FakePipeline(),False)) as client:
+                self.assertEqual(client.get('/api/health').json()['flow_batch_sizes'],[1,10])
+                accepted=client.post('/api/jobs',json={**REQUEST,'flow_batch_size':10},headers={'Idempotency-Key':'approved'})
+                self.assertEqual(accepted.status_code,201)
+                self.assertEqual(accepted.json()['job']['request']['flow_batch_size'],10)
+                self.assertEqual(client.post('/api/jobs',json={**REQUEST,'flow_batch_size':20},headers={'Idempotency-Key':'unapproved'}).status_code,422)
+
+    def test_job_form_advertises_disabled_unvalidated_batch_sizes_and_sends_integer(self):
+        html=(Path(__file__).resolve().parents[1]/'static'/'index.html').read_text(encoding='utf8')
+        self.assertIn('<select id="flowBatchSize"',html)
+        for size in (10,20,30):
+            self.assertIn(f'<option value="{size}" disabled>',html)
+        self.assertIn("flow_batch_size:Number($('#flowBatchSize').value)",html)
+        self.assertIn('health.flow_batch_sizes',html)
+        self.assertIn("if(!flow)select.value='1'",html)
+        self.assertIn("availableFlowBatchSizes=[1]",html)
+        self.assertIn('updateFlowBatchChoices();',html)
+
+    def test_batch_selector_behavior_with_mocked_health(self):
+        if not shutil.which('node'):self.skipTest('Node unavailable')
+        html=Path(__file__).resolve().parents[1]/'static'/'index.html'
+        script=r'''
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const html=fs.readFileSync(process.argv[1],'utf8'),start=html.indexOf('let availableFlowBatchSizes=[1];'),stop=html.indexOf('refreshFlowBatchChoices();',start)+'refreshFlowBatchChoices();'.length;
+assert(start>0 && stop>start);
+const provider={value:'flow'},selector={value:'1',disabled:false,options:[1,10,20,30].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''};
+let response={flow_batch_sizes:[1]},fail=false;
+const context=vm.createContext({$:id=>({'#imageProvider':provider,'#flowBatchSize':selector,'#flowBatchNote':note,'#imageProviderNote':{textContent:''}}[id]),api:async()=>{if(fail)throw Error('offline');return response},console});
+vm.runInContext(html.slice(start,stop),context);
+(async()=>{
+ response={flow_batch_sizes:[1,10]};await vm.runInContext('refreshFlowBatchChoices()',context);
+ assert.deepEqual(selector.options.map(o=>o.disabled),[false,false,true,true]);
+ selector.value='10';provider.value='chatgpt';vm.runInContext('updateFlowBatchChoices()',context);
+ assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
+ provider.value='flow';fail=true;await vm.runInContext('refreshFlowBatchChoices()',context);
+ assert.deepEqual(selector.options.map(o=>o.disabled),[false,true,true,true]);
+ assert.equal(Number(selector.value),1);assert.equal(Number.isInteger(Number(selector.value)),true);
+})().catch(e=>{console.error(e);process.exitCode=1});
+'''
+        result=subprocess.run(['node','-e',script,str(html)],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_api_local_no_generation(self):
         from fastapi.testclient import TestClient
         from videostudio.api import create_app

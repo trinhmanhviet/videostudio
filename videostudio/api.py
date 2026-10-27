@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from .core import Store, Worker, validate_request
+from .core import Store, Worker, validate_request, available_flow_batch_sizes
 from .voices import Voices
 from .providers import Pipeline
 
@@ -49,7 +49,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
     app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs
     @app.get('/api/health')
-    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True}
+    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True,'flow_batch_sizes':available_flow_batch_sizes()}
     def diagnose_job_error(j):
         err=j.get('error')
         if not err:return None
@@ -379,6 +379,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         with store.db() as connection:
             previous=connection.execute('SELECT id FROM jobs WHERE idem=?',(idempotency_key,)).fetchone()
         if previous is None:
+            try:
+                normalized=validate_request(data)
+            except ValueError as error:
+                raise HTTPException(422,str(error)) from error
+            if normalized['flow_batch_size'] not in available_flow_batch_sizes():
+                raise HTTPException(422,'Flow image batch size is not validated/enabled on this installation; choose 1 image per batch')
             pf=pipeline.preflight(request.headers.get('x-connector-scope')) if isinstance(pipeline,Pipeline) else pipeline.preflight()
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})

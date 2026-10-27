@@ -214,4 +214,21 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,200)
         self.bridge.flow_images.generate.assert_awaited_once_with(task_id,job_id,'scene',character_mentions=mentions)
 
+    async def test_flow_batch_route_validates_and_passes_tasks_to_adapter(self):
+        import uuid
+        job_id=str(uuid.uuid4());tasks=[{'task_id':str(uuid.uuid4()),'prompt':'one','ordinal':0},{'task_id':str(uuid.uuid4()),'prompt':'two','ordinal':1}]
+        expected=[{'task_id':tasks[0]['task_id'],'media_id':'media-1'},{'task_id':tasks[1]['task_id'],'media_id':'media-2'}]
+        self.bridge.flow_images.generate_batch=AsyncMock(return_value=expected)
+        response=await self.client.post('/api/flow/images/generate-batch',json={'job_id':job_id,'tasks':tasks,'timeout':1800},headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(response.status,200);self.assertEqual((await response.json())['data'],expected)
+        self.bridge.flow_images.generate_batch.assert_awaited_once_with(job_id,tasks,timeout=1800.0)
+        invalid=await self.client.post('/api/flow/images/generate-batch',json={'job_id':job_id,'tasks':[]},headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(invalid.status,400)
+        self.bridge.flow_images.generate_batch.assert_awaited_once()
+        too_many=await self.client.post('/api/flow/images/generate-batch',json={'job_id':job_id,'tasks':tasks*16},headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(too_many.status,400)
+        thirty=await self.client.post('/api/flow/images/generate-batch',json={'job_id':job_id,'tasks':tasks*15},headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(thirty.status,200)
+        self.assertEqual(self.bridge.flow_images.generate_batch.await_count,2)
+
 if __name__=='__main__':unittest.main()

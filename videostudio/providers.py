@@ -9,7 +9,7 @@ import importlib.util, json, os, time, shutil, re, uuid
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
-from .core import PermanentError, Cancelled, digest
+from .core import PermanentError, Cancelled, digest, available_flow_batch_sizes
 from .media import asset, probe, render, verify, run
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -853,6 +853,66 @@ class Pipeline:
         finally:part.unlink(missing_ok=True)
         return {'task_id':task_id,'request_id':result.get('request_id') or result.get('download_guid') or task_id,'width':width,'height':height,'sha256':digest(destination),'source':provider,'media_id':result.get('media_id') if provider=='flow' else None,'project_url':result.get('project_url') if provider=='flow' else None}
 
+    def _browser_scene_images_batch(self,j,tasks,check,*,timeout=3600):
+        if not isinstance(tasks,list) or not 1<=len(tasks)<=20:raise PermanentError('Flow image batch must contain 1..20 scenes')
+        base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
+        if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
+        prepared=[];ids=set();ordinals=set()
+        for index,item in enumerate(tasks):
+            task_id=item.get('task_id')
+            try:uuid.UUID(task_id)
+            except (ValueError,TypeError,AttributeError) as error:raise PermanentError('Flow batch task ID must be a UUID') from error
+            prompt=item.get('prompt');ordinal=item.get('ordinal',index);mentions=item.get('character_mentions',[])
+            if task_id in ids or not isinstance(prompt,str) or not 1<=len(prompt.strip())<=12000:raise PermanentError('Invalid or duplicate Flow batch task')
+            if not isinstance(ordinal,int) or ordinal<0 or ordinal in ordinals:raise PermanentError('Flow batch ordinals must be unique non-negative integers')
+            if not isinstance(mentions,list) or len(mentions)>8:raise PermanentError('Flow character_mentions must be a list of at most eight native Characters')
+            seen_ids=set();seen_names=set()
+            for mention in mentions:
+                if not isinstance(mention,dict) or not isinstance(mention.get('character_id'),str) or not isinstance(mention.get('name'),str) or not isinstance(mention.get('project_url'),str):raise PermanentError('Invalid native Flow Character mention')
+                try:uuid.UUID(mention['character_id'])
+                except (ValueError,TypeError,AttributeError) as error:raise PermanentError('Invalid native Flow Character entity ID') from error
+                if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,39}',mention['name']):raise PermanentError('Invalid registered Flow Character name')
+                p=urlparse(mention['project_url'])
+                if p.scheme!='https' or p.hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',p.path):raise PermanentError('Invalid native Flow Character project URL')
+                if mention['character_id'] in seen_ids or mention['name'].casefold() in seen_names:raise PermanentError('Duplicate native Flow Character mention')
+                seen_ids.add(mention['character_id']);seen_names.add(mention['name'].casefold())
+            if 'output_path' not in item:raise PermanentError('Flow batch task output_path is required')
+            ids.add(task_id);ordinals.add(ordinal)
+            prepared.append({'task_id':task_id,'prompt':prompt.strip(),'character_mentions':mentions,'ordinal':ordinal,'output_path':Path(item['output_path'])})
+        payload={'job_id':j['id'],'tasks':[{k:item[k] for k in ('task_id','prompt','character_mentions','ordinal')} for item in prepared],'timeout':timeout}
+        check()
+        try:r=httpx.post(base+'/api/flow/images/generate-batch',json=payload,headers={'X-VS-Client':'videostudio'},timeout=timeout+60,trust_env=False)
+        except httpx.HTTPError as error:raise UncertainDeliveryError('Flow batch result uncertain; reconcile the same durable batch receipts, never resubmit a replacement') from error
+        try:body=r.json()
+        except ValueError as error:raise UncertainDeliveryError(f'Flow batch response malformed (HTTP {r.status_code}); receipts must be reconciled') from error
+        if r.status_code!=200:
+            code=body.get('code');message=body.get('error','Flow image batch unavailable')
+            if code in ('uncertain','delivery_indeterminate','browser_unavailable'):raise UncertainDeliveryError(message)
+            raise PermanentError(message)
+        data=body.get('data')
+        if not isinstance(data,list) or len(data)!=len(prepared):raise UncertainDeliveryError('Flow batch response does not contain exactly one result per task')
+        by_id={}
+        for result in data:
+            if not isinstance(result,dict) or not isinstance(result.get('task_id'),str) or result['task_id'] in by_id:raise UncertainDeliveryError('Flow batch response has missing or duplicate task IDs')
+            by_id[result['task_id']]=result
+        if set(by_id)!=ids:raise UncertainDeliveryError('Flow batch response task set differs from the submitted manifest')
+        root=ROOT/'data'/'flow-images';validated={}
+        from PIL import Image
+        for item in prepared:
+            check();task_id=item['task_id'];result=by_id[task_id]
+            if not isinstance(result.get('media_id'),str) or not result['media_id'] or not isinstance(result.get('project_url'),str):raise UncertainDeliveryError('Flow batch task lacks exact media/project identity')
+            source=(root/(task_id+'.png')).resolve();received=Path(result.get('file_path','')).resolve()
+            if received!=source or not source.is_file() or not 1000<source.stat().st_size<=20*1024*1024 or digest(source)!=result.get('sha256'):raise PermanentError('Flow batch image path/hash/size validation failed')
+            destination=item['output_path'].resolve();destination.parent.mkdir(parents=True,exist_ok=True);part=destination.with_suffix('.part')
+            try:
+                with Image.open(source) as picture:
+                    if picture.format not in ('PNG','JPEG','WEBP') or min(picture.size)<512 or max(picture.size)>8192 or picture.width*picture.height>20_000_000:raise PermanentError('Flow batch image format/dimensions invalid')
+                    picture.load();width,height=picture.size;picture.convert('RGB').save(part,format='PNG',optimize=True)
+                part.replace(destination)
+            finally:part.unlink(missing_ok=True)
+            validated[task_id]={'task_id':task_id,'request_id':result.get('request_id') or result.get('download_guid') or task_id,'path':str(destination),'width':width,'height':height,'sha256':digest(destination),'source':'flow','media_id':result['media_id'],'project_url':result['project_url']}
+        return validated
+
     @staticmethod
     def _flow_portrait_prompt(character):
         traits='; '.join(character.get('appearance_evidence',[]))
@@ -909,10 +969,57 @@ class Pipeline:
         assets.append(asset(manifest_path))
         return references,assets
 
+    def _flow_batch_images(self,j,check,references,reference_assets,reference_mode,batch_size):
+        from PIL import Image,ImageStat
+        utterances=j['checkpoints']['speech']['utterances'];prepared=[];tasks=[];assets=list(reference_assets)
+        for index,utterance in enumerate(utterances):
+            check();kind=f'images-{index:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
+            saved=json.loads(checkpoint.read_text(encoding='utf8')) if checkpoint.is_file() else {}
+            mentions=self._flow_scene_mentions(utterance,references);saved_provider=saved.get('provider','comfy')
+            legacy=saved.get('reference_media_ids',[]) or saved.get('reference_identity',[]);saved_mentions=saved.get('character_mentions',[])
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==utterance['visual_prompt'] and saved_provider=='flow' and not legacy and saved_mentions==mentions
+            if path.is_file() and not reusable and (mentions or saved_mentions or legacy):
+                raise PermanentError('Existing scene image has different native Flow Character conditioning; refusing to overwrite '+kind)
+            task_id=str(uuid.uuid5(uuid.UUID(j['id']),f'bulk-scene-image:{index}'))
+            item={'index':index,'utterance':utterance,'kind':kind,'path':path,'checkpoint':checkpoint,'saved':saved,'mentions':mentions,'reusable':reusable,'task_id':task_id}
+            prepared.append(item)
+            if not reusable:tasks.append({'task_id':task_id,'prompt':utterance['visual_prompt'],'character_mentions':mentions,'ordinal':index,'output_path':path})
+        batch_results={}
+        if tasks:
+            if batch_size not in available_flow_batch_sizes() or batch_size==1:
+                raise PermanentError('Selected Flow cohort size is unavailable; refusing silent fallback')
+            try:batch_timeout=int(os.getenv('VS_FLOW_BATCH_TIMEOUT_SECONDS','2400'))
+            except ValueError as error:raise PermanentError('VS_FLOW_BATCH_TIMEOUT_SECONDS must be an integer 60..3600') from error
+            if not 60<=batch_timeout<=3600:raise PermanentError('VS_FLOW_BATCH_TIMEOUT_SECONDS must be 60..3600')
+            for offset in range(0,len(tasks),batch_size):
+                check();batch_results.update(self._browser_scene_images_batch(j,tasks[offset:offset+batch_size],check,timeout=batch_timeout))
+        scenes=[]
+        for item in prepared:
+            check();u=item['utterance'];path=item['path'];checkpoint=item['checkpoint'];mentions=item['mentions'];task_id=item['task_id']
+            if not item['reusable']:
+                receipt=batch_results.get(task_id)
+                if not receipt or receipt.get('task_id')!=task_id or not path.is_file():raise UncertainDeliveryError('Flow batch omitted a durable scene result; refusing to assemble out of order')
+                with Image.open(path) as picture:
+                    picture.load()
+                    if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid/near-uniform scene image')
+                    width,height=picture.size
+                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'submitted_prompt':u['visual_prompt'],'provider':'flow','task_id':task_id,
+                            'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':mentions,
+                            'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
+                temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
+            scenes.append({'path':str(path),'duration':u['duration'],'character_mentions':mentions});assets.append(asset(path))
+        scenes[-1]['duration']+=timeline_duration(j)-j['checkpoints']['speech']['duration_seconds']
+        return {'scenes':scenes,'assets':assets,'image_provider':'flow','character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
+
     def images(self,j,check):
         from .visual_quality import gate_mode
         provider=j.get('request',{}).get('image_provider','comfy')
         if provider not in ('flow','chatgpt','comfy'):raise PermanentError('Unknown initial image provider')
+        batch_size=j.get('request',{}).get('flow_batch_size',1)
+        if type(batch_size) is not int or batch_size not in (1,10,20,30):
+            raise PermanentError('Invalid persisted Flow cohort size; no image submitted')
+        if (provider!='flow' and batch_size!=1) or (provider=='flow' and batch_size not in available_flow_batch_sizes()):
+            raise PermanentError('Selected Flow cohort size is not validated/enabled; no image submitted')
         if gate_mode(j)=='required':
             if provider!='comfy':raise PermanentError('Required visual-QA mode currently supports Comfy only; no image submitted')
             return self._required_images(j,check)
@@ -930,6 +1037,8 @@ class Pipeline:
             else:
                 reference_mode='legacy_text_only'
         total=len(j['checkpoints']['speech']['utterances'])
+        if provider=='flow' and batch_size>1:
+            return self._flow_batch_images(j,check,references,reference_assets,reference_mode,batch_size)
         for i,u in enumerate(j['checkpoints']['speech']['utterances']):
             check()
             if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo hình ảnh: cảnh {i+1}/{total} ({provider})...')

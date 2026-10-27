@@ -9,6 +9,13 @@ class Cancelled(Exception): pass
 class AwaitingVisualReview(Exception): pass
 class PermanentError(Exception): pass
 
+def available_flow_batch_sizes():
+    """Cohort sizes proven safe on this installation; Flow's per-prompt count stays x1."""
+    if os.getenv('VS_FLOW_BATCH_ENABLED','0').strip()!='1':
+        return [1]
+    selected={int(value) for value in os.getenv('VS_FLOW_BATCH_VALIDATED_SIZES','').split(',') if value.strip().isdigit()}
+    return [1]+[size for size in (10,20,30) if size in selected]
+
 def digest(path):
     h=hashlib.sha256()
     with open(path,'rb') as f:
@@ -23,7 +30,7 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
@@ -35,7 +42,12 @@ def validate_request(data):
     mode=data.get('workflow_mode')
     if 'workflow_mode' in data and mode not in ('research','provided_narration'):raise ValueError('workflow_mode must be research or provided_narration')
     if mode=='provided_narration' and not any(line.strip() for line in data['idea'].splitlines()):raise ValueError('Provide at least one non-empty narration line')
-    res=dict(data,idea=data['idea'].strip(),image_provider=provider)
+    batch_size=data.get('flow_batch_size',1)
+    if type(batch_size) is not int or batch_size not in (1,10,20,30):
+        raise ValueError('flow_batch_size must be one of 1, 10, 20, 30')
+    if provider!='flow' and batch_size!=1:
+        raise ValueError('flow_batch_size above 1 requires Google Flow')
+    res=dict(data,idea=data['idea'].strip(),image_provider=provider,flow_batch_size=batch_size)
     if mode is not None:res['workflow_mode']=mode
     if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
     if 'project' in data:
@@ -87,7 +99,11 @@ class Store:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT * FROM jobs WHERE idem=?',(key,)).fetchone()
             if row:
-                if row['request']!=raw: raise ValueError('Idempotency key already used for a different request')
+                stored=json.loads(row['request'])
+                # Old requests predate this optional field; a replay with the same
+                # default must not allocate a second job or change its receipt.
+                stored.setdefault('flow_batch_size',1)
+                if stored!=data: raise ValueError('Idempotency key already used for a different request')
                 return self.get(row['id']),False
             j=str(uuid.uuid4()); self.outputs.mkdir(parents=True,exist_ok=True)
             slug=output_slug(data['idea'])

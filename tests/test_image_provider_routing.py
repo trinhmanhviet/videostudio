@@ -46,7 +46,7 @@ class InitialImageProviderRoutingTests(unittest.TestCase):
 
     def test_flow_routes_each_scene_serially_with_stable_task_ids_and_checkpoints(self):
         self.job['request']['image_provider']='flow';calls,post=self._remote_fixture('flow')
-        with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'):
+        with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'0'},clear=False):
             result=self.pipeline.images(self.job,lambda:None)
             self.assertEqual(len(result['scenes']),3)
             for index,(url,body) in enumerate(calls):
@@ -57,6 +57,59 @@ class InitialImageProviderRoutingTests(unittest.TestCase):
                 self.assertTrue(checkpoint.is_file())
             self.pipeline.images(self.job,lambda:None)
             self.assertEqual(len(calls),3,'verified per-scene checkpoints must prevent duplicate Flow submissions')
+
+    def test_batch_endpoint_helper_validates_and_maps_reordered_results_by_task_id(self):
+        tasks=[]
+        for index in range(2):
+            tasks.append({'task_id':str(uuid.uuid5(uuid.UUID(self.job_id),f'batch:{index}')),'prompt':f'prompt {index}','character_mentions':[],'ordinal':index,'output_path':self.output/f'batch-{index}.png'})
+        calls=[]
+        def post(url,*,json,headers,timeout,trust_env):
+            self.assertTrue(url.endswith('/api/flow/images/generate-batch'));self.assertFalse(trust_env)
+            self.assertEqual(headers['X-VS-Client'],'videostudio');self.assertEqual(json['job_id'],self.job_id)
+            calls.append((url,json));data=[]
+            for task in reversed(json['tasks']):
+                source=self.root/'data'/'flow-images'/(task['task_id']+'.png');source.parent.mkdir(parents=True,exist_ok=True)
+                Image.effect_noise((768,1376),80).convert('RGB').save(source,format='PNG')
+                data.append({'task_id':task['task_id'],'file_path':str(source),'sha256':digest(source),'media_id':'media-'+task['task_id'][:8],
+                             'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc','width':768,'height':1376})
+            self.assertTrue(all('output_path' not in item for item in json['tasks']))
+            return httpx.Response(200,json={'ok':True,'data':data})
+        with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post):
+            result=self.pipeline._browser_scene_images_batch(self.job,tasks,lambda:None,timeout=1200)
+        self.assertEqual(set(result),{x['task_id'] for x in tasks})
+        self.assertEqual(result[tasks[0]['task_id']]['path'],str(tasks[0]['output_path'].resolve()))
+        self.assertTrue(all(Path(x['path']).is_file() and x['width']==768 for x in result.values()))
+        self.assertEqual(len(calls),1)
+
+    def test_flow_batch_feature_chunks_in_ordinal_order_and_reuses_checkpoints(self):
+        self.job['request'].update(image_provider='flow',flow_batch_size=10);calls=[]
+        def fake_batch(job,tasks,check,timeout=3600):
+            calls.append([x['ordinal'] for x in tasks]);results={}
+            for item in tasks:
+                path=Path(item['output_path']);path.parent.mkdir(parents=True,exist_ok=True)
+                Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG')
+                results[item['task_id']]={'task_id':item['task_id'],'path':str(path),'width':768,'height':1376,'sha256':digest(path),
+                                          'request_id':'req-'+item['task_id'],'media_id':'media-'+str(item['ordinal']),
+                                          'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}
+            return results
+        self.pipeline._browser_scene_images_batch=Mock(side_effect=fake_batch)
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            result=self.pipeline.images(self.job,lambda:None)
+            self.assertEqual([Path(x['path']).name for x in result['scenes']],['images-0000.png','images-0001.png','images-0002.png'])
+            self.assertEqual(calls,[[0,1,2]])
+            second=self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(len(second['scenes']),3);self.assertEqual(self.pipeline._browser_scene_images_batch.call_count,1)
+
+    def test_one_stays_serial_and_unvalidated_batch_fails_before_browser(self):
+        self.job['request'].update(image_provider='flow',flow_batch_size=1)
+        calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.ROOT',self.root,create=True),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            self.pipeline.images(self.job,lambda:None)
+        self.assertTrue(calls and all(url.endswith('/api/flow/images/generate') for url,_ in calls))
+        self.job['request']['flow_batch_size']=20
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch('videostudio.providers.httpx.post') as post,patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            with self.assertRaises(PermanentError):self.pipeline.images(self.job,lambda:None)
+            post.assert_not_called()
 
     def test_chatgpt_routes_each_scene_through_existing_browser_endpoint(self):
         self.job['request']['image_provider']='chatgpt';calls,post=self._remote_fixture('chatgpt')

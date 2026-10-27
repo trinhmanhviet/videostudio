@@ -326,6 +326,14 @@ async def create_app(bridge=None):
                 value = {'ok':True, 'data':await bridge.flow_images.create_character(body.get('task_id'),body.get('job_id'),body.get('character_id'),body.get('name'),body.get('prompt'))}
             elif request.path == '/api/flow/images/generate':
                 value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),character_mentions=body.get('character_mentions'))}
+            elif request.path == '/api/flow/images/generate-batch':
+                job_id,tasks=body.get('job_id'),body.get('tasks')
+                timeout=body.get('timeout',1200)
+                if not isinstance(job_id,str) or not isinstance(tasks,list) or not 1<=len(tasks)<=30:
+                    raise web.HTTPBadRequest(text='Flow batch requires a job_id and 1..30 tasks')
+                if not isinstance(timeout,(int,float)) or not 1<=timeout<=3600:
+                    raise web.HTTPBadRequest(text='Flow batch timeout must be 1..3600 seconds')
+                value={'ok':True,'data':await bridge.flow_images.generate_batch(job_id,tasks,timeout=float(timeout))}
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
@@ -356,7 +364,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

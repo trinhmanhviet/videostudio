@@ -1,9 +1,12 @@
 import asyncio
+import hashlib
 import tempfile
 import unittest
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock
+
+from PIL import Image
 
 from videostudio.cdp_flow import FlowImages, FlowTaskError
 
@@ -77,6 +80,228 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(FlowImages._new_media(before,now)['media_id'],'media-c')
         with self.assertRaises(FlowTaskError):FlowImages._new_media(before,now+[{'media_id':'media-d'}])
         self.assertIsNone(FlowImages._new_media(before,now[:2]))
+
+    async def test_named_control_waits_for_menu_and_hits_visible_target_before_click(self):
+        bridge=FakeBridge([]);flow=FlowImages(bridge,Path('unused'))
+        point={'x':45,'y':72,'hitIsControl':True}
+        flow._eval=AsyncMock(side_effect=[None,point,point])
+        await flow._click_named('session','Tải xuống',timeout=1)
+        self.assertEqual(flow._eval.await_count,3)
+        moved=[call for call in bridge.cdp.command.call_args_list if call.args[0]=='Input.dispatchMouseEvent' and call.args[1]['type']=='mouseMoved']
+        clicks=[call for call in bridge.cdp.command.call_args_list if call.args[0]=='Input.dispatchMouseEvent' and call.args[1]['type'] in ('mousePressed','mouseReleased')]
+        self.assertEqual(len(moved),1);self.assertEqual(len(clicks),2)
+
+    async def test_media_control_scrolls_then_hovers_before_menu_lookup(self):
+        bridge=FakeBridge([]);flow=FlowImages(bridge,Path('unused'));sequence=[]
+        async def evaluate(session,expression,timeout=8):
+            if 'scrollIntoView' in expression:sequence.append('scroll');return {'x':100,'y':200}
+            sequence.append('lookup');return {'x':120,'y':180,'hitIsControl':True}
+        async def command(method,params=None,**kwargs):
+            if method=='Input.dispatchMouseEvent' and params['type']=='mouseMoved':sequence.append('hover')
+            elif method=='Input.dispatchMouseEvent' and params['type']=='mousePressed':sequence.append('click')
+            return {}
+        flow._eval=AsyncMock(side_effect=evaluate);bridge.cdp.command=AsyncMock(side_effect=command)
+        await flow._click_media_control('session','media-one','Tuỳ chọn khác')
+        self.assertEqual(sequence[:3],['scroll','hover','lookup'])
+        self.assertIn('click',sequence)
+
+    async def test_thumbnail_discovery_accepts_loaded_286px_flow_cards(self):
+        flow=FlowImages(FakeBridge([]),Path('unused'))
+        expressions=[]
+        async def capture(session,expression,timeout=8):
+            expressions.append(expression)
+            return []
+        flow._eval=AsyncMock(side_effect=capture)
+        await flow._snapshot('session','')
+        await flow._image('session')
+        self.assertEqual(len(expressions),2)
+        snapshot_expr,image_expr=expressions
+        self.assertIn('complete:!!i&&i.complete&&i.naturalWidth>0&&i.naturalHeight>0',snapshot_expr)
+        self.assertIn('i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256',snapshot_expr)
+        self.assertIn('i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256',image_expr)
+        self.assertNotIn('i.naturalWidth>=512',image_expr)
+
+    async def test_download_still_rejects_thumbnail_sized_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            task_id=str(uuid.uuid4());bridge=FakeBridge([])
+            async def command(method,params=None,session=None,**kwargs):
+                if method=='Page.getFrameTree':return {'frameTree':{'frame':{'id':'frame'}}}
+                return {}
+            bridge.cdp.command=AsyncMock(side_effect=command)
+            flow=FlowImages(bridge,Path(td))
+            flow._image=AsyncMock(return_value=[{'media_id':'media-1','x':60,'y':60}])
+            flow._click_media_control=AsyncMock()
+            async def click_named(session,name):
+                if name=='2K':
+                    folder=Path(td)/'downloads'/task_id;folder.mkdir(parents=True,exist_ok=True)
+                    Image.effect_noise((400,600),100).convert('RGB').save(folder/'probe',format='PNG')
+                    flow.download_guid='probe';flow.download_complete=True;flow.download_changed.set()
+            flow._click_named=AsyncMock(side_effect=click_named)
+            with self.assertRaisesRegex(FlowTaskError,'dimensions failed validation'):
+                await flow._download_2k(task_id,'target','session',{'stage':'image_ready'},'prompt',media_id='media-1')
+
+    def test_batch_full_prompt_mapping_ignores_completion_order_and_clipped_titles(self):
+        job_id=str(uuid.uuid4())
+        tasks=[
+            {'task_id':str(uuid.uuid4()),'job_id':job_id,'ordinal':0,'prompt':'Cobalt-blue lighthouse on rocky coast at sunrise, no text.','character_mentions':[]},
+            {'task_id':str(uuid.uuid4()),'job_id':job_id,'ordinal':1,'prompt':'Yellow tram crossing a snowy bridge at dawn, no text.','character_mentions':[]},
+        ]
+        media=[
+            {'media_id':'media-tram','prompt':tasks[1]['prompt'],'mention_entity_ids':[],'title':'Yellow tram crossing a snowy …'},
+            {'media_id':'media-lighthouse','prompt':tasks[0]['prompt'],'mention_entity_ids':[],'title':'Cobalt-blue lighthouse on rocky …'},
+        ]
+        mapping=FlowImages._batch_prompt_mapping(tasks,media)
+        self.assertEqual(mapping[tasks[0]['task_id']],'media-lighthouse')
+        self.assertEqual(mapping[tasks[1]['task_id']],'media-tram')
+
+    def test_batch_full_prompt_mapping_rejects_clipped_prompt_and_duplicate_fingerprints(self):
+        job_id=str(uuid.uuid4());prompt='Cobalt-blue lighthouse on a rocky coast at sunrise.'
+        one={'task_id':str(uuid.uuid4()),'job_id':job_id,'ordinal':0,'prompt':prompt,'character_mentions':[]}
+        with self.assertRaises(FlowTaskError):
+            FlowImages._batch_prompt_mapping([one],[{'media_id':'media-1','prompt':'Cobalt-blue lighthouse on rocky …','mention_entity_ids':[]}])
+        same=[dict(one,ordinal=0),dict(one,task_id=str(uuid.uuid4()),ordinal=1)]
+        with self.assertRaises(FlowTaskError):
+            FlowImages._batch_prompt_mapping(same,[{'media_id':'media-b','prompt':prompt,'mention_entity_ids':[]},{'media_id':'media-a','prompt':prompt,'mention_entity_ids':[]}])
+
+    def test_top_row_mapping_requires_ten_complete_prompt_identified_tiles(self):
+        tasks=[{'task_id':str(uuid.uuid4()),'ordinal':i,'prompt':f'Unique subject {i} under amber light','character_mentions':[]} for i in range(10)]
+        tiles=[{'media_id':f'media-{i}','complete':True,'text':tasks[i]['prompt'],'x':(9-i)*100,'y':120,'tile_height':180} for i in range(10)]
+        mapping=FlowImages._batch_row_mapping(tasks,tiles,[])
+        self.assertEqual([mapping[t['task_id']] for t in tasks],[f'media-{i}' for i in range(10)])
+        with self.assertRaisesRegex(FlowTaskError,'full matching prompt'):
+            FlowImages._batch_row_mapping(tasks,[{**tiles[4],'text':'wrong'} if i==4 else tile for i,tile in enumerate(tiles)],[])
+        with self.assertRaisesRegex(FlowTaskError,'complete ten-image rows'):
+            FlowImages._batch_row_mapping(tasks,[{**tiles[0],'y':500}]+tiles[1:],[])
+        with self.assertRaisesRegex(FlowTaskError,'different number'):
+            FlowImages._batch_row_mapping(tasks,tiles[:-1],[])
+
+    async def test_generate_batch_rejects_duplicate_fingerprints_before_any_submission(self):
+        with tempfile.TemporaryDirectory() as td:
+            job_id=str(uuid.uuid4());prompt='identical prompt';flow=FlowImages(FakeBridge([]),Path(td))
+            flow._generate_unreserved=AsyncMock()
+            tasks=[{'task_id':str(uuid.uuid4()),'ordinal':i,'prompt':prompt,'character_mentions':[]} for i in range(2)]
+            with self.assertRaisesRegex(FlowTaskError,'Duplicate prompt/entity fingerprints'):
+                await flow.generate_batch(job_id,tasks)
+            flow._generate_unreserved.assert_not_awaited()
+            self.assertFalse(flow.batches.exists())
+
+    async def test_indeterminate_batch_receipt_never_resubmits_on_replay(self):
+        with tempfile.TemporaryDirectory() as td:
+            flow=FlowImages(FakeBridge([]),Path(td));job_id=str(uuid.uuid4());task_id=str(uuid.uuid4());prompt='Unique test scene prompt'
+            flow._generate_unreserved=AsyncMock(side_effect=FlowTaskError('click ambiguous','uncertain'))
+            tasks=[{'task_id':task_id,'ordinal':0,'prompt':prompt,'character_mentions':[]}]
+            with self.assertRaises(FlowTaskError):await flow.generate_batch(job_id,tasks,timeout=1)
+            receipt={'task_id':task_id,'job_id':job_id,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),
+                     'character_mentions':[],'stage':'submitting'}
+            flow._write_receipt(task_id,receipt)
+            with self.assertRaisesRegex(FlowTaskError,'indeterminate submitting'):
+                await flow.generate_batch(job_id,tasks,timeout=1)
+            self.assertEqual(flow._generate_unreserved.await_count,1)
+
+    async def test_enter_submission_focuses_editor_and_uses_preheld_browser_lock(self):
+        with tempfile.TemporaryDirectory() as td:
+            job_id=str(uuid.uuid4());task_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc';prompt='Distinct focused scene'
+            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td))
+            ready={'url':project,'composerAvailable':True,'draftEmpty':True,'generateDisabled':True,'largeImages':[]}
+            focused={'url':project,'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[],'agentOn':False,
+                     'creditLines':['Quá trình tạo sẽ tốn 0 tín dụng'],'settingsText':'Nano Banana 2.1 crop_9_16 x1'}
+            flow._ensure_project=AsyncMock(return_value=({'task_id':task_id,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},ready))
+            flow._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
+            flow._ensure_agent_and_settings=AsyncMock(return_value=focused)
+            flow._prompt_box=AsyncMock(return_value={'x':50,'y':60,'text':prompt})
+            flow._click_point=AsyncMock();flow._eval=AsyncMock(return_value=True)
+            flow._snapshot=AsyncMock(return_value=focused)
+            flow._wait_page=AsyncMock(return_value={'draftEmpty':True,'generateDisabled':True})
+            async with bridge.job_lock:
+                result=await asyncio.wait_for(flow._generate_unreserved(task_id,job_id,prompt,submit_only=True,require_zero_credit=True,submit_with_enter=True,bridge_lock_held=True),timeout=2)
+            self.assertEqual(result['stage'],'waiting_result')
+            flow._click_point.assert_awaited_once_with('flow-session',{'x':50,'y':60,'text':prompt})
+            keys=[c for c in bridge.cdp.command.call_args_list if c.args[0]=='Input.dispatchKeyEvent']
+            self.assertEqual([c.args[1]['type'] for c in keys],['keyDown','keyUp'])
+            self.assertEqual(flow._read_receipt(task_id)['stage'],'waiting_result')
+
+    async def test_batch_reservation_blocks_single_generate_interleaving(self):
+        flow=FlowImages(FakeBridge([]),Path('unused'));batch_started=asyncio.Event();release_batch=asyncio.Event();single_called=[]
+        async def batch_impl(job_id,tasks,timeout=1200,bridge_lock_held=False):
+            batch_started.set();await release_batch.wait();return ['batch']
+        async def single_impl(*args,**kwargs):single_called.append(True);return {'task_id':'single'}
+        flow._generate_batch_unreserved=AsyncMock(side_effect=batch_impl)
+        flow._generate_unreserved=AsyncMock(side_effect=single_impl)
+        batch=asyncio.create_task(flow.generate_batch('job',[],timeout=1))
+        await batch_started.wait()
+        single=asyncio.create_task(flow.generate('task','job','prompt'))
+        await asyncio.sleep(0)
+        self.assertEqual(single_called,[])
+        release_batch.set()
+        self.assertEqual(await batch,['batch']);self.assertEqual((await single)['task_id'],'single')
+        self.assertEqual(single_called,[True])
+
+    async def test_batch_submits_before_wait_maps_exact_prompts_and_downloads_in_manifest_order(self):
+        with tempfile.TemporaryDirectory() as td:
+            job_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+            tasks=[
+                {'task_id':str(uuid.uuid4()),'ordinal':0,'prompt':'Cobalt-blue lighthouse on rocky coast at sunrise, no text.','character_mentions':[]},
+                {'task_id':str(uuid.uuid4()),'ordinal':1,'prompt':'Yellow tram crossing a snowy bridge at dawn, no text.','character_mentions':[]},
+            ]
+            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td));submit_calls=[]
+            async def fake_generate(task_id,current_job,prompt,**kwargs):
+                submit_calls.append((task_id,kwargs.get('submit_only'),kwargs.get('require_zero_credit')))
+                receipt={'task_id':task_id,'job_id':current_job,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),'character_mentions':[],
+                         'project_url':project,'stage':'waiting_result','baseline_media_ids':[],'credit_estimate':'Quá trình tạo sẽ tốn 0 tín dụng','submitted_at':1.0}
+                flow._write_receipt(task_id,receipt)
+                return {'task_id':task_id,'stage':'waiting_result','project_url':project}
+            flow._generate_unreserved=AsyncMock(side_effect=fake_generate)
+            flow._target=AsyncMock(return_value='only-flow');flow._session=AsyncMock(return_value='flow-session')
+            flow._snapshot=AsyncMock(return_value={'url':project,'composerAvailable':True,'draftEmpty':True,'assetTiles':[
+                {'media_id':'media-2','complete':True,'aria_label':'Yellow tram crossing a snowy …','text':tasks[1]['prompt'],'x':100,'y':200,'tile_height':200},
+                {'media_id':'media-1','complete':True,'aria_label':'Cobalt-blue lighthouse on rocky …','text':tasks[0]['prompt'],'x':300,'y':200,'tile_height':200}],'largeImages':[]})
+            flow._read_prompt_for_media=AsyncMock(side_effect=[
+                {'media_id':'media-2','prompt':tasks[1]['prompt'],'mention_entity_ids':[],'title':'Yellow tram crossing a snowy …'},
+                {'media_id':'media-1','prompt':tasks[0]['prompt'],'mention_entity_ids':[],'title':'Cobalt-blue lighthouse on rocky …'},
+            ])
+            flow._wait_page=AsyncMock(return_value={'url':project,'composerAvailable':True,'draftEmpty':True})
+            async def fake_download(task_id,target,session,receipt,prompt,media_id=None):
+                path=Path(td)/(task_id+'.png');Image.new('RGB',(600,600),(30,80,120)).save(path,format='PNG')
+                from videostudio.core import digest
+                receipt.update({'stage':'downloaded','media_id':media_id,'download_path':str(path),'download_sha256':digest(path),'width':600,'height':600,'format':'PNG','download_guid':'guid-'+media_id})
+                flow._write_receipt(task_id,receipt);return receipt
+            flow._download_2k=AsyncMock(side_effect=fake_download)
+            results=await flow.generate_batch(job_id,tasks,timeout=2)
+            self.assertEqual([x['task_id'] for x in results],[x['task_id'] for x in tasks])
+            self.assertEqual([x['media_id'] for x in results],['media-1','media-2'])
+            self.assertEqual([x[0] for x in submit_calls],[x['task_id'] for x in tasks])
+            self.assertTrue(all(only and zero for _,only,zero in submit_calls))
+            self.assertEqual([c.kwargs['batch_settings_verified'] for c in flow._generate_unreserved.await_args_list],[False,True])
+            self.assertTrue(all(c.kwargs['submit_with_enter'] for c in flow._generate_unreserved.await_args_list))
+            self.assertEqual(flow._download_2k.await_count,2)
+            self.assertEqual(flow._read_batch_manifest(next(flow.batches.glob('*.json')).stem)['mapping'],{tasks[0]['task_id']:'media-1',tasks[1]['task_id']:'media-2'})
+            replay=await flow.generate_batch(job_id,tasks,timeout=2)
+            self.assertEqual([item['media_id'] for item in replay],['media-1','media-2'])
+            self.assertEqual(len(submit_calls),2,'replay must not submit a second time')
+            self.assertEqual(flow._download_2k.await_count,2,'replay must reuse saved downloads')
+
+    async def test_submit_only_returns_after_receipt_and_requires_explicit_zero_cost_when_requested(self):
+        with tempfile.TemporaryDirectory() as td:
+            job_id=str(uuid.uuid4());task_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td))
+            state={'url':project,'composerAvailable':True,'draftEmpty':True,'generateDisabled':True,'largeImages':[]}
+            flow._ensure_project=AsyncMock(return_value=({'task_id':task_id,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},state))
+            flow._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
+            flow._ensure_agent_and_settings=AsyncMock(return_value={'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[],'agentOn':False,'creditLines':['Quá trình tạo sẽ tốn 0 tín dụng'],'settingsText':'🍌 Nano Banana 2.1\ncrop_9_16\nx1'})
+            flow._click_named=AsyncMock()
+            flow._wait_page=AsyncMock(side_effect=AssertionError('submit_only must not wait for image completion'))
+            result=await flow.generate(task_id,job_id,'Cobalt-blue lighthouse prompt.',submit_only=True,require_zero_credit=True)
+            self.assertEqual(result['stage'],'waiting_result')
+            self.assertEqual(flow._read_receipt(task_id)['stage'],'waiting_result')
+            flow._click_named.assert_awaited_once_with('flow-session','Bắt đầu tạo',exact=True)
+            task2=str(uuid.uuid4());flow2=FlowImages(bridge,Path(td)/'second')
+            flow2._ensure_project=AsyncMock(return_value=({'task_id':task2,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},state))
+            flow2._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
+            flow2._ensure_agent_and_settings=AsyncMock(return_value={'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[],'agentOn':False,'creditLines':['Quá trình tạo sẽ tốn 3 tín dụng'],'settingsText':'🍌 Nano Banana 2.1\ncrop_9_16\nx1'})
+            flow2._click_named=AsyncMock()
+            with self.assertRaisesRegex(FlowTaskError,'not explicitly 0'):
+                await flow2.generate(task2,job_id,'Yellow tram prompt.',submit_only=True,require_zero_credit=True)
+            flow2._click_named.assert_not_awaited()
 
     async def test_existing_single_flow_tab_is_reused(self):
         bridge = FakeBridge([{'targetId': 'only-flow', 'type': 'page', 'url': 'https://flow.google.com/project/abc'}])
