@@ -22,7 +22,7 @@ class BrowserConfig:
             raise ValueError('Refusing personal Chrome profile; choose a separate directory')
         return [str(self.executable), '--user-data-dir='+str(profile),
                 '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
-                '--enable-automation', '--no-first-run', '--no-default-browser-check', 'about:blank']
+                '--no-first-run', '--no-default-browser-check', 'about:blank']
 
 
 class DedicatedChrome:
