@@ -5,6 +5,8 @@ This server owns immutable prompts, response correlation and idempotent imports.
 import hashlib,json,time,uuid
 from .core import PermanentError
 
+SMOKE_PROMPT='Engineering connection test only. Return exactly one JSON object: {"connection_test":"videostudio","ok":true}. Do not create media or use tools.'
+
 def parse_reply(text):
     if not isinstance(text,str) or len(text.encode('utf8'))>700000:raise ValueError('Response too large')
     raw=text.strip()
@@ -28,6 +30,18 @@ class Exchanges:
             c.executescript('''CREATE TABLE IF NOT EXISTS connector_scopes(id TEXT PRIMARY KEY,job TEXT UNIQUE,created REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS connector_status(scope TEXT PRIMARY KEY,status TEXT NOT NULL,updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS connector_exchanges(id TEXT PRIMARY KEY,scope TEXT NOT NULL,request_key TEXT NOT NULL,prompt TEXT NOT NULL,response TEXT,version INTEGER NOT NULL DEFAULT 1,created REAL NOT NULL,UNIQUE(scope,request_key));''')
+    def accepted_extension(self,scope):
+        """A fresh, scope-bound visible bridge and exact prior smoke reply are required."""
+        with self.store.db() as c:
+            status=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(scope,)).fetchone()
+            smoke=c.execute('SELECT response FROM connector_exchanges WHERE scope=? AND request_key=?',(scope,hashlib.sha256(SMOKE_PROMPT.encode()).hexdigest())).fetchone()
+        if not status or not smoke or not smoke['response'] or time.time()-status['updated']>30:return False
+        try:
+            s=json.loads(status['status']);answer=json.loads(smoke['response'])
+        except (ValueError,TypeError):return False
+        return (s.get('build')=='videostudio-extension-0.1.0' and s.get('stage')=='active'
+                and s.get('connected') is True and s.get('enabled') is True
+                and answer=={'connection_test':'videostudio','ok':True})
     def scope(self):
         identifier=str(uuid.uuid4())
         with self.store.db() as c:c.execute('INSERT INTO connector_scopes(id,created) VALUES(?,?)',(identifier,time.time()))

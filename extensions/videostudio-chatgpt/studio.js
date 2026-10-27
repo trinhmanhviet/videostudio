@@ -2,11 +2,16 @@
   const scope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1];
   if(location.origin!=='http://localhost:8877'||(!scope&&location.pathname!=='/'))return;
   const root=document.createElement('aside');root.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;font:13px system-ui';
-  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Idle — click Start to open a dedicated ChatGPT tab.</p><button id="start">Start</button><button id="stop">Stop</button></section>';
+  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Idle — click Start to open a dedicated ChatGPT tab.</p><button id="start">Start</button><button id="smoke">Kiểm tra chữ</button><button id="stop">Stop</button></section>';
   document.documentElement.append(root);
   const status=shadow.querySelector('#status');let active=false,busy=false;
   const api=async(path,options)=>{const response=await fetch(path,{credentials:'same-origin',...options});if(!response.ok)throw Error(`Studio HTTP ${response.status}`);return response.json();};
   const send=message=>chrome.runtime.sendMessage(message);
+  async function heartbeat(){
+    if(!scope)return;
+    try{await api('/api/connector/status/'+scope,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({build:'videostudio-extension-0.1.0',stage:active?'active':'stopped',connected:active,enabled:active})});}
+    catch(error){if(active){active=false;status.textContent='Status heartbeat failed; bridge paused';}}
+  }
   async function importReply(job){
     const base=`/api/v1/projects/${scope}/runs/${scope}/chatgpt-exchanges`;
     const receipt=await api(`${base}/${encodeURIComponent(job.id)}`);
@@ -43,10 +48,16 @@
       }
       sessionStorage.removeItem('videostudio:authorized-scope');
       const response=await send({kind:'start',scope});if(!response.ok)throw Error(response.error);
-      active=true;status.textContent='Connected; awaiting one text request';await tick();
+      active=true;status.textContent='Connected; test text once, then refresh Studio conditions';await heartbeat();await tick();
     }catch(error){status.textContent=`Not started: ${error.message}`;}
   });
-  shadow.querySelector('#stop').addEventListener('click',async event=>{if(!event.isTrusted)return;active=false;const response=await send({kind:'stop'});status.textContent=response.ok?'Stopped':`Stop failed: ${response.error}`;});
+  shadow.querySelector('#smoke').addEventListener('click',async event=>{
+    if(!event.isTrusted||!active||!scope)return;
+    try{const result=await api('/api/connector/smoke/'+scope,{method:'POST'});status.textContent=`Text smoke queued: ${result.exchange_id}; do not click again`;await tick();}
+    catch(error){status.textContent=`Smoke not queued: ${error.message}`;}
+  });
+  shadow.querySelector('#stop').addEventListener('click',async event=>{if(!event.isTrusted)return;active=false;const response=await send({kind:'stop'});await heartbeat();status.textContent=response.ok?'Stopped':`Stop failed: ${response.error}`;});
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{if(message?.kind!=='reply')return;if(active)tick();reply({ok:true});});
   setInterval(tick,1200);
+  setInterval(()=>{if(active)heartbeat();},10000);
 })();

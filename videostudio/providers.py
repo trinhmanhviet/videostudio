@@ -159,6 +159,9 @@ class Pipeline:
                 cdp_ok=r.status_code==200 and r.json().get('ready') is True
             except Exception:pass
             add('cdp_transport',cdp_ok,'Chrome CDP Daemon running on port 8879 and connected to ChatGPT tab')
+        elif transport=='extension':
+            extension_ok=bool(scope and hasattr(self,'exchanges') and self.exchanges.accepted_extension(scope))
+            add('extension_transport',extension_ok,'Exact scope requires a fresh extension heartbeat and correlated ChatGPT smoke response')
         elif transport=='chrome':
             add('chrome_transport',hasattr(self,'exchanges'),'Existing connector transport API configured; NOT proof of live Chrome authorization/login')
         elif transport=='webauth':
@@ -207,6 +210,8 @@ class Pipeline:
             from .webauth import accepted_smoke
             add('webauth_smoke',accepted_smoke(),'A completed synthetic WebAuth text smoke receipt is required; model listing alone is insufficient.')
             add('production_acceptance',bool(webauth_available and accepted_smoke()),'WebAuth text path accepted only with live model listing and completed synthetic smoke; factual Web Search/High not attested.')
+        elif transport=='extension':
+            add('production_acceptance',extension_ok,'Exact scope has recent user-started bridge heartbeat and one completed correlated smoke; no High/Web Search attestation')
         else:
             add('production_acceptance',engineering,'Supervised engineering acceptance scope ONLY, not production release. Tab-close unattended, full quality and multi-duration acceptance remain incomplete.' if engineering else 'Production release locked pending full acceptance. No fake completion.')
         return {'ready':all(x['ok'] for x in checks),'engineering_only':engineering,'checks':checks,'voice_warnings':catalog['warnings']}
@@ -236,7 +241,7 @@ class Pipeline:
             if 'your_response' in res and len(res) == 1 and isinstance(res['your_response'], dict):
                 res = res['your_response']
             return res
-        if transport=='chrome':
+        if transport in ('chrome','extension'):
             if not hasattr(self,'exchanges') or not getattr(self.context,'job',None):raise PermanentError('Chrome exchange context unavailable')
             return self.exchanges.request(self.context.job,prompt,check)
         if transport=='webauth':
@@ -334,12 +339,12 @@ class Pipeline:
     def plan(self,j,check):
         if getattr(self,'store',None):self.store.log(j['id'],'plan','Đang phân tích ý tưởng và lập kế hoạch sản xuất...')
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
-        scope=self.exchanges.for_job(j['id']) if transport=='chrome' and hasattr(self,'exchanges') else None
+        scope=self.exchanges.for_job(j['id']) if transport in ('chrome','extension') and hasattr(self,'exchanges') else None
         pf=self.preflight(scope)
         if not pf['ready']:raise PermanentError('Preflight blocked: '+', '.join(x['name'] for x in pf['checks'] if not x['ok']))
         self.voices.selected(j['request']['voice_id'])
         mode=j['request'].get('workflow_mode')
-        if mode in ('research','provided_narration') and transport not in ('cdp','webauth'):raise PermanentError('This workflow requires a supported ChatGPT text transport')
+        if mode in ('research','provided_narration') and transport not in ('cdp','webauth','extension'):raise PermanentError('This workflow requires a supported ChatGPT text transport')
         if mode=='provided_narration':
             prompt_text=('Create only a visual production plan for this user-provided narration. Do not write, paraphrase, shorten, expand, or reorder narration. '
                          'Return JSON {"title":str,"visual_style":str,"music_prompt":str,"characters":[{"character_id":str,"name":str,"description":str}]}. '
@@ -352,7 +357,7 @@ class Pipeline:
                 if not re.fullmatch(r'[a-z][a-z0-9_-]{0,39}',character['character_id']):raise ValueError('Invalid visual-plan character ID')
             return d
         if mode=='research':
-            prompt_text=(('Use ChatGPT High reasoning and available web search to research the factual topic. ' if transport=='cdp' else 'Develop a cautious, explicitly unverified background summary from existing model knowledge; no live web search is available through this transport. ')+'Give useful information directly, not just links. '
+            prompt_text=(('Use ChatGPT High reasoning and available web search to research the factual topic. ' if transport=='cdp' else 'Develop a cautious, explicitly unverified background summary from existing model knowledge; live Web Search is not attested through this transport. ')+'Give useful information directly, not just links. '
                          'Do not make independent URL access a prerequisite; URLs may be optional citations. Do not invent facts or present uncertain claims as certain. '
                          'Return JSON {"title":str,"research_context":{"summary":str,"facts":[{"claim":str,"explanation":str,"caveat":str,"source_urls":[str]}],"uncertainties":[str]},"research_query":str,"visual_prompt":str,"music_prompt":str}. '
                          'Music must be instrumental. Video request: '+json.dumps(j['request'],ensure_ascii=False))

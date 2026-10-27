@@ -339,7 +339,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     @app.post('/api/connector/smoke/{scope}')
     def smoke_connector(scope:str,request:Request):
         same_origin(request)
-        try:identifier=exchanges.enqueue(scope,'Engineering connection test only. Return exactly one JSON object: {"connection_test":"videostudio","ok":true}. Do not create media or use tools.')
+        from .exchanges import SMOKE_PROMPT
+        try:identifier=exchanges.enqueue(scope,SMOKE_PROMPT)
         except KeyError:raise HTTPException(404,'Scope not found')
         return {'exchange_id':identifier}
     @app.get('/api/connector/status')
@@ -389,8 +390,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
         scope=request.headers.get('x-connector-scope')
-        if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp')=='chrome' and not scope:
-            raise HTTPException(422,'Existing Chrome connector scope required')
+        if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp') in ('chrome','extension') and not scope:
+            raise HTTPException(422,'Connector scope required')
         if scope:
             with store.db() as c:
                 bound=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()

@@ -249,7 +249,9 @@ async function loadProjects(){
 }
 
 function enable(){ $('#submit').disabled=!ready||!$('#voice').value||submitting; }
-async function preflight(){try{const d=await api('/api/preflight');ready=d.ready===true;const box=$('#checks');box.replaceChildren();for(const c of d.checks??[]){const n=text('div',`${c.ok?'✓':'!'} ${c.name}: ${c.message??''}`,'check '+(c.ok?'pass':'error'));box.append(n)}if(!d.checks?.length)box.append(text('p',ready?'Sẵn sàng':'Chưa đủ điều kiện chạy',ready?'pass':'error'));enable()}catch(e){ready=false;$('#checks').replaceChildren(text('p','Không kết nối được backend: '+e.message,'error'));enable()}}
+const extensionScope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1]||null;
+if(extensionScope){$('#browserStart').hidden=true;$('#browserProbe').hidden=true;$('#connectorStatus').textContent='Dùng extension ChatGPT trong Chrome thường; kiểm tra kết nối trong bảng nổi của extension.';}
+async function preflight(){try{const d=await api('/api/preflight'+(extensionScope?'?scope='+encodeURIComponent(extensionScope):''));ready=d.ready===true;const box=$('#checks');box.replaceChildren();for(const c of d.checks??[]){const n=text('div',`${c.ok?'✓':'!'} ${c.name}: ${c.message??''}`,'check '+(c.ok?'pass':'error'));box.append(n)}if(!d.checks?.length)box.append(text('p',ready?'Sẵn sàng':'Chưa đủ điều kiện chạy',ready?'pass':'error'));enable()}catch(e){ready=false;$('#checks').replaceChildren(text('p','Không kết nối được backend: '+e.message,'error'));enable()}}
 
 async function loadVoices(){
   try{
@@ -277,7 +279,7 @@ async function loadVoices(){
 function onVoice(){const v=voices.find(v=>v.id===$('#voice').value);const url=v?.sample_url&&safeURL(v.sample_url);$('#preview').disabled=!url;$('#sample').hidden=true;$('#sample').pause();$('#sample').removeAttribute('src');if(v)$('#voiceNote').textContent=url?'Nghe mẫu trước khi tạo':'Giọng này chưa có mẫu nghe sẵn';enable()}
 $('#voice').addEventListener('change',onVoice);$('#preview').onclick=()=>{const v=voices.find(v=>v.id===$('#voice').value);const url=v?.sample_url&&safeURL(v.sample_url);if(url){$('#sample').src=url;$('#sample').hidden=false;$('#sample').play().catch(()=>{})}};
 
-async function browserStatus(){try{const s=await api('/api/browser/status');$('#connectorStatus').textContent=s.ready?'Chrome riêng: Đã xác nhận đăng nhập.':s.connected?'Chrome riêng đã kết nối; cần đăng nhập/kiểm tra.':'Chrome riêng chưa kết nối. Bấm Mở Chrome riêng để bắt đầu.';}catch(e){$('#connectorStatus').textContent=e.message;}}
+async function browserStatus(){if(extensionScope)return;try{const s=await api('/api/browser/status');$('#connectorStatus').textContent=s.ready?'Chrome riêng: Đã xác nhận đăng nhập.':s.connected?'Chrome riêng đã kết nối; cần đăng nhập/kiểm tra.':'Chrome riêng chưa kết nối. Bấm Mở Chrome riêng để bắt đầu.';}catch(e){$('#connectorStatus').textContent=e.message;}}
 async function browserControl(action,button){button.disabled=true;try{const s=await api('/api/browser/'+action,{method:'POST',body:'{}'});$('#connectorStatus').textContent=action==='start'?'Đã mở Chrome riêng. Bạn đăng nhập ChatGPT trong cửa sổ đó, rồi bấm Kiểm tra kết nối.':s.ready?'Đã xác nhận đăng nhập.':'Chưa xác nhận đăng nhập.';await preflight();}catch(e){$('#connectorStatus').textContent=e.message;}finally{button.disabled=false;}}
 if($('#browserStart')) $('#browserStart').onclick=()=>browserControl('start',$('#browserStart'));
 if($('#browserProbe')) $('#browserProbe').onclick=()=>browserControl('probe',$('#browserProbe'));
@@ -298,7 +300,7 @@ $('#create').onsubmit=async e=>{
   };
   if(!payload.idea||!payload.voice_id||!Number.isFinite(payload.duration_seconds)||payload.duration_seconds<=0){$('#submitError').textContent='Điền đủ ý tưởng, giọng và thời lượng hợp lệ.';submitting=false;enable();return}
   const identity=JSON.stringify(payload);if(!currentKey||currentKey.identity!==identity)currentKey={identity,key:crypto.randomUUID()};
-  try{await api('/api/jobs',{method:'POST',headers:{'Idempotency-Key':currentKey.key},body:identity});currentKey=null;await loadJobs();await loadProjects();}
+  try{await api('/api/jobs',{method:'POST',headers:{'Idempotency-Key':currentKey.key,...(extensionScope?{'X-Connector-Scope':extensionScope}:{})},body:identity});currentKey=null;await loadJobs();await loadProjects();}
   catch(e){$('#submitError').textContent=e.message}finally{submitting=false;enable()}
 };
 
