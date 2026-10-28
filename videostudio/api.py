@@ -339,9 +339,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     @app.post('/api/connector/smoke/{scope}')
     def smoke_connector(scope:str,request:Request):
         same_origin(request)
-        from .exchanges import SMOKE_PROMPT
-        try:identifier=exchanges.enqueue(scope,SMOKE_PROMPT)
+        try:identifier=exchanges.enqueue_smoke(scope)
         except KeyError:raise HTTPException(404,'Scope not found')
+        except PermanentError as e:raise HTTPException(409,str(e))
         return {'exchange_id':identifier}
     @app.get('/api/connector/status')
     def connector_status():
