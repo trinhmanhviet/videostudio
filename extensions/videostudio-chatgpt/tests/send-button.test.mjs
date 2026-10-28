@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { isSendButton } = require('../send-button.cjs');
+import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
+
+const context = {};
+runInNewContext(await readFile(new URL('../send-button.js', import.meta.url), 'utf8'), context);
+const { isSendButton } = context.VideoStudioSendButton;
 
 test('accepts the current ChatGPT Send button without test id', () => {
   assert.equal(isSendButton('Send', null), true);

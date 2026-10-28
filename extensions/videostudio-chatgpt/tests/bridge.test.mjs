@@ -55,5 +55,6 @@ test('manifest has narrow hosts and no automation or cookie permissions',async()
   assert.deepEqual(manifest.host_permissions,['http://localhost:8877/*','https://chatgpt.com/*']);
   assert.deepEqual(manifest.permissions,['storage']);
   assert.equal(manifest.content_scripts.length,2);
+  assert.deepEqual(manifest.content_scripts[1].js,['send-button.js','chatgpt.js']);
   assert.deepEqual(manifest.content_scripts[0].matches,['http://localhost:8877/*']);
 });
