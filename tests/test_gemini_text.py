@@ -260,5 +260,26 @@ class JobTextProviderRoutingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_request({**base, 'text_provider': 'claude'})
 
+class GeminiSmokeReceiptTests(unittest.TestCase):
+    def test_normalize_accepts_flat_and_enveloped_replies(self):
+        from videostudio.gemini_smoke import normalize
+        self.assertEqual(normalize({'connection_test': 'videostudio', 'ok': True})['ok'], True)
+        self.assertEqual(normalize({'your_response': {'connection_test': 'videostudio', 'ok': True}}),
+                         {'connection_test': 'videostudio', 'ok': True})
+
+    def test_receipt_round_trip_and_rejection(self):
+        import tempfile, os
+        from unittest.mock import patch
+        from videostudio import gemini_smoke
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'gemini-smoke.json')
+            with patch.dict('os.environ', {'VS_GEMINI_SMOKE': path}):
+                self.assertFalse(gemini_smoke.accepted_gemini_smoke())
+                with self.assertRaises(ValueError):
+                    gemini_smoke.record_gemini_smoke({'connection_test': 'videostudio', 'ok': False})
+                gemini_smoke.record_gemini_smoke({'your_response': {'connection_test': 'videostudio', 'ok': True}})
+                self.assertTrue(gemini_smoke.accepted_gemini_smoke())
+
+
 if __name__ == '__main__':
     unittest.main()
