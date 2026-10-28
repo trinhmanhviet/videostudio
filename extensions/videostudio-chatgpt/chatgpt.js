@@ -82,7 +82,15 @@
         if(button&&normalise(logicalText(input))===normalise(prompt))break;
         button=null;
       }
-      if(normalise(logicalText(input))!==normalise(prompt))throw Error('Composer does not match immutable prompt');
+      const diffAt=(a,b)=>{const x=normalise(a),y=normalise(b);let i=0;while(i<Math.min(x.length,y.length)&&x[i]===y[i])i++;return i;};
+      for(let attempt=0;attempt<3;attempt++){
+        if(normalise(logicalText(input))===normalise(prompt))break;
+        const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);
+        document.execCommand('insertText',false,prompt);
+        await wait(300);if(retired)return;
+      }
+      const got=logicalText(input);
+      if(normalise(got)!==normalise(prompt))throw Error('Composer does not match immutable prompt (got '+normalise(got).length+'/'+normalise(prompt).length+' chars, first diff at '+diffAt(got,prompt)+')');
       if(!button)throw Error('Send button unavailable');
       // From here delivery is uncertain even if the tab reloads. Background persisted dispatching first.
       button.click();
