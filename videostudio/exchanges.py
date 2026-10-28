@@ -28,24 +28,74 @@ class Exchanges:
         self.store=store
         with store.db() as c:
             c.executescript('''CREATE TABLE IF NOT EXISTS connector_scopes(id TEXT PRIMARY KEY,job TEXT UNIQUE,created REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS connector_bridge_memberships(scope TEXT PRIMARY KEY,bridge TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS connector_bridge_memberships_bridge ON connector_bridge_memberships(bridge);
             CREATE TABLE IF NOT EXISTS connector_status(scope TEXT PRIMARY KEY,status TEXT NOT NULL,updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS connector_exchanges(id TEXT PRIMARY KEY,scope TEXT NOT NULL,request_key TEXT NOT NULL,prompt TEXT NOT NULL,response TEXT,version INTEGER NOT NULL DEFAULT 1,created REAL NOT NULL,UNIQUE(scope,request_key));
             CREATE TABLE IF NOT EXISTS connector_smokes(scope TEXT NOT NULL,exchange_id TEXT NOT NULL UNIQUE,created REAL NOT NULL);''')
     def accepted_extension(self,scope):
         """A fresh, scope-bound visible bridge and exact prior smoke reply are required."""
         with self.store.db() as c:
+            parent=c.execute('SELECT bridge FROM connector_bridge_memberships WHERE scope=?',(scope,)).fetchone()
+            if parent:scope=parent['bridge']
             status=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(scope,)).fetchone()
             smoke=c.execute('SELECT e.response FROM connector_smokes s JOIN connector_exchanges e ON e.id=s.exchange_id WHERE s.scope=? ORDER BY s.created DESC,s.rowid DESC LIMIT 1',(scope,)).fetchone()
         if not status or not smoke or not smoke['response'] or time.time()-status['updated']>30:return False
         try:
             s=json.loads(status['status']);answer=json.loads(smoke['response'])
         except (ValueError,TypeError):return False
-        return (s.get('build')=='videostudio-extension-0.2.0' and s.get('stage')=='active'
+        builds=('videostudio-extension-0.3.0',) if parent else ('videostudio-extension-0.2.0','videostudio-extension-0.2.1','videostudio-extension-0.2.2','videostudio-extension-0.3.0')
+        return (s.get('build') in builds and s.get('stage')=='active'
                 and s.get('connected') is True and s.get('enabled') is True
                 and answer=={'connection_test':'videostudio','ok':True})
+    def bridge_root(self,bridge):
+        with self.store.db() as c:
+            root=c.execute('SELECT id FROM connector_scopes WHERE id=? AND NOT EXISTS (SELECT 1 FROM connector_bridge_memberships WHERE scope=?)',(bridge,bridge)).fetchone()
+        if not root:raise KeyError(bridge)
+        return bridge
+    def bridge_supports_sessions(self,bridge):
+        self.bridge_root(bridge)
+        with self.store.db() as c:
+            row=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(bridge,)).fetchone()
+        if not row or time.time()-row['updated']>30:return False
+        status=json.loads(row['status'])
+        return (status.get('build')=='videostudio-extension-0.3.0' and status.get('stage')=='active'
+                and status.get('connected') is True and status.get('enabled') is True)
+    def bridge_sessions(self,bridge):
+        self.bridge_root(bridge)
+        with self.store.db() as c:
+            rows=c.execute('SELECT s.id AS scope,j.* FROM connector_scopes s JOIN jobs j ON j.id=s.job LEFT JOIN connector_bridge_memberships m ON m.scope=s.id WHERE s.id=? OR m.bridge=? ORDER BY j.created,j.id',(bridge,bridge)).fetchall()
+            items=[]
+            for row in rows:
+                request=json.loads(row['request'])
+                plan=c.execute("SELECT value FROM checkpoints WHERE job=? AND stage='plan'",(row['id'],)).fetchone()
+                title=(json.loads(plan['value']).get('title') if plan else None) or request['idea'].splitlines()[0][:160]
+                items.append({'scope':row['scope'],'job_id':row['id'],'title':title,'project':request.get('project','Dự án mặc định'),
+                              'state':row['state'],'stage':row['stage'],'error':row['error'],'cancel_requested':bool(row['cancel']),'created':row['created']})
+        return {'items':items}
+    def bridge_pending(self,bridge):
+        self.bridge_root(bridge)
+        with self.store.db() as c:
+            rows=c.execute('''SELECT e.*,s.job,EXISTS(SELECT 1 FROM connector_smokes smoke WHERE smoke.exchange_id=e.id) AS is_smoke FROM connector_exchanges e JOIN connector_scopes s ON s.id=e.scope
+                LEFT JOIN connector_bridge_memberships m ON m.scope=s.id LEFT JOIN jobs j ON j.id=s.job
+                WHERE (s.id=? OR m.bridge=?) AND e.response IS NULL AND
+                ((j.state IN ('queued','running','retrying') AND j.cancel=0) OR
+                 (s.id=? AND EXISTS (SELECT 1 FROM connector_smokes smoke WHERE smoke.exchange_id=e.id)))
+                ORDER BY e.created,e.rowid''',(bridge,bridge,bridge)).fetchall()
+        seen=set();items=[]
+        for row in rows:
+            if row['scope'] in seen:continue
+            seen.add(row['scope'])
+            items.append({'scope':row['scope'],'job_id':None if row['is_smoke'] else row['job'],'is_smoke':bool(row['is_smoke']),'id':row['id'],'version':row['version'],'prompt':row['prompt'],'attachments':[]})
+        return {'items':items}
     def enqueue_smoke(self,scope):
         """Create a distinct synthetic exchange after any preceding pending item has settled."""
-        if self.pending(scope)['items']:
+        pending=self.pending(scope)['items']
+        with self.store.db() as c:
+            terminal=c.execute("SELECT j.id FROM connector_scopes s JOIN jobs j ON j.id=s.job WHERE s.id=? AND (j.state NOT IN ('queued','running','retrying') OR j.cancel=1)",(scope,)).fetchone()
+            smoke_pending=c.execute('SELECT e.id FROM connector_smokes s JOIN connector_exchanges e ON e.id=s.exchange_id WHERE s.scope=? AND e.response IS NULL',(scope,)).fetchone()
+        # A retained failed-job receipt must not prevent testing its parent bridge.
+        if (pending and not terminal) or smoke_pending:
             raise PermanentError('Previous connector exchange is still pending; do not send a duplicate')
         nonce=str(uuid.uuid4())
         identifier=self.enqueue(scope,SMOKE_PROMPT+'\nRequest nonce: '+nonce)
@@ -77,6 +127,8 @@ class Exchanges:
         if not r:raise KeyError(identifier)
         return dict(r)
     def receive(self,scope,identifier,version,text):
+        if isinstance(text,(dict,list)):
+            text=json.dumps(text,ensure_ascii=False)
         value=parse_reply(text);serialized=json.dumps(value,ensure_ascii=False,sort_keys=True)
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE')
