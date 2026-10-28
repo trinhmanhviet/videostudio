@@ -83,11 +83,14 @@
         button=null;
       }
       const diffAt=(a,b)=>{const x=normalise(a),y=normalise(b);let i=0;while(i<Math.min(x.length,y.length)&&x[i]===y[i])i++;return i;};
-      for(let attempt=0;attempt<3;attempt++){
+      // Chrome truncates very large execCommand insertions, so long prompts are
+      // written in bounded chunks after selecting the whole composer.
+      for(let attempt=0;attempt<2;attempt++){
         if(normalise(logicalText(input))===normalise(prompt))break;
         const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);
-        document.execCommand('insertText',false,prompt);
-        await wait(300);if(retired)return;
+        if(attempt===0){document.execCommand('insertText',false,prompt);await wait(400);}
+        else{for(let i=0;i<prompt.length;i+=1500){document.execCommand('insertText',false,prompt.slice(i,i+1500));await wait(80);if(retired)return;}}
+        if(retired)return;
       }
       const got=logicalText(input);
       if(normalise(got)!==normalise(prompt))throw Error('Composer does not match immutable prompt (got '+normalise(got).length+'/'+normalise(prompt).length+' chars, first diff at '+diffAt(got,prompt)+')');
