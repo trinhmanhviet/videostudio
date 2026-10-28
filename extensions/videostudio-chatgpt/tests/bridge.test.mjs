@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {start, claim, result, canStart, acknowledge, receiptPath, studioScope} from '../protocol.mjs';
+import {start, claim, result, canStart, canDiscard, acknowledge, receiptPath, studioScope} from '../protocol.mjs';
 
 const scope='123e4567-e89b-42d3-a456-426614174000';
 test('Studio scope accepts only exact localhost production route and matching IDs',()=>{
@@ -38,6 +38,14 @@ test('only an exact accepted receipt clears the job for the next text exchange',
   assert.equal(state.job.phase,'reply');
   assert.equal(acknowledge(state,{id:'req',version:1,accepted:true}),true);
   assert.equal(state.job,null);
+});
+test('manual discard is restricted to inactive owner and unresolved request',()=>{
+  const state={...start({studioTab:7,chatTab:9,scope}),active:false,job:{id:'req',version:1,phase:'uncertain'}};
+  assert.equal(canDiscard(state,{studioTab:7,scope}),true);
+  assert.equal(canDiscard({...state,active:true},{studioTab:7,scope}),false);
+  assert.equal(canDiscard(state,{studioTab:8,scope}),false);
+  assert.equal(canDiscard(state,{studioTab:7,scope:'other'}),false);
+  assert.equal(canDiscard({...state,job:null},{studioTab:7,scope}),false);
 });
 test('receipt URL encodes exact request and scope',()=>{
   assert.equal(receiptPath(scope,'req'),`/api/v1/projects/${scope}/runs/${scope}/chatgpt-exchanges/req`);

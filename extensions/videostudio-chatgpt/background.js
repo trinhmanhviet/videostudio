@@ -1,4 +1,4 @@
-import {start,claim,result,studioScope,canStart,acknowledge} from './protocol.mjs';
+import {start,claim,result,studioScope,canStart,canDiscard,acknowledge} from './protocol.mjs';
 const KEY='videostudio_bridge_v1';
 const get=async()=> (await chrome.storage.local.get(KEY))[KEY]??null;
 const put=async state=>chrome.storage.local.set({[KEY]:state});
@@ -12,11 +12,20 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
       const tab=await chrome.tabs.create({url:'https://chatgpt.com/',active:true});
       const state={...start({studioTab:sender.tab.id,chatTab:tab.id,scope:message.scope}),active:true};await put(state);return {ok:true};
     }
-    const state=await get();if(!state?.active)throw Error('Bridge not active');
+    const state=await get();if(!state)throw Error('Bridge not configured');
+    if(message?.kind==='snapshot'){
+      if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab)throw Error('Not owner');
+      return {ok:true,active:state.active,job:state.job};
+    }
+    if(message?.kind==='discard'){
+      if(!canDiscard(state,{studioTab:sender.tab?.id,scope:message.scope})||!studioSender(sender,state.scope)||message.id!==state.job.id)throw Error('Cannot discard this request');
+      await chrome.storage.local.remove(KEY);return {ok:true};
+    }
     if(message?.kind==='stop'){
       if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab)throw Error('Not owner');
       await put({...state,active:false});return {ok:true};
     }
+    if(!state.active)throw Error('Bridge not active');
     if(message?.kind==='imported'){
       if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab||!acknowledge(state,message))throw Error('Uncorrelated import receipt');
       await put(state);return {ok:true};
@@ -43,10 +52,6 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message?.kind==='reply'){
       if(!chatSender(sender)||!result(state,{chatTab:sender.tab.id,id:message.id,text:message.text}))throw Error('Uncorrelated reply');
       await put(state);await chrome.tabs.sendMessage(state.studioTab,{kind:'reply',id:message.id,text:message.text});return {ok:true};
-    }
-    if(message?.kind==='snapshot'){
-      if(!studioSender(sender,state.scope)||sender.tab.id!==state.studioTab)throw Error('Not owner');
-      return {ok:true,job:state.job};
     }
     throw Error('Unknown message');
   })().then(reply,error=>reply({ok:false,error:String(error.message??error)}));return true;

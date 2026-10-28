@@ -29,7 +29,7 @@
       await wait(200);
       const actual=input.tagName==='TEXTAREA'?input.value:text(input);
       if(actual.trim()!==prompt.trim())throw Error('Composer does not match immutable prompt');
-      const form=input.closest('form');const button=[...(form||document).querySelectorAll('button')].find(n=>visible(n)&&(/^(send prompt|send message|gửi)$/i.test(n.getAttribute('aria-label')||'')||n.getAttribute('data-testid')==='send-button'));
+      const form=input.closest('form');const button=[...(form||document).querySelectorAll('button')].find(n=>visible(n)&&globalThis.VideoStudioSendButton.isSendButton(n.getAttribute('aria-label'),n.getAttribute('data-testid')));
       if(!button||button.disabled)throw Error('Send button unavailable');
       // From here delivery is uncertain even if the tab reloads. Background persisted dispatching first.
       button.click();

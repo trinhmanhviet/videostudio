@@ -2,7 +2,7 @@
   const scope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1];
   if(location.origin!=='http://localhost:8877'||(!scope&&location.pathname!=='/'))return;
   const root=document.createElement('aside');root.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;font:13px system-ui';
-  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Idle — click Start to open a dedicated ChatGPT tab.</p><button id="start">Start</button><button id="smoke">Kiểm tra chữ</button><button id="stop">Stop</button></section>';
+  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Idle — click Start to open a dedicated ChatGPT tab.</p><button id="start">Start</button><button id="smoke">Kiểm tra chữ</button><button id="stop">Stop</button><button id="discard">Bỏ yêu cầu cũ</button></section>';
   document.documentElement.append(root);
   const status=shadow.querySelector('#status');let active=false,busy=false;
   const api=async(path,options)=>{const response=await fetch(path,{credentials:'same-origin',...options});if(!response.ok)throw Error(`Studio HTTP ${response.status}`);return response.json();};
@@ -57,6 +57,16 @@
     catch(error){status.textContent=`Smoke not queued: ${error.message}`;}
   });
   shadow.querySelector('#stop').addEventListener('click',async event=>{if(!event.isTrusted)return;active=false;const response=await send({kind:'stop'});await heartbeat();status.textContent=response.ok?'Stopped':`Stop failed: ${response.error}`;});
+  shadow.querySelector('#discard').addEventListener('click',async event=>{
+    if(!event.isTrusted||!scope||active)return;
+    const state=await send({kind:'snapshot'});
+    if(!state.ok||!state.job||!['dispatching','uncertain'].includes(state.job.phase)){status.textContent='No unresolved request to discard';return;}
+    const receipt=await api(`/api/v1/projects/${scope}/runs/${scope}/chatgpt-exchanges/${encodeURIComponent(state.job.id)}`);
+    if(receipt.accepted){status.textContent='Server already has this reply; do not discard';return;}
+    if(!confirm(`Only if the old ChatGPT tab has NO sent user turn for ${state.job.id}: abandon this pending request? It remains on the server and will NOT be sent again automatically.`))return;
+    const response=await send({kind:'discard',scope,id:state.job.id});
+    status.textContent=response.ok?'Old request abandoned. Open a fresh Studio session with Start.':`Discard blocked: ${response.error}`;
+  });
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{if(message?.kind!=='reply')return;if(active)tick();reply({ok:true});});
   setInterval(tick,1200);
   setInterval(()=>{if(active)heartbeat();},10000);
