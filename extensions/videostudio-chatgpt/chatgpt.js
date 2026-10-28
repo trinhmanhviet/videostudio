@@ -5,7 +5,8 @@
   const user=()=>[...document.querySelectorAll('[data-message-author-role="user"],[data-content-search-unit-key$=":user"]')].filter(visible).at(-1);
   const assistants=()=>[...document.querySelectorAll('[data-message-author-role="assistant"],[data-content-search-unit-key$=":assistant"]')].filter(visible);
   const text=n=>n?.innerText?.trim()??n?.textContent?.trim()??'';
-  const userText=n=>text(n?.querySelector('[data-user-message-bubble] .whitespace-pre-wrap,.whitespace-pre-wrap')||n).replace(/^You said:\s*/u,'').trim();
+  const logicalText=n=>globalThis.VideoStudioLogicalText.logicalText(n);
+  const userText=n=>logicalText(n?.querySelector('[data-user-message-bubble] .whitespace-pre-wrap,.whitespace-pre-wrap')||n).replace(/^You said:\s*/u,'').trim();
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   let retired=false,occupied=false;
   const runtime=async message=>{if(retired)return null;try{return await chrome.runtime.sendMessage(message);}catch(e){if(/Extension context invalidated|Receiving end does not exist/i.test(String(e?.message??e)))retired=true;return null;}};
@@ -32,7 +33,7 @@
       if(input.tagName==='TEXTAREA'){Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,prompt);input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:prompt}));}
       else {const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);if(!document.execCommand('insertText',false,prompt))throw Error('Composer insertion failed');}
       await wait(200);
-      const actual=input.tagName==='TEXTAREA'?input.value:text(input);
+      const actual=logicalText(input);
       if(actual.trim()!==prompt.trim())throw Error('Composer does not match immutable prompt');
       const form=input.closest('form');const button=[...(form||document).querySelectorAll('button')].find(n=>visible(n)&&globalThis.VideoStudioSendButton.isSendButton(n.getAttribute('aria-label'),n.getAttribute('data-testid')));
       if(!button||button.disabled)throw Error('Send button unavailable');
