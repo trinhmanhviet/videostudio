@@ -1,4 +1,4 @@
-param([string]$EngineeringScope='', [switch]$RestartOwnServer, [ValidateSet('cdp','webauth','extension')][string]$TextTransport='cdp')
+﻿param([string]$EngineeringScope='', [switch]$RestartOwnServer, [ValidateSet('cdp','webauth','extension','gemini')][string]$TextTransport='cdp')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $python=if(Test-Path 'C:\Python312\python.exe'){'C:\Python312\python.exe'}else{(Get-Command python).Source}
@@ -16,7 +16,7 @@ if($existing){
 if($EngineeringScope){$env:VS_ENGINEERING_SCOPE=$EngineeringScope}else{Remove-Item Env:VS_ENGINEERING_SCOPE -ErrorAction SilentlyContinue}
 $env:VS_FLOW_REFERENCE_UI_VERIFIED='1'
 $env:VS_LLM_TRANSPORT=$TextTransport
-if($TextTransport -eq 'cdp'){& (Join-Path $PSScriptRoot 'start_browser.ps1') -ServiceOnly}
+if($TextTransport -in @('cdp','gemini')){& (Join-Path $PSScriptRoot 'start_browser.ps1') -ServiceOnly}
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'data') | Out-Null
 $process=Start-Process $python -ArgumentList '-m','uvicorn','videostudio.api:app','--host','127.0.0.1','--port','8877' -WorkingDirectory $root -RedirectStandardOutput (Join-Path $root 'data/server.out.log') -RedirectStandardError (Join-Path $root 'data/server.err.log') -WindowStyle Hidden -PassThru
 Write-Output "VideoStudio local started, PID $($process.Id). Production remains gated; engineering exception is exact-scope only."

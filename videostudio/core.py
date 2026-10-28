@@ -30,7 +30,7 @@ def output_slug(text):
 
 def validate_request(data):
     required={'idea','voice_id','duration_seconds'}
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size','text_provider'}
     if not required.issubset(set(data)) or not set(data).issubset(allowed):
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
     if not isinstance(data['idea'],str) or not 1<=len(data['idea'].strip())<=100000: raise ValueError('Invalid idea')
@@ -47,7 +47,9 @@ def validate_request(data):
         raise ValueError('flow_batch_size must be one of 1, 10, 20, 30')
     if provider!='flow' and batch_size!=1:
         raise ValueError('flow_batch_size above 1 requires Google Flow')
-    res=dict(data,idea=data['idea'].strip(),image_provider=provider,flow_batch_size=batch_size)
+    text_provider=data.get('text_provider','chatgpt')
+    if text_provider not in ('chatgpt','gemini'):raise ValueError('text_provider must be chatgpt or gemini')
+    res=dict(data,idea=data['idea'].strip(),image_provider=provider,flow_batch_size=batch_size,text_provider=text_provider)
     if mode is not None:res['workflow_mode']=mode
     if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
     if 'project' in data:

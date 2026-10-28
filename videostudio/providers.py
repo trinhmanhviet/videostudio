@@ -149,7 +149,7 @@ class Pipeline:
         def add(name,ok,detail):checks.append({'name':name,'ok':bool(ok),'detail':detail})
         local=lambda u:urlparse(u).hostname in ('127.0.0.1','localhost','::1')
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
-        if transport=='cdp':
+        if transport in ('cdp','gemini'):
             cdp_ok=False
             try:
                 cdp_url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/')
@@ -158,7 +158,14 @@ class Pipeline:
                 r=httpx.get(cdp_url+'/api/status',timeout=2,trust_env=False)
                 cdp_ok=r.status_code==200 and r.json().get('ready') is True
             except Exception:pass
-            add('cdp_transport',cdp_ok,'Chrome CDP Daemon running on port 8879 and connected to ChatGPT tab')
+            if transport=='gemini':
+                service_ok=False
+                try:
+                    service_ok=httpx.get(cdp_url+'/api/status',timeout=2,trust_env=False).json().get('service')=='videostudio-dedicated-cdp'
+                except Exception:pass
+                add('gemini_transport',service_ok,'Dedicated CDP daemon reachable; Gemini login/readiness is proven only by its own smoke receipt')
+            else:
+                add('cdp_transport',cdp_ok,'Chrome CDP Daemon running on port 8879 and connected to ChatGPT tab')
         elif transport=='extension':
             extension_ok=bool(scope and hasattr(self,'exchanges') and self.exchanges.accepted_extension(scope))
             add('extension_transport',extension_ok,'Exact scope requires a fresh extension heartbeat and correlated ChatGPT smoke response')
@@ -206,6 +213,10 @@ class Pipeline:
         if transport=='cdp':
             add('cdp_smoke',self.accepted_cdp(),'Historical correlated Chat smoke evidence only; not current authentication or full video acceptance')
             add('production_acceptance',bool(cdp_ok and self.accepted_cdp()),'Full video pipeline unlocked with live authenticated dedicated Chrome and verified smoke exchange')
+        elif transport=='gemini':
+            from .gemini_smoke import accepted_gemini_smoke
+            add('gemini_smoke',accepted_gemini_smoke(),'Exact synthetic Gemini smoke reply from the dedicated tab is required; a ChatGPT smoke never unlocks this gate')
+            add('production_acceptance',bool(service_ok and accepted_gemini_smoke()),'Gemini text path accepted with a reachable daemon and its own verified smoke exchange; ChatGPT connector readiness is not required')
         elif transport=='webauth':
             from .webauth import accepted_smoke
             add('webauth_smoke',accepted_smoke(),'A completed synthetic WebAuth text smoke receipt is required; model listing alone is insufficient.')
@@ -218,14 +229,17 @@ class Pipeline:
     def llm_json(self,prompt,check):
         check()
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
-        if transport=='cdp':
+        requested=getattr(getattr(self,'context',None),'text_provider',None)
+        if requested in ('chatgpt','gemini'):transport='gemini' if requested=='gemini' else 'cdp'
+        if transport in ('cdp','gemini'):
             cdp_url=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/')
             u=urlparse(cdp_url)
             if u.scheme!='http' or u.hostname not in ('127.0.0.1','localhost','::1') or u.username or u.password:
                 raise PermanentError('Only loopback CDP daemon permitted')
             job=getattr(getattr(self,'context',None),'job',None)
             if not job:raise PermanentError('Scoped CDP job context required')
-            r=httpx.post(f"{cdp_url}/api/chat",json={'prompt':prompt,'job_id':job},headers={'X-VS-Client':'videostudio'},timeout=360,trust_env=False)
+            route='/api/gemini' if transport=='gemini' else '/api/chat'
+            r=httpx.post(f"{cdp_url}{route}",json={'prompt':prompt,'job_id':job},headers={'X-VS-Client':'videostudio'},timeout=360,trust_env=False)
             try:
                 data=r.json()
             except Exception:
@@ -330,7 +344,7 @@ class Pipeline:
     def handlers(self):
         def wrapped(name):
             def invoke(j,check):
-                if hasattr(self,'context'):self.context.job=j['id']
+                if hasattr(self,'context'):self.context.job=j['id'];self.context.text_provider=j['request'].get('text_provider','chatgpt')
                 try:return getattr(self,name)(j,check)
                 finally:
                     if hasattr(self,'context'):self.context.job=None
@@ -344,7 +358,7 @@ class Pipeline:
         if not pf['ready']:raise PermanentError('Preflight blocked: '+', '.join(x['name'] for x in pf['checks'] if not x['ok']))
         self.voices.selected(j['request']['voice_id'])
         mode=j['request'].get('workflow_mode')
-        if mode in ('research','provided_narration') and transport not in ('cdp','webauth','extension'):raise PermanentError('This workflow requires a supported ChatGPT text transport')
+        if mode in ('research','provided_narration') and transport not in ('cdp','webauth','extension','gemini'):raise PermanentError('This workflow requires a supported ChatGPT text transport')
         if mode=='provided_narration':
             prompt_text=('Create only a visual production plan for this user-provided narration. Do not write, paraphrase, shorten, expand, or reorder narration. '
                          'Return JSON {"title":str,"visual_style":str,"music_prompt":str,"characters":[{"character_id":str,"name":str,"description":str}]}. '

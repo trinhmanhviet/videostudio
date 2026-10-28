@@ -291,6 +291,158 @@ class ChromeChatGPTBridge:
     async def close(self):
         await self.cdp.close()  # leave owned Chrome open; never close personal Chrome
 
+    # ---------- Gemini text transport (isolated from ChatGPT/Flow) ----------
+
+    async def ensure_gemini_tab(self, job):
+        """Own a dedicated Gemini tab; never adopt a tab the owner already had."""
+        from .cdp_gemini import GEMINI_HOME, valid_gemini_url
+        saved = self.journal.conversation(job, provider='gemini')
+        targets = (await self.cdp.command('Target.getTargets')).get('targetInfos', [])
+        target = None
+        if saved:
+            for t in targets:
+                if t.get('targetId') == saved['target'] and t.get('type') == 'page' and valid_gemini_url(t.get('url', '')):
+                    if t['url'].split('?')[0].rstrip('/') == saved['url'].split('?')[0].rstrip('/'):
+                        target = t['targetId']
+                        break
+        else:
+            for t in targets:
+                if t.get('type') == 'page' and valid_gemini_url(t.get('url', '')) and self.journal.reusable_text_target(t.get('targetId'), t.get('url', ''), provider='gemini'):
+                    target = t['targetId']
+                    self.journal.set_conversation(job, t.get('url', GEMINI_HOME), target, provider='gemini')
+                    break
+        if not target:
+            url = saved['url'] if saved else GEMINI_HOME
+            created = await self.cdp.command('Target.createTarget', {'url': url})
+            target = created['targetId']
+            self.journal.own_target(target, 'gemini')
+            self.journal.set_conversation(job, url, target, provider='gemini')
+        return target
+
+    async def gemini_page_ready(self, job, timeout=35):
+        from .cdp_gemini import gemini_snapshot_expression, parse_snapshot
+        target = await self.ensure_gemini_tab(job)
+        session = await self.session(target)
+        await self.cdp.command('Target.activateTarget', {'targetId': target})
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                state = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
+            except (TimeoutError, CDPError):
+                await asyncio.sleep(.4)
+                continue
+            if state.get('login') or state.get('challenge'):
+                self.authenticated = False
+                raise NeedsAuthentication('Sign in or finish verification in the dedicated Chrome Gemini tab')
+            if state.get('composer'):
+                return target, session, state
+            await asyncio.sleep(.5)
+        raise TimeoutError('Gemini composer not ready; no prompt sent')
+
+    async def ask_gemini(self, job, prompt_text, timeout_seconds=300):
+        """Visible-UI Gemini request: one send at most, receipt before input."""
+        from .cdp_gemini import (gemini_snapshot_expression, gemini_composer_expression,
+                                 gemini_send_button_expression, correlate_gemini, parse_snapshot,
+                                 gemini_chat_count_expression, gemini_new_chat_expression,
+                                 gemini_click_send_expression)
+        async with self.job_lock:
+            record = self.journal.prepare(job, prompt_text, provider='gemini')
+            if record['state'] == 'completed':
+                return record['response']
+            identifier = record['id']
+            marker = '[VideoStudio request ' + identifier + ']'
+            await self.connect()
+            if record['state'] == 'prepared':
+                target, session, state = await self.gemini_page_ready(job)
+                # A restored conversation must never receive our prompt: always open a new chat.
+                fresh = await self.evaluate(session, gemini_new_chat_expression())
+                if fresh:
+                    for kind in ('mousePressed', 'mouseReleased'):
+                        await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': fresh['x'], 'y': fresh['y'], 'button': 'left', 'clickCount': 1}, session=session)
+                    await asyncio.sleep(.8)
+                    state = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
+                    if not state.get('composer'):
+                        raise RuntimeError('Gemini composer unavailable after New chat; no prompt sent')
+                wrapped = (marker + '\n' + prompt_text + '\nReturn exactly one JSON object with this envelope: '
+                           + json.dumps({'request_id': identifier, 'result': {'your_response': 'replace with the requested JSON object'}}, ensure_ascii=False))
+                if state.get('generating'):
+                    raise RuntimeError('Gemini tab has an active response; no overwrite or send')
+                draft = ' '.join((state.get('draft') or '').split())
+                if draft and draft != ' '.join(wrapped.split()):
+                    raise RuntimeError('Gemini tab has a different draft; no overwrite or send')
+                if not draft:
+                    point = await self.evaluate(session, gemini_composer_expression())
+                    if not point:
+                        raise RuntimeError('Gemini composer unavailable; no prompt sent')
+                    for kind in ('mousePressed', 'mouseReleased'):
+                        await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'], 'button': 'left', 'clickCount': 1}, session=session)
+                    await asyncio.sleep(0.1)
+                    await self.cdp.command('Input.insertText', {'text': wrapped}, session=session)
+                button = None
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    button = await self.evaluate(session, gemini_send_button_expression())
+                    if button:
+                        break
+                    await asyncio.sleep(.2)
+                if not button:
+                    raise RuntimeError('Gemini send control unavailable; draft preserved, no request sent')
+                # Durable write BEFORE mouse input: any crash from here is recovery-only.
+                self.journal.claim_send(identifier)
+                final = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression(identifier)))
+                final_draft = ' '.join((final.get('draft') or '').replace('\u00a0', ' ').split())
+                if (not final or not final.get('composer') or final.get('login') or final.get('challenge')
+                        or final.get('generating') or not final_draft
+                        or (final_draft != ' '.join(wrapped.split()) and marker not in final_draft)):
+                    raise IndeterminateRequest('Gemini composer/draft changed at send boundary; no dispatch, receipt retained')
+                for kind in ('mousePressed', 'mouseReleased'):
+                    await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': button['x'], 'y': button['y'], 'button': 'left', 'clickCount': 1}, session=session)
+                # Angular Material ignores a synthetic pointer in some builds; the element
+                # click is required, and the composer clearing is the only proof of dispatch.
+                await self.evaluate(session, gemini_click_send_expression())
+                cleared = False
+                verify_deadline = time.monotonic() + 6
+                while time.monotonic() < verify_deadline:
+                    check = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
+                    if check.get('composer') and not (check.get('draft') or '').strip():
+                        cleared = True
+                        break
+                    await asyncio.sleep(.3)
+                if not cleared:
+                    raise IndeterminateRequest('Gemini composer did not clear after send; receipt retained, not resent')
+            else:
+                target = await self.ensure_gemini_tab(job)
+                session = await self.session(target)
+                await self.cdp.command('Target.activateTarget', {'targetId': target})
+            # Already-attempted request: read only, never submit again.
+            deadline = time.monotonic() + timeout_seconds
+            previous = None
+            while time.monotonic() < deadline:
+                raw = await self.evaluate(session, gemini_snapshot_expression(identifier))
+                state = parse_snapshot(raw)
+                if state.get('login') or state.get('challenge'):
+                    self.authenticated = False
+                    raise NeedsAuthentication('Authentication required; pending Gemini request retained, not resent')
+                try:
+                    out = correlate_gemini(state, marker, identifier)
+                except ValueError:
+                    raise IndeterminateRequest('Ambiguous Gemini transcript for this request; not resent')
+                if out:
+                    text = out['text']
+                    if text == previous:
+                        try:
+                            value = parse_reply(text)
+                            self.journal.accept(identifier, value)
+                            return value['result']
+                        except (ValueError, json.JSONDecodeError):
+                            pass
+                    previous = text
+                if state.get('generating'):
+                    deadline = max(deadline, time.monotonic() + 90)
+                await asyncio.sleep(1)
+            raise IndeterminateRequest('Matching completed Gemini response unavailable; receipt retained, no automatic resubmission')
+
+
 
 async def create_app(bridge=None):
     bridge = bridge or ChromeChatGPTBridge()
@@ -328,12 +480,27 @@ async def create_app(bridge=None):
                 value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),character_mentions=body.get('character_mentions'))}
             elif request.path == '/api/flow/images/generate-batch':
                 job_id,tasks=body.get('job_id'),body.get('tasks')
-                timeout=body.get('timeout',1200)
+                timeout=body.get('timeout',1200);download_results=body.get('download_results',True)
                 if not isinstance(job_id,str) or not isinstance(tasks,list) or not 1<=len(tasks)<=30:
                     raise web.HTTPBadRequest(text='Flow batch requires a job_id and 1..30 tasks')
                 if not isinstance(timeout,(int,float)) or not 1<=timeout<=3600:
                     raise web.HTTPBadRequest(text='Flow batch timeout must be 1..3600 seconds')
-                value={'ok':True,'data':await bridge.flow_images.generate_batch(job_id,tasks,timeout=float(timeout))}
+                if type(download_results) is not bool:
+                    raise web.HTTPBadRequest(text='download_results must be boolean')
+                value={'ok':True,'data':await bridge.flow_images.generate_batch(job_id,tasks,timeout=float(timeout),download_results=download_results)}
+            elif request.path == '/api/gemini':
+                prompt, job = body.get('prompt'), body.get('job_id')
+                if not isinstance(prompt, str) or not 1 <= len(prompt) <= 500000 or not isinstance(job, str) or not 1 <= len(job) <= 200:
+                    raise web.HTTPBadRequest(text='Scoped job_id and prompt required')
+                timeout = body.get('timeout_seconds', 300)
+                if not isinstance(timeout, (int, float)) or not 30 <= timeout <= 1800:
+                    raise web.HTTPBadRequest(text='timeout_seconds must be 30..1800')
+                value = {'ok': True, 'data': await bridge.ask_gemini(job, prompt, timeout_seconds=float(timeout))}
+                from .gemini_smoke import normalize as _normalize_gemini
+                smoke = _normalize_gemini(value['data'])
+                if job == '__acceptance__' and smoke == {'connection_test': 'videostudio', 'ok': True}:
+                    from .gemini_smoke import record_gemini_smoke
+                    record_gemini_smoke(smoke)
             else:
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
@@ -364,7 +531,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app
