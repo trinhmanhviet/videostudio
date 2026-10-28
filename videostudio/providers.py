@@ -42,6 +42,10 @@ def music_graph(prompt,seconds,seed,prefix):
     '7':node('VAEDecodeAudio',samples=['6',0],vae=['1',2]),'8':node('SaveAudioMP3',audio=['7',0],filename_prefix=prefix,quality='V0')}
 
 class NarrationDurationError(ValueError):pass
+class TransientBrowserError(RuntimeError):
+    """Dedicated browser temporarily unavailable; the stage may retry."""
+
+
 class UncertainDeliveryError(RuntimeError):
     """Retry by reconciling the same durable CDP request, never re-sending it."""
 
@@ -244,12 +248,15 @@ class Pipeline:
                 data=r.json()
             except Exception:
                 raise PermanentError(f'CDP daemon error HTTP {r.status_code}: {r.text[:500]}')
-            if r.status_code==409:
-                detail=data.get('code','CDP blocked')+': '+data.get('error','Request retained')
-                if data.get('code')=='delivery_indeterminate':
+            if r.status_code!=200:
+                code=str(data.get('code') or '')
+                detail=(code+': ' if code else '')+str(data.get('error') or r.text[:500])
+                if code=='delivery_indeterminate':
                     raise UncertainDeliveryError(detail)
+                if code in ('browser_unavailable','gemini_unavailable'):
+                    raise TransientBrowserError(detail)
                 raise PermanentError(detail)
-            r.raise_for_status();check()
+            check()
             if not data.get('ok') or not isinstance(data.get('data'),dict):raise PermanentError('Invalid scoped CDP response')
             res = data['data']
             if 'your_response' in res and len(res) == 1 and isinstance(res['your_response'], dict):

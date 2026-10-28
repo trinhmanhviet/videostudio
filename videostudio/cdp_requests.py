@@ -135,6 +135,13 @@ class RequestJournal:
         with self.db() as c:r=c.execute('SELECT purpose FROM owned_targets WHERE target=?',(target,)).fetchone()
         return r['purpose'] if r else None
 
+    def owned_targets(self,purpose):
+        """Owned Chrome targets for one purpose, newest first (single-tab reuse)."""
+        if purpose not in ('text','image','gemini'):raise ValueError('Invalid owned target purpose')
+        with self.db() as c:
+            rows=c.execute('SELECT target FROM owned_targets WHERE purpose=? ORDER BY rowid DESC',(purpose,)).fetchall()
+        return [r['target'] for r in rows]
+
     def reusable_text_target(self,target,url,provider='chatgpt'):
         provider = self._provider(provider)
         if self.target_purpose(target)!=('text' if provider=='chatgpt' else 'gemini'):return False

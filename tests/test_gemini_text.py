@@ -281,5 +281,41 @@ class GeminiSmokeReceiptTests(unittest.TestCase):
                 self.assertTrue(gemini_smoke.accepted_gemini_smoke())
 
 
+class GeminiSingleTabTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from videostudio.cdp_requests import RequestJournal
+        self.tmp = tempfile.TemporaryDirectory()
+        self.journal = RequestJournal(Path(self.tmp.name) / 'journal.sqlite3')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_owned_targets_lists_gemini_tabs_newest_first(self):
+        self.journal.own_target('tab-a', 'gemini')
+        self.journal.own_target('tab-b', 'gemini')
+        self.journal.own_target('tab-c', 'text')
+        gems = self.journal.owned_targets('gemini')
+        self.assertEqual(set(gems), {'tab-a', 'tab-b'})
+        self.assertEqual(gems[0], 'tab-b')
+
+    def test_ensure_gemini_tab_reuses_owned_tab_across_jobs(self):
+        import inspect
+        from videostudio import cdp_daemon
+        source = inspect.getsource(cdp_daemon.ChromeChatGPTBridge.ensure_gemini_tab)
+        self.assertIn("owned_targets('gemini')", source)
+        self.assertLess(source.index("owned_targets('gemini')"), source.index('Target.createTarget'))
+
+
+class GeminiErrorPropagationTests(unittest.TestCase):
+    def test_daemon_503_body_is_surfaced_as_transient_error(self):
+        import inspect
+        from videostudio import providers
+        source = inspect.getsource(providers.Pipeline.llm_json)
+        self.assertIn('TransientBrowserError', source)
+        self.assertIn("data.get('error')", source)
+
+
 if __name__ == '__main__':
     unittest.main()

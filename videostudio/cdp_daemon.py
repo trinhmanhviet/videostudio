@@ -312,6 +312,15 @@ class ChromeChatGPTBridge:
                     self.journal.set_conversation(job, t.get('url', GEMINI_HOME), target, provider='gemini')
                     break
         if not target:
+            # One dedicated Gemini tab for the whole installation: reuse any owned
+            # Gemini page even after Gemini navigated it to a new conversation URL.
+            owned = set(self.journal.owned_targets('gemini'))
+            for t in targets:
+                if t.get('type') == 'page' and t.get('targetId') in owned and valid_gemini_url(t.get('url', '')):
+                    target = t['targetId']
+                    self.journal.set_conversation(job, t.get('url', GEMINI_HOME), target, provider='gemini')
+                    break
+        if not target:
             url = saved['url'] if saved else GEMINI_HOME
             created = await self.cdp.command('Target.createTarget', {'url': url})
             target = created['targetId']
