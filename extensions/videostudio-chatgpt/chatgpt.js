@@ -64,13 +64,16 @@
       if(!input)throw Error('Composer unavailable or occupied');
       // A leftover draft from our own earlier attempt may be reused, never another text.
       const existing=logicalText(input).trim();
-      if(existing&&!existing.includes(requestMarker(id)))throw Error('Composer unavailable or occupied');
+      // Any leftover VideoStudio prompt is ours (only the id differs), so it may be
+      // replaced; anything else is treated as the owner's text and never touched.
+      const staleOwn=/^Y\u00caU C\u1ea6U STUDIO [0-9a-f-]{36}/i.test(existing);
+      if(existing&&!staleOwn&&!existing.includes(requestMarker(id)))throw Error('Composer unavailable or occupied');
       // Do not change ChatGPT mode. If mode cannot be proved Chat, stop.
       const group=document.querySelector('[role="group"][aria-label="Composer mode"]');
       if(group){const chat=[...group.querySelectorAll('button')].find(n=>text(n)==='Chat');if(chat?.getAttribute('aria-pressed')!=='true')throw Error('Chat mode not confirmed');}
       else if(!/^(ask chatgpt|message chatgpt|hỏi chatgpt|nhắn tin cho chatgpt)$/i.test((input.getAttribute('aria-label')||input.getAttribute('placeholder')||input.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')||'').trim()))throw Error('Chat mode unknown');
       input.focus();
-      if(!existing){
+      if(!existing||!existing.includes(requestMarker(id))){
       if(input.tagName==='TEXTAREA'){Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,prompt);input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:prompt}));}
       else {const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);if(!document.execCommand('insertText',false,prompt))throw Error('Composer insertion failed');}
       }
