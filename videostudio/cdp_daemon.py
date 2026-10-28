@@ -353,7 +353,7 @@ class ChromeChatGPTBridge:
         from .cdp_gemini import (gemini_snapshot_expression, gemini_composer_expression,
                                  gemini_send_button_expression, correlate_gemini, parse_snapshot,
                                  gemini_chat_count_expression, gemini_new_chat_expression,
-                                 gemini_click_send_expression)
+                                 gemini_click_send_expression, new_chat_ready, canonical_gemini_text)
         async with self.job_lock:
             record = self.journal.prepare(job, prompt_text, provider='gemini')
             if record['state'] == 'completed':
@@ -363,32 +363,66 @@ class ChromeChatGPTBridge:
             await self.connect()
             if record['state'] == 'prepared':
                 target, session, state = await self.gemini_page_ready(job)
-                # A restored conversation must never receive our prompt: always open a new chat.
+                # Each request uses a fresh Gemini conversation in the same owned tab.
                 fresh = await self.evaluate(session, gemini_new_chat_expression())
                 if fresh:
+                    if not fresh.get('hitMatches'):
+                        raise RuntimeError('Gemini New chat control is obstructed; no prompt sent')
                     for kind in ('mousePressed', 'mouseReleased'):
                         await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': fresh['x'], 'y': fresh['y'], 'button': 'left', 'clickCount': 1}, session=session)
-                    await asyncio.sleep(.8)
-                    state = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
-                    if not state.get('composer'):
-                        raise RuntimeError('Gemini composer unavailable after New chat; no prompt sent')
+                    stable = 0
+                    for _ in range(160):
+                        await asyncio.sleep(.25)
+                        try:
+                            state = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
+                        except (TimeoutError, CDPError):
+                            stable = 0
+                            continue
+                        if new_chat_ready(state):
+                            stable += 1
+                            if stable >= 3:
+                                break
+                        else:
+                            stable = 0
+                    if stable < 3:
+                        raise RuntimeError('Gemini New chat did not reach a stable blank composer; no prompt sent')
+                elif not new_chat_ready(state):
+                    raise RuntimeError('Exact Gemini New chat control unavailable; refusing to append to an old conversation')
                 wrapped = (marker + '\n' + prompt_text + '\nReturn exactly one JSON object with this envelope: '
                            + json.dumps({'request_id': identifier, 'result': {'your_response': 'replace with the requested JSON object'}}, ensure_ascii=False))
                 if state.get('generating'):
                     raise RuntimeError('Gemini tab has an active response; no overwrite or send')
-                draft = ' '.join((state.get('draft') or '').split())
-                if draft and draft != ' '.join(wrapped.split()):
+                draft = canonical_gemini_text(state.get('draft') or '')
+                if draft and draft != wrapped:
                     raise RuntimeError('Gemini tab has a different draft; no overwrite or send')
                 if not draft:
+                    await self.cdp.command('Target.activateTarget', {'targetId': target})
                     point = await self.evaluate(session, gemini_composer_expression())
                     if not point:
                         raise RuntimeError('Gemini composer unavailable; no prompt sent')
                     for kind in ('mousePressed', 'mouseReleased'):
                         await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': point['x'], 'y': point['y'], 'button': 'left', 'clickCount': 1}, session=session)
-                    await asyncio.sleep(0.1)
-                    await self.cdp.command('Input.insertText', {'text': wrapped}, session=session)
+                    await asyncio.sleep(0.15)
+                    # execCommand goes through the editor's own input pipeline, so
+                    # Angular enables its Send control; Input.insertText often leaves
+                    # the model stale (text visible, no send arrow).
+                    inserted = await self.evaluate(session, "(()=>{const b=document.querySelector('rich-textarea [contenteditable=\"true\"],div[contenteditable=\"true\"][role=\"textbox\"]');if(!b)return 'NO_COMPOSER';b.focus();return document.execCommand('insertText',false,%s)?'INSERTED':'REFUSED'})()" % json.dumps(wrapped))
+                    typed = False
+                    for _ in range(20):
+                        await asyncio.sleep(.2)
+                        try:
+                            probe = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
+                        except (TimeoutError, CDPError):
+                            continue
+                        if canonical_gemini_text(probe.get('draft') or '') == wrapped:
+                            typed = True
+                            break
+                    if inserted != 'INSERTED' or not typed:
+                        # Never append a second full prompt after partial insertion.
+                        # The existing draft remains visible for inspection/recovery.
+                        raise RuntimeError('Gemini composer did not accept the exact prompt; nothing sent')
                 button = None
-                deadline = time.monotonic() + 5
+                deadline = time.monotonic() + 8
                 while time.monotonic() < deadline:
                     button = await self.evaluate(session, gemini_send_button_expression())
                     if button:
@@ -399,26 +433,24 @@ class ChromeChatGPTBridge:
                 # Durable write BEFORE mouse input: any crash from here is recovery-only.
                 self.journal.claim_send(identifier)
                 final = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression(identifier)))
-                final_draft = ' '.join((final.get('draft') or '').replace('\u00a0', ' ').split())
+                final_draft = canonical_gemini_text(final.get('draft') or '') if final else ''
                 if (not final or not final.get('composer') or final.get('login') or final.get('challenge')
-                        or final.get('generating') or not final_draft
-                        or (final_draft != ' '.join(wrapped.split()) and marker not in final_draft)):
+                        or final.get('generating') or final_draft != wrapped):
                     raise IndeterminateRequest('Gemini composer/draft changed at send boundary; no dispatch, receipt retained')
-                for kind in ('mousePressed', 'mouseReleased'):
-                    await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': button['x'], 'y': button['y'], 'button': 'left', 'clickCount': 1}, session=session)
-                # Angular Material ignores a synthetic pointer in some builds; the element
-                # click is required, and the composer clearing is the only proof of dispatch.
+                # Dispatch exactly one Send action. The visible user-turn marker, not
+                # composer clearing, is the delivery receipt: Gemini may leave a
+                # trailing newline in the editor even after accepting the message.
                 await self.evaluate(session, gemini_click_send_expression())
-                cleared = False
-                verify_deadline = time.monotonic() + 6
+                sent = False
+                verify_deadline = time.monotonic() + 12
                 while time.monotonic() < verify_deadline:
-                    check = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression()))
-                    if check.get('composer') and not (check.get('draft') or '').strip():
-                        cleared = True
+                    check = parse_snapshot(await self.evaluate(session, gemini_snapshot_expression(identifier)))
+                    if any(t.get('role') == 'user' and marker in (t.get('text') or '') for t in check.get('turns', [])):
+                        sent = True
                         break
                     await asyncio.sleep(.3)
-                if not cleared:
-                    raise IndeterminateRequest('Gemini composer did not clear after send; receipt retained, not resent')
+                if not sent:
+                    raise IndeterminateRequest('Gemini exact user-turn receipt unavailable after single Send action; request retained, not resent')
             else:
                 target = await self.ensure_gemini_tab(job)
                 session = await self.session(target)

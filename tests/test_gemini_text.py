@@ -317,5 +317,57 @@ class GeminiErrorPropagationTests(unittest.TestCase):
         self.assertIn("data.get('error')", source)
 
 
+class GeminiNewChatTransitionTests(unittest.TestCase):
+    def test_new_chat_selector_uses_exact_sidebar_action_not_gemini_logo(self):
+        from videostudio.cdp_gemini import gemini_new_chat_expression
+        source = gemini_new_chat_expression()
+        self.assertIn('a.mat-mdc-list-item', source)
+        self.assertIn('a.mat-mdc-list-item,button.mat-mdc-list-item', source)
+        self.assertIn('labels.has(text)', source)
+        self.assertIn('ctrl\\+shift\\+o', source)
+        self.assertNotIn("(e.getAttribute('aria-label')||'')+' '+(e.innerText||'')", source)
+
+    def test_empty_new_chat_is_ready_even_when_gemini_keeps_same_url(self):
+        from videostudio.cdp_gemini import new_chat_ready
+        self.assertTrue(new_chat_ready({'url':'https://gemini.google.com/app','composer':True,'draft':'','turns':[],'generating':False,'login':False,'challenge':False}))
+        self.assertFalse(new_chat_ready({'url':'https://gemini.google.com/app','composer':True,'draft':'old draft','turns':[],'generating':False,'login':False,'challenge':False}))
+        self.assertFalse(new_chat_ready({'url':'https://gemini.google.com/app','composer':True,'draft':'','turns':[{'role':'user','text':'old'}],'generating':False,'login':False,'challenge':False}))
+
+    def test_ask_gemini_waits_for_blank_state_without_requiring_url_change(self):
+        import inspect
+        from videostudio.cdp_daemon import ChromeChatGPTBridge
+        source = inspect.getsource(ChromeChatGPTBridge.ask_gemini)
+        self.assertIn('new_chat_ready(state)', source)
+        self.assertNotIn("state.get('url') != before_url", source)
+        self.assertIn('range(160)', source)
+        self.assertNotIn('for ch in wrapped', source)
+
+    def test_logical_composer_text_normalizes_line_endings_only(self):
+        from videostudio.cdp_gemini import canonical_gemini_text
+        expected = 'marker\nfirst line\nsecond line'
+        self.assertEqual(canonical_gemini_text(expected), expected)
+        self.assertEqual(canonical_gemini_text(expected.replace('\n','\r\n')), expected)
+        self.assertNotEqual(canonical_gemini_text('marker  first line second line'), expected)
+        self.assertNotEqual(canonical_gemini_text('marker\n\nfirst line\nsecond line'), expected)
+
+    def test_snapshot_builds_logical_paragraph_text(self):
+        from videostudio.cdp_gemini import gemini_snapshot_expression
+        source = gemini_snapshot_expression()
+        self.assertIn("p.every(x=>x.tagName==='P')", source)
+        self.assertIn(".join('\\n')", source)
+
+
+class GeminiDispatchSafetyTests(unittest.TestCase):
+    def test_one_send_action_and_user_turn_receipt_not_composer_clear(self):
+        import inspect
+        from videostudio.cdp_daemon import ChromeChatGPTBridge
+        source = inspect.getsource(ChromeChatGPTBridge.ask_gemini)
+        send = source.split('self.journal.claim_send(identifier)', 1)[1].split('else:', 1)[0]
+        self.assertNotIn("'Input.dispatchMouseEvent'", send)
+        self.assertEqual(send.count('gemini_click_send_expression()'), 1)
+        self.assertIn('marker', send)
+        self.assertNotIn('composer did not clear after send', send)
+
+
 if __name__ == '__main__':
     unittest.main()

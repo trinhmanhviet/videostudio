@@ -26,12 +26,28 @@ def valid_gemini_url(url):
     return p.scheme == 'https' and p.hostname == GEMINI_HOST and not p.username and not p.password
 
 
+def canonical_gemini_text(value):
+    """Normalize only line-ending encoding, never collapse spaces or paragraphs."""
+    if not isinstance(value, str):
+        return ''
+    return value.replace('\r\n', '\n').replace('\r', '\n')
+
+
 def gemini_snapshot_expression(marker=''):
     """Read-only DOM snapshot: composer, streaming state, turns and ordered chat text."""
     return r"""(()=>{
       const vis=e=>{const r=e&&e.getBoundingClientRect();return !!r&&r.width>1&&r.height>1};
       const composer=[...document.querySelectorAll('rich-textarea [contenteditable="true"],div[contenteditable="true"][role="textbox"],textarea')].filter(vis)[0];
-      const nodes=[...document.querySelectorAll('user-query, model-response')];
+      const logicalDraft=e=>{
+        if(!e)return '';
+        if(e.tagName==='TEXTAREA')return e.value||'';
+        const p=[...e.children];
+        let raw;
+        if(p.length&&p.every(x=>x.tagName==='P'))raw=p.map(x=>(x.innerText||x.textContent||'').replace(/\u200b/g,'')).join('\n');
+        else raw=(e.innerText||e.textContent||'').replace(/\u200b/g,'');
+        return raw.trim()===''?'':raw;
+      };
+      const nodes=[...document.querySelectorAll('user-query, model-response')].filter(vis);
       const turns=nodes.map(n=>{
         const isUser=n.tagName.toLowerCase()==='user-query';
         const body=isUser?(n.querySelector('.query-text, .query-content, [class*=query-text]')||n):n;
@@ -51,7 +67,7 @@ def gemini_snapshot_expression(marker=''):
         login:/sign in to gemini|đăng nhập vào gemini/i.test(document.body.innerText.slice(0,600))&&!composer,
         challenge:[...document.querySelectorAll('iframe')].some(f=>/recaptcha|challenges\.cloudflare\.com/.test(f.src||'')),
         composer:!!composer,
-        draft:composer?(composer.innerText||composer.value||'').trim():'',
+        draft:logicalDraft(composer),
         generating:stop||busy,
         turns,
         lastAssistantLength:lastAssistant?lastAssistant.text.length:0,
@@ -98,21 +114,28 @@ def gemini_chat_count_expression():
 
 
 def gemini_new_chat_expression():
-    """Centre point of the 'New chat' control, or null.
-
-    Required before typing: a freshly opened Gemini tab restores the last
-    conversation, and appending to that would pollute the owner's own chat.
-    """
+    """Find the exact sidebar New chat link, never the similarly-labelled Gemini logo."""
     return r"""(()=>{
       const vis=e=>{const r=e&&e.getBoundingClientRect();return !!r&&r.width>1&&r.height>1};
-      const hit=[...document.querySelectorAll('button,a')].filter(vis).find(e=>{
-        const l=(e.getAttribute('aria-label')||'')+' '+(e.innerText||'');
-        return /new chat|cuộc trò chuyện mới|tạo cuộc trò chuyện mới/i.test(l);
+      const norm=s=>String(s||'').normalize('NFC').trim().toLocaleLowerCase();
+      const clean=s=>norm(s).replace(/\s*ctrl\+shift\+o$/i,'').trim();
+      const labels=new Set(['new chat','\u0063\u0075\u1ed9\u0063 \u0074\u0072\u00f2 \u0063\u0068\u0075\u0079\u1ec7\u006e \u006d\u1edb\u0069','\u0074\u1ea1\u006f \u0063\u0075\u1ed9\u0063 \u0074\u0072\u00f2 \u0063\u0068\u0075\u0079\u1ec7\u006e \u006d\u1edb\u0069']);
+      const candidates=[...document.querySelectorAll('a.mat-mdc-list-item,button.mat-mdc-list-item')].filter(vis).filter(e=>{
+        const text=clean(e.innerText),label=clean(e.getAttribute('aria-label'));
+        return labels.has(text)&&(!label||labels.has(label));
       });
-      if(!hit)return null;
-      const r=hit.getBoundingClientRect();
-      return {x:r.x+r.width/2,y:r.y+r.height/2};
+      if(candidates.length!==1)return null;
+      const hit=candidates[0],r=hit.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;
+      const under=document.elementFromPoint(x,y);
+      return {x,y,label:hit.getAttribute('aria-label'),hitMatches:!!under&&(under===hit||hit.contains(under))};
     })()"""
+
+
+def new_chat_ready(state):
+    """True only for a stable, blank active conversation, independent of URL."""
+    return bool(isinstance(state,dict) and state.get('composer') and not state.get('login')
+                and not state.get('challenge') and not state.get('generating')
+                and not str(state.get('draft') or '').strip() and not state.get('turns'))
 
 
 def gemini_click_send_expression():
