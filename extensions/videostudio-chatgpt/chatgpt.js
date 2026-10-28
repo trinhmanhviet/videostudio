@@ -61,23 +61,28 @@
         if(/login|auth|challenge|verify/i.test(location.pathname))throw Error('Login or verification required');
         await wait(250);if(retired)return;
       }
-      if(!input||logicalText(input).trim())throw Error('Composer unavailable or occupied');
+      if(!input)throw Error('Composer unavailable or occupied');
+      // A leftover draft from our own earlier attempt may be reused, never another text.
+      const existing=logicalText(input).trim();
+      if(existing&&!existing.includes(requestMarker(id)))throw Error('Composer unavailable or occupied');
       // Do not change ChatGPT mode. If mode cannot be proved Chat, stop.
       const group=document.querySelector('[role="group"][aria-label="Composer mode"]');
       if(group){const chat=[...group.querySelectorAll('button')].find(n=>text(n)==='Chat');if(chat?.getAttribute('aria-pressed')!=='true')throw Error('Chat mode not confirmed');}
       else if(!/^(ask chatgpt|message chatgpt|hỏi chatgpt|nhắn tin cho chatgpt)$/i.test((input.getAttribute('aria-label')||input.getAttribute('placeholder')||input.querySelector('[data-placeholder]')?.getAttribute('data-placeholder')||'').trim()))throw Error('Chat mode unknown');
       input.focus();
+      if(!existing){
       if(input.tagName==='TEXTAREA'){Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,prompt);input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:prompt}));}
       else {const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);if(!document.execCommand('insertText',false,prompt))throw Error('Composer insertion failed');}
+      }
       let button;
       for(let i=0;i<40;i++){
         await wait(200);if(retired)return;
         const form=input.closest('form');
         button=[...(form||document).querySelectorAll('button')].find(n=>visible(n)&&!n.disabled&&globalThis.VideoStudioSendButton.isSendButton(n.getAttribute('aria-label'),n.getAttribute('data-testid')));
-        if(button&&logicalText(input).trim()===prompt.trim())break;
+        if(button&&normalise(logicalText(input))===normalise(prompt))break;
         button=null;
       }
-      if(logicalText(input).trim()!==prompt.trim())throw Error('Composer does not match immutable prompt');
+      if(normalise(logicalText(input))!==normalise(prompt))throw Error('Composer does not match immutable prompt');
       if(!button)throw Error('Send button unavailable');
       // From here delivery is uncertain even if the tab reloads. Background persisted dispatching first.
       button.click();
