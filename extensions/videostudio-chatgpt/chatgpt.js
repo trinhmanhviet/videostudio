@@ -62,12 +62,19 @@
         await wait(250);if(retired)return;
       }
       if(!input)throw Error('Composer unavailable or occupied');
-      // A leftover draft from our own earlier attempt may be reused, never another text.
-      const existing=logicalText(input).trim();
-      // Any leftover VideoStudio prompt is ours (only the id differs), so it may be
-      // replaced; anything else is treated as the owner's text and never touched.
-      const staleOwn=/^Y\u00caU C\u1ea6U STUDIO [0-9a-f-]{36}/i.test(existing);
-      if(existing&&!staleOwn&&!existing.includes(requestMarker(id)))throw Error('Composer unavailable or occupied');
+      // Owner-requested: wipe any leftover draft in this tool-owned tab before a new
+      // send, so a previous request's text can never block or pollute this one.
+      let existing=logicalText(input).trim();
+      if(existing){
+        input.focus();
+        for(let i=0;i<10&&logicalText(input).trim();i++){
+          const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);
+          document.execCommand('delete');
+          await wait(100);if(retired)return;
+        }
+        existing=logicalText(input).trim();
+        if(existing)throw Error('Composer could not be cleared; nothing sent');
+      }
       // Do not change ChatGPT mode. If mode cannot be proved Chat, stop.
       const group=document.querySelector('[role="group"][aria-label="Composer mode"]');
       if(group){const chat=[...group.querySelectorAll('button')].find(n=>text(n)==='Chat');if(chat?.getAttribute('aria-pressed')!=='true')throw Error('Chat mode not confirmed');}
