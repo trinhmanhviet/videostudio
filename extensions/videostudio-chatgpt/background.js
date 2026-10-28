@@ -1,4 +1,4 @@
-import {start,claim,beginAttempt,retryAttempt,result,studioScope,canStart,acknowledge,receiptPath,stop} from './protocol.mjs';
+import {start,claim,beginAttempt,retryAttempt,result,studioScope,canStart,acknowledge,receiptPath,stop,archivePrevious} from './protocol.mjs';
 const KEY='videostudio_bridge_v2';
 const get=async()=> (await chrome.storage.local.get(KEY))[KEY]??null;
 const put=async state=>chrome.storage.local.set({[KEY]:state});
@@ -27,9 +27,12 @@ async function reconcile(state){
   if(seen.visibleUser===state.job.prompt&&Date.now()-(state.job.startedAt??Date.now())<360000)return 'pending';
   if(state.job.phase==='dispatching'&&Date.now()-(state.job.startedAt??Date.now())<30000)return 'pending';
   if(state.job.attempt>=2)return 'exhausted';
+  const priorTab=state.job.chatTab;
   const tab=await chrome.tabs.create({url:'https://chatgpt.com/',active:true});
   if(!retryAttempt(state,{id:data.id,version:data.version,accepted:data.accepted,visibleUser:null},tab.id)){await chrome.tabs.remove(tab.id);return 'blocked';}
   state.job.startedAt=Date.now();await put(state);
+  try{await chrome.tabs.remove(priorTab);}catch{}
+  state.ownedTabs=state.ownedTabs.filter(id=>id!==priorTab);await put(state);
   try{await ready(tab.id);await dispatch(state);}catch(error){state.job.phase='uncertain';state.job.reason=String(error.message??error);await put(state);}
   return 'retried';
 }
@@ -38,7 +41,12 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message?.kind==='start'){
       if(!studioSender(sender)||!studioScope(sender.url,message.scope,message.scope))throw Error('Studio origin/scope mismatch');
       const old=await get();if(old?.active&&old.studioTab===sender.tab.id&&old.scope===message.scope)return {ok:true,active:true};
-      if(old){if(old.job){const status=await reconcile(old);if(status!=='receipt')throw Error(`Old exchange unresolved: ${status}`);}await closeOwned(old);}
+      if(old){
+        const previous=archivePrevious(old);
+        await put(old);
+        if(previous)await chrome.storage.local.set({videostudio_bridge_last_abandoned:previous});
+        await closeOwned(old);
+      }
       const state=start({studioTab:sender.tab.id,scope:message.scope});await put(state);return {ok:true,active:true};
     }
     const state=await get();if(!state)throw Error('Bridge not configured');

@@ -6,6 +6,11 @@ export const receiptPath=(scope,id)=>`/api/v1/projects/${encodeURIComponent(scop
 export const start=({studioTab,scope,chatTab=null})=>({studioTab,scope,chatTab,ownedTabs:chatTab?[chatTab]:[],active:true,job:null});
 export const canStart=state=>!state?.active&&!state?.job;
 export const canDiscard=(state,{studioTab,scope})=>!!state&&!state.active&&['dispatching','uncertain'].includes(state.job?.phase)&&state.studioTab===studioTab&&state.scope===scope;
+export function archivePrevious(state){
+  state.active=false;
+  const job=state.job;
+  return job?{scope:state.scope,id:job.id,version:job.version,attempt:job.attempt,phase:job.phase}:null;
+}
 export function stop(state){state.active=false;state.ownedTabs=[];state.chatTab=null;state.job=null;return state;}
 export function claim(state,{studioTab,scope,id,version,prompt}){
   if(state.studioTab!==studioTab||state.scope!==scope||typeof id!=='string'||!id||!Number.isInteger(version)||typeof prompt!=='string'||!prompt.startsWith(`YÊU CẦU STUDIO ${id}\n`))return false;

@@ -10,7 +10,8 @@
   let retired=false,occupied=false;
   const runtime=async message=>{if(retired)return null;try{return await chrome.runtime.sendMessage(message);}catch(e){if(/Extension context invalidated|Receiving end does not exist/i.test(String(e?.message??e)))retired=true;return null;}};
   const error=async (id,attempt,reason)=>{await runtime({kind:'uncertain',id,attempt,reason});};
-  const inspect=(id,prompt)=>{const turn=user(),node=assistants().at(-1);const complete=node&&[...node.closest('[data-testid^="conversation-turn-"],[data-content-search-unit-key]')?.querySelectorAll('button')??[]].some(n=>/good-response|bad-response|rate response/i.test(`${n.getAttribute('data-testid')} ${n.getAttribute('aria-label')}`));return {visibleUser:turn?userText(turn):null,visibleReply:turn&&userText(turn)===prompt&&complete?text(node)||null:null};};
+  const assistantText=node=>{const codes=[...node.querySelectorAll('pre code')];if(codes.length>1)return null;return (codes.length===1?codes[0].textContent:text(node.querySelector('.markdown,.prose,[data-markdown-text-style="assistant-message"]')||node)).replace(/^ChatGPT said:\s*/u,'').trim();};
+  const inspect=(id,prompt)=>{const turn=user(),node=assistants().at(-1);const complete=node&&[...node.closest('[data-testid^="conversation-turn-"],[data-content-search-unit-key]')?.querySelectorAll('button')??[]].some(n=>/good-response|bad-response|rate response/i.test(`${n.getAttribute('data-testid')} ${n.getAttribute('aria-label')}`));return {visibleUser:turn?userText(turn):null,visibleReply:turn&&userText(turn)===prompt&&complete?assistantText(node)||null:null};};
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
     if(retired)return;
     if(message?.kind==='inspect'){reply(inspect(message.id,message.prompt));return;}
@@ -47,8 +48,7 @@
         const turn=node.closest('[data-talvt-turn-state],[data-testid^="conversation-turn-"],[data-content-search-unit-key]')||node;
         const complete=turn.getAttribute('data-talvt-turn-state')==='complete'||[...turn.querySelectorAll('[role="status"],[aria-live]')].some(n=>/response complete|phản hồi hoàn tất/i.test(text(n)))||[...turn.querySelectorAll('button')].some(n=>/good-response|bad-response|rate response/i.test(`${n.getAttribute('data-testid')} ${n.getAttribute('aria-label')}`));
         if(stop||!complete)continue;
-        const codes=[...node.querySelectorAll('pre code')];if(codes.length>1)throw Error('Multiple reply blocks');
-        const response=codes.length===1?codes[0].textContent:text(node.querySelector('.markdown,.prose,[data-markdown-text-style="assistant-message"]')||node).replace(/^ChatGPT said:\s*/u,'').trim();
+        const response=assistantText(node);
         if(!response||response.length>700000)throw Error('Reply missing or too large');
         const accepted=await runtime({kind:'reply',id,attempt,text:response});if(!accepted){retired=true;return;}if(!accepted.ok)throw Error('Reply correlation rejected');return;
       }

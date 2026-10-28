@@ -31,8 +31,13 @@ class ExtensionAcceptanceTests(unittest.TestCase):
             ex.receive(scope, request_id, 1, '{"connection_test":"videostudio","ok":true}')
             self.assertFalse(ex.accepted_extension(scope))
             with store.db() as db:
-                db.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)', (scope, json.dumps({'build':'videostudio-extension-0.1.0','stage':'active','connected':True,'enabled':True}), time.time()))
+                db.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)', (scope, json.dumps({'build':'videostudio-extension-0.2.0','stage':'active','connected':True,'enabled':True}), time.time()))
             self.assertTrue(ex.accepted_extension(scope))
+            with store.db() as db:
+                db.execute('UPDATE connector_status SET status=? WHERE scope=?', (json.dumps({'build':'videostudio-extension-0.1.0','stage':'active','connected':True,'enabled':True}), scope))
+            self.assertFalse(ex.accepted_extension(scope))
+            with store.db() as db:
+                db.execute('UPDATE connector_status SET status=? WHERE scope=?', (json.dumps({'build':'videostudio-extension-0.2.0','stage':'active','connected':True,'enabled':True}), scope))
             with store.db() as db:
                 db.execute('UPDATE connector_status SET updated=? WHERE scope=?', (time.time() - 120, scope))
             self.assertFalse(ex.accepted_extension(scope))

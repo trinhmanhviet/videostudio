@@ -40,7 +40,7 @@ class Exchanges:
         try:
             s=json.loads(status['status']);answer=json.loads(smoke['response'])
         except (ValueError,TypeError):return False
-        return (s.get('build')=='videostudio-extension-0.1.0' and s.get('stage')=='active'
+        return (s.get('build')=='videostudio-extension-0.2.0' and s.get('stage')=='active'
                 and s.get('connected') is True and s.get('enabled') is True
                 and answer=={'connection_test':'videostudio','ok':True})
     def enqueue_smoke(self,scope):

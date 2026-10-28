@@ -2,14 +2,15 @@
   const scope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1];
   if(location.origin!=='http://localhost:8877'||(!scope&&location.pathname!=='/'))return;
   const root=document.createElement('aside');root.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;font:13px system-ui';
-  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006}button{margin:4px;padding:6px}p{max-width:300px}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Chưa kết nối.</p><button id="start">Start</button><button id="smoke">Test chữ</button><button id="stop">Stop</button></section>';
+  const shadow=root.attachShadow({mode:'closed'});shadow.innerHTML='<style>section{background:#142620;color:#fff;padding:12px;border-radius:8px;box-shadow:0 3px 20px #0006;min-width:190px}button{margin:4px;padding:7px 11px;border:1px solid #a9d890;border-radius:6px;background:#c3ed91;color:#152317;font-weight:650;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}#stop{background:transparent;color:#f4f9ef}p{max-width:270px;margin:8px 0;overflow-wrap:anywhere}</style><section><strong>VideoStudio · ChatGPT</strong><p id="status">Chưa kết nối.</p><button id="start">Start</button><button id="smoke">Test chữ</button><button id="stop">Stop</button></section>';
   document.documentElement.append(root);
-  const status=shadow.querySelector('#status');let active=false,busy=false,retired=false;const intervals=[];const listeners=[];
-  function retire(){if(retired)return;retired=true;active=false;for(const timer of intervals)clearInterval(timer);for(const [node,type,handler] of listeners)node.removeEventListener?.(type,handler);chrome.runtime.onMessage.removeListener?.(onReply);status.textContent='Tiện ích đã tải lại. Tải lại trang Studio một lần.';}
+  const status=shadow.querySelector('#status');const startButton=shadow.querySelector('#start'),smokeButton=shadow.querySelector('#smoke'),stopButton=shadow.querySelector('#stop');let active=false,busy=false,retired=false;const intervals=[];const listeners=[];
+  function render(){startButton.hidden=active;stopButton.hidden=!active;smokeButton.hidden=!active||!scope;}render();
+  function retire(){if(retired)return;retired=true;active=false;render();for(const timer of intervals)clearInterval(timer);for(const [node,type,handler] of listeners)node.removeEventListener?.(type,handler);try{chrome.runtime.onMessage.removeListener(onReply);}catch{}status.textContent='Tiện ích đã tải lại. Tải lại trang Studio một lần.';}
   const invalid=error=>/Extension context invalidated|Receiving end does not exist|Cannot access a chrome\.runtime/i.test(String(error?.message??error));
   const send=async message=>{if(retired)return {ok:false,error:'Extension context invalidated'};try{return await chrome.runtime.sendMessage(message);}catch(error){if(invalid(error)){retire();return {ok:false,error:'Extension context invalidated'};}throw error;}};
   const api=async(path,options)=>{const response=await fetch(path,{credentials:'same-origin',...options});if(!response.ok)throw Error(`Studio HTTP ${response.status}`);return response.json();};
-  async function heartbeat(){if(!scope||retired)return;try{await api('/api/connector/status/'+scope,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({build:'videostudio-extension-0.2.0',stage:active?'active':'stopped',connected:active,enabled:active})});}catch(error){if(active){active=false;status.textContent='Heartbeat lỗi; kết nối tạm dừng';}}}
+  async function heartbeat(){if(!scope||retired)return;try{await api('/api/connector/status/'+scope,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({build:'videostudio-extension-0.2.0',stage:active?'active':'stopped',connected:active,enabled:active})});}catch(error){if(active){active=false;render();status.textContent='Heartbeat lỗi; kết nối tạm dừng';}}}
   async function importReply(job){
     const base=`/api/v1/projects/${scope}/runs/${scope}/chatgpt-exchanges`;
     const receipt=await api(`${base}/${encodeURIComponent(job.id)}`);
@@ -27,7 +28,7 @@
       if(!item.id||!Number.isInteger(item.version)||typeof item.prompt!=='string'||item.attachments?.length)throw Error('Unsupported request shape/attachments');
       const response=await send({kind:'claim',id:item.id,version:item.version,prompt:item.prompt});if(!response.ok)throw Error(response.error);
       status.textContent=`${item.id}: ${response.phase}`;
-    }catch(error){if(!retired){status.textContent=`Tạm dừng: ${error.message}`;active=false;}}finally{busy=false;}
+    }catch(error){if(!retired){status.textContent=`Tạm dừng: ${error.message}`;active=false;render();}}finally{busy=false;}
   }
   function listen(node,type,fn){node.addEventListener(type,fn);listeners.push([node,type,fn]);}
   listen(shadow.querySelector('#start'),'click',async event=>{
@@ -36,14 +37,14 @@
       let target=scope;
       if(!target){const session=await api('/api/connector/sessions',{method:'POST'});if(session.project_id!==session.run_id||session.url!==`/story-video/projects/${session.project_id}/production`)throw Error('Invalid connector scope');target=session.project_id;}
       const response=await send({kind:'start',scope:target});if(!response.ok)throw Error(response.error);
-      active=true;status.textContent='Đã kết nối';await heartbeat();if(!scope){location.assign(`/story-video/projects/${target}/production`);return;}await tick();
+      active=true;render();status.textContent='Đã kết nối';await heartbeat();if(!scope){location.assign(`/story-video/projects/${target}/production`);return;}await tick();
     }catch(error){if(!retired)status.textContent=`Không thể Start: ${error.message}`;}
   });
   listen(shadow.querySelector('#smoke'),'click',async event=>{if(!event.isTrusted||!active||!scope||retired)return;try{const result=await api('/api/connector/smoke/'+scope,{method:'POST'});status.textContent=`Test chữ đã xếp hàng: ${result.exchange_id}`;await tick();}catch(error){if(!retired)status.textContent=`Test chữ lỗi: ${error.message}`;}});
-  listen(shadow.querySelector('#stop'),'click',async event=>{if(!event.isTrusted||retired)return;try{const response=await send({kind:'stop'});if(!response.ok)throw Error(response.error);active=false;await heartbeat();status.textContent='Đã dừng và đóng tab ChatGPT thuộc tiện ích';}catch(error){if(!retired)status.textContent=`Stop lỗi: ${error.message}`;}});
+  listen(shadow.querySelector('#stop'),'click',async event=>{if(!event.isTrusted||retired)return;try{const response=await send({kind:'stop'});if(!response.ok)throw Error(response.error);active=false;render();await heartbeat();status.textContent='Đã dừng và đóng tab ChatGPT thuộc tiện ích';}catch(error){if(!retired)status.textContent=`Stop lỗi: ${error.message}`;}});
   function onReply(message,_sender,reply){if(message?.kind!=='reply'||retired)return;if(active)void tick().catch(()=>{});reply({ok:true});}
   chrome.runtime.onMessage.addListener(onReply);
   intervals.push(setInterval(()=>{void tick().catch(()=>{});},1200));
   intervals.push(setInterval(()=>{if(active)void heartbeat().catch(()=>{});},10000));
-  if(scope)void send({kind:'snapshot'}).then(state=>{if(retired)return;if(state.ok){active=state.active;status.textContent=active?'Đã kết nối':'Đã dừng';if(active)void tick();}}).catch(()=>{});
+  if(scope)void send({kind:'snapshot'}).then(state=>{if(retired)return;if(state.ok){active=state.active;render();status.textContent=active?'Đã kết nối':'Đã dừng';if(active)void tick();}}).catch(()=>{});
 })();
