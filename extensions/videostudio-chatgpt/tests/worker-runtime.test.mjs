@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import * as protocol from '../protocol.mjs';
+const scope='123e4567-e89b-42d3-a456-426614174000';
+test('actual MV3 worker one-click root Start, fresh exchange tabs and Stop closes owned tabs',async()=>{
+  let listener,state=null,nextTab=20;const opened=[],closed=[],delivered=[];
+  const chrome={storage:{local:{get:async()=>({videostudio_bridge_v2:state}),set:async obj=>{state=obj.videostudio_bridge_v2;}}},runtime:{onMessage:{addListener:fn=>listener=fn}},tabs:{create:async()=>{const tab={id:++nextTab,status:'complete'};opened.push(tab.id);return tab;},get:async id=>({id,status:'complete'}),sendMessage:async(id,message)=>{delivered.push({id,message});return {ok:true};},remove:async id=>closed.push(id),onUpdated:{addListener(){},removeListener(){}}}};
+  const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\n/,'');
+  vm.runInNewContext(source,{chrome,...protocol,URL,fetch:async()=>({ok:true,json:async()=>({id:'one',version:1,accepted:false})}),setTimeout,clearTimeout,Date,Error,Number,String});
+  const root={url:'http://localhost:8877/',frameId:0,tab:{id:7}};
+  const scoped={...root,url:`http://localhost:8877/story-video/projects/${scope}/production`};
+  const send=(message,sender)=>new Promise(resolve=>listener(message,sender,resolve));
+  assert.equal((await send({kind:'start',scope},root)).ok,true);
+  assert.equal((await send({kind:'snapshot'},scoped)).active,true);
+  assert.equal((await send({kind:'start',scope},scoped)).ok,true);
+  assert.deepEqual(opened,[]);
+  const first=await send({kind:'claim',id:'one',version:1,prompt:'YÊU CẦU STUDIO one\nX'},scoped);
+  assert.equal(first.ok,true);assert.equal(opened.length,1);assert.equal(delivered[0].message.attempt,1);
+  assert.equal((await send({kind:'stop'},scoped)).ok,true);
+  assert.deepEqual(closed,opened);assert.equal(state.active,false);assert.equal(state.job,null);
+});

@@ -7,14 +7,18 @@
   const text=n=>n?.innerText?.trim()??n?.textContent?.trim()??'';
   const userText=n=>text(n?.querySelector('[data-user-message-bubble] .whitespace-pre-wrap,.whitespace-pre-wrap')||n).replace(/^You said:\s*/u,'').trim();
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const error=async (id,reason)=>chrome.runtime.sendMessage({kind:'uncertain',id,reason}).catch(()=>{});
-  let occupied=false;
+  let retired=false,occupied=false;
+  const runtime=async message=>{if(retired)return null;try{return await chrome.runtime.sendMessage(message);}catch(e){if(/Extension context invalidated|Receiving end does not exist/i.test(String(e?.message??e)))retired=true;return null;}};
+  const error=async (id,attempt,reason)=>{await runtime({kind:'uncertain',id,attempt,reason});};
+  const inspect=(id,prompt)=>{const turn=user(),node=assistants().at(-1);const complete=node&&[...node.closest('[data-testid^="conversation-turn-"],[data-content-search-unit-key]')?.querySelectorAll('button')??[]].some(n=>/good-response|bad-response|rate response/i.test(`${n.getAttribute('data-testid')} ${n.getAttribute('aria-label')}`));return {visibleUser:turn?userText(turn):null,visibleReply:turn&&userText(turn)===prompt&&complete?text(node)||null:null};};
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
+    if(retired)return;
+    if(message?.kind==='inspect'){reply(inspect(message.id,message.prompt));return;}
     if(message?.kind!=='deliver')return;
     if(occupied){reply({ok:false});return;}
     occupied=true;reply({ok:true});
     (async()=>{
-      const {id,prompt}=message;
+      const {id,prompt,attempt}=message;
       if(typeof id!=='string'||!prompt.startsWith(`YÊU CẦU STUDIO ${id}\n`))throw Error('Immutable request marker missing');
       if(/login|auth|challenge|verify/i.test(location.pathname))throw Error('Login or verification required');
       if(user()||assistants().length)throw Error('Dedicated tab is not an empty conversation');
@@ -35,9 +39,9 @@
       button.click();
       for(let i=0;i<80;i++){await wait(250);if(userText(user())===prompt.trim())break;}
       if(userText(user())!==prompt.trim())throw Error('Exact user-turn receipt missing');
-      const sent=await chrome.runtime.sendMessage({kind:'sent',id});if(!sent.ok)throw Error('Background rejected send receipt');
+      const sent=await runtime({kind:'sent',id,attempt});if(!sent){retired=true;return;}if(!sent.ok)throw Error('Background rejected send receipt');
       for(let i=0;i<720;i++){
-        await wait(500);const answers=assistants();const node=answers.at(-1);
+        await wait(500);if(retired)return;const answers=assistants();const node=answers.at(-1);
         if(!node||!user()||!(user().compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
         const stop=[...document.querySelectorAll('button')].some(n=>visible(n)&&/stop (generating|response)|stop-button/i.test(`${n.getAttribute('aria-label')} ${n.getAttribute('data-testid')}`));
         const turn=node.closest('[data-talvt-turn-state],[data-testid^="conversation-turn-"],[data-content-search-unit-key]')||node;
@@ -46,9 +50,9 @@
         const codes=[...node.querySelectorAll('pre code')];if(codes.length>1)throw Error('Multiple reply blocks');
         const response=codes.length===1?codes[0].textContent:text(node.querySelector('.markdown,.prose,[data-markdown-text-style="assistant-message"]')||node).replace(/^ChatGPT said:\s*/u,'').trim();
         if(!response||response.length>700000)throw Error('Reply missing or too large');
-        const accepted=await chrome.runtime.sendMessage({kind:'reply',id,text:response});if(!accepted.ok)throw Error('Reply correlation rejected');return;
+        const accepted=await runtime({kind:'reply',id,attempt,text:response});if(!accepted){retired=true;return;}if(!accepted.ok)throw Error('Reply correlation rejected');return;
       }
       throw Error('Response completion not verifiable');
-    })().catch(e=>error(message.id,e.message));
+    })().catch(e=>{if(!retired)void error(message.id,message.attempt,e.message);});
   });
 })();
