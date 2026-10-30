@@ -38,6 +38,75 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 - Nếu một lô bị lỗi, **Tiếp tục từ bước tạo ảnh** sẽ dùng lại các ảnh/biên nhận đã lưu. Đừng tạo video thứ hai để thay thế job đang phục hồi.
 - Mười ảnh mỗi đợt đã có một lô Flow thực tế chạy xong. Hai mươi và ba mươi ảnh mỗi đợt vẫn khóa.
 
+## Kiến trúc và luồng xử lý
+
+```mermaid
+flowchart LR
+  U[Người dùng / Studio UI] -->|HTTP loopback :8877| API[FastAPI API<br/>videostudio/api.py]
+  API --> DB[(SQLite jobs + checkpoints)]
+  API --> W[Worker tuần tự<br/>videostudio/core.py]
+  W --> P[Provider pipeline<br/>videostudio/providers.py]
+  P -->|prompt + request ID| API
+  API <-->|scoped exchanges / heartbeat| E[Extension service worker<br/>Chrome thường]
+  E <-->|điền, gửi, lấy reply| C[ChatGPT tab]
+  P -->|Flow image requests| D[CDP daemon :8879<br/>videostudio/cdp_daemon.py]
+  D <-->|loopback CDP| F[Chrome riêng / Google Flow]
+  P --> S[Speech runtime]
+  P --> M[ComfyUI / nhạc]
+  P --> R[FFmpeg render + verify]
+  R --> O[(Thư mục output)]
+```
+
+Hai trình duyệt có vai trò riêng: extension bridge dùng Chrome thường để giao tiếp ChatGPT; Chrome riêng dùng profile riêng và CDP cho Flow. API và CDP daemon chỉ bind loopback. Không đổi chế độ Chrome riêng trong khi Flow đang tạo ảnh.
+
+### Các bước của một job
+
+```mermaid
+flowchart LR
+  A[plan] --> B[research] --> C[script] --> D[speech] --> E[images] --> F[subtitles] --> G[music] --> H[render] --> I[verify]
+```
+
+Worker lấy job theo thứ tự; mỗi bước hoàn tất mới ghi checkpoint rồi chuyển tiếp. Retry/resume bắt đầu từ checkpoint thiếu hoặc bước người dùng chọn; asset đã được xác nhận giữ nguyên. Một worker và tài nguyên GPU dùng chung khiến **nhiều job chưa chạy đồng thời thật**; job mới được lưu và xếp hàng. Khả năng ChatGPT có nhiều session không đồng nghĩa với pipeline video song song.
+
+### ChatGPT qua extension bridge
+
+1. Người dùng bấm **Start** trong float để mở bridge; extension gửi heartbeat. **Test chữ** tạo smoke do người dùng chủ động để xác nhận round-trip.
+2. Mỗi video có connector scope riêng dưới bridge gốc. API tạo exchange có request ID/version/prompt bất biến; extension chỉ nhận exchange thuộc bridge và scope mà server xác nhận.
+3. Extension ghi prompt vào composer, gửi, đối chiếu user turn và reply theo request đang chờ, rồi trả receipt về API. Không ghép reply theo vị trí tab hoặc dùng câu trả lời của lượt cũ.
+4. Trạng thái session được lưu để phục hồi sau reload. **Khôi phục ChatGPT** tìm đúng phản hồi bằng request marker/URL đã lưu; không tự gửi prompt lần nữa. Cần giữ tab Studio mở để float tiếp tục điều phối.
+
+Các điểm vào chính: API/exchange tại `videostudio/api.py` và `videostudio/exchanges.py`; vòng đời job/checkpoint tại `videostudio/core.py`; extension service worker và giao diện float tại `extensions/videostudio-chatgpt/background.js` và `studio.js`.
+
+### Flow, ảnh và đổi tài khoản
+
+- Provider gửi prompt ảnh tới daemon loopback; daemon điều khiển tab Flow qua Chrome DevTools Protocol. Mỗi cảnh có task ID, job/run ID và checkpoint riêng để ánh xạ ảnh tải về đúng cảnh.
+- Các prompt được gửi theo lô tối đa 10 ảnh đã xác nhận; chỉ tải/ghép khi kết quả lô được nhận diện. 2K không xác nhận hoặc bị Flow từ chối thì dùng chính ảnh 1K; không tạo ảnh thứ hai để thay thế mơ hồ.
+- Khi đổi tài khoản, worker tạm dừng ở trạng thái chờ. Dịch vụ đối chiếu prompt và asset cũ, ghi checkpoint ảnh hợp lệ, rồi chỉ tạo các cảnh còn thiếu sau khi người dùng đăng nhập và tiếp tục. Nếu daemon không xác nhận đã yên, đổi profile bị chặn để tránh request cũ chạy nhầm trên account mới.
+
+### Lưu trữ, khôi phục và hủy
+
+| Dữ liệu | Vị trí mặc định | Dùng để |
+| --- | --- | --- |
+| Job, stage, exchange, checkpoint | `data/jobs.sqlite3` | Tiếp tục đúng job sau lỗi/restart |
+| Profile Chrome riêng, receipts và cache runtime | `data/` | Giữ phiên Flow và liên kết task với asset |
+| Ảnh, âm thanh, log và video theo job | `VS_OUTPUT_DIR` (`E:\Videos`) | Sản phẩm và dấu vết phục hồi |
+
+`data/` không được đưa lên Git. Xóa job khỏi float có thể hỏi riêng có xóa output hay không; thao tác hủy job dừng công việc cục bộ của job đó, không hứa hủy tiến trình tạo đã được website nhận. Backup khi chuyển máy: sao chép output cần giữ; không chép profile Chrome đang mở. Database/profile không tự đồng bộ sang máy mới.
+
+### Mã nguồn theo chức năng
+
+| Thành phần | Tệp chính |
+| --- | --- |
+| HTTP API, preflight, job/project | `videostudio/api.py` |
+| SQLite, checkpoint, hàng đợi và worker | `videostudio/core.py` |
+| Điều phối provider, speech, ảnh, nhạc, render | `videostudio/providers.py` |
+| Chrome/CDP và thao tác Flow | `videostudio/cdp_daemon.py`, `videostudio/cdp_flow.py`, `videostudio/chrome_browser.py` |
+| Chuyển account Flow an toàn | `videostudio/flow_account.py` |
+| ChatGPT bridge | `extensions/videostudio-chatgpt/` |
+| Render, phụ đề, probe media | `videostudio/media.py` |
+
+README mô tả luồng hiện hành; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
+
 ## File và cài đặt local
 
 `data/` chứa database job, Chrome profile riêng, cache, Flow receipts và trạng thái runtime. Git ignore thư mục này. Video/ảnh đầu ra mặc định lưu ở `E:\Videos`; máy khác có thể đặt `VS_OUTPUT_DIR` trước khi khởi động.
