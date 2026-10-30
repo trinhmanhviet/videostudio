@@ -7,6 +7,7 @@ from contextlib import contextmanager
 STAGES = ('plan','research','script','speech','images','subtitles','music','render','verify')
 class Cancelled(Exception): pass
 class AwaitingVisualReview(Exception): pass
+class AwaitingFlowAccount(Exception): pass
 class PermanentError(Exception): pass
 
 def available_flow_batch_sizes():
@@ -80,7 +81,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, at REAL, stage TEXT, event TEXT, detail TEXT);
             CREATE TABLE IF NOT EXISTS worker_lock(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT, expires REAL);
             CREATE TABLE IF NOT EXISTS recovery_grants(job TEXT,stage TEXT,attempt_limit INTEGER NOT NULL,reason TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(job,stage));
-            CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY, created REAL NOT NULL);''')
+            CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY, created REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS flow_account_changes(job TEXT PRIMARY KEY,phase TEXT NOT NULL,data TEXT NOT NULL DEFAULT '{}',updated REAL NOT NULL);''')
     @contextmanager
     def db(self):
         c=sqlite3.connect(self.path,timeout=10); c.row_factory=sqlite3.Row
@@ -93,20 +95,36 @@ class Store:
         with self.db() as c:
             self.event(c,j,s,'progress',detail)
             c.execute('UPDATE jobs SET updated=? WHERE id=?',(time.time(),j))
-    def create(self,data,key,connector_scope=None):
+    def create(self,data,key,connector_scope=None,connector_bridge=None):
         data=validate_request(data)
         if not key or len(key)>200: raise ValueError('Idempotency-Key required (max 200 characters)')
         raw=json.dumps(data,sort_keys=True,ensure_ascii=False)
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            if connector_bridge:
+                root=c.execute('SELECT id FROM connector_scopes WHERE id=? AND NOT EXISTS (SELECT 1 FROM connector_bridge_memberships WHERE scope=?)',(connector_bridge,connector_bridge)).fetchone()
+                if not root:raise ValueError('Unknown connector bridge root')
             row=c.execute('SELECT * FROM jobs WHERE idem=?',(key,)).fetchone()
             if row:
                 stored=json.loads(row['request'])
                 # Old requests predate this optional field; a replay with the same
                 # default must not allocate a second job or change its receipt.
                 stored.setdefault('flow_batch_size',1)
+                stored.setdefault('text_provider','chatgpt')
                 if stored!=data: raise ValueError('Idempotency key already used for a different request')
+                if connector_bridge:
+                    owner=c.execute('SELECT s.id FROM connector_scopes s LEFT JOIN connector_bridge_memberships m ON m.scope=s.id WHERE s.job=? AND (s.id=? OR m.bridge=?)',(row['id'],connector_bridge,connector_bridge)).fetchone()
+                    if not owner:raise ValueError('Idempotency key already used by another connector bridge')
                 return self.get(row['id']),False
+            from .project_lifecycle import reject_deleted_project
+            reject_deleted_project(c,data.get('project') or 'Dự án mặc định')
+            if connector_scope:
+                available=c.execute('SELECT id FROM connector_scopes WHERE id=? AND job IS NULL',(connector_scope,)).fetchone()
+                if not available:raise ValueError('Connector scope is unavailable')
+            if connector_bridge:
+                connector_scope=str(uuid.uuid4())
+                c.execute('INSERT INTO connector_scopes(id,created) VALUES(?,?)',(connector_scope,time.time()))
+                c.execute('INSERT INTO connector_bridge_memberships(scope,bridge) VALUES(?,?)',(connector_scope,connector_bridge))
             j=str(uuid.uuid4()); self.outputs.mkdir(parents=True,exist_ok=True)
             slug=output_slug(data['idea'])
             name=slug+'-'+datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -134,6 +152,10 @@ class Store:
         raw=json.dumps(data,sort_keys=True,ensure_ascii=False)
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            from .project_lifecycle import reject_deleted_project
+            reject_deleted_project(c,data.get('project') or 'Dự án mặc định')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,parent_job_id)
             j=str(uuid.uuid4())
             self.outputs.mkdir(parents=True,exist_ok=True)
             slug=output_slug(data['idea'])
@@ -172,7 +194,8 @@ class Store:
     def cancel(self,j):
         self.get(j)
         with self.db() as c:
-            c.execute("UPDATE jobs SET cancel=1,state=CASE WHEN state IN ('queued','retrying','awaiting_visual_review') THEN 'cancelled' ELSE state END,updated=? WHERE id=?",(time.time(),j));self.event(c,j,None,'cancel_requested')
+            c.execute("UPDATE jobs SET cancel=1,state=CASE WHEN state IN ('queued','retrying','awaiting_visual_review','awaiting_flow_account') THEN 'cancelled' ELSE state END,updated=? WHERE id=?",(time.time(),j));self.event(c,j,None,'cancel_requested')
+            c.execute("UPDATE flow_account_changes SET phase='error',updated=? WHERE job=? AND phase IN ('pausing','reconciling','ready')",(time.time(),j))
         return self.get(j)
     def attempt_limit(self,j,stage,base=3):
         with self.db() as c:r=c.execute('SELECT attempt_limit FROM recovery_grants WHERE job=? AND stage=?',(j,stage)).fetchone()
@@ -184,6 +207,8 @@ class Store:
             if not row:raise KeyError(j)
             owner=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()
             if not owner or owner['job']!=j:raise ValueError('Connector scope does not own this job')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,j)
             if row['state'] not in ('failed','cancelled'):raise ValueError('Only failed/cancelled job may be continued')
             connector_failure='Chrome connector response unavailable' in (row['error'] or '')
             comfy_recovery=False
@@ -212,7 +237,23 @@ class Store:
             self.event(c,j,stage,'service_crash_resume' if actor=='service_recovery' else 'owner_resume',f'Keep checkpoints and {count} prior attempts; effective limit {limit}; old receipts preserved')
         return self.get(j)
     def active(self,j):
-        if self.get(j)['cancel']: raise Cancelled()
+        job=self.get(j)
+        if job['cancel']: raise Cancelled()
+        if job['stage']=='images' and self.flow_pause_requested(j):raise AwaitingFlowAccount('Chờ đổi tài khoản Flow; giữ nguyên các ảnh đã tạo.')
+    def flow_pause_requested(self,j):
+        with self.db() as c:
+            row=c.execute('SELECT phase FROM flow_account_changes WHERE job=?',(j,)).fetchone()
+            return bool(row and row['phase']=='pausing')
+    def flow_workers_blocked(self,connection):
+        return bool(connection.execute("SELECT 1 FROM flow_account_changes f JOIN jobs j ON j.id=f.job WHERE j.cancel=0 AND j.state NOT IN ('cancelled','completed') AND (f.phase IN ('pausing','reconciling','ready') OR json_extract(f.data,'$.needs_quiescence')=1) LIMIT 1").fetchone())
+    def park_flow_account(self,j,stage,attempt_started=False):
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row=c.execute('SELECT cancel FROM jobs WHERE id=?',(j,)).fetchone()
+            if not row:raise KeyError(j)
+            if attempt_started:c.execute('UPDATE attempts SET count=MAX(0,count-1) WHERE job=? AND stage=?',(j,stage))
+            c.execute('UPDATE jobs SET state=?,error=NULL,next_at=0,updated=? WHERE id=?',('cancelled' if row['cancel'] else 'awaiting_flow_account',time.time(),j))
+            self.event(c,j,stage,'awaiting_flow_account','Đã dừng ở điểm an toàn để giữ ảnh và đổi tài khoản Flow.')
     def lock(self,owner,ttl=30):
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE'); r=c.execute('SELECT * FROM worker_lock WHERE id=1').fetchone()
@@ -234,6 +275,7 @@ class Worker:
             j=jobs[-1]; jid=j['id']; stage=next((x for x in STAGES if x not in j['checkpoints']),None)
             if not stage: raise PermanentError('Missing verified completion transition')
             allowed_attempts=s.attempt_limit(jid,stage,self.max_attempts)
+            attempt_started=False
             try:
                 s.active(jid)
                 # A checkpoint is trusted only if every attested file still matches.
@@ -241,10 +283,13 @@ class Worker:
                     for a in cp.get('assets',[]):
                         if not Path(a['path']).is_file() or digest(a['path'])!=a['sha256']: raise PermanentError('Checkpoint asset missing or changed')
                 with s.db() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    if s.flow_workers_blocked(c):return False
                     row=c.execute('SELECT count FROM attempts WHERE job=? AND stage=?',(jid,stage)).fetchone(); count=(row[0] if row else 0)+1
                     if count>allowed_attempts: raise PermanentError('Retry budget exhausted after restart')
                     c.execute('INSERT OR REPLACE INTO attempts VALUES(?,?,?)',(jid,stage,count))
                     c.execute("UPDATE jobs SET state='running',stage=?,updated=? WHERE id=?",(stage,time.time(),jid));s.event(c,jid,stage,'started')
+                    attempt_started=True
                 value=self.handlers[stage](j,lambda:s.active(jid))
                 s.active(jid)
                 if not isinstance(value,dict):raise PermanentError('Stage returned invalid checkpoint')
@@ -254,6 +299,8 @@ class Worker:
                 with s.db() as c:
                     c.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)',(jid,stage,json.dumps(value)))
                     c.execute('UPDATE jobs SET state=?,error=NULL,next_at=0,updated=? WHERE id=?',('completed' if stage=='verify' else 'queued',time.time(),jid));s.event(c,jid,stage,'completed')
+            except AwaitingFlowAccount:
+                s.park_flow_account(jid,stage,attempt_started)
             except AwaitingVisualReview as e:
                 with s.db() as c:
                     c.execute('UPDATE attempts SET count=MAX(0,count-1) WHERE job=? AND stage=?',(jid,stage))
@@ -262,6 +309,9 @@ class Worker:
             except Cancelled:
                 with s.db() as c:c.execute("UPDATE jobs SET state='cancelled',updated=? WHERE id=?",(time.time(),jid));s.event(c,jid,stage,'cancelled')
             except Exception as e:
+                if s.flow_pause_requested(jid):
+                    s.park_flow_account(jid,stage,attempt_started)
+                    return True
                 attempts=s.get(jid)['attempts'].get(stage,0)
                 terminal=isinstance(e,PermanentError) or attempts>=allowed_attempts
                 with s.db() as c:

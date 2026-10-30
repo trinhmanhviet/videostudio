@@ -6,6 +6,9 @@ Coordinates sequential execution on GPU:
 4. FFmpeg assembly and export
 """
 import json
+import os
+import subprocess
+import sys
 import time
 import threading
 from pathlib import Path
@@ -26,9 +29,50 @@ def record_owned(path, prompt_id):
         tmp.replace(path)
 
 def free_comfy(client):
-    """ComfyUI native model management handles model swapping safely in process memory.
-    Avoid calling POST /free which triggers an unsafe c10.dll access violation (0xc0000005) in PyTorch allocator."""
+    """Request the user-authorized unload; callers must first verify an idle queue."""
+    response = client.post('free', json={'unload_models': True, 'free_memory': True})
+    response.raise_for_status()
     return True
+
+def recover_comfy(url, check):
+    """Run one bounded, cancellation-aware attempt through the verified launcher.
+
+    The helper checks both the host listener and Comfy Python processes before
+    starting anything. A timeout or failed HTTP connection alone is insufficient.
+    Only this short-lived helper is terminated on cancellation, never Comfy.
+    """
+    check()
+    script = Path(__file__).resolve().parents[1] / 'scripts' / 'start_comfy_recovery.py'
+    process = subprocess.Popen(
+        [sys.executable, str(script), '--expected-url', url],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
+    )
+    deadline = time.monotonic() + 220
+    try:
+        while True:
+            check()
+            try:
+                output, error = process.communicate(timeout=.25)
+                break
+            except subprocess.TimeoutExpired:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Comfy recovery budget exhausted; no generation submitted')
+        check()
+        if process.returncode:
+            raise RuntimeError('Comfy recovery refused or failed: ' + error.decode(errors='replace')[-3000:])
+        records = [json.loads(line) for line in output.decode().splitlines() if line.strip()]
+        if not records or records[-1].get('ready') is not True:
+            raise RuntimeError('Comfy recovery did not confirm a ready service')
+        return records[-1]
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
 
 def headroom(client, devices, path):
     free = min((d.get('vram_free', 0) for d in devices), default=0)

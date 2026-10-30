@@ -100,11 +100,11 @@ class FlowCharacterManifestTests(unittest.TestCase):
         self.assertNotIn('FLOW CHARACTER REFERENCES', p.llm_json.call_args.args[0])
         self.assertNotIn('flow_character_manifest_version', result)
 
-    def test_flow_short_duration_rewrite_preserves_manifest(self):
+    def test_flow_natural_duration_preserves_script_and_manifest_without_rewrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Pipeline.__new__(Pipeline)
             script = self.valid_script();script['flow_character_manifest_version'] = 1
-            p._speech_attempt = Mock(side_effect=[NarrationDurationError('too long'), {'duration_seconds': 29.5, 'assets': []}])
+            p._speech_attempt = Mock(return_value={'duration_seconds': 35, 'assets': []})
             p.llm_json = Mock(return_value={'scenes': [
                 {'narration': 'Cha nhìn ra đồng.', 'visual_prompt': 'A man with a weathered face and gray beard watches a field.', 'character_ids': ['father']},
                 {'narration': 'Cha bước chậm.', 'visual_prompt': 'The same man with a weathered face and gray beard walks slowly.', 'character_ids': ['father']},
@@ -113,7 +113,9 @@ class FlowCharacterManifestTests(unittest.TestCase):
             with patch.dict('os.environ', {'VS_DURATION_REWRITE_ATTEMPTS': '2'}):
                 result = p.speech(job, lambda: None)
             final = json.loads((Path(tmp) / 'final-script.json').read_text(encoding='utf8'))
-            self.assertEqual(result['duration_attempts'], 2)
+            self.assertEqual(result['duration_attempts'], 1)
+            p.llm_json.assert_not_called()
+            self.assertEqual(final['narration'], script['narration'])
             self.assertEqual(final['characters'], script['characters'])
             self.assertEqual([s['character_ids'] for s in final['scenes']], [['father'], ['father']])
 

@@ -305,9 +305,14 @@
   async function request(path,opts={}){const r=await fetch(path,{...opts,headers:{'Content-Type':'application/json',...opts.headers},signal:AbortSignal.timeout(120000)});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d;}
   const imageURL=(s,edit)=>base()+'/scenes/'+encodeURIComponent(s.scene_id)+'/image?edit='+encodeURIComponent(edit)+'&thumb=true';
   function clearPolling(){epoch++;for(const t of timers)clearTimeout(t);timers.clear();}
+  const canExport=()=>!!state?.editable&&state.can_export!==false;
   function controls(){
     const view=$('viewSceneEditor');
     view.querySelectorAll('button,select,input,textarea').forEach(e=>{if(e.id==='btnBackFromEditor')return;e.disabled=busy||e.dataset.permDisabled==='true'||(e.dataset.requiresEdit==='true'&&!state?.editable)||e.dataset.pending==='true'||e.dataset.boundary==='true';});
+    $('sePageExport').disabled=busy||!canExport();
+    const recovery=state?.state==='failed'&&state.recovery;
+    $('sePageResume').hidden=!recovery;$('sePageResume').textContent=recovery?.label||'';
+    const availability=$('seExportAvailability');availability.textContent=state?.export_unavailable_reason||'';availability.hidden=!availability.textContent;
   }
   function pager(){
     let p=$('sePagination');if(p)return p;
@@ -402,12 +407,22 @@
     clearPolling();job=jid;const c=cache();state=c.state||null;
     $('viewGallery').hidden=$('viewWorkspace').hidden=true;$('viewSceneEditor').hidden=false;document.body.classList.add('scene-editor-active');
     const hash='#/editor/'+encodeURIComponent(jid);if(location.hash!==hash)location.hash=hash;
-    if(state){render();await request(base(jid)).then(v=>{if(job===jid&&v.version!==state.version){state=v;c.state=v;render();}}).catch(()=>{});}else await refresh();
+    if(state){render();await request(base(jid)).then(v=>{if(job===jid){state=v;c.state=v;render();}}).catch(()=>{});}else await refresh();
     requestAnimationFrame(()=>window.scrollTo(0,c.scroll||0));
   };
   function close(){if(busy)return;cache().scroll=window.scrollY;clearPolling();$('viewSceneEditor').querySelectorAll('audio').forEach(a=>a.pause());$('viewSceneEditor').hidden=true;document.body.classList.remove('scene-editor-active');$(priorView).hidden=false;window.scrollTo(0,workspaceScroll);if(location.hash.startsWith('#/editor/'))history.back();}
   $('btnBackFromEditor').onclick=close;$('sePageReload').onclick=refresh;$('sePageFilter').onchange=()=>{if(busy)return;cache().filter=$('sePageFilter').value;cache().page=0;render();};
-  $('sePageExport').onclick=async()=>{if(busy||!state?.editable)return;const c=cache(),identity=String(state.version);if(c.exportKey?.identity!==identity)c.exportKey={identity,key:uid()};busy=true;controls();try{const result=await request(base()+'/export',{method:'POST',headers:{'Idempotency-Key':c.exportKey.key},body:JSON.stringify({version:state.version,confirm_all:true})});message('Đã tạo phiên bản '+result.id.slice(0,8)+', đang dựng video.');}catch(e){message(e.message,true);}finally{busy=false;controls();}};
+  $('sePageResume').onclick=async()=>{
+    if(busy||state?.state!=='failed'||!state.recovery)return;
+    const jid=job,label=state.recovery.label;busy=true;controls();
+    try{
+      await request('/api/jobs/'+encodeURIComponent(jid)+'/retry',{method:'POST',body:'{}'});
+      state={...state,state:'queued',editable:false,can_export:false,recovery:null,export_unavailable_reason:'Tác vụ đang chạy; chờ hoàn tất trước khi xuất video.'};cache().state=state;clearPolling();
+      try{state=await request(base(jid));cache().state=state;}catch{}
+      render();message('Đã '+label.toLocaleLowerCase('vi')+'. Các bước hoàn tất được giữ nguyên. Bấm Làm mới để cập nhật.');
+    }catch(e){message('Chưa tiếp tục được: '+e.message,true);}finally{busy=false;controls();}
+  };
+  $('sePageExport').onclick=async()=>{if(busy||!canExport())return;const c=cache(),identity=String(state.version);if(c.exportKey?.identity!==identity)c.exportKey={identity,key:uid()};busy=true;controls();try{const result=await request(base()+'/export',{method:'POST',headers:{'Idempotency-Key':c.exportKey.key},body:JSON.stringify({version:state.version,confirm_all:true})});message('Đã tạo phiên bản '+result.id.slice(0,8)+', đang dựng video.');}catch(e){message(e.message,true);}finally{busy=false;controls();}};
   window.addEventListener('hashchange',()=>{const m=location.hash.match(/^#\/editor\/([^?&]+)/);if(m)window.openSceneEditor(decodeURIComponent(m[1]));else if(!$('viewSceneEditor').hidden)close();});
   const initial=()=>{const m=location.hash.match(/^#\/editor\/([^?&]+)/);if(m)window.openSceneEditor(decodeURIComponent(m[1]));};
   if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',initial);else initial();

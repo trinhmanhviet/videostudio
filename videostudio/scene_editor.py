@@ -10,6 +10,8 @@ from .visual_quality import bind_scene_ids,text_hash,fingerprint,atomic_json
 
 MAX_UPLOAD=20*1024*1024
 MAX_PIXELS=20_000_000
+EXPORT_STAGES=('plan','research','script','speech','images','subtitles','music')
+STAGE_LABELS={'plan':'phân tích ý tưởng','research':'tìm hiểu','script':'viết kịch bản','speech':'tạo lời đọc','images':'tạo ảnh','subtitles':'căn phụ đề','music':'nhạc','render':'dựng video','verify':'kiểm tra thành phẩm'}
 
 class SceneEditor:
     def __init__(self,store):
@@ -56,8 +58,16 @@ class SceneEditor:
             row['review_status']='user_approved' if approved and approved['image_sha256']==row['image_sha256'] and approved['timeline_sha256']==timeline else 'needs_review'
             row['image_url']=f'/api/jobs/{jid}/scene-editor/scenes/{sid}/image?edit={row["edit_id"]}'
             row['audio_url']=f'/api/jobs/{jid}/scene-editor/scenes/{sid}/audio'
-        return {'job_id':jid,'version':head['version'],'mode':head['mode'],'state':j['state'],'timeline_sha256':timeline,'scenes':layout,'editable':j['state'] in ('completed','failed','awaiting_visual_review'),'reviewer':'manual_user_selection','automatic_visual_review_available':False}
+        editable=j['state'] in ('completed','failed','awaiting_visual_review')
+        missing=[stage for stage in EXPORT_STAGES if stage not in j['checkpoints']]
+        reason='Chưa thể xuất video vì còn thiếu bước: '+', '.join(STAGE_LABELS[stage] for stage in missing)+'. Tiếp tục tác vụ gốc để hoàn tất.' if missing else None
+        if not editable:reason='Tác vụ đang chạy; chờ hoàn tất trước khi xuất video.'
+        stage=j.get('stage') or next((s for s in STAGES if s not in j['checkpoints']),None)
+        recovery={'stage':stage,'label':'Tiếp tục từ bước '+STAGE_LABELS.get(stage,stage or 'bị gián đoạn')} if j['state']=='failed' else None
+        return {'job_id':jid,'version':head['version'],'mode':head['mode'],'state':j['state'],'timeline_sha256':timeline,'scenes':layout,'editable':editable,'can_export':editable and not missing,'missing_export_checkpoints':missing,'export_unavailable_reason':reason,'recovery':recovery,'reviewer':'manual_user_selection','automatic_visual_review_available':False}
     def _mutable(self,c,jid,version):
+        from .project_lifecycle import reject_retired_job
+        reject_retired_job(c,jid)
         if type(version) is not int or version<0:raise ValueError('An editor version is required')
         row=c.execute('SELECT h.*,j.state FROM scene_editor_heads h JOIN jobs j ON h.job=j.id WHERE h.job=?',(jid,)).fetchone()
         if not row or row['version']!=version:raise ValueError('Stale editor version; refresh before editing/exporting')
@@ -144,13 +154,15 @@ class SceneEditor:
         v=self.view(jid);parent=self.store.get(jid)
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,jid)
             old=c.execute('SELECT j.id,e.* FROM jobs j LEFT JOIN scene_exports e ON e.child=j.id WHERE j.idem=?',(idem,)).fetchone()
             if old:
                 if old['parent']!=jid or old['version']!=version or old['confirm_all']!=int(confirm_all):raise ValueError('Idempotency key already used for another editor snapshot')
                 child=old['id']
             else:
                 head=self._mutable(c,jid,version)
-                for stage in ('plan','research','script','speech','images','subtitles','music'):
+                for stage in EXPORT_STAGES:
                     if stage not in parent['checkpoints']:raise ValueError('Required source checkpoint missing: '+stage)
                     for a in parent['checkpoints'][stage].get('assets',[]):
                         if not Path(a['path']).is_file() or digest(a['path'])!=a['sha256']:raise ValueError('Source checkpoint changed')

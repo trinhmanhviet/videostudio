@@ -43,9 +43,9 @@ class ResearchModeTests(unittest.TestCase):
         job={'request':{'workflow_mode':'provided_narration','duration_seconds':45},'checkpoints':{'speech':{'duration_seconds':31.25}}}
         self.assertEqual(timeline_duration(job),31.25)
 
-    def test_legacy_jobs_keep_their_requested_duration(self):
+    def test_requests_without_workflow_mode_also_use_measured_duration(self):
         job={'request':{'duration_seconds':45},'checkpoints':{'speech':{'duration_seconds':31.25}}}
-        self.assertEqual(timeline_duration(job),45)
+        self.assertEqual(timeline_duration(job),31.25)
 
     def test_plan_requests_direct_structured_facts_without_required_urls(self):
         from types import SimpleNamespace

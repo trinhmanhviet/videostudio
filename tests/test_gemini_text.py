@@ -342,6 +342,14 @@ class GeminiNewChatTransitionTests(unittest.TestCase):
         self.assertIn('range(160)', source)
         self.assertNotIn('for ch in wrapped', source)
 
+    def test_ask_gemini_uses_exact_dom_new_chat_click_once(self):
+        import inspect
+        from videostudio.cdp_daemon import ChromeChatGPTBridge
+        source = inspect.getsource(ChromeChatGPTBridge.ask_gemini)
+        block = source.split('clicked = await self.evaluate(session, gemini_click_new_chat_expression())',1)[1].split('wrapped = (marker +',1)[0]
+        self.assertIn('gemini_click_new_chat_expression()', source)
+        self.assertNotIn('Input.dispatchMouseEvent', block)
+
     def test_logical_composer_text_normalizes_line_endings_only(self):
         from videostudio.cdp_gemini import canonical_gemini_text
         expected = 'marker\nfirst line\nsecond line'

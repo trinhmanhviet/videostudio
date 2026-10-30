@@ -14,7 +14,7 @@ class DedicatedChromeTests(unittest.TestCase):
             self.assertIn('--remote-debugging-port=0', args)
             self.assertIn('--remote-debugging-address=127.0.0.1', args)
             self.assertIn('--user-data-dir='+str(cfg.profile.resolve()), args)
-            self.assertNotIn('--enable-automation', args)
+            self.assertIn('--enable-automation', args)
             self.assertFalse(any('remote-allow-origins' in a or '--headless' in a for a in args))
 
     def test_refuse_default_personal_profile(self):

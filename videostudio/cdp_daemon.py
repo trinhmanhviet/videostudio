@@ -353,7 +353,8 @@ class ChromeChatGPTBridge:
         from .cdp_gemini import (gemini_snapshot_expression, gemini_composer_expression,
                                  gemini_send_button_expression, correlate_gemini, parse_snapshot,
                                  gemini_chat_count_expression, gemini_new_chat_expression,
-                                 gemini_click_send_expression, new_chat_ready, canonical_gemini_text)
+                                 gemini_click_send_expression, gemini_click_new_chat_expression,
+                                 new_chat_ready, canonical_gemini_text)
         async with self.job_lock:
             record = self.journal.prepare(job, prompt_text, provider='gemini')
             if record['state'] == 'completed':
@@ -364,12 +365,8 @@ class ChromeChatGPTBridge:
             if record['state'] == 'prepared':
                 target, session, state = await self.gemini_page_ready(job)
                 # Each request uses a fresh Gemini conversation in the same owned tab.
-                fresh = await self.evaluate(session, gemini_new_chat_expression())
-                if fresh:
-                    if not fresh.get('hitMatches'):
-                        raise RuntimeError('Gemini New chat control is obstructed; no prompt sent')
-                    for kind in ('mousePressed', 'mouseReleased'):
-                        await self.cdp.command('Input.dispatchMouseEvent', {'type': kind, 'x': fresh['x'], 'y': fresh['y'], 'button': 'left', 'clickCount': 1}, session=session)
+                clicked = await self.evaluate(session, gemini_click_new_chat_expression())
+                if clicked:
                     stable = 0
                     for _ in range(160):
                         await asyncio.sleep(.25)
@@ -509,6 +506,31 @@ async def create_app(bridge=None):
     async def mutate(request):
         try:
             body = await request.json()
+            if request.path=='/api/flow/account/reconcile':
+                job_id=body.get('job_id')
+                try:uuid.UUID(job_id)
+                except (ValueError,TypeError,AttributeError):raise web.HTTPBadRequest(text='Valid job_id required')
+                from .core import Store
+                from .flow_account import FlowAccountService
+                db=Path(os.getenv('VS_DATABASE',str(ROOT/'data'/'jobs.sqlite3')))
+                store=Store(db,os.getenv('VS_OUTPUT_DIR','E:/Videos'));service=FlowAccountService(store,flow_root=bridge.flow_images.root)
+                job=store.get(job_id)
+                with store.db() as c:
+                    phase=service._read(c,job_id)[0]
+                    if c.execute('select cancel from jobs where id=?',(job_id,)).fetchone()['cancel'] or job['state']!='awaiting_flow_account' or phase!='reconciling':
+                        raise web.HTTPConflict(text='Video is no longer safely paused for Flow recovery')
+                async with bridge.flow_images._flow_batch_lock:
+                    async with bridge.job_lock:
+                        job=store.get(job_id)
+                        with store.db() as c:
+                            if c.execute('select cancel from jobs where id=?',(job_id,)).fetchone()['cancel'] or service._read(c,job_id)[0]!='reconciling':
+                                raise web.HTTPConflict(text='Flow recovery state changed before the browser lock was acquired')
+                        if body.get('quiesce_only') is True:return web.json_response({'ok':True,'data':{'quiesced':True}})
+                        tasks=service._scene_tasks(job);service._preserve_local(job,tasks)
+                        missing=[task for task in tasks if not task['cached']]
+                        if missing:
+                            await asyncio.wait_for(service._reconcile_browser_async(job,missing,bridge=bridge),timeout=540)
+                        return web.json_response({'ok':True,'data':{'quiesced':True,'preserved':sum(task['cached'] for task in tasks)}})
             if request.path.endswith('/start'):
                 value = await bridge.open_login()
             elif request.path.endswith('/probe'):
@@ -572,7 +594,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch','/api/flow/account/reconcile'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

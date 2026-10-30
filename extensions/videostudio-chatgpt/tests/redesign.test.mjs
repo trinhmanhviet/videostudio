@@ -32,13 +32,16 @@ test('retry is bounded to one fresh tab after exact receipt reconciliation',()=>
 test('actual Studio runtime guards invalidated send and retires intervals/listener',async()=>{
   const code=await readFile(new URL('../studio.js',import.meta.url),'utf8');
   const timers=new Map();let next=0,removed=0;const listeners=[];
-  const button=()=>({style:{},addEventListener(){},removeEventListener(){}});
-  const nodes=new Map(['status','start','smoke','stop'].map(key=>['#'+key,key==='status'?{textContent:''}:button()]));
+  const domListeners=new Set();
+  const button=()=>({style:{},dataset:{},textContent:'',setAttribute(){},addEventListener(type,fn){domListeners.add(fn)},removeEventListener(type,fn){domListeners.delete(fn)}});
+  const nodes=new Map(['status','start','smoke','stop','manager','manager-content','collapse','badge','count','error-badge','empty','sessions','dismiss-dialog','dismiss-video','dismiss-files','dismiss-warning','dismiss-error','dismiss-confirm','dismiss-cancel'].map(key=>['#'+key,button()]));
   const shadow={innerHTML:'',querySelector:key=>nodes.get(key)};
-  const root={style:{},attachShadow:()=>shadow,remove(){removed++}};
-  const context={location:{origin:'http://localhost:8877',pathname:`/story-video/projects/${scope}/production`},document:{createElement:()=>root,documentElement:{append(){}}},chrome:{runtime:{sendMessage:async()=>{throw Error('Extension context invalidated')},onMessage:{addListener:fn=>listeners.push(fn),removeListener:fn=>{listeners.splice(listeners.indexOf(fn),1)}}}},setInterval:fn=>{timers.set(++next,fn);return next},clearInterval:id=>timers.delete(id),fetch:async()=>({ok:true,json:async()=>({})}),sessionStorage:{getItem:()=>null},console};
+  const root={style:{},dataset:{},attachShadow:()=>shadow,remove(){removed++}};
+  const document={...button(),createElement:()=>root,documentElement:{append(){}}};
+  const context={location:{origin:'http://localhost:8877',pathname:`/story-video/projects/${scope}/production`},document,chrome:{runtime:{sendMessage:async()=>{throw Error('Extension context invalidated')},onMessage:{addListener:fn=>listeners.push(fn),removeListener:fn=>{listeners.splice(listeners.indexOf(fn),1)}}}},setInterval:fn=>{timers.set(++next,fn);return next},clearInterval:id=>timers.delete(id),fetch:async()=>({ok:true,json:async()=>({})}),localStorage:{getItem:()=>null},console};
   vm.runInNewContext(code,context);
   await new Promise(resolve=>setImmediate(resolve));
   for(const timer of [...timers.values()])await timer();
-  assert.equal(timers.size,0);assert.equal(listeners.length,0);
+  assert.equal(timers.size,0);assert.equal(listeners.length,0);assert.equal(domListeners.size,0);
+  assert.equal(nodes.get('#start').disabled,true);assert.match(nodes.get('#status').textContent,/Tải lại trang Studio/);
 });

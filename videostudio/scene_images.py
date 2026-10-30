@@ -37,7 +37,11 @@ class SceneImageJobs:
         if not isinstance(key,str) or not 1<=len(key)<=150:raise ValueError('Idempotency-Key required (max 150)')
         prompt=prompt.strip();v=self.editor.view(jid);row=self.editor._scene(v,sid)
         with self.store.db() as c:
-            c.execute('BEGIN IMMEDIATE');old=c.execute('SELECT * FROM scene_image_tasks WHERE idem=?',(key,)).fetchone()
+            c.execute('BEGIN IMMEDIATE')
+            if self.store.flow_workers_blocked(c):raise ValueError('Đang đổi tài khoản Flow. Hoàn tất đổi tài khoản trước khi tạo ảnh cảnh.')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,jid)
+            old=c.execute('SELECT * FROM scene_image_tasks WHERE idem=?',(key,)).fetchone()
             if old:
                 if (old['job'],old['scene'],old['prompt'],old['provider'],old['editor_version'])!=(jid,sid,prompt,provider,version):raise ValueError('Idempotency key already used for another image request')
                 identifier=old['id']
@@ -88,6 +92,9 @@ class SceneImageJobs:
             raise ValueError('Only the specifically rejected Comfy output-format task is recoverable')
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            if self.store.flow_workers_blocked(c):raise ValueError('Hoàn tất đổi tài khoản Flow trước khi tiếp tục tác vụ ảnh.')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,jid)
             if c.execute("UPDATE scene_image_tasks SET state='running',updated=? WHERE id=? AND state='failed' AND error='Unsafe Comfy output'",(time.time(),identifier)).rowcount!=1:
                 raise ValueError('Comfy recovery task changed; not resumed')
         current=self.get(identifier)
@@ -142,7 +149,9 @@ class SceneImageJobs:
         if not self.store.lock(owner):return False
         try:
             with self.store.db() as c:
-                c.execute('BEGIN IMMEDIATE');r=c.execute("SELECT id FROM scene_image_tasks WHERE state IN ('queued','running') ORDER BY created LIMIT 1").fetchone()
+                c.execute('BEGIN IMMEDIATE')
+                if self.store.flow_workers_blocked(c):return False
+                r=c.execute("SELECT id FROM scene_image_tasks WHERE state IN ('queued','running') ORDER BY created LIMIT 1").fetchone()
                 if not r:return False
                 identifier=r['id'];c.execute("UPDATE scene_image_tasks SET state='running',error=NULL,updated=? WHERE id=?",(time.time(),identifier))
             task=self.get(identifier)
@@ -157,6 +166,9 @@ class SceneImageJobs:
     def resume(self,jid,sid,identifier):
         self.scoped(jid,sid,identifier)
         with self.store.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            from .project_lifecycle import reject_retired_job
+            reject_retired_job(c,jid)
             if c.execute("UPDATE scene_image_tasks SET state='queued',error=NULL,updated=? WHERE id=? AND state IN ('uncertain','needs_auth','needs_comfy_idle','needs_zero_credit','needs_flow_check')",(time.time(),identifier)).rowcount!=1:raise ValueError('Only uncertain/auth/comfy-idle requests can resume; no new task is created')
         return self.get(identifier)
     def cancel(self,jid,sid,identifier):

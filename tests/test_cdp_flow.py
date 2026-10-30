@@ -84,9 +84,9 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
     async def test_named_control_waits_for_menu_and_hits_visible_target_before_click(self):
         bridge=FakeBridge([]);flow=FlowImages(bridge,Path('unused'))
         point={'x':45,'y':72,'hitIsControl':True}
-        flow._eval=AsyncMock(side_effect=[None,point,point])
+        flow._eval=AsyncMock(side_effect=[None,point,point,None])
         await flow._click_named('session','Tải xuống',timeout=1)
-        self.assertEqual(flow._eval.await_count,3)
+        self.assertEqual(flow._eval.await_count,4)
         moved=[call for call in bridge.cdp.command.call_args_list if call.args[0]=='Input.dispatchMouseEvent' and call.args[1]['type']=='mouseMoved']
         clicks=[call for call in bridge.cdp.command.call_args_list if call.args[0]=='Input.dispatchMouseEvent' and call.args[1]['type'] in ('mousePressed','mouseReleased')]
         self.assertEqual(len(moved),1);self.assertEqual(len(clicks),2)
@@ -94,6 +94,7 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
     async def test_media_control_scrolls_then_hovers_before_menu_lookup(self):
         bridge=FakeBridge([]);flow=FlowImages(bridge,Path('unused'));sequence=[]
         async def evaluate(session,expression,timeout=8):
+            if 'flow-info-panel' in expression:sequence.append('popup-check');return 0
             if 'scrollIntoView' in expression:sequence.append('scroll');return {'x':100,'y':200}
             sequence.append('lookup');return {'x':120,'y':180,'hitIsControl':True}
         async def command(method,params=None,**kwargs):
@@ -102,8 +103,19 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             return {}
         flow._eval=AsyncMock(side_effect=evaluate);bridge.cdp.command=AsyncMock(side_effect=command)
         await flow._click_media_control('session','media-one','Tuỳ chọn khác')
-        self.assertEqual(sequence[:3],['scroll','hover','lookup'])
+        self.assertEqual(sequence[:4],['popup-check','scroll','hover','lookup'])
         self.assertIn('click',sequence)
+
+    async def test_dismiss_flow_popups_clicks_outside_until_overlays_close(self):
+        bridge=FakeBridge([]);flow=FlowImages(bridge,Path('unused'));checks=iter([2,1,0])
+        async def evaluate(session,expression,timeout=8):
+            if 'innerWidth' in expression:return {'x':1908,'y':899}
+            return next(checks)
+        flow._eval=AsyncMock(side_effect=evaluate)
+        await flow._dismiss_flow_popups('session')
+        clicks=[call for call in bridge.cdp.command.call_args_list if call.args[0]=='Input.dispatchMouseEvent' and call.args[1]['type']=='mousePressed']
+        self.assertEqual(len(clicks),2)
+        self.assertTrue(all(call.args[1]['x']==1908 and call.args[1]['y']==899 for call in clicks))
 
     async def test_thumbnail_discovery_accepts_loaded_286px_flow_cards(self):
         flow=FlowImages(FakeBridge([]),Path('unused'))
@@ -131,11 +143,11 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             flow=FlowImages(bridge,Path(td))
             flow._image=AsyncMock(return_value=[{'media_id':'media-1','x':60,'y':60}])
             flow._click_media_control=AsyncMock()
-            async def click_named(session,name):
+            async def click_named(session,name,**kwargs):
                 if name=='2K':
                     folder=Path(td)/'downloads'/task_id;folder.mkdir(parents=True,exist_ok=True)
                     Image.effect_noise((400,600),100).convert('RGB').save(folder/'probe',format='PNG')
-                    flow.download_guid='probe';flow.download_complete=True;flow.download_changed.set()
+                    flow.download_guid='probe';flow.downloads={'probe':{'state':'completed'}};flow.download_complete=True;flow.download_changed.set()
             flow._click_named=AsyncMock(side_effect=click_named)
             with self.assertRaisesRegex(FlowTaskError,'dimensions failed validation'):
                 await flow._download_2k(task_id,'target','session',{'stage':'image_ready'},'prompt',media_id='media-1')
@@ -168,12 +180,32 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
         tiles=[{'media_id':f'media-{i}','complete':True,'text':tasks[i]['prompt'],'x':(9-i)*100,'y':120,'tile_height':180} for i in range(10)]
         mapping=FlowImages._batch_row_mapping(tasks,tiles,[])
         self.assertEqual([mapping[t['task_id']] for t in tasks],[f'media-{i}' for i in range(10)])
-        with self.assertRaisesRegex(FlowTaskError,'full matching prompt'):
+        with self.assertRaisesRegex(FlowTaskError,'conflicts with the visual row order'):
             FlowImages._batch_row_mapping(tasks,[{**tiles[4],'text':'wrong'} if i==4 else tile for i,tile in enumerate(tiles)],[])
-        with self.assertRaisesRegex(FlowTaskError,'complete ten-image rows'):
-            FlowImages._batch_row_mapping(tasks,[{**tiles[0],'y':500}]+tiles[1:],[])
+        detail_prompts=[{'media_id':f'media-{i}','prompt':tasks[i]['prompt']} for i in range(10)]
+        self.assertEqual([FlowImages._batch_row_mapping(tasks,tiles,[],media_prompts=detail_prompts)[t['task_id']] for t in tasks],[f'media-{i}' for i in range(10)])
+        wrong_detail=[{'media_id':f'media-{i}','prompt':'mismatch' if i==3 else tasks[i]['prompt']} for i in range(10)]
+        with self.assertRaisesRegex(FlowTaskError,'did not match exactly one cohort task'):
+            FlowImages._batch_row_mapping(tasks,tiles,[],media_prompts=wrong_detail)
         with self.assertRaisesRegex(FlowTaskError,'different number'):
             FlowImages._batch_row_mapping(tasks,tiles[:-1],[])
+
+    def test_batch_download_order_is_right_to_left_and_oldest_rows_first(self):
+        tasks=[{'task_id':f'task-{i}','ordinal':i,'prompt':f'p{i}','character_mentions':[]} for i in range(10)]
+        mapping={task['task_id']:f'media-{i}' for i,task in enumerate(tasks)}
+        tiles=[{'media_id':f'media-{i}','complete':True,'x':(10-i)*100,'y':100,'tile_height':180} for i in range(10)]
+        order,_=FlowImages._batch_download_order(tasks,tiles,mapping)
+        self.assertEqual(order,[task['task_id'] for task in tasks])
+        twenty=[{'task_id':f'task-{i}','ordinal':i,'prompt':f'p{i}','character_mentions':[]} for i in range(20)]
+        mapping20={task['task_id']:f'media-{i}' for i,task in enumerate(twenty)}
+        tiles20=[]
+        for i in range(10):tiles20.append({'media_id':f'media-{i}','complete':True,'x':(10-i)*100,'y':400,'tile_height':180})
+        for i in range(10,20):tiles20.append({'media_id':f'media-{i}','complete':True,'x':(20-i)*100,'y':100,'tile_height':180})
+        order20,_=FlowImages._batch_download_order(twenty,tiles20,mapping20)
+        self.assertEqual(order20,[task['task_id'] for task in twenty])
+        wrapped=[{**tile,'x':(index%7)*100,'y':100 if index<7 else 400} for index,tile in enumerate(tiles)]
+        order_wrapped,_=FlowImages._batch_download_order(tasks,wrapped,mapping)
+        self.assertEqual(order_wrapped,['task-9','task-8','task-7','task-6','task-5','task-4','task-3','task-2','task-1','task-0'])
 
     async def test_generate_batch_rejects_duplicate_fingerprints_before_any_submission(self):
         with tempfile.TemporaryDirectory() as td:
@@ -207,11 +239,11 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
                      'creditLines':['Quá trình tạo sẽ tốn 0 tín dụng'],'settingsText':'Nano Banana 2.1 crop_9_16 x1'}
             flow._ensure_project=AsyncMock(return_value=({'task_id':task_id,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},ready))
             flow._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
-            flow._ensure_agent_and_settings=AsyncMock(return_value=focused)
+            flow._ensure_agent_and_settings=AsyncMock(return_value={**focused,'settingsOpen':True})
             flow._prompt_box=AsyncMock(return_value={'x':50,'y':60,'text':prompt})
-            flow._click_point=AsyncMock();flow._eval=AsyncMock(return_value=True)
-            flow._snapshot=AsyncMock(return_value=focused)
-            flow._wait_page=AsyncMock(return_value={'draftEmpty':True,'generateDisabled':True})
+            flow._click_point=AsyncMock();flow._click_expr=AsyncMock();flow._eval=AsyncMock(return_value=True)
+            flow._snapshot=AsyncMock(return_value={**focused,'creditLines':[],'settingsOpen':False})
+            flow._wait_page=AsyncMock(side_effect=[{'url':project,'settingsOpen':False},{'draftEmpty':True,'generateDisabled':True}])
             async with bridge.job_lock:
                 result=await asyncio.wait_for(flow._generate_unreserved(task_id,job_id,prompt,submit_only=True,require_zero_credit=True,submit_with_enter=True,bridge_lock_held=True),timeout=2)
             self.assertEqual(result['stage'],'waiting_result')
@@ -219,10 +251,29 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             keys=[c for c in bridge.cdp.command.call_args_list if c.args[0]=='Input.dispatchKeyEvent']
             self.assertEqual([c.args[1]['type'] for c in keys],['keyDown','keyUp'])
             self.assertEqual(flow._read_receipt(task_id)['stage'],'waiting_result')
+            self.assertIn('0 tín dụng',flow._read_receipt(task_id)['credit_estimate'])
+            flow._click_expr.assert_awaited_once()
+
+    async def test_enter_rejects_changed_draft_after_cost_panel_closes(self):
+        with tempfile.TemporaryDirectory() as td:
+            job_id=str(uuid.uuid4());task_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc';prompt='Distinct safe prompt'
+            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td))
+            flow._ensure_project=AsyncMock(return_value=({'task_id':task_id,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},{'url':project}))
+            flow._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
+            verified={'url':project,'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[],'agentOn':False,'settingsOpen':True,
+                      'settingsText':'Nano Banana 2.1 crop_9_16 x1','creditLines':['Quá trình tạo sẽ tốn 0 tín dụng']}
+            flow._ensure_agent_and_settings=AsyncMock(return_value=verified)
+            flow._click_expr=AsyncMock();flow._prompt_box=AsyncMock(return_value={'x':50,'y':60});flow._click_point=AsyncMock();flow._eval=AsyncMock(return_value=True)
+            flow._wait_page=AsyncMock(return_value={'url':project,'settingsOpen':False})
+            flow._snapshot=AsyncMock(return_value={**verified,'draftMatches':False,'settingsOpen':False,'creditLines':[]})
+            with self.assertRaisesRegex(FlowTaskError,'changed at Enter boundary'):
+                await flow._generate_unreserved(task_id,job_id,prompt,submit_only=True,require_zero_credit=True,submit_with_enter=True)
+            self.assertFalse(any(c.args[0]=='Input.dispatchKeyEvent' for c in bridge.cdp.command.call_args_list))
+            self.assertNotEqual(flow._read_receipt(task_id)['stage'],'submitting')
 
     async def test_batch_reservation_blocks_single_generate_interleaving(self):
         flow=FlowImages(FakeBridge([]),Path('unused'));batch_started=asyncio.Event();release_batch=asyncio.Event();single_called=[]
-        async def batch_impl(job_id,tasks,timeout=1200,bridge_lock_held=False):
+        async def batch_impl(job_id,tasks,timeout=1200,bridge_lock_held=False,download_results=True,require_zero_credit=True):
             batch_started.set();await release_batch.wait();return ['batch']
         async def single_impl(*args,**kwargs):single_called.append(True);return {'task_id':'single'}
         flow._generate_batch_unreserved=AsyncMock(side_effect=batch_impl)
@@ -243,42 +294,61 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
                 {'task_id':str(uuid.uuid4()),'ordinal':0,'prompt':'Cobalt-blue lighthouse on rocky coast at sunrise, no text.','character_mentions':[]},
                 {'task_id':str(uuid.uuid4()),'ordinal':1,'prompt':'Yellow tram crossing a snowy bridge at dawn, no text.','character_mentions':[]},
             ]
-            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td));submit_calls=[]
+            bridge=FakeBridge([{'targetId':'only-flow','type':'page','url':project}]);flow=FlowImages(bridge,Path(td));submit_calls=[];download_calls=[]
             async def fake_generate(task_id,current_job,prompt,**kwargs):
                 submit_calls.append((task_id,kwargs.get('submit_only'),kwargs.get('require_zero_credit')))
                 receipt={'task_id':task_id,'job_id':current_job,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),'character_mentions':[],
-                         'project_url':project,'stage':'waiting_result','baseline_media_ids':[],'credit_estimate':'Quá trình tạo sẽ tốn 0 tín dụng','submitted_at':1.0}
+                         'project_url':project,'stage':'waiting_result','baseline_media_ids':[],'credit_estimate':'Quá trình tạo sẽ tốn 0 tín dụng','credit_verified_at':1.0,'submitted_at':1.0}
                 flow._write_receipt(task_id,receipt)
-                return {'task_id':task_id,'stage':'waiting_result','project_url':project}
+                return {'task_id':task_id,'stage':'waiting_result','project_url':project,'credit_estimate':'Quá trình tạo sẽ tốn 0 tín dụng','credit_verified_at':1.0}
             flow._generate_unreserved=AsyncMock(side_effect=fake_generate)
             flow._target=AsyncMock(return_value='only-flow');flow._session=AsyncMock(return_value='flow-session')
             flow._snapshot=AsyncMock(return_value={'url':project,'composerAvailable':True,'draftEmpty':True,'assetTiles':[
-                {'media_id':'media-2','complete':True,'aria_label':'Yellow tram crossing a snowy …','text':tasks[1]['prompt'],'x':100,'y':200,'tile_height':200},
-                {'media_id':'media-1','complete':True,'aria_label':'Cobalt-blue lighthouse on rocky …','text':tasks[0]['prompt'],'x':300,'y':200,'tile_height':200}],'largeImages':[]})
-            flow._read_prompt_for_media=AsyncMock(side_effect=[
-                {'media_id':'media-2','prompt':tasks[1]['prompt'],'mention_entity_ids':[],'title':'Yellow tram crossing a snowy …'},
-                {'media_id':'media-1','prompt':tasks[0]['prompt'],'mention_entity_ids':[],'title':'Cobalt-blue lighthouse on rocky …'},
+                {'media_id':'media-2','complete':True,'aria_label':'Yellow tram crossing a snowy …','text':tasks[1]['prompt'],'x':300,'y':200,'tile_height':200},
+                {'media_id':'media-1','complete':True,'aria_label':'Cobalt-blue lighthouse on rocky …','text':tasks[0]['prompt'],'x':100,'y':200,'tile_height':200}],'largeImages':[]})
+            flow._read_detail_prompt_for_media=AsyncMock(side_effect=[
+                {'media_id':'media-2','prompt':tasks[1]['prompt'],'mention_entity_ids':[]},
+                {'media_id':'media-1','prompt':tasks[0]['prompt'],'mention_entity_ids':[]},
             ])
+            flow._read_prompt_for_media=flow._read_detail_prompt_for_media
             flow._wait_page=AsyncMock(return_value={'url':project,'composerAvailable':True,'draftEmpty':True})
+            interrupted=[False]
             async def fake_download(task_id,target,session,receipt,prompt,media_id=None):
+                if download_calls:
+                    self.assertEqual(receipt.get('download_resolution_requested'),'1K','after a failed 2K download, reuse 1K for the rest of this cohort')
+                    if not interrupted[0]:
+                        interrupted[0]=True
+                        raise FlowTaskError('fixture interrupted download','uncertain')
+                else:
+                    receipt.update(download_resolution_requested='1K',download_fallback_reason='2K unavailable')
+                download_calls.append(task_id)
                 path=Path(td)/(task_id+'.png');Image.new('RGB',(600,600),(30,80,120)).save(path,format='PNG')
                 from videostudio.core import digest
                 receipt.update({'stage':'downloaded','media_id':media_id,'download_path':str(path),'download_sha256':digest(path),'width':600,'height':600,'format':'PNG','download_guid':'guid-'+media_id})
                 flow._write_receipt(task_id,receipt);return receipt
             flow._download_2k=AsyncMock(side_effect=fake_download)
+            record_only=await flow.generate_batch(job_id,tasks,timeout=2,download_results=False)
+            self.assertEqual([x['stage'] for x in record_only],['image_ready','image_ready'])
+            self.assertEqual(flow._download_2k.await_count,0,'recording run stops after generation/mapping')
+            self.assertEqual(flow._read_batch_manifest(next(flow.batches.glob('*.json')).stem)['stage'],'images_ready')
+            with self.assertRaisesRegex(FlowTaskError,'fixture interrupted download'):
+                await flow.generate_batch(job_id,tasks,timeout=2)
+            # A restart/reflow must retain task/media ownership and the saved order.
+            for tile in flow._snapshot.return_value['assetTiles']:tile['x']=500-tile['x']
             results=await flow.generate_batch(job_id,tasks,timeout=2)
             self.assertEqual([x['task_id'] for x in results],[x['task_id'] for x in tasks])
             self.assertEqual([x['media_id'] for x in results],['media-1','media-2'])
+            self.assertEqual(download_calls,[tasks[1]['task_id'],tasks[0]['task_id']], 'download order must follow visible row right-to-left, not task ordinal')
             self.assertEqual([x[0] for x in submit_calls],[x['task_id'] for x in tasks])
             self.assertTrue(all(only and zero for _,only,zero in submit_calls))
             self.assertEqual([c.kwargs['batch_settings_verified'] for c in flow._generate_unreserved.await_args_list],[False,True])
-            self.assertTrue(all(c.kwargs['submit_with_enter'] for c in flow._generate_unreserved.await_args_list))
-            self.assertEqual(flow._download_2k.await_count,2)
+            self.assertTrue(all(c.kwargs['submit_with_enter'] is False for c in flow._generate_unreserved.await_args_list))
+            self.assertEqual(flow._download_2k.await_count,3)
             self.assertEqual(flow._read_batch_manifest(next(flow.batches.glob('*.json')).stem)['mapping'],{tasks[0]['task_id']:'media-1',tasks[1]['task_id']:'media-2'})
             replay=await flow.generate_batch(job_id,tasks,timeout=2)
             self.assertEqual([item['media_id'] for item in replay],['media-1','media-2'])
             self.assertEqual(len(submit_calls),2,'replay must not submit a second time')
-            self.assertEqual(flow._download_2k.await_count,2,'replay must reuse saved downloads')
+            self.assertEqual(flow._download_2k.await_count,3,'replay must reuse saved downloads')
 
     async def test_submit_only_returns_after_receipt_and_requires_explicit_zero_cost_when_requested(self):
         with tempfile.TemporaryDirectory() as td:
@@ -289,11 +359,13 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             flow._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
             flow._ensure_agent_and_settings=AsyncMock(return_value={'draftMatches':True,'mentionEntityIds':[],'attachedMediaIds':[],'agentOn':False,'creditLines':['Quá trình tạo sẽ tốn 0 tín dụng'],'settingsText':'🍌 Nano Banana 2.1\ncrop_9_16\nx1'})
             flow._click_named=AsyncMock()
-            flow._wait_page=AsyncMock(side_effect=AssertionError('submit_only must not wait for image completion'))
+            flow._wait_page=AsyncMock(return_value={'draftEmpty':True})
             result=await flow.generate(task_id,job_id,'Cobalt-blue lighthouse prompt.',submit_only=True,require_zero_credit=True)
             self.assertEqual(result['stage'],'waiting_result')
             self.assertEqual(flow._read_receipt(task_id)['stage'],'waiting_result')
-            flow._click_named.assert_awaited_once_with('flow-session','Bắt đầu tạo',exact=True)
+            flow._click_named.assert_awaited_once_with('flow-session','Bắt đầu tạo',exact=True,native_only=True)
+            self.assertTrue(flow._wait_page.await_args.args[1]({'draftEmpty':True}))
+            self.assertFalse(flow._wait_page.await_args.args[1]({'draftEmpty':False,'largeImages':[{'media_id':'unrelated'}]}))
             task2=str(uuid.uuid4());flow2=FlowImages(bridge,Path(td)/'second')
             flow2._ensure_project=AsyncMock(return_value=({'task_id':task2,'job_id':job_id,'project_url':project,'stage':'project_ready','baseline_media_ids':[]},state))
             flow2._attach_character_mentions=AsyncMock(return_value={'mentionEntityIds':[]})
@@ -381,6 +453,7 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
             flow=FlowImages(bridge,Path(tmp));flow._image=AsyncMock(return_value=[{'media_id':'media-2k','x':100,'y':200,'width':1080,'height':1920,'alt':'scene'}]);flow._click_media_control=AsyncMock()
             async def click(session,name,**kwargs):
                 if name=='2K':
+                    flow.active_frame=kwargs.get('download_frame')
                     folder=Path(tmp)/'downloads'/task_id;folder.mkdir(parents=True,exist_ok=True);guid=str(uuid.uuid4());file=folder/guid
                     Image.new('RGB',(1080,1920),'navy').save(file,format='JPEG',quality=90)
                     flow.on_event({'method':'Browser.downloadWillBegin','params':{'frameId':'foreign-frame','guid':str(uuid.uuid4())}})

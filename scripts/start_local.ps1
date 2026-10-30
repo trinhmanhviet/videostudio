@@ -16,6 +16,8 @@ if($existing){
 if($EngineeringScope){$env:VS_ENGINEERING_SCOPE=$EngineeringScope}else{Remove-Item Env:VS_ENGINEERING_SCOPE -ErrorAction SilentlyContinue}
 $env:VS_FLOW_REFERENCE_UI_VERIFIED='1'
 $env:VS_LLM_TRANSPORT=$TextTransport
+. (Join-Path $PSScriptRoot 'flow_batch_capability.ps1')
+Enable-VerifiedFlowBatch $root
 if($TextTransport -in @('cdp','gemini')){& (Join-Path $PSScriptRoot 'start_browser.ps1') -ServiceOnly}
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'data') | Out-Null
 $process=Start-Process $python -ArgumentList '-m','uvicorn','videostudio.api:app','--host','127.0.0.1','--port','8877' -WorkingDirectory $root -RedirectStandardOutput (Join-Path $root 'data/server.out.log') -RedirectStandardError (Join-Path $root 'data/server.err.log') -WindowStyle Hidden -PassThru

@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from .core import Store, Worker, validate_request, available_flow_batch_sizes
+from .core import Store, Worker, PermanentError, validate_request, available_flow_batch_sizes
 from .voices import Voices
 from .providers import Pipeline
 
@@ -21,12 +21,27 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     scene_editor=SceneEditor(store);pipeline.scene_editor=scene_editor
     from .scene_images import SceneImageJobs
     image_jobs=SceneImageJobs(store,scene_editor);image_jobs.pipeline=pipeline
-    from .exchanges import Exchanges
+    from .flow_account import FlowAccountService
+    flow_accounts=FlowAccountService(store,scene_editor)
+    pipeline.flow_accounts=flow_accounts
+    from .browser_manager import BrowserManager
+    def browser_active_jobs():
+        with store.db() as connection:
+            states="('running')" if flow_accounts.blocks_workers() else "('queued','running','retrying')"
+            count=connection.execute('SELECT COUNT(*) FROM jobs WHERE state IN '+states).fetchone()[0]
+            count+=connection.execute("SELECT COUNT(*) FROM scene_image_tasks WHERE state IN ('queued','running')").fetchone()[0]
+            if flow_accounts.blocks_browser_changes() or flow_accounts.blocks_workers():count=max(count,1)
+            return count
+    browser_manager=BrowserManager(active_jobs=browser_active_jobs)
+    from .exchanges import Exchanges, EXTENSION_HEARTBEAT_SECONDS
     exchanges=Exchanges(store)
+    from .project_lifecycle import ProjectLifecycle, reject_deleted_project, reject_retired_job
+    project_lifecycle=ProjectLifecycle(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
     def loop():
         while not stop.is_set():
+            if flow_accounts.blocks_workers():stop.wait(.5);continue
             working.set()
             try: did=image_jobs.step(worker.owner) or worker.step()
             except Exception:did=False
@@ -39,6 +54,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     async def lifespan(app):
         threads=[]
         if worker_enabled:
+            flow_accounts.recover_after_restart()
             for target in (loop,heartbeat):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
         yield
@@ -47,9 +63,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         # checkpoint recoverable, rather than falsely changing it to success.
         for t in threads:t.join(timeout=2)
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
-    app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs
+    app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs;app.state.flow_accounts=flow_accounts
     @app.get('/api/health')
-    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True,'flow_batch_sizes':available_flow_batch_sizes()}
+    def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'text_transport':os.getenv('VS_LLM_TRANSPORT','cdp'),'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True,'flow_batch_sizes':available_flow_batch_sizes()}
     def diagnose_job_error(j):
         err=j.get('error')
         if not err:return None
@@ -107,7 +123,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             'events':events[-30:]
         }
     @app.get('/api/projects')
-    def get_projects():
+    def get_projects(archived:bool=False,q:str="",page:int=1,page_size:int|None=None):
+        if page<1 or (page_size is not None and page_size not in (10,20,30)):raise HTTPException(422,"Invalid project pagination")
         with store.db() as c:
             rows=c.execute('SELECT id, request, state, stage, created, output FROM jobs ORDER BY created DESC').fetchall()
             p_rows=c.execute('SELECT name, created FROM projects ORDER BY created DESC').fetchall()
@@ -145,13 +162,48 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if 'Dự án mặc định' not in projects_dict:
             projects_dict['Dự án mặc định']={'name':'Dự án mặc định','count':0,'latest_id':None,'latest_state':None,'latest_stage':None,'latest_created':time.time(),'latest_video':None,'thumbnail':None,'idea':''}
         items=sorted(list(projects_dict.values()),key=lambda x:x['latest_created'] or 0,reverse=True)
-        return {'items':items,'projects':[x['name'] for x in items]}
+        metadata=project_lifecycle.metadata()
+        search=q.strip().casefold()
+        matching_names=set()
+        if search:
+            for r in rows:
+                try:req=json.loads(r['request'])
+                except (ValueError,TypeError):continue
+                if search in str(req.get('idea','')).casefold():matching_names.add(req.get('project') or 'Dự án mặc định')
+        items=[dict(item,archived=bool(metadata.get(item['name'],{}).get('archived',False))) for item in items
+               if not metadata.get(item['name'],{}).get('deleted')
+               and bool(metadata.get(item['name'],{}).get('archived',False))==archived
+               and (not search or search in item['name'].casefold() or item['name'] in matching_names)]
+        total=len(items);total_pages=max(1,(total+page_size-1)//page_size) if page_size else 1
+        if page_size:items=items[(page-1)*page_size:page*page_size]
+        return {'items':items,'projects':[x['name'] for x in items],'page':page,'page_size':page_size,'total':total,'total_pages':total_pages}
+    def project_input(data):
+        name=data.get('name')
+        if not isinstance(name,str) or not name.strip() or len(name.strip())>200:raise HTTPException(422,'Tên dự án không hợp lệ')
+        return name.strip()
+    @app.post('/api/projects/archive')
+    def archive_project(data:dict,request:Request):
+        same_origin(request);name=project_input(data)
+        if type(data.get('archived')) is not bool:raise HTTPException(422,'archived phải là boolean')
+        try:return project_lifecycle.archive(name,data['archived'])
+        except KeyError:raise HTTPException(404,'Project not found')
+        except ValueError as error:raise HTTPException(409,str(error))
+    @app.post('/api/projects/delete')
+    def delete_project(data:dict,request:Request):
+        same_origin(request);name=project_input(data)
+        if data.get('confirm') is not True:raise HTTPException(422,'Cần xác nhận xóa dự án')
+        if type(data.get('delete_files',False)) is not bool:raise HTTPException(422,'delete_files phải là boolean')
+        try:return project_lifecycle.delete(name,data.get('delete_files',False))
+        except KeyError:raise HTTPException(404,'Project not found')
+        except ValueError as error:raise HTTPException(409,str(error))
     @app.post('/api/projects')
     def create_project(data:dict,request:Request):
         same_origin(request)
-        pname=data.get('name','').strip()
-        if not pname or len(pname)>200:raise HTTPException(422,'Tên dự án không hợp lệ')
+        pname=project_input(data)
         with store.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            try:reject_deleted_project(c,pname)
+            except ValueError as error:raise HTTPException(409,str(error))
             c.execute('INSERT OR IGNORE INTO projects VALUES(?,?)',(pname,time.time()))
         return {'ok':True,'name':pname}
     @app.post('/api/jobs/{job_id}/retry')
@@ -163,6 +215,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         stage=j['stage']
         new_idea=(data or {}).get('idea')
         with store.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            try:reject_retired_job(c,job_id)
+            except ValueError as error:raise HTTPException(409,str(error))
             if new_idea and isinstance(new_idea,str) and new_idea.strip():
                 req=j['request'];req['idea']=new_idea.strip()
                 c.execute('UPDATE jobs SET request=? WHERE id=?',(json.dumps(req,ensure_ascii=False),job_id))
@@ -225,6 +280,44 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if r.status_code!=200:raise HTTPException(503,'Browser service unavailable')
             return r.json()
         except httpx.HTTPError:raise HTTPException(503,'Start the dedicated VideoStudio browser service first')
+    @app.get('/api/browser/profile')
+    def browser_profile_status(request:Request):
+        browser_request_local(request)
+        try:return browser_manager.status()
+        except RuntimeError as error:raise HTTPException(503,str(error))
+    @app.post('/api/browser/profile/open')
+    def browser_profile_open(data:dict,request:Request):
+        browser_request_local(request);same_origin(request)
+        if set(data)!={'mode'} or data.get('mode') not in ('clean','debug'):raise HTTPException(422,'Chọn Mở sạch hoặc Mở debug; profile được giữ cố định.')
+        try:return browser_manager.open(data['mode'])
+        except ValueError as error:raise HTTPException(409,str(error))
+        except RuntimeError as error:raise HTTPException(503,str(error))
+    @app.post('/api/browser/profile/stop')
+    def browser_profile_stop(request:Request):
+        browser_request_local(request);same_origin(request)
+        try:return browser_manager.stop()
+        except ValueError as error:raise HTTPException(409,str(error))
+        except RuntimeError as error:raise HTTPException(503,str(error))
+    def flow_account_response(job_id,request,operation):
+        browser_request_local(request)
+        if operation!='status':same_origin(request)
+        with store.db() as connection:
+            owned=connection.execute('SELECT id FROM connector_scopes WHERE job=?',(job_id,)).fetchone()
+        if owned:
+            bridge=request.headers.get('x-connector-scope')
+            if not bridge:raise HTTPException(403,'Kết nối Studio không sở hữu video này.')
+            try:exchanges.bridge_job(bridge,job_id)
+            except KeyError:raise HTTPException(403,'Kết nối Studio không sở hữu video này.')
+        try:return getattr(flow_accounts,operation)(job_id)
+        except KeyError:raise HTTPException(404,'Không tìm thấy video.')
+        except ValueError as error:raise HTTPException(409,str(error))
+        except RuntimeError as error:raise HTTPException(503,str(error))
+    @app.get('/api/jobs/{job_id}/flow-account')
+    def flow_account_status(job_id:str,request:Request):return flow_account_response(job_id,request,'status')
+    @app.post('/api/jobs/{job_id}/flow-account/prepare')
+    def flow_account_prepare(job_id:str,request:Request):return flow_account_response(job_id,request,'prepare')
+    @app.post('/api/jobs/{job_id}/flow-account/continue')
+    def flow_account_continue(job_id:str,request:Request):return flow_account_response(job_id,request,'continue_job')
     def browser_control(action,request):
         import httpx
         browser_request_local(request)
@@ -319,10 +412,16 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         return {'project_id':scope,'run_id':scope,'url':f'/story-video/projects/{scope}/production'}
     @app.post('/api/connector/status/{scope}')
     def report_connector(scope:str,data:dict,request:Request):
-        same_origin(request)
+        # The extension service worker can keep its existing bridge heartbeat
+        # alive while Studio is throttled. This exception is status-only.
+        import re
+        origin=request.headers.get('origin','')
+        if re.fullmatch(r'chrome-extension://[a-p]{32}',origin) and request.headers.get('x-vs-client')=='videostudio-extension':
+            browser_request_local(request)
+        else:same_origin(request)
         try:exchanges.pending(scope)
         except KeyError:raise HTTPException(404,'Scope not found')
-        # Informational heartbeat only, never grants authorization or readiness.
+        # Informational heartbeat only; a correlated latest smoke is still required.
         from .connector_diagnostics import sanitize_status
         allowed=sanitize_status(data)
         import json
@@ -332,7 +431,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             # fresh owner-tab heartbeat. This remains informational, not auth.
             if previous:
                 old=json.loads(previous['status'])
-                if allowed.get('stage')=='other_run' and old.get('enabled') is True and old.get('build')==allowed.get('build') and time.time()-previous['updated']<30:
+                if allowed.get('stage')=='other_run' and old.get('enabled') is True and old.get('build')==allowed.get('build') and time.time()-previous['updated']<=EXTENSION_HEARTBEAT_SECONDS:
                     return {'recorded':False,'reason':'non_owner_tab'}
             c.execute('INSERT OR REPLACE INTO connector_status VALUES(?,?,?)',(scope,json.dumps(allowed),time.time()))
         return {'recorded':True}
@@ -348,6 +447,40 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         import json
         with store.db() as c:rows=c.execute('SELECT * FROM connector_status ORDER BY updated DESC LIMIT 10').fetchall()
         return {'items':[{'scope':r['scope'],'status':json.loads(r['status']),'updated':r['updated']} for r in rows]}
+    @app.get('/api/connector/bridges/{bridge}/sessions')
+    def bridge_sessions(bridge:str):
+        try:return exchanges.bridge_sessions(bridge)
+        except KeyError:raise HTTPException(404,'Bridge not found')
+    @app.get('/api/connector/bridges/{bridge}/status')
+    def bridge_status(bridge:str):
+        try:
+            exchanges.bridge_root(bridge)
+            return exchanges.extension_status(bridge)
+        except KeyError:raise HTTPException(404,'Bridge not found')
+    @app.get('/api/connector/bridges/{bridge}/pending')
+    def bridge_pending(bridge:str):
+        try:return exchanges.bridge_pending(bridge)
+        except KeyError:raise HTTPException(404,'Bridge not found')
+    @app.get('/api/connector/bridges/{bridge}/jobs/{job_id}')
+    def bridge_job(bridge:str,job_id:str):
+        try:return exchanges.bridge_job(bridge,job_id)
+        except KeyError:raise HTTPException(404,'Job not found in bridge')
+    @app.post('/api/connector/bridges/{bridge}/jobs/{job_id}/dismiss')
+    def dismiss_bridge_job(bridge:str,job_id:str,request:Request,data:dict|None=None):
+        same_origin(request);data=data or {}
+        if type(data.get('delete_files',False)) is not bool:raise HTTPException(422,'delete_files phải là boolean')
+        if data.get('delete_files') is True and data.get('confirm') is not True:raise HTTPException(422,'Cần xác nhận xóa tệp')
+        try:return exchanges.dismiss_job(bridge,job_id,delete_files=data.get('delete_files',False))
+        except KeyError:raise HTTPException(404,'Job not found in bridge')
+        except ValueError as error:raise HTTPException(409,str(error))
+    @app.post('/api/connector/bridges/{bridge}/jobs/{job_id}/cancel')
+    def bridge_cancel(bridge:str,job_id:str,request:Request):
+        same_origin(request)
+        try:sessions=exchanges.bridge_sessions(bridge)['items']
+        except KeyError:raise HTTPException(404,'Bridge not found')
+        if not any(item['job_id']==job_id for item in sessions):raise HTTPException(404,'Job not found in bridge')
+        store.cancel(job_id)
+        return next(item for item in exchanges.bridge_sessions(bridge)['items'] if item['job_id']==job_id)
     prefix='/api/v1/projects/{project_id}/runs/{run_id}/chatgpt-exchanges'
     def checked_scope(project_id,run_id):
         if project_id!=run_id:raise HTTPException(404,'Scope not found')
@@ -379,27 +512,38 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         # Reject new jobs before allocation; existing idempotent receipts remain readable.
         with store.db() as connection:
             previous=connection.execute('SELECT id FROM jobs WHERE idem=?',(idempotency_key,)).fetchone()
+        scope=request.headers.get('x-connector-scope')
+        extension=os.getenv('VS_LLM_TRANSPORT','cdp')=='extension'
         if previous is None:
             try:
                 normalized=validate_request(data)
             except ValueError as error:
                 raise HTTPException(422,str(error)) from error
+            if os.getenv('VS_LLM_TRANSPORT','cdp') in ('extension','chrome','webauth') and normalized['text_provider']!='chatgpt':
+                raise HTTPException(422,'This text transport supports ChatGPT only; select ChatGPT')
             if normalized['flow_batch_size'] not in available_flow_batch_sizes():
                 raise HTTPException(422,'Flow image batch size is not validated/enabled on this installation; choose 1 image per batch')
+            if extension:
+                if not scope:raise HTTPException(422,'Connector bridge scope required')
+                try:compatible=exchanges.bridge_supports_sessions(scope)
+                except KeyError:raise HTTPException(422,'Unknown connector bridge root')
+                if not compatible:raise HTTPException(409,'Reload VideoStudio extension 0.3.0, refresh this Studio tab and start the bridge before creating another video')
             pf=pipeline.preflight(request.headers.get('x-connector-scope')) if isinstance(pipeline,Pipeline) else pipeline.preflight()
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
-        scope=request.headers.get('x-connector-scope')
         if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp') in ('chrome','extension') and not scope:
             raise HTTPException(422,'Connector scope required')
-        if scope:
+        if extension and not scope:raise HTTPException(422,'Connector bridge scope required')
+        if scope and not extension:
             with store.db() as c:
                 bound=c.execute('SELECT job FROM connector_scopes WHERE id=?',(scope,)).fetchone()
             if bound is None:raise HTTPException(422,'Unknown connector scope')
             if bound['job'] and (previous is None or previous['id']!=bound['job']):raise HTTPException(409,'Connector scope already owns another job; open a new video session')
         try:
-            job,created=store.create(data,idempotency_key,scope)
-            if scope:exchanges.bind(scope,job['id'])
+            with browser_manager.lock:
+                if previous is None and browser_manager.last_mode=='clean' and normalized['image_provider'] in ('flow','chatgpt'):
+                    raise HTTPException(409,'Chrome riêng đang mở sạch để đăng nhập. Bấm Mở debug rồi tạo video; tài khoản được giữ nguyên.')
+                job,created=store.create(data,idempotency_key,connector_scope=None if extension else scope,connector_bridge=scope if extension else None)
             return {**public_job(job),'job':public_job(job),'created':created}
         except ValueError as e:raise HTTPException(409 if 'already used' in str(e) else 422,str(e))
     @app.get('/api/jobs')
@@ -410,6 +554,31 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def detail(job_id:str):
         try:return public_job(store.get(job_id))
         except KeyError:raise HTTPException(404,'Job not found')
+    @app.post('/api/jobs/{job_id}/composer-diagnostics')
+    def composer_diagnostics(job_id:str,data:dict,request:Request):
+        same_origin(request)
+        import uuid
+        identifier=data.get('request_id')
+        try:uuid.UUID(identifier)
+        except (ValueError,TypeError,AttributeError):raise HTTPException(422,'Invalid request ID')
+        bridge=request.headers.get('x-connector-scope')
+        try:members=exchanges.bridge_sessions(bridge)['items']
+        except KeyError:raise HTTPException(403,'Unknown connector bridge')
+        if not any(item['job_id']==job_id for item in members):raise HTTPException(403,'Job does not belong to bridge')
+        try:
+            job=store.get(job_id);scope=exchanges.for_job(job_id)
+            record=exchanges.get(scope,identifier)
+        except (KeyError,TypeError):raise HTTPException(404,'Scoped request not found')
+        attempt=data.get('attempt')
+        if type(attempt) is not int or not 1<=attempt<=2 or type(data.get('version')) is not int or data.get('version')!=record['version']:raise HTTPException(422,'Diagnostic request correlation mismatch')
+        from .composer_diagnostics import bounded_diagnostic
+        try:diagnostic=bounded_diagnostic(data.get('diagnostic'))
+        except ValueError as error:raise HTTPException(422,str(error))
+        filename=f'composer-diagnostic-{identifier}-attempt{attempt}.json'
+        target=Path(job['output'])/filename
+        body={'job_id':job_id,'scope':scope,'request_id':identifier,'version':record['version'],'attempt':attempt,'diagnostic':diagnostic}
+        temporary=target.with_name(target.name+'.'+uuid.uuid4().hex+'.part.json');temporary.write_text(json.dumps(body,ensure_ascii=False,indent=2),encoding='utf8');temporary.replace(target)
+        return {'saved':True,'filename':filename}
     @app.post('/api/jobs/{job_id}/cancel')
     def cancel(job_id:str,request:Request):
         origin=request.headers.get('origin')
@@ -451,6 +620,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             except KeyError:raise HTTPException(404,'Unknown connector scope')
             return FileResponse(static/('connector-test.html' if connector_test else 'index.html'))
         app.mount('/',StaticFiles(directory=static,html=True),name='frontend')
+    app.state.browser_manager=browser_manager
     return app
 
 app=create_app(worker_enabled=os.getenv('VS_WORKER_ENABLED','1')=='1')

@@ -48,6 +48,41 @@ class EditorTests(unittest.TestCase):
     def editor(self,s):
         self.assertIsNotNone(importlib.util.find_spec('videostudio.scene_editor'),'Scene editor implementation missing')
         return importlib.import_module('videostudio.scene_editor').SceneEditor(s)
+    def test_failed_music_exposes_export_prerequisite_and_original_job_recovery(self):
+        with tempfile.TemporaryDirectory() as t:
+            s,j=ready_job(t,state='failed');before=copy.deepcopy(j['checkpoints'])
+            with s.db() as c:
+                c.execute("DELETE FROM checkpoints WHERE job=? AND stage='music'",(j['id'],))
+                c.execute("UPDATE jobs SET stage='music',error='GPU VRAM unavailable' WHERE id=?",(j['id'],))
+            e=self.editor(s);v=e.view(j['id'])
+            self.assertTrue(v['editable']);self.assertFalse(v['can_export'])
+            self.assertEqual(v['missing_export_checkpoints'],['music'])
+            self.assertIn('nhạc',v['export_unavailable_reason'])
+            self.assertEqual(v['recovery'],{'stage':'music','label':'Tiếp tục từ bước nhạc'})
+            self.assertEqual(len(v['scenes']),2)
+            self.assertEqual(s.get(j['id'])['checkpoints'],{k:cp for k,cp in before.items() if k!='music'})
+    def test_export_availability_matches_required_source_checkpoints(self):
+        for stage in ('plan','research','script','subtitles','music'):
+            with self.subTest(stage=stage),tempfile.TemporaryDirectory() as t:
+                s,j=ready_job(t);e=self.editor(s)
+                with s.db() as c:c.execute('DELETE FROM checkpoints WHERE job=? AND stage=?',(j['id'],stage))
+                v=e.view(j['id']);self.assertFalse(v['can_export'])
+                self.assertEqual(v['missing_export_checkpoints'],[stage])
+    def test_complete_source_and_failed_render_can_export(self):
+        for state in ('completed','failed','running'):
+            with self.subTest(state=state),tempfile.TemporaryDirectory() as t:
+                s,j=ready_job(t,state=state);v=self.editor(s).view(j['id'])
+                self.assertEqual(v['can_export'],state!='running')
+                self.assertEqual(v['missing_export_checkpoints'],[])
+                self.assertEqual(v['recovery'],{'stage':'render','label':'Tiếp tục từ bước dựng video'} if state=='failed' else None)
+    def test_missing_music_export_rejected_before_child_or_output_allocation(self):
+        with tempfile.TemporaryDirectory() as t:
+            s,j=ready_job(t,state='failed')
+            with s.db() as c:c.execute("DELETE FROM checkpoints WHERE job=? AND stage='music'",(j['id'],))
+            e=self.editor(s);v=e.view(j['id']);outputs=set(s.outputs.iterdir())
+            with patch('videostudio.scene_editor.uuid.uuid4',side_effect=AssertionError('must not allocate child')):
+                with self.assertRaisesRegex(ValueError,'music'):e.export(j['id'],v['version'],'missing-music',True)
+            self.assertEqual(len(s.list()),1);self.assertEqual(set(s.outputs.iterdir()),outputs)
     def test_mode_switch_preserves_edit_and_timeline(self):
         with tempfile.TemporaryDirectory() as t:
             s,j=ready_job(t);e=self.editor(s);before=copy.deepcopy(j['checkpoints']);v=e.view(j['id'])
@@ -111,6 +146,30 @@ class EditorTests(unittest.TestCase):
             self.assertEqual(s2.cancel(j['id'])['state'],'cancelled')
 
 class EditorAPITests(unittest.TestCase):
+    def test_missing_music_export_and_retry_preserve_original_job_checkpoints(self):
+        from videostudio.api import create_app
+        class FakePipeline:
+            def handlers(self):return {}
+            def preflight(self):return {'ready':False,'checks':[]}
+        with tempfile.TemporaryDirectory() as t:
+            s,j=ready_job(t,state='failed')
+            with s.db() as c:
+                c.execute("DELETE FROM checkpoints WHERE job=? AND stage='music'",(j['id'],))
+                c.execute("UPDATE jobs SET stage='music',error='GPU VRAM unavailable' WHERE id=?",(j['id'],))
+                c.execute('INSERT INTO attempts VALUES(?,?,?)',(j['id'],'music',3))
+            before=copy.deepcopy(s.get(j['id']));outputs=set(s.outputs.iterdir())
+            with TestClient(create_app(s,FakePipeline(),False)) as c:
+                base='/api/jobs/'+j['id'];view=c.get(base+'/scene-editor').json()
+                self.assertFalse(view['can_export']);self.assertEqual(view['missing_export_checkpoints'],['music'])
+                self.assertEqual(view['recovery']['label'],'Tiếp tục từ bước nhạc')
+                rejected=c.post(base+'/scene-editor/export',json={'version':view['version'],'confirm_all':True},headers={'Idempotency-Key':'missing-music'})
+                self.assertEqual(rejected.status_code,422);self.assertIn('music',rejected.json()['detail'])
+                retried=c.post(base+'/retry');self.assertEqual(retried.status_code,200)
+                self.assertEqual(retried.json()['id'],j['id']);self.assertEqual(retried.json()['status'],'queued')
+                active=c.get(base+'/scene-editor').json();self.assertFalse(active['editable']);self.assertFalse(active['can_export']);self.assertIsNone(active['recovery'])
+            after=s.get(j['id']);self.assertEqual(after['request'],before['request']);self.assertEqual(after['checkpoints'],before['checkpoints'])
+            self.assertEqual(set(s.outputs.iterdir()),outputs);self.assertEqual(len(s.list()),1)
+            with s.db() as c:self.assertIsNone(c.execute('SELECT 1 FROM attempts WHERE job=? AND stage=?',(j['id'],'music')).fetchone())
     def test_origin_and_binary_upload(self):
         from videostudio.api import create_app
         class FakePipeline:

@@ -10,6 +10,7 @@ Safety rules encoded here (deliberate):
     marker is ambiguous and never accepted.
 """
 import json
+from pathlib import Path
 from urllib.parse import urlparse
 
 GEMINI_HOME = 'https://gemini.google.com/app'
@@ -129,6 +130,11 @@ def gemini_new_chat_expression():
       const under=document.elementFromPoint(x,y);
       return {x,y,label:hit.getAttribute('aria-label'),hitMatches:!!under&&(under===hit||hit.contains(under))};
     })()"""
+
+
+def gemini_click_new_chat_expression():
+    """Load the tested exact-match New Chat DOM action used by the daemon."""
+    return Path(__file__).with_name('gemini_new_chat.js').read_text(encoding='utf-8').strip()
 
 
 def new_chat_ready(state):

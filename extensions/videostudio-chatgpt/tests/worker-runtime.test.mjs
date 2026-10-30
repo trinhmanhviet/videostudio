@@ -17,7 +17,7 @@ test('actual MV3 worker one-click root Start, fresh exchange tabs and Stop close
   assert.equal((await send({kind:'start',scope},scoped)).ok,true);
   assert.deepEqual(opened,[]);
   const first=await send({kind:'claim',id:'one',version:1,prompt:'YÊU CẦU STUDIO one\nX'},scoped);
-  assert.equal(first.ok,true);assert.equal(opened.length,1);assert.equal(delivered[0].message.attempt,1);
+  assert.equal(first.ok,true);assert.equal(opened.length,1);assert.equal(delivered.find(item=>item.message.kind==='deliver').message.attempt,1);
   assert.equal((await send({kind:'stop'},scoped)).ok,true);
   assert.deepEqual(closed,opened);assert.equal(state.active,false);assert.equal(state.job,null);
 });

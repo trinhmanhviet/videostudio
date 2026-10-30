@@ -8,7 +8,7 @@ def redact(value,limit=600):
     return value[:limit]
 
 def sanitize_status(data):
-    d={k:(redact(data[k],120) if isinstance(data[k],str) else data[k]) for k in ('build','stage','connected','enabled') if k in data and isinstance(data[k],(str,bool))}
+    d={k:(redact(data[k],120) if isinstance(data[k],str) else data[k]) for k in ('build','runtime_version','stage','connected','enabled') if k in data and isinstance(data[k],(str,bool))}
     if isinstance(data.get('error'),dict):
         d['error']={k:redact(data['error'][k],100 if k=='code' else 600) for k in ('code','message') if isinstance(data['error'].get(k),str)}
     if isinstance(data.get('logs'),list):

@@ -38,6 +38,7 @@ class FlowImages:
         self.events = []
         self.active_frame = None
         self.download_guid = None
+        self.downloads = {}
         self.download_complete = False
         self.download_error = None
         self.download_changed = asyncio.Event()
@@ -55,16 +56,17 @@ class FlowImages:
                 uuid.UUID(guid)
             except (ValueError, TypeError, AttributeError):
                 return
-            if self.download_guid and self.download_guid != guid:
-                self.download_error = 'More than one Flow download started; refusing to choose a file'
-            else:
+            self.downloads.setdefault(guid,{'state':'inProgress'})
+            if not self.download_guid:
                 self.download_guid = guid
+            self.download_complete = False
             self.events.append({'method': method, 'frameId': p.get('frameId'), 'guid': guid, 'suggestedFilename': p.get('suggestedFilename')})
             self.download_changed.set()
-        elif method == 'Browser.downloadProgress' and p.get('guid') == self.download_guid:
+        elif method == 'Browser.downloadProgress' and p.get('guid') in self.downloads:
+            self.downloads[p['guid']]['state']=p.get('state')
             self.events.append({'method': method, 'guid': p.get('guid'), 'state': p.get('state'), 'receivedBytes': p.get('receivedBytes'), 'totalBytes': p.get('totalBytes')})
             if p.get('state') == 'completed':
-                self.download_complete = True
+                self.download_complete = all(item['state']=='completed' for item in self.downloads.values())
             elif p.get('state') == 'canceled':
                 self.download_error = 'Flow download was canceled'
             self.download_changed.set()
@@ -141,8 +143,8 @@ class FlowImages:
         return mapping
 
     @classmethod
-    def _batch_row_mapping(cls,tasks,tiles,baseline):
-        """Freeze UI media IDs before download; require row geometry AND full tile prompt identity."""
+    def _batch_row_mapping(cls,tasks,tiles,baseline,media_prompts=None):
+        """Freeze UI media IDs before download; require row geometry AND full detail-panel prompt identity."""
         baseline=set(baseline or []);fresh=[];seen=set()
         for tile in tiles:
             media_id=tile.get('media_id')
@@ -161,21 +163,81 @@ class FlowImages:
         for tile in sorted(fresh,key=lambda value:(value['y'],value['x'])):
             if not rows or abs(tile['y']-rows[-1][0]['y'])>tolerance:rows.append([tile])
             else:rows[-1].append(tile)
-        if len(tasks)>=10 and (len(rows)!=(len(tasks)+9)//10 or any(len(row)!=10 for row in rows)):
-            raise FlowTaskError('Flow cohort does not form complete ten-image rows','uncertain')
-        if len(tasks)<10 and len(rows)!=1:
-            raise FlowTaskError('Flow cohort spans multiple rows before ten images','uncertain')
+        if not rows:raise FlowTaskError('Flow cohort has no visible rows','uncertain')
         visual=[tile for row in rows for tile in sorted(row,key=lambda value:value['x'])]
-        if len({tile['x'] for row in rows for tile in row})<min(len(tasks),10):
+        if len({tile['x'] for row in rows for tile in row})<2 and len(fresh)>1:
             raise FlowTaskError('Flow cohort tile positions overlap','uncertain')
         mapping={}
-        for task,tile in zip(sorted(tasks,key=lambda value:value['ordinal']),reversed(visual)):
-            expected=' '.join([mention['name'] for mention in task.get('character_mentions',[])]+[task['prompt']]).strip()
-            text=cls._prompt_text(tile.get('text',''))
-            if cls._prompt_text(expected) not in text:
-                raise FlowTaskError('Flow tile did not expose the full matching prompt; refusing row-only ownership','uncertain')
-            mapping[task['task_id']]=tile['media_id']
+        if media_prompts is not None:
+            full_by_id={value['media_id']:cls._prompt_text(value['prompt']) for value in media_prompts}
+            if set(full_by_id)!={tile['media_id'] for tile in visual}:
+                raise FlowTaskError('Flow detail prompts do not cover every cohort media ID','uncertain')
+            used_media=set()
+            for task in sorted(tasks,key=lambda value:value['ordinal']):
+                expected=' '.join([mention['name'] for mention in task.get('character_mentions',[])]+[task['prompt']]).strip()
+                expected_norm=cls._prompt_text(expected)
+                matched=[mid for mid,prompt_text in full_by_id.items() if prompt_text==expected_norm and mid not in used_media]
+                if len(matched)!=1:
+                    raise FlowTaskError('Flow detail prompt did not match exactly one cohort task','uncertain')
+                chosen=matched[0];used_media.add(chosen)
+                mapping[task['task_id']]=chosen
+        else:
+            for task,tile in zip(sorted(tasks,key=lambda value:value['ordinal']),reversed(visual)):
+                expected=' '.join([mention['name'] for mention in task.get('character_mentions',[])]+[task['prompt']]).strip()
+                text=cls._prompt_text(tile.get('text',''))
+                if cls._prompt_text(expected)!=text:
+                    raise FlowTaskError('Flow detail prompt conflicts with the visual row order; refusing positional ownership','uncertain')
+                mapping[task['task_id']]=tile['media_id']
         return mapping
+
+    @staticmethod
+    def _flow_asset_rows(tiles):
+        if not tiles:return []
+        tolerance=max(8,min(tile.get('tile_height',0) for tile in tiles)*.1)
+        rows=[]
+        for tile in sorted(tiles,key=lambda value:(value['y'],value['x'])):
+            if not rows or abs(tile['y']-rows[-1][0]['y'])>tolerance:rows.append([tile])
+            else:rows[-1].append(tile)
+        return rows
+
+    async def _ensure_batch_row_layout(self,session,project_url,tasks,baseline,tiles):
+        def expected_rows(rows):
+            count=len(tasks);expected=(count+9)//10;last=count%10 or 10
+            return len(rows)==expected and all(len(row)==10 for row in rows[:-1]) and len(rows[-1])==last
+        rows=self._flow_asset_rows(tiles)
+        if expected_rows(rows):return tiles
+        state=await self._snapshot(session,'')
+        if (state.get('url','').split('?')[0].rstrip('/')!=project_url.split('?')[0].rstrip('/') or
+                not state.get('draftEmpty') or not state.get('generateDisabled')):
+            raise FlowTaskError('Flow project/draft changed before row layout check','uncertain')
+        toggle=await self._eval(session,r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};return[...document.querySelectorAll('button,[role=button]')].filter(visible).filter(e=>/thu gọn/i.test(e.innerText||'')).length})()''')
+        if toggle!=1:
+            raise FlowTaskError('Flow grid does not fit ten tiles per row and the sidebar-collapse control is not unique','uncertain')
+        await self._click_named(session,'Thu gọn',selector='button,[role=button]')
+        state=await self._wait_page(session,lambda s:s.get('url','').split('?')[0].rstrip('/')==project_url.split('?')[0].rstrip('/'),timeout=5,prompt='')
+        tiles=[tile for tile in state.get('assetTiles',[]) if tile.get('media_id') and tile['media_id'] not in set(baseline or []) and tile.get('complete')]
+        if not expected_rows(self._flow_asset_rows(tiles)):
+            raise FlowTaskError('Flow grid still wraps away from the expected ten-image rows after collapsing the sidebar','uncertain')
+        return tiles
+
+    @classmethod
+    def _batch_download_order(cls,tasks,tiles,mapping):
+        task_ids={task['task_id'] for task in tasks}
+        if set(mapping)!=task_ids or len(set(mapping.values()))!=len(tasks):
+            raise FlowTaskError('Flow mapping is not one-to-one before download ordering','uncertain')
+        reverse={media_id:task_id for task_id,media_id in mapping.items()}
+        fresh=[tile for tile in tiles if tile.get('media_id') in reverse and tile.get('complete')]
+        if len(fresh)!=len(tasks):
+            raise FlowTaskError('Mapped Flow media tiles are not all visible/complete for download ordering','uncertain')
+        rows=cls._flow_asset_rows(fresh)
+        # Window width/sidebar/zoom can wrap a cohort into any number of rows.
+        # Full prompt/media IDs establish identity; geometry only orders clicks.
+        # Flow displays newest on the left; traversing older/bottom rows first and
+        # each row right-to-left follows the user's download direction.
+        ordered_tiles=[tile for row in reversed(rows) for tile in sorted(row,key=lambda item:item['x'],reverse=True)]
+        order=[reverse[tile['media_id']] for tile in ordered_tiles]
+        positions={tile['media_id']:{'x':tile['x'],'y':tile['y'],'row':row_index} for row_index,row in enumerate(rows) for tile in row}
+        return order,positions
 
     @staticmethod
     def _valid_project_url(job_id, url):
@@ -263,7 +325,7 @@ class FlowImages:
         await self._click_point(session, point)
         await asyncio.sleep(.18)
 
-    async def _click_named(self, session, name, *, exact=False, selector='button,[role=button],[role=menuitem]', timeout=5):
+    async def _click_named(self, session, name, *, exact=False, selector='button,[role=button],[role=menuitem]', timeout=5, native_only=False, download_frame=None):
         # Text/aria lookup only locates a visible, unobscured control; the action remains a trusted CDP mouse press.
         expression = r'''(()=>{const norm=s=>(s||'').replace(/\s+/g,' ').trim().toLocaleLowerCase();const wanted=norm(LABEL);const all=[...document.querySelectorAll(SELECTOR)].filter(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'});const matches=all.filter(e=>{const text=norm(e.innerText),aria=norm(e.getAttribute('aria-label'));return EXACT?(text===wanted||aria===wanted):(text.includes(wanted)||aria.includes(wanted))});if(matches.length!==1)return null;const b=matches[0],r=b.getBoundingClientRect(),x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);return{x,y,hitIsControl:hit===b||b.contains(hit)}})()'''
         expression = expression.replace('LABEL', json.dumps(name, ensure_ascii=False)).replace('SELECTOR', json.dumps(selector)).replace('EXACT', 'true' if exact else 'false')
@@ -277,7 +339,12 @@ class FlowImages:
         await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':point['x'],'y':point['y']},session=session)
         landed=await self._eval(session,expression,timeout=2)
         if not landed or not landed.get('hitIsControl'):raise FlowTaskError('Google Flow '+name+' control moved or was obscured before click','uncertain')
+        if download_frame is not None:
+            self.download_guid=None;self.downloads={};self.download_complete=False;self.download_error=None;self.events=[];self.download_changed.clear()
+            self.active_frame=download_frame
         await self._click_point(session,landed)
+        if not native_only:
+            await self._eval(session,r'''(()=>{const hit=document.elementFromPoint(%d,%d);const b=hit?.closest('button,[role=button],[role=menuitem]');b?.click()})()'''%(landed['x'],landed['y']))
         await asyncio.sleep(.2)
 
     async def _snapshot(self, session, prompt=''):
@@ -371,17 +438,24 @@ class FlowImages:
         self._write_receipt(task_id,receipt)
         return receipt,state
 
-    async def _ensure_agent_and_settings(self, session, prompt):
+    async def _ensure_agent_and_settings(self, session, prompt, *, require_zero_credit=False):
         state = await self._snapshot(session, prompt)
         if state.get('agentOn') is None:
             raise FlowTaskError('Cannot verify whether Tác nhân is off; no image request submitted')
         if state['agentOn']:
             await self._click_expr(session, '(()=>{const e=document.querySelector("button.agent-mode-chip");if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()', 'Tác nhân')
             state = await self._wait_page(session, lambda s: s.get('agentOn') is False, timeout=5, prompt=prompt)
+        matches=lambda value: value.get('agentOn') is False and all(v in (value.get('settingsText') or '') for v in ('Nano Banana 2.1','crop_9_16','x1'))
+        # Flow retains these choices per project. Read the current trigger text
+        # instead of re-selecting image mode/aspect/count for every scene.
+        # Credit-restricted calls may still need the panel to expose the estimate.
+        if matches(state) and (not require_zero_credit or state.get('creditLines')):
+            return state
         # Open the documented model/settings panel on the existing Flow page.
         if not state.get('settingsOpen'):
             await self._click_expr(session, '(()=>{const e=document.querySelector("button.settings-trigger-button");if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()', 'Cài đặt hình ảnh')
             state = await self._wait_page(session, lambda s: s.get('settingsOpen'), timeout=5, prompt=prompt)
+        if matches(state):return state
         # Desired controls use the visible UI. Re-clicking a single-choice option is idempotent.
         await self._click_named(session, 'Hình ảnh', selector='button.mat-button-toggle-button')
         await self._click_named(session, '9:16', selector='button.mat-button-toggle-button')
@@ -404,7 +478,68 @@ class FlowImages:
     async def _image(self, session):
         return await self._eval(session, r'''(()=>{const a=[...document.querySelectorAll('img[data-media-id]')].filter(i=>{const r=i.getBoundingClientRect(),s=getComputedStyle(i);return r.width>40&&r.height>40&&s.display!=='none'&&i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256});return a.map(i=>{const r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||''}})})()''')
 
+    async def _dismiss_flow_popups(self,session,attempts=3):
+        """Close layered Flow info/menu popups before interacting with another tile."""
+        check="(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};return[...document.querySelectorAll('flow-info-panel,.mat-mdc-menu-panel,[id^=\\\"mat-menu-panel-\\\"]')].filter(visible).length})()"
+        for _ in range(attempts):
+            count=await self._eval(session,check)
+            if not count:return
+            point=await self._eval(session,"(()=>({x:Math.max(8,innerWidth-12),y:Math.max(8,innerHeight-12)}))()")
+            if not point:raise FlowTaskError('Could not find a safe blank viewport point to dismiss Flow popups','uncertain')
+            x,y=point['x'],point['y']
+            await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':x,'y':y},session=session)
+            await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mousePressed','x':x,'y':y,'button':'left','clickCount':1},session=session)
+            await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseReleased','x':x,'y':y,'button':'left','clickCount':1},session=session)
+            for event in ('keyDown','keyUp'):
+                await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':event,'key':'Escape','code':'Escape'},session=session)
+            await asyncio.sleep(.15)
+        if await self._eval(session,check):raise FlowTaskError('Flow popup did not close; refusing to click an obscured control','uncertain')
+
+    async def _grid_view(self,session,top=None):
+        return await self._eval(session,r'''(()=>{const e=[...document.querySelectorAll('.cdk-virtual-scrollable.page-container')].find(e=>e.clientHeight>100);if(!e)return null;const top=TOP;if(top!==null)e.scrollTop=top;return{top:e.scrollTop,height:e.clientHeight,total:e.scrollHeight}})()'''.replace('TOP',json.dumps(top)))
+
+    def _known_job_media(self,job_id,excluded):
+        known=set()
+        for path in self.tasks.glob('*.json'):
+            old=json.loads(path.read_text(encoding='utf8'))
+            if old.get('job_id')==job_id and old.get('task_id') not in excluded and old.get('media_id'):known.add(old['media_id'])
+        return known
+
+    async def _wait_batch_slot(self,session,manifest,normalized,timeout):
+        submitted=sum(value in ('waiting_result','image_ready','download_menu_open','downloading','downloaded') for value in manifest['task_state'].values())
+        if submitted<3:return
+        baseline=set(manifest.get('baseline_media_ids') or [])|self._known_job_media(manifest['job_id'],{item['task_id'] for item in normalized})
+        await self._grid_view(session,0)
+        deadline=time.monotonic()+min(timeout,180)
+        while time.monotonic()<deadline:
+            state=await self._snapshot(session,'')
+            complete={tile['media_id'] for tile in state.get('assetTiles',[]) if tile.get('media_id') and tile['media_id'] not in baseline and tile.get('complete')}
+            if submitted-len(complete)<3:return
+            await asyncio.sleep(1)
+        raise FlowTaskError('Flow generation slots did not clear; saved requests kept, no extra prompt sent','needs_flow_check')
+
+    async def _scan_grid_tiles(self,session,project_url,*,wanted=None,baseline=None,expected=None):
+        """Read the top of Flow once: successful new images appear newest-left."""
+        await self._grid_view(session,0)
+        await asyncio.sleep(.18)
+        state=await self._snapshot(session,'')
+        if state.get('url','').split('?')[0].rstrip('/')!=project_url.split('?')[0].rstrip('/'):
+            raise FlowTaskError('Flow project changed while reading recent images','uncertain')
+        baseline=set(baseline or [])
+        return [tile for tile in state.get('assetTiles',[]) if tile.get('media_id') and tile.get('complete')
+                and ((wanted is not None and tile['media_id'] in wanted) or (wanted is None and tile['media_id'] not in baseline))]
+
+    async def _ensure_media_mounted(self,session,media_id):
+        selector=json.dumps('img[data-media-id="'+media_id+'"]')
+        if await self._eval(session,'Boolean(document.querySelector('+selector+'))'):return
+        state=await self._snapshot(session,'')
+        await self._scan_grid_tiles(session,state['url'],wanted={media_id})
+        if not await self._eval(session,'Boolean(document.querySelector('+selector+'))'):
+            raise FlowTaskError('Saved Flow media is not among the recent images at the top; no downward search performed','uncertain')
+
     async def _click_media_control(self,session,media_id,name):
+        await self._dismiss_flow_popups(session)
+        await self._ensure_media_mounted(session,media_id)
         media_js=json.dumps(media_id);name_js=json.dumps(name,ensure_ascii=False)
         hover_expr="(()=>{const i=document.querySelector("+json.dumps('img[data-media-id="'+media_id+'"]')+");if(!i)return null;i.scrollIntoView({block:'center'});const r=i.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()"
         hover_point=await self._eval(session,hover_expr)
@@ -420,9 +555,46 @@ class FlowImages:
         await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':point['x'],'y':point['y']},session=session)
         landed=await self._eval(session,expression,timeout=2)
         if not landed or not landed.get('hitIsControl'):raise FlowTaskError('Flow '+name+' control moved or was obscured before click','uncertain')
-        await self._click_point(session,landed);await asyncio.sleep(.2)
+        # One trusted CDP press/release is sufficient; avoid a second synthetic click that toggles menus closed.
+        await self._click_point(session,landed)
+        await asyncio.sleep(.25)
+
+    async def _read_detail_prompt_for_media(self,session,media_id,project_url,timeout=8):
+        """Read full prompt from the visible asset info panel, never from a clipped tile title."""
+        await self._ensure_media_mounted(session,media_id)
+        state=await self._snapshot(session,'')
+        if (state.get('url','').split('?')[0].rstrip('/')!=project_url.rstrip('/') or
+                not state.get('draftEmpty')):
+            raise FlowTaskError('Flow project/draft changed before visible prompt inspection','uncertain')
+        tiles=[x for x in state.get('assetTiles',[]) if x.get('media_id')==media_id]
+        if len(tiles)!=1 or not tiles[0].get('aria_label'):
+            raise FlowTaskError('Flow detail tile is missing or ambiguous','uncertain')
+        existing=await self._eval(session,"(()=>[...document.querySelectorAll('flow-info-panel')].some(e=>e.getBoundingClientRect().width>0))()")
+        if existing:
+            for kind in ('mouseMoved','mousePressed','mouseReleased'):
+                params={'type':kind,'x':50,'y':50}
+                if 'mouse' in kind and kind!='mouseMoved':params.update(button='left',clickCount=1)
+                try:await self.bridge.cdp.command('Input.dispatchMouseEvent',params,session=session)
+                except Exception:pass
+            await asyncio.sleep(.2)
+        await self._click_media_control(session,media_id,tiles[0]['aria_label'])
+        prompt=None
+        try:
+            expression=r'''(()=>{const panels=[...document.querySelectorAll('flow-info-panel')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});if(panels.length!==1)return null;const prompts=[...panels[0].querySelectorAll('.prompt-text')].map(e=>(e.innerText||'').trim()).filter(Boolean);return prompts.length===1?prompts[0]:null})()'''
+            deadline=time.monotonic()+timeout
+            while time.monotonic()<deadline:
+                prompt=await self._eval(session,expression)
+                if prompt:break
+                await asyncio.sleep(.15)
+            if not prompt:raise FlowTaskError('Flow visible info panel did not expose one full prompt','uncertain')
+            return {'media_id':media_id,'prompt':prompt,'mention_entity_ids':[]}
+        finally:
+            await self._dismiss_flow_popups(session)
+            visible=await self._eval(session,"(()=>[...document.querySelectorAll('flow-info-panel')].some(e=>e.getBoundingClientRect().width>0))()")
+            if visible:raise FlowTaskError('Flow info panel did not close after reading prompt','uncertain')
 
     async def _read_prompt_for_media(self,session,media_id,timeout=12):
+        await self._ensure_media_mounted(session,media_id)
         state=await self._snapshot(session,'')
         if not state or not state.get('composerAvailable') or not state.get('draftEmpty'):
             raise FlowTaskError('Flow composer is not empty before prompt-identity read; refusing to overwrite a draft','uncertain')
@@ -430,7 +602,7 @@ class FlowImages:
         point=await self._eval(session,"(()=>{const i=document.querySelector("+selector+");if(!i)return null;const c=i.closest('flow-grid-tile-container');c?.scrollIntoView({block:'center'});const r=i.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()")
         if not point:raise FlowTaskError('Flow media tile is not mounted for full-prompt identity read','uncertain')
         await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':point['x'],'y':point['y']},session=session)
-        expression="(()=>{const i=document.querySelector("+selector+"),c=i?.closest('flow-grid-tile-container');if(!c)return null;const b=[...c.querySelectorAll('button[aria-label=\\\"Sử dụng lại câu lệnh\\\"]')].find(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'});if(!b)return null;const r=b.getBoundingClientRect(),x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),h=document.elementFromPoint(x,y);return{x,y,hitIsButton:h===b||b.contains(h)}})()"
+        expression=r'''(()=>{const i=document.querySelector(SELECTOR),c=i?.closest('flow-grid-tile-container');if(!c)return null;const b=[...c.querySelectorAll('button[aria-label="Sử dụng lại câu lệnh"],button[aria-label="Reuse prompt"]')].find(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'});if(!b)return null;const r=b.getBoundingClientRect(),x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),h=document.elementFromPoint(x,y);return{x,y,hitIsButton:h===b||b.contains(h)}})()'''.replace('SELECTOR',selector)
         deadline=time.monotonic()+timeout;button=None
         while time.monotonic()<deadline:
             button=await self._eval(session,expression)
@@ -444,9 +616,44 @@ class FlowImages:
             raise FlowTaskError('Flow Reuse prompt control moved before click; refusing ambiguous identity','uncertain')
         await self._click_point(session,landed)
         state=await self._wait_page(session,lambda value:value.get('composerAvailable') and value.get('draftLength',0)>0,timeout=timeout,prompt='')
-        if not state or not state.get('draft'):
+        draft=(await self._prompt_box(session) or {}).get('text','')
+        if not state or not draft:
             raise FlowTaskError('Flow Reuse prompt did not expose full prompt text in the composer','uncertain')
-        return {'media_id':media_id,'prompt':state['draft'],'mention_entity_ids':state.get('mentionEntityIds',[]),'title':next((x.get('title') for x in state.get('largeImages',[]) if x.get('media_id')==media_id),None)}
+        return {'media_id':media_id,'prompt':draft,'mention_entity_ids':state.get('mentionEntityIds',[]),'title':next((x.get('title') for x in state.get('largeImages',[]) if x.get('media_id')==media_id),None)}
+
+    async def _clear_verified_reused_prompt(self,session,project_url,expected):
+        """Clear only the exact Flow prompt this tool inserted from a saved tile."""
+        box=await self._prompt_box(session)
+        if not box or self._prompt_text(box.get('text',''))!=self._prompt_text(expected):
+            raise FlowTaskError('Flow reuse-prompt draft changed; leaving it untouched for recovery','uncertain')
+        await self._click_point(session,box)
+        commands=[
+            ('keyDown','Control',0,17),('keyDown','a',2,65),('keyUp','a',2,65),
+            ('keyUp','Control',0,17),('keyDown','Backspace',0,8),('keyUp','Backspace',0,8),
+        ]
+        for kind,key,modifiers,keycode in commands:
+            await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':key,'code':key if key=='Control' else ('KeyA' if key=='a' else key),'modifiers':modifiers,'windowsVirtualKeyCode':keycode,'nativeVirtualKeyCode':keycode},session=session)
+        await self._wait_page(session,lambda state:state.get('draftEmpty') and state.get('url','').split('?')[0].rstrip('/')==project_url.split('?')[0].rstrip('/'),timeout=8,prompt='')
+
+    async def _read_batch_media_prompt(self,session,media_id,project_url,tasks):
+        try:return await self._read_detail_prompt_for_media(session,media_id,project_url)
+        except FlowTaskError as error:
+            if str(error)!='Flow visible info panel did not expose one full prompt':raise
+        # Some Flow builds render the info panel without its old .prompt-text node.
+        # The card's native Reuse control exposes the saved full prompt instead.
+        detail=await self._read_prompt_for_media(session,media_id)
+        fingerprint=self._batch_prompt_fingerprint(detail['prompt'],detail.get('mention_entity_ids',[]))
+        matches=[]
+        for task in tasks:
+            expected=' '.join([m['name'] for m in task.get('character_mentions',[])]+[task['prompt']]).strip()
+            if self._batch_prompt_fingerprint(expected,[m['character_id'] for m in task.get('character_mentions',[])])==fingerprint:matches.append(task)
+        try:
+            if len(matches)!=1:raise FlowTaskError('Flow saved prompt does not identify exactly one batch scene','uncertain')
+        finally:
+            # The tool verified this card before inserting its saved prompt and
+            # the composer was blank. Restore that original blank state by name.
+            await self._clear_verified_reused_prompt(session,project_url,detail['prompt'])
+        return detail
 
     async def _attach_character_mentions(self,session,prompt,mentions,timeout=12):
         expected_ids=[item['character_id'] for item in mentions]
@@ -482,7 +689,17 @@ class FlowImages:
         if state.get('attachedMediaIds'):raise FlowTaskError('Unexpected media attachment appeared in Flow prompt; no scene submitted','needs_flow_check')
         return state
 
-    async def _download_2k(self, task_id, target, session, receipt, prompt, media_id=None, timeout=75):
+    async def _close_upscale_failure(self,session):
+        # Scope Close to the ancestor of this specific failure notification.
+        # Never press an unrelated modal/page Close button.
+        notice=await self._eval(session,r'''(()=>{const norm=s=>(s||'').normalize('NFC').replace(/\s+/g,' ').trim();const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const texts=[...document.querySelectorAll('*')].filter(e=>!e.children.length&&visible(e)&&/không tăng được độ phân giải|unable to upscale|couldn.t upscale/i.test(norm(e.textContent)));for(const text of texts){let box=text;for(let i=0;box&&i<7;i++,box=box.parentElement){const r=box.getBoundingClientRect();if(r.width>850||r.height>400)break;const buttons=[...box.querySelectorAll('button,[role="button"],a')].filter(e=>visible(e)&&/^(đóng|close)$/i.test(norm(e.innerText)||norm(e.getAttribute('aria-label'))));if(buttons.length===1){const b=buttons[0],p=b.getBoundingClientRect(),x=p.x+p.width/2,y=p.y+p.height/2,hit=document.elementFromPoint(x,y);if(hit===b||b.contains(hit))return{found:true,point:{x,y}};}}}return{found:texts.length>0,point:null}})()''')
+        if not notice or not notice.get('found'):return False
+        if not notice.get('point'):raise FlowTaskError('Không tăng được độ phân giải; cần bấm Đóng trên thông báo Flow','uncertain')
+        await self._click_point(session,notice['point'])
+        await asyncio.sleep(.15)
+        return True
+
+    async def _download_2k(self, task_id, target, session, receipt, prompt, media_id=None, timeout=30):
         folder = self.root / 'downloads' / task_id
         folder.mkdir(parents=True, exist_ok=True)
         if receipt.get('stage') == 'downloaded':
@@ -491,12 +708,13 @@ class FlowImages:
                 return receipt
         await self.bridge.cdp.command('Target.activateTarget', {'targetId': target})
         frame = (await self.bridge.cdp.command('Page.getFrameTree', session=session))['frameTree']['frame']['id']
-        self.active_frame = frame; self.download_guid = None; self.download_complete = False; self.download_error = None; self.events = []; self.download_changed.clear()
+        self.active_frame = None; self.download_guid = None; self.downloads={};self.download_complete = False; self.download_error = None; self.events = []; self.download_changed.clear()
         try:
             if getattr(self.bridge.images, 'download_behavior_uncertain', False):
                 await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior': 'default', 'eventsEnabled': False})
                 self.bridge.images.download_behavior_uncertain = False
             await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior':'allowAndName','downloadPath':str(folder.resolve()),'eventsEnabled':True})
+            if media_id:await self._ensure_media_mounted(session,media_id)
             images = await self._image(session)
             if media_id:
                 matches=[image for image in images if image.get('media_id')==media_id]
@@ -506,36 +724,82 @@ class FlowImages:
                 img=images[0]
             else:
                 raise FlowTaskError('Flow media ID is required when a project contains multiple images','uncertain')
-            await self.bridge.cdp.command('Input.dispatchMouseEvent', {'type':'mouseMoved','x':img['x'],'y':img['y']}, session=session)
-            await asyncio.sleep(.35)
-            await self._click_media_control(session,img['media_id'],'Tuỳ chọn khác')
-            await self._click_named(session, 'Tải xuống')
-            receipt.update({'stage':'download_menu_open','updated_at':time.time()}); self._write_receipt(task_id, receipt)
-            await self._click_named(session, '2K')
-            receipt.update({'stage':'downloading','updated_at':time.time()}); self._write_receipt(task_id, receipt)
-            deadline = time.monotonic() + timeout
-            while time.monotonic() < deadline and not self.download_complete:
-                if self.download_error:
-                    raise FlowTaskError(self.download_error, 'uncertain')
-                self.download_changed.clear()
-                try: await asyncio.wait_for(self.download_changed.wait(), min(2, max(.1, deadline-time.monotonic())))
-                except asyncio.TimeoutError: pass
-            if not self.download_guid or not self.download_complete:
-                raise FlowTaskError('Flow 2K download was not confirmed; do not create a second image', 'uncertain')
+            fallback=receipt.get('download_resolution_requested')=='1K'
+            failure=None
+            if await self._close_upscale_failure(session):
+                fallback=True;failure='Flow báo Không tăng được độ phân giải; đã bấm Đóng'
+            if not fallback:
+                await self.bridge.cdp.command('Input.dispatchMouseEvent', {'type':'mouseMoved','x':img['x'],'y':img['y']}, session=session)
+                await asyncio.sleep(.35)
+                await self._click_media_control(session,img['media_id'],'Tuỳ chọn khác')
+                await self._click_named(session, 'Tải xuống')
+                receipt.update({'stage':'download_menu_open','updated_at':time.time()}); self._write_receipt(task_id, receipt)
+                try:
+                    await self._click_named(session, '2K', exact=False, native_only=True, download_frame=frame)
+                    receipt.update({'stage':'downloading','download_resolution_requested':'2K','updated_at':time.time()});self._write_receipt(task_id,receipt)
+                    deadline=time.monotonic()+timeout
+                    while time.monotonic()<deadline and not self.download_complete and not self.download_error:
+                        if await self._close_upscale_failure(session):
+                            failure='Flow báo Không tăng được độ phân giải; đã bấm Đóng';break
+                        self.download_changed.clear()
+                        try:await asyncio.wait_for(self.download_changed.wait(),min(2,max(.1,deadline-time.monotonic())))
+                        except asyncio.TimeoutError:pass
+                    if not self.download_guid or not self.download_complete:
+                        failure=failure or self.download_error or '2K download not confirmed within budget'
+                except FlowTaskError as error:
+                    failure=str(error)
+                fallback=failure is not None
+            if fallback:
+                receipt.update({'stage':'download_menu_open','download_resolution_requested':'1K','download_fallback_reason':failure or receipt.get('download_fallback_reason','resume original-resolution download'),'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                await self._dismiss_flow_popups(session)
+                # Re-locate the immutable media ID. Never choose the newest tile,
+                # regenerate a scene, or download a different card as a fallback.
+                matches=[image for image in await self._image(session) if image.get('media_id')==img['media_id']]
+                if len(matches)!=1:raise FlowTaskError('The task-specific Flow media card is missing or ambiguous; refusing 1K fallback','uncertain')
+                img=matches[0]
+                await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':img['x'],'y':img['y']},session=session)
+                await self._click_media_control(session,img['media_id'],'Tuỳ chọn khác')
+                await self._click_named(session,'Tải xuống')
+                # Preserve late 2K events: both downloads address this same card.
+                self.active_frame=frame;self.download_error=None
+                await self._click_named(session,'1K',exact=False,native_only=True)
+                receipt.update({'stage':'downloading','updated_at':time.time()});self._write_receipt(task_id,receipt)
+                deadline=time.monotonic()+timeout
+                while time.monotonic()<deadline and not any(item['state']=='completed' for item in self.downloads.values()):
+                    self.download_changed.clear()
+                    try:await asyncio.wait_for(self.download_changed.wait(),min(2,max(.1,deadline-time.monotonic())))
+                    except asyncio.TimeoutError:pass
+                completed=[guid for guid,item in self.downloads.items() if item['state']=='completed']
+                if not completed:raise FlowTaskError('Flow 1K download was not confirmed; keep the same image for download recovery, do not regenerate','uncertain')
+                self.download_guid=completed[-1]
+            else:
+                completed=list(self.downloads)
+            # Normally only identical duplicates are interchangeable. During
+            # fallback, 2K and 1K variants of this re-verified card may differ.
+            hashes=set()
+            for guid in completed:
+                candidate=folder/guid
+                if not candidate.is_file() or not 1000<candidate.stat().st_size<=MAX_FLOW_DOWNLOAD:
+                    raise FlowTaskError('Flow download is missing or has invalid size','uncertain')
+                hashes.add(digest(candidate))
+            if not fallback and len(hashes)!=1:
+                raise FlowTaskError('Different Flow files downloaded for one scene; inspect the saved download receipts','uncertain')
             downloaded = folder / self.download_guid
             if not downloaded.is_file() or not 1000 < downloaded.stat().st_size <= MAX_FLOW_DOWNLOAD:
                 raise FlowTaskError('Flow download is missing or has invalid size', 'uncertain')
             with Image.open(downloaded) as im:
                 if im.format not in ('PNG','JPEG','WEBP') or min(im.size) < 512 or max(im.size) > 8192 or im.width*im.height > 20_000_000:
-                    raise FlowTaskError('Flow 2K image format/dimensions failed validation')
+                    raise FlowTaskError('Flow image format/dimensions failed validation')
                 im.load(); width,height=im.size; fmt=im.format
                 destination=(self.root/(task_id+'.png')).resolve();part=destination.with_suffix('.part')
                 im.convert('RGB').save(part,format='PNG',optimize=True)
             part.replace(destination)
-            receipt.update({'stage':'downloaded','download_path':str(destination),'download_sha256':digest(destination),'width':width,'height':height,'format':fmt,'download_guid':self.download_guid,'media_id':media_id,'updated_at':time.time()});self._write_receipt(task_id,receipt)
+            receipt.update({'stage':'downloaded','download_path':str(destination),'download_sha256':digest(destination),'width':width,'height':height,'format':fmt,'download_guid':self.download_guid,'duplicate_download_guids':[guid for guid in completed if guid!=self.download_guid and digest(folder/guid)==digest(downloaded)],'alternate_resolution_download_guids':[guid for guid in completed if guid!=self.download_guid and digest(folder/guid)!=digest(downloaded)],'media_id':img['media_id'],'updated_at':time.time()});self._write_receipt(task_id,receipt)
             return receipt
         finally:
             self.active_frame = None
+            try:await self._dismiss_flow_popups(session)
+            except Exception:pass
             try: await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior':'default','eventsEnabled':False})
             except Exception: self.bridge.images.download_behavior_uncertain = True
 
@@ -656,7 +920,7 @@ class FlowImages:
         async with self._flow_batch_lock:
             return await self._generate_unreserved(task_id,job_id,prompt,timeout=timeout,character_mentions=character_mentions,submit_only=submit_only,require_zero_credit=require_zero_credit)
 
-    async def _generate_unreserved(self, task_id, job_id, prompt, timeout=900, character_mentions=None, *, submit_only=False, require_zero_credit=False, batch_settings_verified=False, submit_with_enter=False, bridge_lock_held=False):
+    async def _generate_unreserved(self, task_id, job_id, prompt, timeout=900, character_mentions=None, *, submit_only=False, require_zero_credit=False, batch_settings_verified=False, batch_credit_estimate=None, batch_credit_verified_at=None, batch_credit_source_task_id=None, submit_with_enter=False, bridge_lock_held=False):
         try: uuid.UUID(task_id); uuid.UUID(job_id)
         except (ValueError, TypeError, AttributeError) as e: raise ValueError('Flow requires UUID task and job IDs') from e
         if not isinstance(prompt,str) or not 1 <= len(prompt.strip()) <= 12000: raise ValueError('Invalid Flow scene prompt')
@@ -707,7 +971,7 @@ class FlowImages:
                 if baseline is None:raise FlowTaskError('Flow receipt lacks its baseline media IDs; refusing to guess a result','uncertain')
                 if receipt.get('stage') in ('submitting','waiting_result'):
                     if submit_only:
-                        return {'task_id':task_id,'stage':receipt.get('stage'),'project_url':receipt.get('project_url'),'media_id':receipt.get('media_id'),'credit_estimate':receipt.get('credit_estimate'),'submitted_at':receipt.get('submitted_at')}
+                        return {'task_id':task_id,'stage':receipt.get('stage'),'project_url':receipt.get('project_url'),'media_id':receipt.get('media_id'),'credit_estimate':receipt.get('credit_estimate'),'credit_verified_at':receipt.get('credit_verified_at'),'submitted_at':receipt.get('submitted_at')}
                     state=await self._wait_page(session,lambda s:self._new_media(baseline,s.get('largeImages',[])) is not None,timeout=timeout,prompt=composed_prompt)
                     media=self._new_media(baseline,state.get('largeImages',[]))
                     receipt.update({'stage':'image_ready','media_id':media['media_id'],'result_dimensions':media,'updated_at':time.time()});self._write_receipt(task_id,receipt)
@@ -718,35 +982,56 @@ class FlowImages:
                     if len([x for x in images if x.get('media_id')==media_id])!=1:
                         raise FlowTaskError('The task-specific Flow media card is missing; no new image will be submitted','uncertain')
             else:
-                configured=(await self._snapshot(session,composed_prompt)) if batch_settings_verified else (await self._ensure_agent_and_settings(session,composed_prompt))
-                if batch_settings_verified and not all(value in (configured.get('settingsText') or '') for value in ('Nano Banana 2.1','crop_9_16','x1')):
-                    raise FlowTaskError('Flow batch settings changed after first prompt; no new image submitted','needs_flow_check')
+                if batch_settings_verified:
+                    configured=await self._snapshot(session,composed_prompt)
+                    if not all(value in (configured.get('settingsText') or '') for value in ('Nano Banana 2.1','crop_9_16','x1')):
+                        raise FlowTaskError('Flow batch settings changed after first prompt; no new image submitted','needs_flow_check')
+                    if require_zero_credit and (not batch_credit_estimate or not re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',batch_credit_estimate,re.I)):
+                        raise FlowTaskError('Flow batch has no persisted explicit zero-credit evidence; no image submitted','needs_flow_check')
+                else:configured=await self._ensure_agent_and_settings(session,composed_prompt,require_zero_credit=require_zero_credit)
                 if configured.get('draftMatches') is not True or configured.get('mentionEntityIds',[])!=entity_ids or configured.get('attachedMediaIds',[]):
                     raise FlowTaskError('Flow prompt/@Character entity set changed before Submit; no image request sent','needs_flow_check')
-                cost_line=next((x for x in configured.get('creditLines',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I)),None)
+                visible_cost=next((x for x in configured.get('creditLines',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I)),None)
+                cost_line=visible_cost or (batch_credit_estimate if batch_settings_verified else None)
+                contradictory_cost=False
+                if require_zero_credit:
+                    contradictory_cost=any(re.search(r'quá trình tạo sẽ tốn|generation will cost',x,re.I) and not re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I) for x in configured.get('creditLines',[]))
+                    if contradictory_cost:raise FlowTaskError('Visible Flow estimate is not explicitly 0; no image submitted','needs_flow_check')
                 if configured.get('agentOn') is not False:
                     raise FlowTaskError('Tác nhân is not confirmed off; no image request sent','needs_flow_check')
                 if require_zero_credit and not cost_line:
                     raise FlowTaskError('Visible Flow estimate is not explicitly 0; no image request sent','needs_flow_check')
                 if submit_with_enter:
+                    if configured.get('settingsOpen'):
+                        await self._click_expr(session,'(()=>{const e=document.querySelector("button.settings-trigger-button");if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()','đóng cài đặt trước khi Enter')
+                        closed=await self._wait_page(session,lambda value:not value.get('settingsOpen'),timeout=5,prompt=composed_prompt)
+                        if closed.get('url','').split('?')[0].rstrip('/')!=project_path:
+                            raise FlowTaskError('Flow project changed after zero-credit check; no image submitted','needs_flow_check')
                     box=await self._prompt_box(session)
                     if not box:raise FlowTaskError('Flow prompt editor unavailable before Enter; no image submitted','needs_flow_check')
                     await self._click_point(session,box)
                     focus=await self._eval(session,r'''(()=>{const box=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');return !!box&&(box===document.activeElement||box.contains(document.activeElement))})()''')
                     if not focus:raise FlowTaskError('Flow prompt editor did not receive focus; no Enter sent','needs_flow_check')
                     focused=await self._snapshot(session,composed_prompt)
-                    if not focused.get('draftMatches') or focused.get('mentionEntityIds',[])!=entity_ids or focused.get('attachedMediaIds',[]) or focused.get('agentOn') is not False or not any(re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',line,re.I) for line in focused.get('creditLines',[])):
-                        raise FlowTaskError('Flow prompt or 0-credit state changed at Enter boundary; no image submitted','needs_flow_check')
-                receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_estimate':cost_line,'submitted_character_ids':entity_ids,'submitted_prompt_sha256':prompt_sha,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                    visible_cost=focused.get('creditLines',[])
+                    conflicting_cost=False
+                    if require_zero_credit:
+                        conflicting_cost=any(re.search(r'quá trình tạo sẽ tốn|generation will cost',line,re.I) and not re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',line,re.I) for line in visible_cost)
+                    if (focused.get('url','').split('?')[0].rstrip('/')!=project_path or not focused.get('draftMatches') or focused.get('mentionEntityIds',[])!=entity_ids or focused.get('attachedMediaIds',[]) or focused.get('agentOn') is not False or not all(value in (focused.get('settingsText') or '') for value in ('Nano Banana 2.1','crop_9_16','x1')) or conflicting_cost):
+                        raise FlowTaskError('Flow prompt/settings changed at Enter boundary; no image submitted','needs_flow_check')
+                credit_verified_at=(batch_credit_verified_at if batch_settings_verified else time.time())
+                receipt['baseline_media_ids']=list(set(receipt.get('baseline_media_ids',[]))|self._known_job_media(job_id,{task_id}))
+                receipt.update({'stage':'submitting','agent_off':True,'settings_text':configured.get('settingsText'),'credit_estimate':cost_line,'credit_verified_at':credit_verified_at,'credit_batch_source_task_id':batch_credit_source_task_id if batch_settings_verified else task_id,'submitted_character_ids':entity_ids,'submitted_prompt_sha256':prompt_sha,'submitted_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 if submit_with_enter:
                     for event in ('keyDown','keyUp'):
                         await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':event,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
                     await self._wait_page(session,lambda value:value.get('draftEmpty') and value.get('generateDisabled'),timeout=6,prompt='')
                 else:
-                    await self._click_named(session,'Bắt đầu tạo',exact=True)
+                    await self._click_named(session,'Bắt đầu tạo',exact=True,native_only=True)
+                    await self._wait_page(session,lambda value:value.get('draftEmpty'),timeout=10,prompt='')
                 receipt.update({'stage':'waiting_result','updated_at':time.time()});self._write_receipt(task_id,receipt)
                 if submit_only:
-                    return {'task_id':task_id,'stage':receipt.get('stage'),'project_url':receipt.get('project_url'),'media_id':receipt.get('media_id'),'credit_estimate':receipt.get('credit_estimate'),'submitted_at':receipt.get('submitted_at')}
+                    return {'task_id':task_id,'stage':receipt.get('stage'),'project_url':receipt.get('project_url'),'media_id':receipt.get('media_id'),'credit_estimate':receipt.get('credit_estimate'),'credit_verified_at':receipt.get('credit_verified_at'),'submitted_at':receipt.get('submitted_at')}
             if receipt.get('stage') not in ('image_ready','download_menu_open','downloading'):
                 baseline=receipt.get('baseline_media_ids')
                 if baseline is None:raise FlowTaskError('Flow receipt lacks its baseline media IDs; refusing to guess a result','uncertain')
@@ -760,12 +1045,12 @@ class FlowImages:
             output=Path(receipt['download_path'])
             return {'task_id':task_id,'file_path':str(output),'sha256':digest(output),'width':receipt['width'],'height':receipt['height'],'request_id':'flow-'+task_id,'source':'google_flow_nano_banana_2_1','format':'PNG','flow_download_format':receipt.get('format'),'project_url':receipt.get('project_url'),'download_guid':receipt.get('download_guid'),'media_id':receipt.get('media_id')}
 
-    async def generate_batch(self,job_id,tasks,timeout=1200):
+    async def generate_batch(self,job_id,tasks,timeout=1200,download_results=True,require_zero_credit=True):
         async with self._flow_batch_lock:
             async with self.bridge.job_lock:
-                return await self._generate_batch_unreserved(job_id,tasks,timeout=timeout,bridge_lock_held=True)
+                return await self._generate_batch_unreserved(job_id,tasks,timeout=timeout,bridge_lock_held=True,download_results=download_results,require_zero_credit=require_zero_credit)
 
-    async def _generate_batch_unreserved(self,job_id,tasks,timeout=1200,bridge_lock_held=False):
+    async def _generate_batch_unreserved(self,job_id,tasks,timeout=1200,bridge_lock_held=False,download_results=True,require_zero_credit=True):
         """Submit up to 30 independent Flow prompts before mapping and serial download."""
         try:job_uuid=uuid.UUID(job_id)
         except (ValueError,TypeError,AttributeError) as error:raise ValueError('Flow batch requires a UUID job ID') from error
@@ -801,7 +1086,14 @@ class FlowImages:
             manifest={'schema_version':1,'batch_id':batch_id,'job_id':job_id,'tasks':manifest_items,'baseline_media_ids':None,'project_url':None,
                       'task_state':{},'mapping':{},'stage':'prepared','created_at':time.time(),'submission_started_at':time.time(),'updated_at':time.time()}
             self._write_batch_manifest(batch_id,manifest)
-        results={};settings_verified=False
+        results={};settings_verified=False;batch_credit_estimate=None;batch_credit_verified_at=None;batch_credit_source_task_id=None
+        if resumed:
+            for candidate in normalized:
+                old=self._read_receipt(candidate['task_id'])
+                if old and old.get('stage') in ('waiting_result','image_ready','download_menu_open','downloading','downloaded'):
+                    evidence=old.get('credit_estimate') or ''
+                    if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',evidence,re.I):
+                        settings_verified=True;batch_credit_estimate=evidence;batch_credit_verified_at=old.get('credit_verified_at');batch_credit_source_task_id=old.get('credit_batch_source_task_id') or old.get('task_id');break
         try:
             for item in normalized:
                 task_id=item['task_id'];receipt=self._read_receipt(task_id)
@@ -822,8 +1114,15 @@ class FlowImages:
                         raise FlowTaskError('A pending single-task receipt cannot be folded into a new batch','uncertain')
                 else:
                     manifest['task_state'][task_id]='submit_started';manifest['stage']='submitting';manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
-                    await self._generate_unreserved(task_id,job_id,item['prompt'],timeout=1,character_mentions=item['character_mentions'],submit_only=True,require_zero_credit=True,batch_settings_verified=settings_verified,submit_with_enter=True,bridge_lock_held=bridge_lock_held)
-                    settings_verified=True
+                    if manifest.get('project_url'):
+                        await self.bridge.connect();slot_target=await self._target();slot_session=await self._session(slot_target)
+                        await self._wait_batch_slot(slot_session,manifest,normalized,timeout)
+                    submission=await self._generate_unreserved(task_id,job_id,item['prompt'],timeout=1,character_mentions=item['character_mentions'],submit_only=True,require_zero_credit=require_zero_credit,batch_settings_verified=settings_verified,batch_credit_estimate=batch_credit_estimate,batch_credit_verified_at=batch_credit_verified_at,batch_credit_source_task_id=batch_credit_source_task_id,submit_with_enter=False,bridge_lock_held=bridge_lock_held)
+                    if not settings_verified:
+                        estimate=submission.get('credit_estimate')
+                        if require_zero_credit and (not estimate or not re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',estimate,re.I)):
+                            raise FlowTaskError('First batch prompt lacks explicit zero-credit estimate; no subsequent prompt will be sent','needs_flow_check')
+                        batch_credit_estimate=estimate;batch_credit_verified_at=submission.get('credit_verified_at');batch_credit_source_task_id=task_id;settings_verified=True
                 receipt=self._read_receipt(task_id) or {}
                 if receipt.get('stage')=='submitting':raise FlowTaskError('Flow batch submission is indeterminate; no further task submitted','uncertain')
                 if receipt.get('stage') not in ('waiting_result','image_ready','download_menu_open','downloading','downloaded'):
@@ -841,6 +1140,7 @@ class FlowImages:
                 manifest['submission_completed_at']=time.time();manifest['submit_elapsed_seconds']=round(manifest['submission_completed_at']-manifest.get('submission_started_at',manifest['created_at']),2)
                 self._write_batch_manifest(batch_id,manifest)
             if len(results)==len(normalized):
+                manifest.pop('last_error',None)
                 manifest['stage']='completed';manifest['completed_at']=time.time();manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
                 return [results[x['task_id']] for x in normalized]
             if not manifest.get('project_url') or manifest.get('baseline_media_ids') is None:
@@ -848,7 +1148,20 @@ class FlowImages:
             await self.bridge.connect();target=await self._target();session=await self._session(target)
             await self.bridge.cdp.command('Target.activateTarget',{'targetId':target})
             project_path=urlparse(manifest['project_url']).path.rstrip('/');baseline=set(manifest['baseline_media_ids'] or [])
-            mapped={task_id:media_id for task_id,media_id in (manifest.get('mapping') or {}).items() if task_id not in results}
+            current_task_ids={item['task_id'] for item in normalized}
+            # The initial UI baseline contains only mounted tiles. Previously
+            # accepted media from this job also belong to the baseline offscreen.
+            for path in self.tasks.glob('*.json'):
+                old=json.loads(path.read_text(encoding='utf8'))
+                if old.get('job_id')==job_id and old.get('task_id') not in current_task_ids and old.get('media_id') and old.get('project_url','').split('?')[0].rstrip('/')==manifest['project_url'].rstrip('/'):
+                    baseline.add(old['media_id'])
+            current_state=await self._snapshot(session,'')
+            if urlparse(current_state.get('url','')).path.rstrip('/')!=project_path:
+                if not current_state.get('draftEmpty') or not current_state.get('generateDisabled'):
+                    raise FlowTaskError('Flow tab has an active draft or request; refusing to switch to the batch project','uncertain')
+                await self.bridge.cdp.command('Page.navigate',{'url':manifest['project_url']},session=session)
+                await self._wait_page(session,lambda s:urlparse(s.get('url','')).path.rstrip('/')==project_path and s.get('composerAvailable'),timeout=25,prompt='')
+            mapped=dict(manifest.get('mapping') or {})
             for item in normalized:
                 if item['task_id'] in results:continue
                 receipt=self._read_receipt(item['task_id']) or {}
@@ -856,8 +1169,9 @@ class FlowImages:
                     mapped[item['task_id']]=receipt['media_id']
             if mapped and (len(set(mapped.values()))!=len(mapped) or any(task_id not in {x['task_id'] for x in normalized} for task_id in mapped)):
                 raise FlowTaskError('Saved Flow cohort mapping is duplicated or foreign','uncertain')
-            state=None;new_tiles=[];deadline=time.monotonic()+timeout
+            state=None;new_tiles=[];deadline=time.monotonic()+min(timeout,180)
             if len(mapped)<len(normalized):
+                await self._grid_view(session,0)
                 while time.monotonic()<deadline:
                     async with self._maybe_job_lock(bridge_lock_held):state=await self._snapshot(session,'')
                     if not state or urlparse(state.get('url','')).path.rstrip('/')!=project_path:
@@ -870,13 +1184,28 @@ class FlowImages:
                 if len(new_tiles)!=len(normalized):
                     manifest['stage']='waiting_result';manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
                     raise FlowTaskError('Flow cohort results are incomplete; no task will be resubmitted','uncertain')
-                frozen=self._batch_row_mapping(normalized,new_tiles,baseline)
+                media_prompts=[]
+                for tile in new_tiles:
+                    async with self._maybe_job_lock(bridge_lock_held):
+                        detail=await self._read_batch_media_prompt(session,tile['media_id'],manifest['project_url'],normalized)
+                    media_prompts.append(detail)
+                frozen=(self._batch_row_mapping(normalized,new_tiles,baseline,media_prompts=media_prompts) if download_results else self._batch_prompt_mapping(normalized,media_prompts))
                 if any(frozen.get(task_id)!=media_id for task_id,media_id in mapped.items()):
                     raise FlowTaskError('Flow row mapping conflicts with saved receipts','uncertain')
                 mapped=frozen
                 manifest['mapping']=dict(mapped);manifest['stage']='mapped';manifest['results_ready_at']=time.time();manifest['wait_elapsed_seconds']=round(manifest['results_ready_at']-manifest['submission_completed_at'],2);manifest['mapped_at']=time.time();manifest['updated_at']=time.time()
                 self._write_batch_manifest(batch_id,manifest)
             if len(mapped)!=len(normalized):raise FlowTaskError('Flow cohort did not map every task','uncertain')
+            if not new_tiles:
+                state=await self._snapshot(session,'')
+                if not state or urlparse(state.get('url','')).path.rstrip('/')!=project_path:
+                    raise FlowTaskError('Flow project changed before resuming saved download order','uncertain')
+                new_tiles=await self._scan_grid_tiles(session,manifest['project_url'],wanted=set(mapped.values()))
+            order,positions=self._batch_download_order(normalized,new_tiles,mapped)
+            # A resumed batch may have scrolled/reflowed. Preserve the frozen ID
+            # order, then locate each card afresh; never infer ownership by position.
+            if not manifest.get('download_order'):manifest['download_order']=order
+            manifest['tile_positions']=positions
             tile_by_id={x.get('media_id'):x for x in new_tiles}
             for item in normalized:
                 task_id=item['task_id']
@@ -886,9 +1215,20 @@ class FlowImages:
                 if receipt.get('media_id') and receipt.get('media_id')!=media_id:raise FlowTaskError('Flow batch mapping conflicts with a saved media receipt','uncertain')
                 receipt.update({'stage':'image_ready','media_id':media_id,'batch_id':batch_id,'batch_ordinal':item['ordinal'],'batch_prompt_fingerprint':item['prompt_fingerprint'],'prompt_identity_verified':True,'prompt_identity_method':'frozen_row_order_and_full_tile_prompt','result_dimensions':{'media_id':media_id,'title':tile_by_id.get(media_id,{}).get('aria_label','')},'updated_at':time.time()})
                 self._write_receipt(task_id,receipt);manifest['task_state'][task_id]='image_ready';manifest['mapping'][task_id]=media_id
-            manifest['stage']='downloading';manifest.setdefault('downloads_started_at',time.time());manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
-            for item in normalized:
-                task_id=item['task_id']
+            if not download_results:
+                manifest.update({'stage':'images_ready','images_ready_at':time.time(),'download_results':False,'updated_at':time.time()})
+                self._write_batch_manifest(batch_id,manifest)
+                return [{'task_id':item['task_id'],'media_id':mapped[item['task_id']],'project_url':manifest['project_url'],'ordinal':item['ordinal'],'stage':'image_ready'} for item in normalized]
+            if len(manifest['download_order'])!=len(normalized) or set(manifest['download_order'])!={x['task_id'] for x in normalized}:
+                raise FlowTaskError('Frozen Flow download order is invalid','uncertain')
+            if not download_results:
+                manifest.update({'stage':'images_ready','images_ready_at':time.time(),'download_results':False,'updated_at':time.time()})
+                self._write_batch_manifest(batch_id,manifest)
+                return [{'task_id':item['task_id'],'media_id':mapped[item['task_id']],'project_url':manifest['project_url'],'ordinal':item['ordinal'],'stage':'image_ready'} for item in normalized]
+            manifest['download_results']=True;manifest['stage']='downloading';manifest.setdefault('downloads_started_at',time.time());manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
+            items_by_id={item['task_id']:item for item in normalized}
+            for task_id in manifest['download_order']:
+                item=items_by_id[task_id]
                 if task_id in results:continue
                 receipt=self._read_receipt(task_id) or {};cached=self._cached_result(task_id,receipt)
                 if cached:results[task_id]=cached;continue
@@ -900,9 +1240,15 @@ class FlowImages:
                     if not current or urlparse(current.get('url','')).path.rstrip('/')!=project_path:
                         raise FlowTaskError('Flow left the mapped batch project; refusing download','uncertain')
                     await self.bridge.cdp.command('Target.activateTarget',{'targetId':target})
+                    if manifest.get('prefer_original_resolution'):
+                        receipt.update(download_resolution_requested='1K',download_fallback_reason='2K unavailable earlier in this cohort; use original resolution')
+                        self._write_receipt(task_id,receipt)
                     receipt=await self._download_2k(task_id,target,session,receipt,composed,media_id=receipt['media_id'])
+                    if receipt.get('download_resolution_requested')=='1K' and receipt.get('download_fallback_reason'):
+                        manifest['prefer_original_resolution']=True
                 results[task_id]={'task_id':task_id,'file_path':receipt['download_path'],'sha256':receipt['download_sha256'],'width':receipt['width'],'height':receipt['height'],'request_id':'flow-'+task_id,'source':'google_flow_nano_banana_2_1','format':'PNG','flow_download_format':receipt.get('format'),'project_url':receipt.get('project_url'),'download_guid':receipt.get('download_guid'),'media_id':receipt.get('media_id')}
                 manifest['task_state'][task_id]='downloaded';manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
+            manifest.pop('last_error',None)
             manifest['stage']='completed';manifest['completed_at']=time.time();manifest['download_elapsed_seconds']=round(manifest['completed_at']-manifest['downloads_started_at'],2);manifest['total_elapsed_seconds']=round(manifest['completed_at']-manifest['created_at'],2);manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
             return [results[x['task_id']] for x in normalized]
         except FlowTaskError as error:

@@ -170,6 +170,9 @@ vm.runInContext(html.slice(start,stop),context);
 (async()=>{
  response={flow_batch_sizes:[1,10]};await vm.runInContext('refreshFlowBatchChoices()',context);
  assert.deepEqual(selector.options.map(o=>o.disabled),[false,false,true,true]);
+ vm.runInContext('flowBatchChoiceInitialized=false',context);await vm.runInContext('refreshFlowBatchChoices()',context);
+ assert.equal(selector.value,'10');
+ selector.value='1';selector.onchange();await vm.runInContext('refreshFlowBatchChoices()',context);assert.equal(selector.value,'1');
  selector.value='10';provider.value='chatgpt';vm.runInContext('updateFlowBatchChoices()',context);
  assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
  provider.value='flow';fail=true;await vm.runInContext('refreshFlowBatchChoices()',context);

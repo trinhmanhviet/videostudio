@@ -1,41 +1,51 @@
-# VideoStudio local - implementation in progress
+# VideoStudio
 
-**Not production-ready. No idea-to-video AI end-to-end acceptance has passed.**
+Ứng dụng local trên Windows để tạo và quản lý video theo dự án. Server và worker chạy trên máy người dùng; ảnh Flow dùng Chrome riêng; ChatGPT text dùng extension trên Chrome thường; file xuất mặc định lưu ở `E:\Videos`.
 
-The repository contains a working durable-job backend, HTTP API and connected three-input frontend. Preflight deliberately blocks production job creation. This is an engineering checkpoint, not delivery of the requested finished product.
+## Cài trên máy Windows mới
 
-## Run the local inspection UI
-
-From this directory, with the existing Python environment providing FastAPI, uvicorn, httpx and Pillow:
+1. Cài Git, Python 3.12 x64, Google Chrome và FFmpeg (`ffmpeg`, `ffprobe` phải có trong `PATH`). Runtime/model/cache giọng đọc và ComfyUI là phần cài riêng; requirements không tự tải model lớn.
 
 ```powershell
+git clone https://github.com/trinhmanhviet/videostudio.git D:\Projects\videostudio
+Set-Location D:\Projects\videostudio
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Nếu chưa có `py -3.12`, cài Python 3.12 trước. Launcher dùng `C:\Python312\python.exe` nếu có, nếu không dùng Python đầu tiên trong `PATH`.
+
+2. Nạp extension: Chrome thường → `chrome://extensions` → bật Developer mode → **Load unpacked** → chọn `D:\Projects\videostudio\extensions\videostudio-chatgpt`.
+3. Đăng nhập Google qua `Chrome - Clean.cmd`; sau đó mở **Mở debug** trong float để Flow cho phép tool điều khiển.
+4. Bấm đúp **Start VideoStudio.cmd**. Mở Studio, đăng nhập ChatGPT trong Chrome thường. Trong float bấm **Start**, rồi **Test chữ** nếu bridge chưa kết nối.
+
+Muốn tự mở Chrome riêng: dùng **Chrome - Clean.cmd** để đăng nhập bình thường; **Chrome - Debug.cmd** để điều khiển Flow; **Chrome - Stop.cmd** để tắt Chrome riêng. Cả ba cùng dùng `data/chrome-profile`, giữ tài khoản và dữ liệu. Chế độ sạch để đăng nhập; debug để điều khiển. Không đổi chế độ khi video hoặc tác vụ ảnh đang chạy.
+
+ComfyUI nếu đã chạy được mở bởi shortcut của người dùng thì launcher sẽ dùng lại. Nếu chưa chạy, launcher gọi `scripts/start_comfy_recovery.py`, cần có cấu hình launcher/runtime hợp lệ trên máy đó. Launcher này không cài ComfyUI, model, node hay tài khoản. Khởi động backend thủ công:
+
+```powershell
+Set-Location D:\Projects\videostudio
 python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 ```
 
-Open http://127.0.0.1:8877. This does not restart StoryForge, use the Chrome extension or contact paid services. Preflight reports unmet conditions. No credentials are copied automatically.
+## Tạo và phục hồi video
 
-## Tests actually rerun by the parent engineer
+- Float liệt kê từng video và trạng thái ChatGPT. Khi tab ChatGPT bị treo, chọn **Khôi phục ChatGPT** trên video. Tool tìm lại đúng phản hồi; nếu thiếu URL thì dán URL cuộc trò chuyện. Tool không gửi lại prompt khi khôi phục.
+- Google Flow mặc định tạo **10 ảnh mỗi đợt**, mỗi prompt tạo x1. Tool gửi prompt, chờ ảnh của nhóm tạo xong, ghép theo ID cảnh rồi tải. Nếu 2K lỗi, nó đóng thông báo Flow và dùng 1K cùng ảnh. Sau một lần 2K lỗi, ảnh còn lại trong nhóm dùng 1K để tránh chờ timeout lặp lại.
+- Đổi tài khoản Flow giữa video: float video → **Đổi tài khoản Flow** → **Chuẩn bị đổi tài khoản**. Chờ ảnh được đối chiếu và giữ lại; sau đó mở sạch, đăng nhập Google, bật debug rồi chọn **Tiếp tục video này**. Tool tiếp tục chính job đó và chỉ tạo cảnh còn thiếu. Luồng này giữ dữ liệu ảnh/checkpoint cũ và giữ nguyên biên nhận Flow.
+- Nếu một lô bị lỗi, **Tiếp tục từ bước tạo ảnh** sẽ dùng lại các ảnh/biên nhận đã lưu. Đừng tạo video thứ hai để thay thế job đang phục hồi.
+- Mười ảnh mỗi đợt đã có một lô Flow thực tế chạy xong. Hai mươi và ba mươi ảnh mỗi đợt vẫn khóa.
 
-`python -m unittest discover -s tests -v`: 14 tests passed, 7.046 seconds.
+## File và cài đặt local
 
-- SQLite job creation, idempotent requests, conflicting payloads, output collision isolation.
-- Checkpoint continuation, finite persisted retry budget, worker lease exclusion, queued/in-stage cancellation and corrupted asset rejection.
-- API checks, blocked preflight rejecting job before allocation, same-origin mutation guards and frontend response.
-- CPU FFmpeg integration with synthetic image and sine-wave audio fixtures; real encoding, stream probing and duration assertion.
+`data/` chứa database job, Chrome profile riêng, cache, Flow receipts và trạng thái runtime. Git ignore thư mục này. Video/ảnh đầu ra mặc định lưu ở `E:\Videos`; máy khác có thể đặt `VS_OUTPUT_DIR` trước khi khởi động.
 
-That FFmpeg test is NOT speech synthesis, music generation, model output, visual/semantic review, GPU integration or a completed user video. Browser click/reload acceptance and container execution were not performed.
+Các biến môi trường thường dùng: `VS_DATABASE` (mặc định `data/jobs.sqlite3`), `VS_OUTPUT_DIR` (`E:\Videos`), `VS_CHROME_PROFILE` (`data/chrome-profile`), `VS_CHROME_EXE` (`C:\Program Files\Google\Chrome\Application\chrome.exe`), `VS_COMFY_URL` (`http://127.0.0.1:8188`) và `VS_LLM_TRANSPORT` (launcher đặt extension bridge). Mọi endpoint điều khiển chỉ nên dùng qua loopback.
 
-## Unfinished requirements and blockers
+## Mức nghiệm thu
 
-- The existing Chrome connector now exchanges a real correlated JSON smoke response with VideoStudio after the owner's real click. No parallel extension or fake trusted gesture is used. Its dependency on the Studio tab still blocks the original fully unattended/tab-close acceptance. Failed ChatGPT2API is not the default transport.
-- VieNeu now uses the existing StoryForge CPU/ONNX Python and offline cache. A live manhviet clone test produced 4.32s of PCM audio, full decode/finite samples/non-silence passed. This does not yet prove full narration semantic completeness or every voice.
-- Follow-up: authoritative read-only DB import now preserves all 25 presets and all 3 locked user clones with matching reference hashes, plus 3 archived clones retained but disabled. Existing StoryForge voices are untouched. Local export is ignored by Git. See `docs/integration-followup.md` for owner-authorized service starts and evidence.
-- Research currently retrieves local `.txt` sources only, not automatic web discovery or claim verification.
-- Updated: storyboard schema now requests short per-scene utterances and separate visual prompts. Speech code measures independent utterances, caches them by voice/text hash, and captions use measured utterance intervals with Unicode preservation, overlap and line-width checks. Images have per-scene receipts/checkpoints. The full provider chain has not been exercised end-to-end. Bounded measured-duration script rewriting is implemented with cached revisions and two passing fixture tests, but not yet accepted with live generated scripts. Semantic/continuity checks remain incomplete.
-- Renderer now encodes 1080x1920/30fps, builds cached pan/zoom scene clips, preserves natural speech speed (no atempo), permits a bounded final visual hold, and mixes with music fade, sidechain ducking and limiter. A two-scene CPU fixture render passes. Music loop crossfade and live speech/music QA remain unfinished. Do not use fixture output as AI product acceptance.
-- Comfy model/node availability is verified read-only, not live graph execution. Stable Audio3 blueprint remains unverified; no commercial rights claim is made. No GPU work has run.
-- Worker lease serializes this tool's work only; cross-application GPU ownership/VRAM coordination remains unfinished. No global unload, interrupt or kill is used.
-- Docker packaging exists but has not been built/tested. It defaults to worker disabled and is not a ready containerized generation runtime. Container host routing and persistent volume/permissions remain unverified.
-- Production readiness is explicitly hard-blocked until these engineering requirements and live end-to-end tests pass. Setting credentials alone does not remove that gate.
+Đã hoàn thành một video thật và lô thử Flow 10 ảnh. Chưa nghiệm thu mọi account, model, giọng đọc, thời lượng hay máy mới. Preflight có thể chặn job khi runtime/model cần thiết chưa sẵn sàng. Worker và GPU xử lý video tuần tự; **chạy nhiều video song song thật** vẫn còn trong [TODO.md](TODO.md).
 
-See `docs/initial-audit.md` and `docs/preflight-observed.json` for inspected evidence. Existing videos, models, StoryForge code and online deployment were not modified.
+Các hướng dẫn chi tiết: [bắt đầu sau khi restart máy](docs/startup.md), [tự khôi phục ChatGPT](docs/self-service-chatgpt-recovery.md), [chuyển tài khoản Flow](docs/flow-batch-verification.md) và [thiết lập Chrome riêng](docs/browser-profile-controls-2026-10-30.md).

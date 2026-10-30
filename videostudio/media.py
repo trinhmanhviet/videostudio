@@ -1,5 +1,5 @@
 """CPU FFmpeg composition using real generated assets. No silent/fake output."""
-import json, subprocess, time
+import json, subprocess, time, math
 from pathlib import Path
 from .core import digest, PermanentError
 
@@ -39,7 +39,7 @@ def visual_track(scenes,output,check,ffmpeg='ffmpeg'):
     if not scenes:raise PermanentError('Storyboard contains no scenes')
     for index,scene in enumerate(scenes):
         check();source=Path(scene['path']).resolve();duration=float(scene['duration'])
-        if duration<=0:raise PermanentError('Empty scene duration')
+        if not math.isfinite(duration) or duration<=0:raise PermanentError('Invalid scene duration')
         identity=hashlib.sha256((digest(source)+str(duration)+'1080x1920-30-pan-v1').encode()).hexdigest()
         clip=target.parent/f'visual-{index:04}.mp4';receipt=clip.with_suffix('.json')
         reusable=clip.is_file() and receipt.is_file()
@@ -58,11 +58,11 @@ def visual_track(scenes,output,check,ffmpeg='ffmpeg'):
 
 def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffprobe='ffprobe',music_volume=0.35):
     speech_seconds=float(probe(speech,ffprobe)['format']['duration'])
-    # Keep the selected voice's natural pace. Upstream must rewrite narration
-    # when it does not fit; never truncate speech or hide the error with atempo.
+    # Seconds is the measured timeline, independent of the planning estimate.
+    # Retain a short existing visual tail for previously generated soundtracks.
     tolerance=min(5.0,max(2.0,seconds*.25))
-    if speech_seconds>seconds or seconds-speech_seconds>tolerance:
-        raise PermanentError(f'Narration {speech_seconds:.2f}s does not naturally fit target {seconds}s (allowed trailing hold {tolerance:.2f}s); rewrite narration required')
+    if not math.isfinite(seconds) or seconds<=0 or not math.isfinite(speech_seconds) or speech_seconds<=0 or speech_seconds>seconds or seconds-speech_seconds>tolerance:
+        raise PermanentError(f'Narration {speech_seconds:.2f}s is inconsistent with measured timeline {seconds}s')
     target=Path(output); tmp=target.with_name(target.stem+'.part.mp4')
     from .music import extend_music
     prepared_music=extend_music(music,seconds,target.parent/'music-covered.wav',check,ffmpeg,ffprobe)
@@ -118,7 +118,7 @@ def render_visual_revision(scenes,audio_source,subtitles,output,seconds,check,ff
 def verify(path,seconds,ffprobe='ffprobe'):
     data=probe(path,ffprobe); kinds={s['codec_type'] for s in data['streams']}
     actual=float(data['format']['duration'])
-    if not {'video','audio'}<=kinds or abs(actual-seconds)>max(.25,seconds*.01):raise PermanentError(f'Invalid video streams/duration: {actual} vs {seconds}')
+    if not math.isfinite(seconds) or seconds<=0 or not math.isfinite(actual) or actual<=0 or not {'video','audio'}<=kinds or abs(actual-seconds)>max(.25,seconds*.01):raise PermanentError(f'Invalid video streams/duration: {actual} vs {seconds}')
     video=next(s for s in data['streams'] if s['codec_type']=='video')
     rate=video.get('avg_frame_rate','0/1').split('/')
     fps=float(rate[0])/float(rate[1]) if len(rate)==2 and float(rate[1]) else 0

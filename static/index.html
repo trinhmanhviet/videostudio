@@ -10,7 +10,16 @@ small,.muted{color:var(--muted);font-size:13px}
 .tab-btn{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:8px 16px;font:600 14px system-ui;cursor:pointer;white-space:nowrap}
 .tab-btn.active{background:var(--accent);color:#101a0e;border-color:var(--accent)}
 .card{padding:22px;background:var(--card);border:1px solid var(--line);border-radius:14px;min-width:0}
-.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-top:16px}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:20px;margin-top:16px}
+.project-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.project-toolbar label{margin:8px 0 4px}
+.project-search{flex:1 1 220px;min-width:0}
+.project-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.project-actions button{padding:7px 10px}
+.project-delete-choice{display:flex;gap:8px;align-items:start;font-weight:400;cursor:pointer}
+.project-delete-choice input{width:auto;flex:none;margin-top:5px}
+#projectDeleteDescription{overflow-wrap:anywhere}
+.project-pagination{margin-top:16px;justify-content:space-between}
 .project-card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s;display:flex;flex-direction:column}
 .project-card:hover{transform:translateY(-3px);border-color:var(--accent)}
 .project-thumb{width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:32px;overflow:hidden}
@@ -70,16 +79,21 @@ audio{width:100%;height:36px;margin-top:8px}
         <option value="edited">Đã thay ảnh</option>
       </select>
       <button type="button" id="sePageReload" class="secondary" style="font-size:12.5px">🔄 Làm mới</button>
+      <button type="button" id="sePageResume" hidden style="font-size:12.5px"></button>
       <button type="button" id="sePageExport" style="background:var(--accent);color:#101a0e;font-weight:700;font-size:12.5px">🚀 Xuất video mới</button>
     </div>
   </div>
   <div id="sePageMessage" class="notice" style="margin-bottom:14px" role="status"></div>
+  <div id="seExportAvailability" class="notice" style="margin-bottom:14px" role="status" hidden></div>
   <div id="sePageGrid" class="se-grid"></div>
-</div></div><div id="paneClone" hidden><section class="card" style="max-width:760px;margin:auto"><h2>🎙️ Clone giọng đọc mẫu</h2><p class="muted">Nhân bản giọng nói tiếng Việt từ file thu âm mẫu qua mô hình VieNeu trên GPU và tự động lưu vào danh mục giọng.</p><form id="cloneForm"><label for="cloneName">Tên giọng đọc</label><input id="cloneName" required placeholder="Ví dụ: Giọng truyền cảm, Giọng của tôi..." maxlength="100"><label for="cloneFile">File âm thanh mẫu (mp3, wav, m4a, flac)</label><input id="cloneFile" type="file" accept="audio/*" required><label for="cloneDuration">Độ dài mẫu sử dụng: <span id="cloneDurationVal">15 giây</span></label><input id="cloneDuration" type="range" min="5" max="60" value="15" step="5"><p class="notice">Gợi ý: Chọn file thu âm rõ lời, ít tạp âm từ 10 - 30 giây để mô hình học chính xác nhất âm sắc và ngữ điệu.</p><button id="cloneSubmit" type="submit">Bắt đầu nhân bản giọng (GPU)</button><p id="cloneError" class="error" role="alert"></p><p id="cloneStatus" class="notice"></p><div id="cloneResult" hidden style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:10px"><h3>Nghe thử giọng vừa clone</h3><audio id="cloneSample" controls style="width:100%;margin:10px 0"></audio><button type="button" id="useCloneBtn">Dùng giọng này để tạo video</button></div></form></section></div><div id="projectModal" hidden class="modal-backdrop"><div class="modal-box"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:18px;color:var(--accent)">✨ Tạo dự án mới</h3><button type="button" class="secondary" id="btnCloseProjectModal" style="padding:4px 10px;font-size:12px">✕</button></div><p class="muted" style="margin:0 0 14px;font-size:13px">Đặt tên cho dự án video của bạn (ví dụ: Áo giáp thời Trung cổ, Lịch sử Hà Nội...):</p><input id="modalProjectName" placeholder="Nhập tên dự án mới..." maxlength="100" style="margin-bottom:16px"><div class="row" style="justify-content:flex-end;gap:10px"><button type="button" class="secondary" id="btnCancelProjectModal">Hủy</button><button type="button" id="btnConfirmProjectModal" style="background:var(--accent);color:#101a0e;font-weight:700">Tạo dự án</button></div></div></div></main><script>
+</div></div><div id="paneClone" hidden><section class="card" style="max-width:760px;margin:auto"><h2>🎙️ Clone giọng đọc mẫu</h2><p class="muted">Nhân bản giọng nói tiếng Việt từ file thu âm mẫu qua mô hình VieNeu trên GPU và tự động lưu vào danh mục giọng.</p><form id="cloneForm"><label for="cloneName">Tên giọng đọc</label><input id="cloneName" required placeholder="Ví dụ: Giọng truyền cảm, Giọng của tôi..." maxlength="100"><label for="cloneFile">File âm thanh mẫu (mp3, wav, m4a, flac)</label><input id="cloneFile" type="file" accept="audio/*" required><label for="cloneDuration">Độ dài mẫu sử dụng: <span id="cloneDurationVal">15 giây</span></label><input id="cloneDuration" type="range" min="5" max="60" value="15" step="5"><p class="notice">Gợi ý: Chọn file thu âm rõ lời, ít tạp âm từ 10 - 30 giây để mô hình học chính xác nhất âm sắc và ngữ điệu.</p><button id="cloneSubmit" type="submit">Bắt đầu nhân bản giọng (GPU)</button><p id="cloneError" class="error" role="alert"></p><p id="cloneStatus" class="notice"></p><div id="cloneResult" hidden style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:10px"><h3>Nghe thử giọng vừa clone</h3><audio id="cloneSample" controls style="width:100%;margin:10px 0"></audio><button type="button" id="useCloneBtn">Dùng giọng này để tạo video</button></div></form></section></div><div id="projectModal" hidden class="modal-backdrop"><div class="modal-box"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:18px;color:var(--accent)">✨ Tạo dự án mới</h3><button type="button" class="secondary" id="btnCloseProjectModal" style="padding:4px 10px;font-size:12px">✕</button></div><p class="muted" style="margin:0 0 14px;font-size:13px">Đặt tên cho dự án video của bạn (ví dụ: Áo giáp thời Trung cổ, Lịch sử Hà Nội...):</p><input id="modalProjectName" placeholder="Nhập tên dự án mới..." maxlength="100" style="margin-bottom:16px"><div class="row" style="justify-content:flex-end;gap:10px"><button type="button" class="secondary" id="btnCancelProjectModal">Hủy</button><button type="button" id="btnConfirmProjectModal" style="background:var(--accent);color:#101a0e;font-weight:700">Tạo dự án</button></div></div></div></main>
+<script>
 'use strict';
 const $=s=>document.querySelector(s);let ready=false,voices=[],submitting=false,refreshing=false,currentKey=null,activeProject=null,allJobs=[];
 const stages={plan:'Phân tích ý tưởng',research:'Tìm hiểu bằng ChatGPT',script:'Viết kịch bản & kiểm chứng',speech:'Tạo lời đọc (GPU)',images:'Tạo hình từng cảnh (GPU)',subtitles:'Căn phụ đề ASS',music:'Tạo nhạc nền (GPU)',render:'Dựng video',verify:'Kiểm tra thành phẩm'};
-const statuses={queued:'Đang chờ',running:'Đang chạy',completed:'Hoàn tất',succeeded:'Hoàn tất',failed:'Tạm dừng/Thất bại',cancelled:'Đã hủy',cancelling:'Đang hủy',awaiting_visual_review:'Chờ bạn duyệt ảnh'};
+const recoveryStages={plan:'phân tích ý tưởng',research:'tìm hiểu',script:'viết kịch bản',speech:'tạo lời đọc',images:'tạo ảnh',subtitles:'căn phụ đề',music:'nhạc',render:'dựng video',verify:'kiểm tra thành phẩm'};
+function recoveryLabel(stage){return 'Tiếp tục từ bước '+(recoveryStages[stage]||stage||'bị gián đoạn');}
+const statuses={queued:'Đang chờ',running:'Đang chạy',completed:'Hoàn tất',succeeded:'Hoàn tất',failed:'Tạm dừng/Thất bại',cancelled:'Đã hủy',cancelling:'Đang hủy',awaiting_visual_review:'Chờ bạn duyệt ảnh',awaiting_flow_account:'Chờ đổi tài khoản Flow'};
 function text(tag,value,cls){const n=document.createElement(tag);n.textContent=value??'';if(cls)n.className=cls;return n}
 function safeURL(value){try{const u=new URL(value,location.href);return u.origin===location.origin?u.href:null}catch{return null}}
 async function api(path,options={}){const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(path.startsWith('/api/browser/')?45000:60000)});const d=await r.json().catch(()=>({detail:'Phản hồi server không hợp lệ'}));if(!r.ok){let m=d.detail??d.error??d.message??`HTTP ${r.status}`;throw Error(typeof m==='string'?m:JSON.stringify(m))}return d}
@@ -96,6 +110,8 @@ $('#tabClone').onclick=()=>showTab('Clone');
 
 $('#musicVolume').oninput=()=>{ $('#volumeValue').textContent=$('#musicVolume').value+'%'; };
 let availableFlowBatchSizes=[1];
+let flowBatchChoiceInitialized=false;
+$('#flowBatchSize').onchange=()=>{flowBatchChoiceInitialized=true;};
 function updateFlowBatchChoices(){
   const flow=$('#imageProvider').value==='flow',select=$('#flowBatchSize');
   if(!flow)select.value='1';
@@ -105,11 +121,15 @@ function updateFlowBatchChoices(){
     option.textContent=n===1?'1 ảnh - tuần tự':`${n} ảnh${option.disabled?' - chưa kiểm chứng':''}`;
   }
   if(!availableFlowBatchSizes.includes(Number(select.value)))select.value='1';
-  $('#flowBatchNote').textContent=flow?'Flow vẫn tạo x1 mỗi prompt. Các đợt lớn chỉ mở sau khi tải và ghép cảnh qua thử nghiệm.':'Chỉ Google Flow hỗ trợ lựa chọn số ảnh mỗi đợt.';
+  $('#flowBatchNote').textContent=flow?'Mỗi prompt tạo x1 ảnh. Gửi các prompt của một đợt trước, chờ tạo xong rồi tải; sau đó sang đợt tiếp theo.':'Chỉ Google Flow hỗ trợ lựa chọn số ảnh mỗi đợt.';
 }
 async function refreshFlowBatchChoices(){
   try{const health=await api('/api/health');availableFlowBatchSizes=Array.isArray(health.flow_batch_sizes)?health.flow_batch_sizes.filter(n=>[1,10,20,30].includes(n)):[1];}
   catch{availableFlowBatchSizes=[1];}
+  if(!flowBatchChoiceInitialized){
+    if($('#imageProvider').value==='flow'&&availableFlowBatchSizes.includes(10))$('#flowBatchSize').value='10';
+    flowBatchChoiceInitialized=true;
+  }
   updateFlowBatchChoices();
 }
 $('#imageProvider').onchange=()=>{const notes={flow:'Flow có thể tiêu credits theo lựa chọn đã xác nhận.',chatgpt:'Dùng ảnh ChatGPT trong Chrome riêng, theo hạn mức tài khoản.',comfy:'Dùng Qwen Image 2.1 trên ComfyUI; hàng đợi và VRAM bulk vẫn được kiểm tra.'};$('#imageProviderNote').textContent=notes[$('#imageProvider').value]||'';updateFlowBatchChoices();};
@@ -162,6 +182,7 @@ function openProjectModal(){
   const modal=$('#projectModal');
   const input=$('#modalProjectName');
   input.value='';
+  $('#projectCreateError').textContent='';
   modal.hidden=false;
   setTimeout(()=>input.focus(),50);
 }
@@ -177,12 +198,14 @@ $('#modalProjectName').onkeydown=e=>{
 };
 $('#btnConfirmProjectModal').onclick=async()=>{
   const name=$('#modalProjectName').value.trim();
-  if(!name){alert('Vui lòng nhập tên dự án');return;}
-  closeProjectModal();
-  try{await api('/api/projects',{method:'POST',body:JSON.stringify({name})});}catch(e){}
-  openProject(name);
-  $('#idea').value='';
-  await loadProjects();
+  if(!name){$('#projectCreateError').textContent='Vui lòng nhập tên dự án';return;}
+  const button=$('#btnConfirmProjectModal');button.disabled=true;
+  $('#projectCreateError').textContent='';
+  try{
+    await api('/api/projects',{method:'POST',body:JSON.stringify({name})});
+    closeProjectModal();openProject(name);$('#idea').value='';await loadProjects();
+  }catch(e){$('#projectCreateError').textContent='Không thể tạo dự án: '+e.message;}
+  finally{button.disabled=false;}
 };
 
 function openProject(pname){
@@ -201,19 +224,117 @@ $('#btnBackToGallery').onclick=()=>{
 };
 $('#btnCreateNewProject').onclick=openProjectModal;
 
-async function loadProjects(){
+const projectGallery={archived:false,q:'',page:1,pageSize:10,request:0,busy:new Set()};
+let deletingProject=null,deleteReturnFocus=null,deletePending=false;
+function initProjectManagement(){
+  const toolbar=document.createElement('div');toolbar.className='project-toolbar';
+  toolbar.innerHTML='<div class="row" role="group" aria-label="Danh sách dự án"><button type="button" class="tab-btn active" id="projectViewActive" aria-pressed="true">Dự án đang dùng</button><button type="button" class="tab-btn" id="projectViewArchive" aria-pressed="false">Kho lưu trữ</button></div><div class="project-search"><label for="projectSearch">Tìm dự án theo tên hoặc ý tưởng</label><input id="projectSearch" type="search" placeholder="Tìm dự án..."></div><div><label for="projectPageSize">Dự án / trang</label><select id="projectPageSize"><option value="10">10</option><option value="20">20</option><option value="30">30</option></select></div>';
+  const box=$('#galleryContainer');box.before(toolbar);
+  for(const id of ['projectGalleryError','projectLoadError']){
+    const error=text('p','','error');error.id=id;error.setAttribute('role','alert');box.before(error);
+  }
+  const pagination=document.createElement('div');pagination.className='row project-pagination';
+  pagination.innerHTML='<button type="button" class="secondary" id="projectPrevPage" disabled>← Trước</button><span id="projectPageStatus" class="muted" aria-live="polite"></span><button type="button" class="secondary" id="projectNextPage" disabled>Sau →</button>';
+  box.after(pagination);
+  const reset=()=>{projectGallery.page=1;$('#projectGalleryError').textContent='';loadProjects();};
+  $('#projectSearch').oninput=()=>{projectGallery.q=$('#projectSearch').value;reset();};
+  $('#projectPageSize').onchange=()=>{projectGallery.pageSize=Number($('#projectPageSize').value);reset();};
+  for(const [id,archived] of [['projectViewActive',false],['projectViewArchive',true]]){
+    $('#'+id).onclick=()=>{
+      projectGallery.archived=archived;
+      for(const [button,selected] of [['projectViewActive',!archived],['projectViewArchive',archived]]){
+        $('#'+button).classList.toggle('active',selected);$('#'+button).setAttribute('aria-pressed',String(selected));
+      }
+      reset();
+    };
+  }
+  $('#projectPrevPage').onclick=()=>{projectGallery.page--;loadProjects();};
+  $('#projectNextPage').onclick=()=>{projectGallery.page++;loadProjects();};
+  const modal=document.createElement('div');modal.id='projectDeleteModal';modal.className='modal-backdrop';modal.hidden=true;
+  modal.innerHTML='<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="projectDeleteTitle" aria-describedby="projectDeleteDescription"><h3 id="projectDeleteTitle" style="margin-top:0">Xóa dự án</h3><p id="projectDeleteDescription"></p><fieldset style="border:0;padding:0;margin:0;min-width:0"><legend>Chọn cách xử lý tệp</legend><label class="project-delete-choice"><input type="radio" name="projectDeleteChoice" id="projectDeleteKeepFiles" value="keep" checked><span>Giữ tệp video và tài nguyên đã tạo</span></label><label class="project-delete-choice"><input type="radio" name="projectDeleteChoice" id="projectDeleteFiles" value="delete"><span>Xóa cả tệp video và tài nguyên của dự án. Không thể hoàn tác.</span></label></fieldset><p id="projectDeleteError" class="error" role="alert"></p><div class="row" style="justify-content:flex-end"><button type="button" class="secondary" id="projectDeleteCancel">Hủy</button><button type="button" id="projectDeleteConfirm">Xóa dự án, giữ tệp</button></div></div>';
+  document.body.append(modal);
+  const updateChoice=()=>{$('#projectDeleteConfirm').textContent=$('#projectDeleteFiles').checked?'Xác nhận xóa dự án và tệp':'Xóa dự án, giữ tệp';};
+  $('#projectDeleteFiles').onchange=updateChoice;$('#projectDeleteKeepFiles').onchange=updateChoice;
+  $('#projectDeleteCancel').onclick=closeProjectDelete;
+  modal.onclick=e=>{if(e.target===modal)closeProjectDelete();};
+  modal.onkeydown=e=>{
+    if(e.key==='Escape'){e.preventDefault();closeProjectDelete();}
+    if(e.key==='Tab'){
+      const focusable=[...modal.querySelectorAll('button,input:checked')].filter(el=>!el.disabled);
+      if(!focusable.length){e.preventDefault();return;}
+      const first=focusable[0],last=focusable.at(-1);
+      if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+      else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+    }
+  };
+  $('#projectDeleteConfirm').onclick=async()=>{
+    if(deletePending||!deletingProject)return;
+    const name=deletingProject,deleteFiles=$('#projectDeleteFiles').checked;
+    deletePending=true;projectGallery.request++;
+    for(const control of modal.querySelectorAll('button,input'))control.disabled=true;
+    $('#projectDeleteError').textContent='';
+    try{
+      const result=await api('/api/projects/delete',{method:'POST',body:JSON.stringify({name,delete_files:deleteFiles,confirm:true})});
+      deletePending=false;closeProjectDelete();await loadProjects();
+      if(result.cleanup_pending)$('#projectGalleryError').textContent='Đã gỡ dự án; một số file đang chờ xóa do bị khóa.';
+    }catch(e){$('#projectDeleteError').textContent='Không thể xóa dự án: '+e.message;}
+    finally{deletePending=false;for(const control of modal.querySelectorAll('button,input'))control.disabled=false;}
+  };
+  const createError=text('p','','error');createError.id='projectCreateError';createError.setAttribute('role','alert');$('#modalProjectName').after(createError);
+}
+function openProjectDelete(name,trigger){
+  deletingProject=name;deleteReturnFocus=trigger;
+  $('#projectDeleteDescription').textContent='Xóa dự án “'+name+'” khỏi danh sách?';
+  $('#projectDeleteKeepFiles').checked=true;$('#projectDeleteError').textContent='';
+  $('#projectDeleteConfirm').textContent='Xóa dự án, giữ tệp';
+  $('#projectDeleteModal').hidden=false;$('#projectDeleteKeepFiles').focus();
+}
+function closeProjectDelete(){
+  if(deletePending)return;
+  $('#projectDeleteModal').hidden=true;deletingProject=null;
+  if(deleteReturnFocus?.isConnected)deleteReturnFocus.focus();else $('#projectSearch').focus();
+}
+async function archiveProject(name,archived){
+  if(projectGallery.busy.has(name))return;
+  projectGallery.busy.add(name);projectGallery.request++;$('#projectGalleryError').textContent='';
+  for(const card of $('#galleryContainer').children)if(card.dataset.project===name)for(const button of card.querySelectorAll('button'))button.disabled=true;
   try{
-    const d=await api('/api/projects');
+    await api('/api/projects/archive',{method:'POST',body:JSON.stringify({name,archived})});
+    await loadProjects();
+  }catch(e){$('#projectGalleryError').textContent='Không thể '+(archived?'lưu trữ':'khôi phục')+' dự án: '+e.message;}
+  finally{
+    projectGallery.busy.delete(name);
+    for(const card of $('#galleryContainer').children)if(card.dataset.project===name)for(const button of card.querySelectorAll('button'))button.disabled=false;
+  }
+}
+initProjectManagement();
+
+async function loadProjects(){
+  const request=++projectGallery.request;
+  const query=new URLSearchParams({archived:String(projectGallery.archived),q:projectGallery.q,page:String(projectGallery.page),page_size:String(projectGallery.pageSize)});
+  try{
+    const d=await api('/api/projects?'+query);
+    if(request!==projectGallery.request)return;
+    const managementSupported=Number.isInteger(d.total)&&Number.isInteger(d.total_pages);
+    for(const id of ['projectViewArchive','projectSearch','projectPageSize'])$('#'+id).disabled=!managementSupported;
     const items=d.items??[];
+    const total=Number(d.total??items.length),pages=Math.max(1,Number(d.total_pages??Math.ceil(total/projectGallery.pageSize)));
+    const current=Math.max(1,Math.min(Number(d.page??projectGallery.page),pages));
+    if(projectGallery.page>pages){projectGallery.page=pages;return loadProjects();}
+    projectGallery.page=current;
+    $('#projectPageStatus').textContent='Trang '+current+' / '+pages+' · '+total+' dự án';
+    $('#projectPrevPage').disabled=!managementSupported||current<=1;$('#projectNextPage').disabled=!managementSupported||current>=pages;
+    $('#projectLoadError').textContent=managementSupported?'':'Backend chưa nạp bản quản lý dự án mới; chờ job đang chạy kết thúc trước khi cập nhật server.';
     const box=$('#galleryContainer');
     if(!items.length){
-      box.replaceChildren(text('p','Chưa có dự án nào. Bấm "+ Tạo dự án mới" để bắt đầu.','muted'));
+      box.replaceChildren(text('p',projectGallery.q?'Không tìm thấy dự án phù hợp.':projectGallery.archived?'Kho lưu trữ chưa có dự án.':'Chưa có dự án nào. Bấm "+ Tạo dự án mới" để bắt đầu.','muted'));
       return;
     }
     box.replaceChildren();
     for(const item of items){
       const card=document.createElement('div');
       card.className='project-card';
+      card.dataset.project=item.name;
       const thumbBox=document.createElement('div');
       thumbBox.className='project-thumb';
       if(item.thumbnail){
@@ -239,19 +360,36 @@ async function loadProjects(){
         snippet.style.margin='8px 0 0';
         info.append(snippet);
       }
+      const actions=document.createElement('div');actions.className='project-actions';
+      const archive=text('button',projectGallery.archived?'Khôi phục':'Lưu trữ','secondary project-archive');archive.type='button';
+      archive.disabled=!managementSupported||projectGallery.busy.has(item.name);
+      const archived=projectGallery.archived;
+      archive.onclick=e=>{e.stopPropagation();archiveProject(item.name,!archived);};
+      const remove=text('button','Xóa','secondary project-delete');remove.type='button';remove.disabled=archive.disabled;
+      remove.onclick=e=>{e.stopPropagation();openProjectDelete(item.name,remove);};
+      actions.append(archive,remove);info.append(actions);
       card.append(thumbBox,info);
       card.onclick=()=>openProject(item.name);
       box.append(card);
     }
   }catch(e){
-    $('#galleryContainer').replaceChildren(text('p','Lỗi tải dự án: '+e.message,'error'));
+    if(request===projectGallery.request)$('#projectLoadError').textContent='Lỗi tải dự án: '+e.message;
   }
 }
 
 function enable(){ $('#submit').disabled=!ready||!$('#voice').value||submitting; }
 const extensionScope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1]||null;
-if(extensionScope){$('#browserStart').hidden=true;$('#browserProbe').hidden=true;$('#connectorStatus').textContent='Dùng extension ChatGPT trong Chrome thường; kiểm tra kết nối trong bảng nổi của extension.';}
-async function preflight(){try{const d=await api('/api/preflight'+(extensionScope?'?scope='+encodeURIComponent(extensionScope):''));ready=d.ready===true;const box=$('#checks');box.replaceChildren();for(const c of d.checks??[]){const n=text('div',`${c.ok?'✓':'!'} ${c.name}: ${c.message??''}`,'check '+(c.ok?'pass':'error'));box.append(n)}if(!d.checks?.length)box.append(text('p',ready?'Sẵn sàng':'Chưa đủ điều kiện chạy',ready?'pass':'error'));enable()}catch(e){ready=false;$('#checks').replaceChildren(text('p','Không kết nối được backend: '+e.message,'error'));enable()}}
+let usesExtension=!!extensionScope;
+function configureTextTransport(transport){
+  if(!extensionScope&&transport!=='extension')return;
+  usesExtension=true;$('#browserStart').hidden=true;$('#browserProbe').hidden=true;
+  $('#textProvider').value='chatgpt';$('#textProvider').disabled=true;
+  $('#textProvider').querySelector('option[value="chatgpt"]').textContent='ChatGPT · extension bridge (Chrome thường)';
+  $('#textProviderNote').textContent='Chữ do ChatGPT tạo qua extension bridge chạy nền. Giữ tab Studio mở trong khi chạy.';
+  $('#connectorStatus').textContent=extensionScope?'Đã chọn extension bridge cho tác vụ video; trạng thái kết nối ở bảng nổi.':'Bấm Start trong bảng extension để kết nối công cụ tạo video, rồi Test chữ nếu chưa kiểm tra phiên này.';
+}
+configureTextTransport();
+async function preflight(){try{const d=await api('/api/preflight'+(extensionScope?'?scope='+encodeURIComponent(extensionScope):''));configureTextTransport(d.text_transport);ready=d.ready===true;const box=$('#checks');box.replaceChildren();for(const c of d.checks??[]){const n=text('div',`${c.ok?'✓':'!'} ${c.name}: ${c.message??''}`,'check '+(c.ok?'pass':'error'));box.append(n)}if(!d.checks?.length)box.append(text('p',ready?'Sẵn sàng':'Chưa đủ điều kiện chạy',ready?'pass':'error'));enable()}catch(e){ready=false;$('#checks').replaceChildren(text('p','Không kết nối được backend: '+e.message,'error'));enable()}}
 
 async function loadVoices(){
   try{
@@ -279,7 +417,7 @@ async function loadVoices(){
 function onVoice(){const v=voices.find(v=>v.id===$('#voice').value);const url=v?.sample_url&&safeURL(v.sample_url);$('#preview').disabled=!url;$('#sample').hidden=true;$('#sample').pause();$('#sample').removeAttribute('src');if(v)$('#voiceNote').textContent=url?'Nghe mẫu trước khi tạo':'Giọng này chưa có mẫu nghe sẵn';enable()}
 $('#voice').addEventListener('change',onVoice);$('#preview').onclick=()=>{const v=voices.find(v=>v.id===$('#voice').value);const url=v?.sample_url&&safeURL(v.sample_url);if(url){$('#sample').src=url;$('#sample').hidden=false;$('#sample').play().catch(()=>{})}};
 
-async function browserStatus(){if(extensionScope)return;try{const s=await api('/api/browser/status');$('#connectorStatus').textContent=s.ready?'Chrome riêng: Đã xác nhận đăng nhập.':s.connected?'Chrome riêng đã kết nối; cần đăng nhập/kiểm tra.':'Chrome riêng chưa kết nối. Bấm Mở Chrome riêng để bắt đầu.';}catch(e){$('#connectorStatus').textContent=e.message;}}
+async function browserStatus(){if(usesExtension)return;try{const s=await api('/api/browser/status');if(usesExtension)return;$('#connectorStatus').textContent=s.ready?'Chrome riêng: Đã xác nhận đăng nhập.':s.connected?'Chrome riêng đã kết nối; cần đăng nhập/kiểm tra.':'Chrome riêng chưa kết nối. Bấm Mở Chrome riêng để bắt đầu.';}catch(e){if(!usesExtension)$('#connectorStatus').textContent=e.message;}}
 async function browserControl(action,button){button.disabled=true;try{const s=await api('/api/browser/'+action,{method:'POST',body:'{}'});$('#connectorStatus').textContent=action==='start'?'Đã mở Chrome riêng. Bạn đăng nhập ChatGPT trong cửa sổ đó, rồi bấm Kiểm tra kết nối.':s.ready?'Đã xác nhận đăng nhập.':'Chưa xác nhận đăng nhập.';await preflight();}catch(e){$('#connectorStatus').textContent=e.message;}finally{button.disabled=false;}}
 if($('#browserStart')) $('#browserStart').onclick=()=>browserControl('start',$('#browserStart'));
 if($('#browserProbe')) $('#browserProbe').onclick=()=>browserControl('probe',$('#browserProbe'));
@@ -307,6 +445,7 @@ $('#create').onsubmit=async e=>{
 
 function renderJobCard(j){
   const n=document.createElement('article');n.className='job';n.id='job-'+j.id;n.dataset.status=j.status;
+  n.dataset.renderState=jobCardRenderState(j);
   const row=text('div','','row');row.style.justifyContent='space-between';
   row.append(text('h3',j.idea??j.title??j.id),text('span',statuses[j.status]??j.status,'badge status-'+j.status+' status-badge'));
   n.append(row,text('small',j.id));
@@ -321,26 +460,17 @@ function renderJobCard(j){
     dbox.append(text('h4','💡 Gợi ý khắc phục:'));
     dbox.append(text('p','Lý do: '+j.diagnostics.reason));
     dbox.append(text('p','Gợi ý: '+j.diagnostics.suggestion));
-    const btns=document.createElement('div');btns.className='row';btns.style.marginTop='10px';
-    const applyBtn=text('button','✏️ Điền ý tưởng gợi ý để tạo lại','secondary');
-    applyBtn.type='button';
-    applyBtn.onclick=()=>{
-      if(j.diagnostics.suggestion.includes('"')){
-        const match=j.diagnostics.suggestion.match(/"([^"]+)"/);
-        if(match)$('#idea').value=match[1];
-      }
-      window.scrollTo({top:$('#idea').offsetTop-60,behavior:'smooth'});
-    };
-    const retryBtn=text('button','🔄 Thử lại bước này (Retry)','');
+    n.append(dbox);
+  }
+  if(j.status==='failed'){
+    const retryBtn=text('button',recoveryLabel(j.stage),'job-retry');
     retryBtn.type='button';
     retryBtn.onclick=async()=>{
-      retryBtn.disabled=true;
-      try{await api('/api/jobs/'+encodeURIComponent(j.id)+'/retry',{method:'POST'});await loadJobs();}
+      retryBtn.disabled=true;const card=retryBtn.closest('.job');
+      try{const resumed=await api('/api/jobs/'+encodeURIComponent(j.id)+'/retry',{method:'POST'});if(card?.isConnected)updateJobCard(card,resumed);await loadJobs();}
       catch(err){alert('Lỗi thử lại: '+err.message);retryBtn.disabled=false;}
     };
-    btns.append(applyBtn,retryBtn);
-    dbox.append(btns);
-    n.append(dbox);
+    n.append(retryBtn,text('p','Giữ nguyên lời đọc, ảnh và các bước đã hoàn tất.','notice'));
   }
   const errP=text('p',j.error?(typeof j.error==='string'?j.error:JSON.stringify(j.error)):'','error job-error');if(!j.error)errP.hidden=true;n.append(errP);
   const out=j.output_url&&safeURL(j.output_url);
@@ -348,7 +478,7 @@ function renderJobCard(j){
     const v=document.createElement('video');v.controls=true;v.preload='metadata';v.src=out;n.append(v);
     const a=text('a','Tải video MP4','button');a.href=out;a.download='';n.append(a);
   }
-  if(['queued','running','cancelling'].includes(j.status)){
+  if(['queued','running','cancelling','awaiting_flow_account'].includes(j.status)){
     const b=text('button','Hủy tác vụ','secondary');b.type='button';b.className='secondary job-cancel';b.disabled=j.status==='cancelling';
     b.onclick=async()=>{b.disabled=true;try{await api('/api/jobs/'+encodeURIComponent(j.id)+'/cancel',{method:'POST'});await loadJobs()}catch(e){b.disabled=false}};
     n.append(b);
@@ -363,7 +493,12 @@ function appendSceneEditorButton(n,j){
   }
 }
 
+function jobCardRenderState(j){return JSON.stringify([j.status,j.stage,j.error,j.diagnostics,!!j.checkpoints?.images]);}
 function updateJobCard(n,j){
+  const renderState=jobCardRenderState(j);
+  if(n.dataset.renderState!==renderState){
+    const fresh=renderJobCard(j);n.replaceChildren(...fresh.childNodes);n.dataset.renderState=renderState;n.dataset.status=j.status;return;
+  }
   appendSceneEditorButton(n,j);
   n.dataset.status=j.status;
   const badge=n.querySelector('.status-badge');
@@ -500,4 +635,4 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){loadJobs();preflight();loadProjects();}
 });
-</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261026-flow2"></script></body></html>
+</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261030-recovery1"></script></body></html>
