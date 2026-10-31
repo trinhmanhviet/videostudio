@@ -20,6 +20,26 @@ def stamp(seconds):
     ms=round(seconds*1000);h,ms=divmod(ms,3600000);m,ms=divmod(ms,60000);s,ms=divmod(ms,1000)
     return f'{h:02}:{m:02}:{s:02},{ms:03}'
 
+def split_caption_scenes(scenes):
+    """Split oversized narration locally, preserving words and visual metadata."""
+    result=[]
+    for scene in scenes:
+        chunks=[];current=[]
+        for word in scene.get('narration','').split():
+            try:wrap_caption(' '.join(current+[word]))
+            except ValueError as error:
+                if str(error)!='Utterance exceeds safe caption area; split narration upstream':raise
+                chunks.append(' '.join(current));current=[]
+                wrap_caption(word)
+            current.append(word)
+        if current:chunks.append(' '.join(current))
+        if not chunks:wrap_caption('')
+        for index,text in enumerate(chunks):
+            item={**scene,'narration':text}
+            if len(chunks)>1 and 'scene_id' in item:item['scene_id']=f"{item['scene_id']}-part-{index+1}"
+            result.append(item)
+    return result
+
 def write_captions(utterances,path):
     rows=[];end=0
     for i,u in enumerate(utterances,1):

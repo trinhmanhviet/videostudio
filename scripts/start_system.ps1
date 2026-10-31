@@ -25,15 +25,28 @@ function Wait-StartupService([string]$Url,[string]$Kind,[int]$Seconds){
  throw "$Kind did not become ready. See data\startup.log and the service logs."
 }
 function Invoke-StartupScript([string]$Name){
- & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $Name) | ForEach-Object {Write-Host $_}
- if($LASTEXITCODE -ne 0){throw "$Name failed. See data\server.err.log or data\cdp.err.log."}
+ # A background Python descendant can retain a native pipeline handle after
+ # the child PowerShell exits. Poll the direct child and use files, not a pipe.
+ $outLog=Join-Path $script:StartupRoot "data/startup-$Name.out.log"
+ $errLog=Join-Path $script:StartupRoot "data/startup-$Name.err.log"
+ $child=Start-Process powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+(Join-Path $PSScriptRoot $Name)+'"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+ $null=$child.Handle
+ $until=(Get-Date).AddSeconds(90)
+ while(-not $child.HasExited){
+  if((Get-Date) -gt $until){throw "$Name startup timed out. See $outLog and $errLog."}
+  Start-Sleep -Milliseconds 200
+  $child.Refresh()
+ }
+ $child.WaitForExit()
+ Get-Content -LiteralPath $outLog -ErrorAction SilentlyContinue | ForEach-Object {Write-Host $_}
+ if($child.ExitCode -ne 0){Get-Content -LiteralPath $errLog -ErrorAction SilentlyContinue | ForEach-Object {Write-Host $_};throw "$Name failed. See $errLog."}
 }
 function Ensure-StartupServer{
- $health=Get-StartupJson 'http://localhost:8877/api/health'
+ $health=Get-StartupJson 'http://127.0.0.1:8877/api/health'
  if(-not (Test-StartupResponse $health 'server')){
   if(Test-StartupListener 8877){throw 'Port 8877 is occupied but VideoStudio is not ready. No process was stopped; wait and run this launcher again.'}
   Invoke-StartupScript 'start_extension.ps1'
-  $health=Wait-StartupService 'http://localhost:8877/api/health' 'server' 30
+  $health=Wait-StartupService 'http://127.0.0.1:8877/api/health' 'server' 30
  }
  if($health.text_transport -ne 'extension'){throw 'The running server is not using extension bridge. It was left running; do not restart it while a video is active.'}
  Write-Host '[OK] VideoStudio server (extension bridge).'

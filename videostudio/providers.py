@@ -719,6 +719,8 @@ class Pipeline:
         from .captions import wrap_caption
         scenes=d.get('scenes')
         if not isinstance(scenes,list) or not scenes or len(scenes)>max_scenes:raise ValueError(f'Timed utterance storyboard required (1-{max_scenes} scenes)')
+        from .captions import split_caption_scenes
+        scenes=d['scenes']=split_caption_scenes(scenes)
         for scene in scenes:
             if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError('Missing scene visual prompt')
             wrap_caption(scene.get('narration',''))
@@ -763,7 +765,8 @@ class Pipeline:
                 ch_result=self.llm_json(ch_prompt,check)
                 if not isinstance(ch_result.get('scenes'),list) or not ch_result['scenes']:raise ValueError(f'Invalid chapter {idx} scenes')
                 ch_file.write_text(json.dumps(ch_result,ensure_ascii=False,indent=2),encoding='utf8')
-            for scene in ch_result['scenes']:
+            from .captions import split_caption_scenes
+            for scene in split_caption_scenes(ch_result['scenes']):
                 if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError(f'Missing visual prompt in chapter {idx}')
                 wrap_caption(scene.get('narration',''))
                 all_scenes.append(scene)
