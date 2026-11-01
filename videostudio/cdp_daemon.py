@@ -538,7 +538,10 @@ async def create_app(bridge=None):
             elif request.path == '/api/images/generate':
                 value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'))}
             elif request.path == '/api/flow/characters/create':
-                value = {'ok':True, 'data':await bridge.flow_images.create_character(body.get('task_id'),body.get('job_id'),body.get('character_id'),body.get('name'),body.get('prompt'))}
+                resume=body.get('resume_only',False)
+                if type(resume) is not bool:raise web.HTTPBadRequest(text='resume_only must be boolean')
+                options={'resume_only':True} if resume else {}
+                value = {'ok':True, 'data':await bridge.flow_images.create_character(body.get('task_id'),body.get('job_id'),body.get('character_id'),body.get('name'),body.get('prompt'),**options)}
             elif request.path == '/api/flow/images/generate':
                 value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),character_mentions=body.get('character_mentions'))}
             elif request.path == '/api/flow/images/generate-batch':

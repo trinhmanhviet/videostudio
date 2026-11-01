@@ -8,6 +8,17 @@ from videostudio.cdp_requests import RequestJournal
 
 
 class DaemonTests(unittest.IsolatedAsyncioTestCase):
+    async def test_character_resume_only_flag_reaches_adapter_and_rejects_non_boolean(self):
+        self.bridge.flow_images.create_character=AsyncMock(return_value={'character_id':'same-entity'})
+        payload={'task_id':'task','job_id':'job','character_id':'worker','name':'worker','prompt':'portrait','resume_only':True}
+        response=await self.client.post('/api/flow/characters/create',json=payload,headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(response.status,200)
+        self.bridge.flow_images.create_character.assert_awaited_once_with('task','job','worker','worker','portrait',resume_only=True)
+        payload['resume_only']='true'
+        invalid=await self.client.post('/api/flow/characters/create',json=payload,headers={'X-VS-Client':'videostudio'})
+        self.assertEqual(invalid.status,400)
+        self.assertEqual(self.bridge.flow_images.create_character.await_count,1)
+
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.launcher=MagicMock()

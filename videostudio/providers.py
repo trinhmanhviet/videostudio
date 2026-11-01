@@ -1046,6 +1046,12 @@ class Pipeline:
             ensure_flow_service(parsed.scheme+'://'+parsed.netloc,check)
             return post()  # Same durable IDs and immutable request, once only.
 
+    def _wait_for_character_recheck(self,seconds,check):
+        deadline=time.monotonic()+seconds
+        while time.monotonic()<deadline:
+            check();time.sleep(min(.5,max(0,deadline-time.monotonic())))
+        check()
+
     def _browser_flow_character(self,j,character,prompt,check,*,task_id):
         base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
         if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
@@ -1055,12 +1061,21 @@ class Pipeline:
         if not isinstance(character_id,str) or not _FLOW_CHARACTER_ID.fullmatch(character_id):raise PermanentError('Invalid Flow character manifest ID')
         check()
         payload={'task_id':task_id,'job_id':j['id'],'character_id':character_id,'name':name,'prompt':prompt}
-        try:r=self._flow_post(base+'/api/flow/characters/create',payload,check,1200)
-        except httpx.HTTPError as error:raise UncertainDeliveryError('Flow Character creation result uncertain; reconcile the same durable Character receipt, never create a replacement') from error
-        try:body=r.json()
-        except ValueError as error:raise UncertainDeliveryError(f'Flow Character response malformed (HTTP {r.status_code}); reconcile same receipt') from error
-        if r.status_code!=200:
+        delays=(30,60,120,120)
+        for recovery in range(len(delays)+1):
+            try:r=self._flow_post(base+'/api/flow/characters/create',payload,check,1200)
+            except httpx.HTTPError as error:raise UncertainDeliveryError('Flow Character creation result uncertain; reconcile the same durable Character receipt, never create a replacement') from error
+            try:body=r.json()
+            except ValueError as error:raise UncertainDeliveryError(f'Flow Character response malformed (HTTP {r.status_code}); reconcile same receipt') from error
+            if r.status_code==200:break
             code=body.get('code');message=body.get('error','Flow Character creation unavailable')
+            if code=='character_save_pending':
+                if recovery==len(delays):raise UncertainDeliveryError('Flow Character name remains unconfirmed after automatic rechecks; same receipt preserved: '+name)
+                delay=delays[recovery]
+                if getattr(self,'store',None):self.store.log(j['id'],'images',f'Flow đang xác nhận tên {name}; tự kiểm tra lại sau {delay} giây (lượt {recovery+1}/{len(delays)}), dùng nguyên Character đã tạo.')
+                self._wait_for_character_recheck(delay,check)
+                payload={**payload,'resume_only':True}
+                continue
             if code in ('uncertain','delivery_indeterminate','browser_unavailable'):raise UncertainDeliveryError(message)
             if code in ('needs_zero_credit','needs_flow_check','needs_auth','authentication_required'):raise PermanentError(message)
             raise PermanentError(message)

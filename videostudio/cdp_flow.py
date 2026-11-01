@@ -895,8 +895,13 @@ class FlowImages:
             await asyncio.sleep(1.0)
         raise FlowTaskError('Flow Character generation timed out or failed to complete', 'uncertain')
 
-    async def create_character(self,task_id,job_id,character_id,name,prompt,timeout=900):
+    async def create_character(self,task_id,job_id,character_id,name,prompt,timeout=900,*,resume_only=False):
         async with self._flow_batch_lock:
+            if resume_only:
+                uuid.UUID(task_id)
+                saved=self._read_receipt(task_id)
+                if not saved or (saved.get('stage')!='character_saved' and saved.get('character_create_stage') not in ('submitting','saving','saved')):
+                    raise FlowTaskError('Character recovery receipt is missing or not submitted; no replacement generated','uncertain')
             return await self._create_character_unreserved(task_id,job_id,character_id,name,prompt,timeout)
 
     async def _create_character_unreserved(self, task_id, job_id, character_id, name, prompt, timeout=900):
@@ -1030,10 +1035,12 @@ class FlowImages:
                     field=named[0] if len(named)==1 else (fields[1] if len(fields)>=2 else (fields[0] if len(fields)==1 and not re.search(r'search|tìm.?kiếm',fields[0].get('hint',''),re.I) else None))
                 if field:break
                 await asyncio.sleep(.2)
-            if not field:raise FlowTaskError('Cannot read the saved Character name yet; retry this same Character','uncertain')
+            if not field:raise FlowTaskError('Cannot read the saved Character name yet; automatic recheck required','character_save_pending')
+            receipt['last_name_observation']={'at':time.time(),'value':str(field.get('value',''))[:120],'hint':str(field.get('hint',''))[:120],'local_attempt':attempt}
+            self._write_receipt(task_id,receipt)
             if field.get('value')==name:
                 verified=await self._eval(session,r'''/* VS_CHARACTER_PERSISTED */(()=>{const f=[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});return f.some(e=>e.value===NAME)})()'''.replace('NAME',json.dumps(name)))
-                if verified is not True:raise FlowTaskError('Flow Character name is not persisted; retry this same Character','uncertain')
+                if verified is not True:raise FlowTaskError('Flow Character name is not persisted; automatic recheck required','character_save_pending')
                 receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
                 await self._return_to_project_root(session,project,prompt)
                 return {'task_id':task_id,'character_id':entity,'name':name,'project_url':project}
@@ -1051,7 +1058,7 @@ class FlowImages:
                 await asyncio.sleep(.2)
             await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
             await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
-        raise FlowTaskError('Flow Character name was not retained after two save attempts; receipt preserved for retry','uncertain')
+        raise FlowTaskError('Flow Character name was not retained after two save attempts; receipt preserved for automatic recheck','character_save_pending')
 
     @asynccontextmanager
     async def _maybe_job_lock(self,held=False):
