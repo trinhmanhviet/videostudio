@@ -1190,6 +1190,9 @@ class Pipeline:
         from PIL import Image
         for item in prepared:
             check();task_id=item['task_id'];result=by_id[task_id]
+            if result.get('status')=='blocked' and result.get('blocked_confirmed') is True:
+                validated[task_id]=result
+                continue
             if not isinstance(result.get('media_id'),str) or not result['media_id'] or not isinstance(result.get('project_url'),str):raise UncertainDeliveryError('Flow batch task lacks exact media/project identity')
             source=(root/(task_id+'.png')).resolve();received=Path(result.get('file_path','')).resolve()
             if received!=source or not source.is_file() or not 1000<source.stat().st_size<=20*1024*1024 or digest(source)!=result.get('sha256'):raise PermanentError('Flow batch image path/hash/size validation failed')
@@ -1301,7 +1304,9 @@ class Pipeline:
                     except Exception:pass
             mentions=self._flow_scene_mentions(utterance,references);saved_provider=saved.get('provider','comfy')
             legacy=saved.get('reference_media_ids',[]) or saved.get('reference_identity',[]);saved_mentions=saved.get('character_mentions',[])
-            reusable=path.is_file() and saved.get('sha256')==digest(path) and _flow_checkpoint_prompt_matches(saved,utterance['visual_prompt'],saved_mentions) and saved_provider=='flow' and (migrated or (not legacy and saved_mentions==mentions))
+            permitted_provider=saved_provider=='flow' or (saved_provider=='comfy' and saved.get('hybrid_fallback') is True)
+            ref_assets_ok=all(Path(a['path']).is_file() and digest(a['path'])==a['sha256'] for a in saved.get('reference_assets',[]))
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and _flow_checkpoint_prompt_matches(saved,utterance['visual_prompt'],saved_mentions) and permitted_provider and ref_assets_ok and (migrated or (not legacy and saved_mentions==mentions))
             if migrated and reusable:mentions=saved_mentions
             if path.is_file() and not reusable and (mentions or saved_mentions or legacy):
                 raise PermanentError('Existing scene image has different native Flow Character conditioning; refusing to overwrite '+kind)
@@ -1312,6 +1317,30 @@ class Pipeline:
         batch_results={}
         completed_ids={item['task_id'] for item in prepared if item['reusable']}
         total_images=len(prepared)
+        hybrid_handled=set()
+        use_hybrid=os.getenv('VS_FLOW_COMFY_FALLBACK','1')=='1'
+        def record_hybrid(task,receipt):
+            check();path=task['output_path']
+            if receipt.get('task_id')!=task['task_id'] or not path.is_file():raise UncertainDeliveryError('Hybrid scene result identity differs')
+            with Image.open(path) as picture:
+                picture.load();width,height=picture.size
+                if min(picture.size)<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid hybrid scene image')
+            saved={'sha256':digest(path),'prompt':task['original_prompt'],'submitted_prompt':task['prompt'],'provider':receipt.get('provider','flow'),
+                   'task_id':task['task_id'],'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':task.get('character_mentions',[]),
+                   'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url'),'hybrid_fallback':receipt.get('hybrid_fallback',False),
+                   'reference_images':receipt.get('reference_images',[]),'reference_assets':receipt.get('reference_assets',[])}
+            checkpoint=path.with_suffix('.checkpoint.json');temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
+            completed_ids.add(task['task_id'])
+            if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh · {saved["provider"]}.')
+        if tasks and use_hybrid:
+            from .hybrid_images import run as run_hybrid
+            if batch_size not in available_flow_batch_sizes() or batch_size==1:raise PermanentError('Selected Flow cohort size is unavailable')
+            batch_timeout=int(os.getenv('VS_FLOW_BATCH_TIMEOUT_SECONDS','2400'))
+            if not 60<=batch_timeout<=3600:raise PermanentError('Invalid Flow cohort timeout')
+            if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh · đang xử lý nhóm {batch_size} cảnh.')
+            batch_results=run_hybrid(self,j,tasks,batch_size,references,record_hybrid,check,timeout=batch_timeout)
+            hybrid_handled=set(batch_results)
+            tasks=[]
         if tasks:
             if batch_size not in available_flow_batch_sizes() or batch_size==1:
                 raise PermanentError('Selected Flow cohort size is unavailable; refusing silent fallback')
@@ -1337,12 +1366,12 @@ class Pipeline:
                         temp=c_check.with_suffix('.part.json');temp.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temp.replace(c_check)
                     if receipt and receipt.get('task_id')==tid and c_path.is_file():completed_ids.add(tid)
                 if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh.')
-        elif getattr(self,'store',None):
+        elif getattr(self,'store',None) and not hybrid_handled:
             self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh · dùng lại các ảnh đã xác nhận.')
         scenes=[]
         for item in prepared:
             check();u=item['utterance'];path=item['path'];checkpoint=item['checkpoint'];mentions=item['mentions'];task_id=item['task_id']
-            if not item['reusable']:
+            if not item['reusable'] and task_id not in hybrid_handled:
                 receipt=batch_results.get(task_id)
                 if not receipt or receipt.get('task_id')!=task_id or not path.is_file():raise UncertainDeliveryError('Flow batch omitted a durable scene result; refusing to assemble out of order')
                 with Image.open(path) as picture:
@@ -1353,7 +1382,8 @@ class Pipeline:
                             'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':mentions,
                             'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
                 temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
-            scenes.append({'path':str(path),'duration':u['duration'],'character_mentions':mentions});assets.append(asset(path))
+            current=json.loads(checkpoint.read_text(encoding='utf8'))
+            scenes.append({'path':str(path),'duration':u['duration'],'character_mentions':mentions,'image_provider':current.get('provider','flow')});assets.append(asset(path));assets.extend(current.get('reference_assets',[]))
         scenes[-1]['duration']+=timeline_duration(j)-j['checkpoints']['speech']['duration_seconds']
         return {'scenes':scenes,'assets':assets,'image_provider':'flow','character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
 

@@ -43,6 +43,10 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 
 ## Tạo và phục hồi video
 
+- Với batch Flow 3/5/10: chỉ khi có bằng chứng từ chối rõ ràng gắn đúng cảnh, tool chuyển các cảnh còn thiếu sang Comfy trong hai batch, rồi thử một cảnh bằng Flow. Ảnh đã tải không bị tạo lại; timeout/thiếu ảnh đơn thuần không bị suy thành đã thất bại. Trạng thái chuyển nguồn và nguồn từng cảnh được lưu qua retry.
+- Khi cảnh Comfy có nhân vật tham chiếu, tool tải portrait từ Character ID đã lưu, cache PNG/hash trong dữ liệu job, upload sang Comfy và nối vào `TextEncodeQwenImage21` qua cổng ảnh + VAE; sampler dùng latent của encoder. Ref giữ nguyên theo job, không tái tạo để chấm điểm. Node hiện cài hỗ trợ tối đa 16 ảnh ref/cảnh. `VS_FLOW_COMFY_FALLBACK=0` tắt nhánh fallback nếu cần dùng lại đường Flow thuần.
+- Phụ đề xuất mới/xuất lại nằm trên dải 30% phía dưới khung hình (576px trên canvas 1080×1920), tránh vùng caption/nút của Shorts và Reels. Video đã xuất trước đó cần xuất lại để nhận vị trí mới.
+
 - Float liệt kê từng video và trạng thái ChatGPT. Khi tab ChatGPT bị treo, chọn **Khôi phục ChatGPT** trên video. Tool tìm lại đúng phản hồi; nếu thiếu URL thì dán URL cuộc trò chuyện. Tool không gửi lại prompt khi khôi phục.
 - Google Flow mặc định tạo **10 ảnh mỗi đợt**, mỗi prompt tạo x1. Tool gửi prompt, chờ ảnh của nhóm tạo xong, ghép theo ID cảnh rồi tải. Nếu 2K lỗi, nó đóng thông báo Flow và dùng 1K cùng ảnh. Sau một lần 2K lỗi, ảnh còn lại trong nhóm dùng 1K để tránh chờ timeout lặp lại.
 - Đổi tài khoản Flow giữa video: float video → **Đổi tài khoản Flow** → **Chuẩn bị đổi tài khoản**. Chờ ảnh được đối chiếu và giữ lại; sau đó mở sạch, đăng nhập Google, bật debug rồi chọn **Tiếp tục video này**. Tool tiếp tục chính job đó và chỉ tạo cảnh còn thiếu. Luồng này giữ dữ liệu ảnh/checkpoint cũ và giữ nguyên biên nhận Flow.

@@ -2,8 +2,7 @@
 import json, subprocess, time, math
 from pathlib import Path
 from .core import digest, PermanentError
-
-SUBTITLE_BOTTOM_MARGIN = 288
+from .captions import SUBTITLE_BOTTOM_MARGIN
 
 def render_scenes(job):
     checkpoint=job['checkpoints']['images']

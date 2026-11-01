@@ -220,6 +220,21 @@ class FlowImages:
             else:rows[-1].append(tile)
         return rows
 
+    @classmethod
+    def _confirmed_failed_tasks(cls,tasks,tiles,baseline_tile_ids):
+        if baseline_tile_ids is None:return {}
+        failed={}
+        for tile in tiles:
+            text=cls._prompt_text(tile.get('text',''))
+            if tile.get('complete') or not tile.get('tile_id') or tile['tile_id'] in set(baseline_tile_ids):continue
+            if not re.search(r'vi phạm|không thể tạo|không tạo được|generation failed|could not generate|couldn.t generate|policy violation',text,re.I):continue
+            matches=[item for item in tasks if cls._prompt_text(item['prompt']) in text]
+            if len(matches)==1:
+                task=matches[0]['task_id']
+                if task in failed:raise FlowTaskError('More than one failed card matches a scene; keep original receipts','uncertain')
+                failed[task]=tile['tile_id']
+        return failed
+
     async def _ensure_batch_row_layout(self,session,project_url,tasks,baseline,tiles):
         def expected_rows(rows):
             count=len(tasks);expected=(count+9)//10;last=count%10 or 10
@@ -837,6 +852,78 @@ class FlowImages:
             try: await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior':'default','eventsEnabled':False})
             except Exception: self.bridge.images.download_behavior_uncertain = True
 
+    def _commit_portrait(self,task_id,receipt,source,method):
+        if not source.is_file() or not 1000<source.stat().st_size<=MAX_FLOW_DOWNLOAD:raise FlowTaskError('Portrait file size invalid','uncertain')
+        output=self.root/'references'/(task_id+'.png');output.parent.mkdir(parents=True,exist_ok=True)
+        with Image.open(source) as image:
+            if min(image.size)<256 or image.width*image.height>20000000 or image.format not in ('PNG','JPEG','WEBP'):raise FlowTaskError('Invalid Character portrait dimensions/format','uncertain')
+            image.load();width,height=image.size;part=output.with_suffix('.part');image.convert('RGB').save(part,format='PNG')
+        portrait={'path':str(output.resolve()),'sha256':digest(part),'width':width,'height':height,'project_url':receipt['project_url'],'download_method':method}
+        if receipt.get('portrait') and receipt['portrait'].get('sha256')!=portrait['sha256']:raise FlowTaskError('Character reference identity changed; original receipt preserved','uncertain')
+        part.replace(output);receipt['portrait']=portrait;self._write_receipt(task_id,receipt)
+        return {'task_id':task_id,'character_id':receipt['character_id'],'file_path':portrait['path'],**portrait}
+
+    async def download_character_reference(self,task_id,job_id,character_id,timeout=45):
+        uuid.UUID(task_id);uuid.UUID(job_id);uuid.UUID(character_id)
+        async with self._flow_batch_lock:
+            receipt=self._read_receipt(task_id)
+            if not receipt or receipt.get('job_id')!=job_id or receipt.get('stage')!='character_saved' or receipt.get('character_id')!=character_id:
+                raise FlowTaskError('Reference download requires the exact saved Character receipt','uncertain')
+            saved=receipt.get('portrait')
+            if saved and Path(saved.get('path','')).is_file():
+                if Path(saved['path']).resolve()!=(self.root/'references'/(task_id+'.png')).resolve():raise FlowTaskError('Portrait cache path differs','uncertain')
+                if digest(saved['path'])!=saved.get('sha256'):raise FlowTaskError('Saved Character portrait changed','uncertain')
+                return {'task_id':task_id,'character_id':character_id,'file_path':saved['path'],**saved}
+            async with self.bridge.job_lock:
+                await self.bridge.connect();target=await self._target();session=await self._session(target)
+                project=receipt['project_url'].split('?')[0].rstrip('/')
+                if urlparse(project).scheme!='https' or urlparse(project).hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',urlparse(project).path):raise FlowTaskError('Invalid reference project URL','uncertain')
+                url=project+'/character/'+character_id
+                before=await self._snapshot(session,'')
+                if before.get('draftLength') and before.get('url','').split('?')[0].rstrip('/')!=url:raise FlowTaskError('Flow has a draft; reference navigation refused','uncertain')
+                await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
+                await self._wait_page(session,lambda s:s.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
+                await self._wait_character_complete(session,timeout=timeout)
+                folder=self.root/'downloads'/('reference-'+task_id);folder.mkdir(parents=True,exist_ok=True)
+                try:
+                    visible_image=await self._eval(session,r'''(()=>{const all=[...document.querySelectorAll('img')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&e.complete&&e.naturalWidth>=256&&e.naturalHeight>=256});const named=all.filter(e=>/nhân vật|character/i.test(e.alt||''));const selected=named.length?named:all;const urls=[...new Set(selected.map(e=>e.currentSrc||e.src))];return{src:urls.length===1?urls[0]:null,candidates:all.map(e=>({alt:e.alt,width:e.naturalWidth,height:e.naturalHeight,host:(()=>{try{return new URL(e.currentSrc||e.src).hostname}catch{return''}})(),scheme:(e.currentSrc||e.src).split(':')[0]}))}})()''')
+                    if isinstance(visible_image,dict) and isinstance(visible_image.get('src'),str):
+                        source_url=visible_image['src'];host=urlparse(source_url).hostname or ''
+                        if source_url.startswith('data:image/') and ';base64,' in source_url:
+                            import base64
+                            raw=source_url.split(';base64,',1)[1]
+                            if len(raw)>MAX_FLOW_DOWNLOAD*2:raise FlowTaskError('Portrait data image too large','uncertain')
+                            source=folder/'visible-portrait.bin';source.write_bytes(base64.b64decode(raw,validate=True))
+                            return self._commit_portrait(task_id,receipt,source,'visible_character_image_data')
+                        if source_url.startswith('blob:https://flow.google.com/') or source_url.startswith('blob:https://labs.google/') or (urlparse(source_url).scheme=='https' and host=='flow.google.com'):
+                            import base64
+                            expression='''(async()=>{const r=await fetch(SOURCE);if(!r.ok)throw Error('Image unavailable');const a=new Uint8Array(await r.arrayBuffer());if(a.length>MAXIMUM)throw Error('Reference too large');let s='';for(let i=0;i<a.length;i+=16384)s+=String.fromCharCode(...a.subarray(i,i+16384));return btoa(s)})()'''.replace('SOURCE',json.dumps(source_url)).replace('MAXIMUM',str(MAX_FLOW_DOWNLOAD))
+                            encoded=await self.bridge.cdp.command('Runtime.evaluate',{'expression':expression,'returnByValue':True,'awaitPromise':True},session=session,timeout=30)
+                            value=encoded.get('result',{}).get('value')
+                            if isinstance(value,str):
+                                source=folder/'visible-portrait.bin';source.write_bytes(base64.b64decode(value,validate=True))
+                                return self._commit_portrait(task_id,receipt,source,'visible_character_image_browser')
+                        if urlparse(source_url).scheme=='https' and (host.endswith('.googleusercontent.com') or host=='storage.googleapis.com'):
+                            import httpx
+                            async with httpx.AsyncClient(timeout=30,trust_env=False,follow_redirects=False) as client:
+                                async with client.stream('GET',source_url) as response:
+                                    if response.status_code==200 and response.headers.get('content-type','').startswith('image/'):
+                                        source=folder/'visible-portrait.bin';size=0
+                                        with source.open('wb') as stream:
+                                            async for chunk in response.aiter_bytes():
+                                                size+=len(chunk)
+                                                if size>MAX_FLOW_DOWNLOAD:raise FlowTaskError('Portrait exceeds size limit','uncertain')
+                                                stream.write(chunk)
+                                        return self._commit_portrait(task_id,receipt,source,'visible_character_image_cdn')
+                                    raise FlowTaskError('Portrait CDN returned '+str(response.status_code)+' '+response.headers.get('content-type','')+'; host='+host,'uncertain')
+                        raise FlowTaskError('Portrait source requires a supported image transfer; scheme='+urlparse(source_url).scheme+'; host='+host,'uncertain')
+                    if isinstance(visible_image,dict) and not visible_image.get('src'):
+                        summary=await self._eval(session,r'''(()=>[...document.images].map(e=>({alt:e.alt,width:e.naturalWidth,height:e.naturalHeight,display:getComputedStyle(e).display,rect:(()=>{const r=e.getBoundingClientRect();return{w:r.width,h:r.height}})(),scheme:(e.currentSrc||e.src).split(':')[0],host:(()=>{try{return new URL(e.currentSrc||e.src).hostname}catch{return''}})()})))()''')
+                        raise FlowTaskError('Character portrait source is missing or ambiguous: '+json.dumps(summary,ensure_ascii=False)[:2200],'uncertain')
+                    raise FlowTaskError('No unique loaded Character portrait is available; keep the saved entity','uncertain')
+                finally:
+                    await self._return_to_project_root(session,project,'')
+
     def _cached_result(self, task_id, receipt):
         if not receipt:
             return None
@@ -1098,6 +1185,7 @@ class FlowImages:
             if cached:return cached
             receipt,state=await self._ensure_project(task_id,job_id,prompt,target,session,receipt)
             saved_mentions=receipt.get('character_mentions')
+            receipt.setdefault('baseline_tile_ids',[tile['tile_id'] for tile in state.get('assetTiles',[]) if tile.get('tile_id')])
             if saved_mentions is None:
                 if receipt.get('stage')!='project_ready':raise FlowTaskError('Flow receipt lacks native Character identity after a non-empty stage; refusing ambiguous recovery','uncertain')
                 receipt['character_mentions']=mentions
@@ -1141,6 +1229,12 @@ class FlowImages:
                 else:configured=await self._ensure_agent_and_settings(session,composed_prompt,require_zero_credit=require_zero_credit)
                 if configured.get('draftMatches') is not True or configured.get('mentionEntityIds',[])!=entity_ids or configured.get('attachedMediaIds',[]):
                     raise FlowTaskError('Flow prompt/@Character entity set changed before Submit; no image request sent','needs_flow_check')
+                if configured.get('generateDisabled'):
+                    notice=await self._eval(session,r'''(()=>[...document.querySelectorAll('[role="alert"],.mat-mdc-snack-bar-label')].map(e=>e.innerText||'').join(' '))()''')
+                    if isinstance(notice,str) and re.search(r'requesting.*too quickly|quá nhanh|hết tín dụng|out of credits|quota|giới hạn.*yêu cầu',notice,re.I):
+                        await self._clear_verified_reused_prompt(session,receipt['project_url'],composed_prompt)
+                        receipt.update(stage='blocked',blocked_confirmed=True,blocked_before_submit=True,block_reason=notice[:300],updated_at=time.time());self._write_receipt(task_id,receipt)
+                        raise FlowTaskError('Flow explicitly blocked submission before Send','flow_blocked')
                 visible_cost=next((x for x in configured.get('creditLines',[]) if re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',x,re.I)),None)
                 cost_line=visible_cost or (batch_credit_estimate if batch_settings_verified else None)
                 contradictory_cost=False
@@ -1236,6 +1330,22 @@ class FlowImages:
             manifest={'schema_version':1,'batch_id':batch_id,'job_id':job_id,'tasks':manifest_items,'baseline_media_ids':None,'project_url':None,
                       'task_state':{},'mapping':{},'stage':'prepared','created_at':time.time(),'submission_started_at':time.time(),'updated_at':time.time()}
             self._write_batch_manifest(batch_id,manifest)
+        for item in normalized:
+            existing=self._read_receipt(item['task_id'])
+            if existing and (existing.get('job_id')!=job_id or existing.get('prompt_sha256')!=item['prompt_sha256'] or existing.get('character_mentions',[])!=item['character_mentions']):raise FlowTaskError('Flow blocked receipt identity differs','uncertain')
+        blocked=[item for item in normalized if (self._read_receipt(item['task_id']) or {}).get('blocked_confirmed') is True]
+        if blocked:
+            active=[item for item in normalized if item not in blocked]
+            if active:
+                subset=[{k:x[k] for k in ('task_id','ordinal','prompt_sha256','conditioning_sha256')} for x in active]
+                subset_signature=hashlib.sha256(json.dumps(subset,sort_keys=True,separators=(',',':')).encode('utf8')).hexdigest()
+                subset_id=str(uuid.uuid5(job_uuid,'flow-image-batch:'+subset_signature))
+                if self._read_batch_manifest(subset_id) is None:
+                    record={**manifest,'batch_id':subset_id,'tasks':subset,'task_state':{x['task_id']:(self._read_receipt(x['task_id']) or {}).get('stage','prepared') for x in active},
+                            'mapping':{k:v for k,v in manifest.get('mapping',{}).items() if k in {x['task_id'] for x in active}}}
+                    self._write_batch_manifest(subset_id,record)
+            kept=await self._generate_batch_unreserved(job_id,active,timeout,bridge_lock_held,download_results,require_zero_credit) if active else []
+            return kept+[{'task_id':item['task_id'],'status':'blocked','blocked_confirmed':True,'project_url':(self._read_receipt(item['task_id']) or {}).get('project_url')} for item in blocked]
         results={};settings_verified=False;batch_credit_estimate=None;batch_credit_verified_at=None;batch_credit_source_task_id=None
         if resumed:
             for candidate in normalized:
@@ -1267,7 +1377,16 @@ class FlowImages:
                     if manifest.get('project_url'):
                         await self.bridge.connect();slot_target=await self._target();slot_session=await self._session(slot_target)
                         await self._wait_batch_slot(slot_session,manifest,normalized,timeout)
-                    submission=await self._generate_unreserved(task_id,job_id,item['prompt'],timeout=1,character_mentions=item['character_mentions'],submit_only=True,require_zero_credit=require_zero_credit,batch_settings_verified=settings_verified,batch_credit_estimate=batch_credit_estimate,batch_credit_verified_at=batch_credit_verified_at,batch_credit_source_task_id=batch_credit_source_task_id,submit_with_enter=False,bridge_lock_held=bridge_lock_held)
+                    try:
+                        submission=await self._generate_unreserved(task_id,job_id,item['prompt'],timeout=1,character_mentions=item['character_mentions'],submit_only=True,require_zero_credit=require_zero_credit,batch_settings_verified=settings_verified,batch_credit_estimate=batch_credit_estimate,batch_credit_verified_at=batch_credit_verified_at,batch_credit_source_task_id=batch_credit_source_task_id,submit_with_enter=False,bridge_lock_held=bridge_lock_held)
+                    except FlowTaskError as error:
+                        if error.code!='flow_blocked':raise
+                        for remaining in normalized[normalized.index(item):]:
+                            old=self._read_receipt(remaining['task_id'])
+                            if old and old.get('stage') not in ('project_ready','characters_attached','blocked'):continue
+                            old=old or {'task_id':remaining['task_id'],'job_id':job_id,'prompt_sha256':remaining['prompt_sha256'],'character_mentions':remaining['character_mentions']}
+                            old.update(stage='blocked',blocked_confirmed=True,blocked_before_submit=True,updated_at=time.time());self._write_receipt(remaining['task_id'],old)
+                        return await self._generate_batch_unreserved(job_id,tasks,timeout,bridge_lock_held,download_results,require_zero_credit)
                     if not settings_verified:
                         estimate=submission.get('credit_estimate')
                         if require_zero_credit and (not estimate or not re.search(r'quá trình tạo sẽ tốn\s*0\s*tín dụng|generation will cost\s*0\s*credits',estimate,re.I)):
@@ -1280,6 +1399,7 @@ class FlowImages:
                 receipt.update({'batch_id':batch_id,'batch_ordinal':item['ordinal'],'batch_prompt_fingerprint':item['prompt_fingerprint']});self._write_receipt(task_id,receipt)
                 if manifest.get('baseline_media_ids') is None and receipt.get('baseline_media_ids') is not None:
                     manifest['baseline_media_ids']=list(receipt.get('baseline_media_ids') or [])
+                    manifest['baseline_tile_ids']=receipt.get('baseline_tile_ids')
                 project_url=receipt.get('project_url')
                 if project_url:
                     if manifest.get('project_url') and manifest['project_url'].split('?')[0].rstrip('/')!=project_url.split('?')[0].rstrip('/'):
@@ -1331,6 +1451,16 @@ class FlowImages:
                         raise FlowTaskError('Flow project contains extra new assets; refusing cohort assignment','uncertain')
                     if len(new_tiles)==len(normalized):break
                     await asyncio.sleep(.4)
+                # A failure card is usable evidence only when it exposes the full,
+                # unique prompt and belongs to this submission's new tile set.
+                failed=self._confirmed_failed_tasks(normalized,(state or {}).get('assetTiles',[]),manifest.get('baseline_tile_ids'))
+                fresh_cards=[tile for tile in (state or {}).get('assetTiles',[]) if tile.get('tile_id') and tile['tile_id'] not in set(manifest.get('baseline_tile_ids') or [])]
+                if failed and len(fresh_cards)==len(normalized) and len(new_tiles)+len(failed)==len(normalized):
+                    for item in normalized:
+                        if item['task_id'] not in failed:continue
+                        record=self._read_receipt(item['task_id']) or {}
+                        record.update(stage='blocked',blocked_confirmed=True,failed_tile_id=failed[item['task_id']],updated_at=time.time());self._write_receipt(item['task_id'],record)
+                    return await self._generate_batch_unreserved(job_id,tasks,timeout,bridge_lock_held,download_results,require_zero_credit)
                 if len(new_tiles)!=len(normalized):
                     manifest['stage']='waiting_result';manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
                     raise FlowTaskError('Flow cohort results are incomplete; no task will be resubmitted','uncertain')

@@ -542,6 +542,8 @@ async def create_app(bridge=None):
                 if type(resume) is not bool:raise web.HTTPBadRequest(text='resume_only must be boolean')
                 options={'resume_only':True} if resume else {}
                 value = {'ok':True, 'data':await bridge.flow_images.create_character(body.get('task_id'),body.get('job_id'),body.get('character_id'),body.get('name'),body.get('prompt'),**options)}
+            elif request.path == '/api/flow/characters/reference':
+                value={'ok':True,'data':await bridge.flow_images.download_character_reference(body.get('task_id'),body.get('job_id'),body.get('character_id'))}
             elif request.path == '/api/flow/images/generate':
                 value = {'ok':True, 'data':await bridge.flow_images.generate(body.get('task_id'),body.get('job_id'),body.get('prompt'),character_mentions=body.get('character_mentions'))}
             elif request.path == '/api/flow/images/generate-batch':
@@ -597,7 +599,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/flow/characters/create','/api/flow/images/generate','/api/flow/images/generate-batch','/api/flow/account/reconcile'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/flow/characters/create','/api/flow/characters/reference','/api/flow/images/generate','/api/flow/images/generate-batch','/api/flow/account/reconcile'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

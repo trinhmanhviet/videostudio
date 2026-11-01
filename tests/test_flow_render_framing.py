@@ -33,8 +33,8 @@ class FlowRenderFramingTests(unittest.TestCase):
             media.visual_track([scene],root/'visual-track.mp4',lambda:None)
             self.assertLess(frame_red(),3)
 
-    def test_subtitle_style_places_text_fifteen_percent_above_bottom(self):
+    def test_subtitle_style_places_text_thirty_percent_above_bottom(self):
         with tempfile.TemporaryDirectory() as folder:
             result=write_captions([{'narration':'Một câu phụ đề.','start':0,'end':2}],Path(folder)/'subtitles.srt')
-            self.assertEqual(result['safe_margins_pixels']['bottom'],288)
-            self.assertIn(',90,90,288,1',Path(result['ass_path']).read_text(encoding='utf8'))
+            self.assertEqual(result['safe_margins_pixels']['bottom'],576)
+            self.assertIn(',90,90,576,1',Path(result['ass_path']).read_text(encoding='utf8'))
