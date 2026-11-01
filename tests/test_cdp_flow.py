@@ -820,7 +820,7 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
 
             flow._click_named=AsyncMock();flow._wait_page=AsyncMock(side_effect=[form,detail,detail]);flow._wait_character_complete=AsyncMock(return_value=True)
 
-            flow._eval=AsyncMock(side_effect=[{'x':10,'y':10,'text':''},{'prompt':prompt,'models':1,'generate':[{'disabled':False,'rect':{'x':5,'y':5}}],'credits':[]},fields,named,True])
+            flow._eval=AsyncMock(side_effect=[{'x':10,'y':10,'text':''},{'prompt':prompt,'models':1,'generate':[{'disabled':False,'rect':{'x':5,'y':5}}],'credits':[]},fields,True,[{'value':name},{'value':name}],True])
 
             flow._click_point=AsyncMock();flow._return_to_project_root=AsyncMock()
 
@@ -832,7 +832,7 @@ class FlowSafetyTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(flow._read_receipt(task_id)['credit_estimate'],None)
 
-            self.assertEqual(flow._click_point.await_count,4)
+            self.assertEqual(flow._click_point.await_count,3)
 
 
 

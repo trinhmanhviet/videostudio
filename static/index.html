@@ -212,6 +212,8 @@ let resettingJob=null;
 function openResetImagesModal(j){
   resettingJob=j;
   const modal=$('#resetImagesModal');
+  const explanation=modal.querySelector('p.muted');
+  if(explanation)explanation.textContent='Giữ nguyên kịch bản, lời đọc, nhạc và phụ đề đã có checkpoint hợp lệ. Chỉ tạo lại bộ ảnh rồi dựng/xuất video; không cần tạo job mới.';
   const providerSelect=$('#resetImageProvider');
   const batchSelect=$('#resetFlowBatchSize');
   const currentProvider=j.request?.image_provider||'flow';

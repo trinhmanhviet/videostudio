@@ -44,7 +44,7 @@ test('read-only recovery can read an exact completed turn after earlier auth or 
     await w.send({kind:'uncertain',id:'same',attempt:1,reason,send_attempted:true},w.chat(w.created[0].id));
     w.seen({visibleUser:'YÊU CẦU STUDIO same\n[collapsed]',visibleReply:'completed answer'});
     assert.equal((await w.send({kind:'reconcile',scope:a,inspect_only:true})).status,'reply',reason);
-    const slot=(await w.send({kind:'snapshot'})).sessions[0];assert.equal(slot.job.text,'completed answer');assert.equal(slot.job.reason,reason);
+    const slot=(await w.send({kind:'snapshot'})).sessions[0];assert.equal(slot.job.text,'completed answer');assert.equal(slot.job.reason,null);
     assert.equal(slot.job.attempt,1);assert.equal(w.created.length,1);
   }
 });

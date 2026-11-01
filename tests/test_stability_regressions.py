@@ -74,6 +74,24 @@ class CharacterRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ResetSafetyTests(unittest.TestCase):
+    def test_image_reset_keeps_attested_speech_music_and_subtitles(self):
+        from videostudio.media import asset
+        with tempfile.TemporaryDirectory() as folder:
+            store=Store(Path(folder)/'db',Path(folder)/'videos')
+            job,_=store.create({'idea':'test','voice_id':'test','duration_seconds':8},'job')
+            keep={}
+            for stage,name in [('speech','speech.wav'),('music','music.wav'),('subtitles','subtitles.srt')]:
+                path=Path(job['output'])/name;path.write_bytes(stage.encode())
+                keep[stage]={'path':str(path),'assets':[asset(path)]}
+            with store.db() as c:
+                for stage,value in {'script':{},'images':{},**keep}.items():c.execute('INSERT INTO checkpoints VALUES(?,?,?)',(job['id'],stage,json.dumps(value)))
+                c.execute("UPDATE jobs SET state='failed' WHERE id=?",(job['id'],))
+            result=store.reset_stage_images(job['id'],image_provider='comfy')
+            self.assertEqual(result['id'],job['id'])
+            for stage,checkpoint in keep.items():
+                self.assertEqual(result['checkpoints'][stage],checkpoint)
+                self.assertEqual(Path(checkpoint['path']).read_bytes(),stage.encode())
+
     def test_reset_restores_files_and_checkpoints_if_transaction_fails(self):
         with tempfile.TemporaryDirectory() as folder:
             store=Store(Path(folder)/'db',Path(folder)/'videos')

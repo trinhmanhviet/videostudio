@@ -394,17 +394,23 @@ class Store:
                 reject_retired_job(c,job_id)
                 if image_tasks_active(c,[job_id]) or self.flow_workers_blocked(c):raise ValueError('Hãy chờ tác vụ ảnh hoặc đổi tài khoản Flow hoàn tất trước khi reset')
                 OutputRemoval(self,c,[j])  # Validate paths and references held by other exports before touching files.
+                for kept_stage in ('speech','music','subtitles'):
+                    row=c.execute('SELECT value FROM checkpoints WHERE job=? AND stage=?',(job_id,kept_stage)).fetchone()
+                    if row:
+                        for saved_asset in json.loads(row['value']).get('assets',[]):
+                            path=Path(saved_asset['path'])
+                            if not path.is_file() or digest(path)!=saved_asset['sha256']:raise ValueError('Không thể dùng lại '+kept_stage+': tệp không còn khớp checkpoint')
                 out=Path(current['output']);backup=out/'.reset-backup'/uuid.uuid4().hex
                 files=set()
                 for pattern in ('images-*.png','images-*.checkpoint.json','images-*.part*'):
                     files.update(out.glob(pattern))
-                files.update(out/name for name in ('flow-character-references.json','flow-character-references','video.mp4','subtitles.srt','music.wav','images.json','render.json','verify.json'))
+                files.update(out/name for name in ('flow-character-references.json','flow-character-references','video.mp4','images.json','render.json','verify.json'))
                 for source in sorted(files):
                     if not source.exists():continue
                     backup.mkdir(parents=True,exist_ok=True)
                     destination=backup/source.name;source.rename(destination);moves.append((source,destination))
-                c.execute("DELETE FROM checkpoints WHERE job=? AND stage IN ('images','subtitles','music','render','verify')", (job_id,))
-                c.execute("DELETE FROM attempts WHERE job=? AND stage IN ('images','subtitles','music','render','verify')", (job_id,))
+                c.execute("DELETE FROM checkpoints WHERE job=? AND stage IN ('images','render','verify')", (job_id,))
+                c.execute("DELETE FROM attempts WHERE job=? AND stage IN ('images','render','verify')", (job_id,))
                 req = dict(j['request']);req['image_provider']=provider;req['flow_batch_size']=batch_size
                 c.execute("UPDATE jobs SET request=?, state='queued', stage='images', cancel=0, error=NULL, next_at=0, updated=? WHERE id=?",
                           (json.dumps(req, ensure_ascii=False), time.time(), job_id))

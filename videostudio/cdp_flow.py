@@ -992,34 +992,7 @@ class FlowImages:
             try:uuid.UUID(entity_id)
             except (ValueError,TypeError,AttributeError) as error:raise FlowTaskError('Flow Character route lacks a UUID entity ID; manual reconciliation required','uncertain') from error
             receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name,'prompt_sha256':prompt_sha,'project_url':project_url,'character_id':entity_id,'target_id':target,'character_create_stage':'saving','updated_at':time.time()});self._write_receipt(task_id,receipt)
-            # Wait for character portrait generation to complete
-            await self._wait_character_complete(session, timeout=timeout)
-            await asyncio.sleep(0.5)
-            fields=await self._eval(session,r'''(()=>[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0}).map(x=>({value:x.value,rect:(()=>{const r=x.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()})))()''')
-            if not isinstance(fields,list) or len(fields)<2:raise FlowTaskError('Flow Character name field is not visible; manual reconciliation required','uncertain')
-            if fields[1].get('value')!=name:
-                point=fields[1].get('rect')
-                await self._click_point(session,point)
-                for event in ({'type':'keyDown','key':'a','code':'KeyA','windowsVirtualKeyCode':65,'nativeVirtualKeyCode':65,'modifiers':2},{'type':'keyUp','key':'a','code':'KeyA','windowsVirtualKeyCode':65,'nativeVirtualKeyCode':65,'modifiers':2}):await self.bridge.cdp.command('Input.dispatchKeyEvent',event,session=session)
-                await self.bridge.cdp.command('Input.insertText',{'text':name},session=session)
-                for event in ('keyDown','keyUp'):await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':event,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
-            named=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0});const done=[...document.querySelectorAll('button')].filter(b=>(b.innerText||'').trim().normalize('NFC')==='Xong'.normalize('NFC')&&(()=>{const r=b.getBoundingClientRect();return r.width>0&&r.height>0})());return{values:f.map(x=>x.value),done:done.length,disabled:done.map(b=>b.disabled),point:done.length===1?(()=>{const r=done[0].getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})():null}})()''')
-            if not isinstance(named,dict) or len(named.get('values',[]))<2 or named['values'][1]!=name or named.get('done')!=1 or named.get('disabled')!=[False]:raise FlowTaskError('Flow Character name/save control could not be verified; manual reconciliation required','uncertain')
-            await self._click_point(session,named['point'])
-            # Read back the persisted entity, not the draft field left on screen.
-            await self.bridge.cdp.command('Page.navigate',{'url':project_url+'/character/'+entity_id},session=session)
-            await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.rstrip('/')==project_path+'/character/'+entity_id,timeout=30,prompt='')
-            deadline=time.monotonic()+10.0;verified=False
-            while time.monotonic()<deadline:
-                res=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0});return f.length>=2&&f[1].value===NAME})()'''.replace('NAME',json.dumps(name)))
-                if res is True:
-                    verified=True
-                    break
-                await asyncio.sleep(0.5)
-            if not verified:raise FlowTaskError('Flow did not retain the registered Character name; manual reconciliation required','uncertain')
-            receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
-            await self._return_to_project_root(session,project_url,prompt)
-            return {'task_id':task_id,'character_id':entity_id,'name':name,'project_url':project_url}
+            return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout,navigate=False)
 
     async def _recover_submitted_character(self,session,target,task_id,receipt,name,prompt,timeout):
         project=receipt.get('project_url','').split('?')[0].rstrip('/')
@@ -1036,30 +1009,49 @@ class FlowImages:
         receipt.update(character_id=entity,character_create_stage='saving',updated_at=time.time());self._write_receipt(task_id,receipt)
         return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout)
 
-    async def _resume_character_save(self,session,task_id,receipt,name,prompt,timeout):
+    async def _resume_character_save(self,session,task_id,receipt,name,prompt,timeout,*,navigate=True):
         """Finish the same known entity; never generate another portrait."""
         project=receipt['project_url'].split('?')[0].rstrip('/')
         entity=str(uuid.UUID(receipt['character_id']))
         if urlparse(project).scheme!='https' or urlparse(project).hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',urlparse(project).path):
             raise FlowTaskError('Invalid saved Flow Character project','uncertain')
         url=project+'/character/'+entity
-        await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
-        await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
+        if navigate:
+            await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
+            await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
         await self._wait_character_complete(session,timeout=timeout)
-        fields=await self._eval(session,r'''(()=>[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>{const r=e.getBoundingClientRect();return{value:e.value,x:r.x+r.width/2,y:r.y+r.height/2}}))()''')
-        if not isinstance(fields,list) or len(fields)<2:raise FlowTaskError('Cannot read the saved Character name yet; retry this same Character','uncertain')
-        if fields[1].get('value')!=name:
-            await self._click_point(session,fields[1])
+        fields_expr=r'''/* VS_CHARACTER_FIELDS */(()=>[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>{const r=e.getBoundingClientRect();return{value:e.value,hint:[e.type,e.name,e.placeholder,e.getAttribute('aria-label')].filter(Boolean).join(' '),x:r.x+r.width/2,y:r.y+r.height/2}}))()'''
+        for attempt in range(3):
+            deadline=time.monotonic()+12;field=None
+            while time.monotonic()<deadline:
+                fields=await self._eval(session,fields_expr)
+                if isinstance(fields,list):
+                    named=[f for f in fields if re.search(r'character.?name|tên.?nhân.?vật',f.get('hint',''),re.I) and not re.search(r'search|tìm.?kiếm',f.get('hint',''),re.I)]
+                    field=named[0] if len(named)==1 else (fields[1] if len(fields)>=2 else (fields[0] if len(fields)==1 and not re.search(r'search|tìm.?kiếm',fields[0].get('hint',''),re.I) else None))
+                if field:break
+                await asyncio.sleep(.2)
+            if not field:raise FlowTaskError('Cannot read the saved Character name yet; retry this same Character','uncertain')
+            if field.get('value')==name:
+                verified=await self._eval(session,r'''/* VS_CHARACTER_PERSISTED */(()=>{const f=[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});return f.some(e=>e.value===NAME)})()'''.replace('NAME',json.dumps(name)))
+                if verified is not True:raise FlowTaskError('Flow Character name is not persisted; retry this same Character','uncertain')
+                receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
+                await self._return_to_project_root(session,project,prompt)
+                return {'task_id':task_id,'character_id':entity,'name':name,'project_url':project}
+            if attempt==2:break
+            await self._click_point(session,field.get('rect') or field)
             for kind in ('keyDown','keyUp'):await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':'a','code':'KeyA','windowsVirtualKeyCode':65,'modifiers':2},session=session)
             await self.bridge.cdp.command('Input.insertText',{'text':name},session=session)
             await self._click_named(session,'Xong',exact=True,native_only=True)
+            # Let Flow commit and close its editor before navigating. Immediate
+            # navigation can abort an in-flight save while the local field looks right.
+            deadline=time.monotonic()+12
+            while time.monotonic()<deadline:
+                settled=await self._eval(session,r'''/* VS_CHARACTER_SAVE_SETTLED */(()=>{const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0};return ![...document.querySelectorAll('button')].some(b=>visible(b)&&(b.innerText||'').trim().normalize('NFC')==='Xong')&&![...document.querySelectorAll('[role="progressbar"],mat-spinner')].some(visible)})()''')
+                if settled is True:break
+                await asyncio.sleep(.2)
             await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
             await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
-        verified=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});return f.length>=2&&f[1].value===NAME})()'''.replace('NAME',json.dumps(name)))
-        if verified is not True:raise FlowTaskError('Flow Character name is not persisted; retry this same Character','uncertain')
-        receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
-        await self._return_to_project_root(session,project,prompt)
-        return {'task_id':task_id,'character_id':entity,'name':name,'project_url':project}
+        raise FlowTaskError('Flow Character name was not retained after two save attempts; receipt preserved for retry','uncertain')
 
     @asynccontextmanager
     async def _maybe_job_lock(self,held=False):

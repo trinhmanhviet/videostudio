@@ -165,8 +165,11 @@ async function reconcile(state,slot,inspectOnly=false){
   const unsentMode=slot.job.phase==='uncertain'&&modeReason(slot.job.reason)&&slot.job.send_attempted!==true;
   if(!inspectOnly&&(/login|auth|challenge|verify|captcha|immutable request marker|unsupported/i.test(slot.job.reason??'')||
     (!unsentMode&&/mode unknown|mode not confirmed/i.test(slot.job.reason??''))))return 'human-or-invalid';
-  const data=await receipt(slot);
-  if(data.accepted){slot.job.phase='reply';slot.job.text=data.response_text??slot.job.text??'';await put(state);return 'receipt';}
+  let data;
+  try{data=await receipt(slot);}catch(error){if(!inspectOnly)throw error;}
+  // Read-only inspection may recover a correlated reply while Studio's receipt
+  // endpoint is temporarily unavailable. Server acceptance still happens on import.
+  if(data?.accepted){slot.job.phase='reply';slot.job.text=data.response_text??slot.job.text??'';slot.job.reason=null;await put(state);return 'receipt';}
   let seen=await inspect(slot.job.chatTab,slot.job.id,slot.job.prompt);
   const currentUrl=conversationUrl(seen.conversationUrl);
   if(currentUrl&&receiptMatches(seen.visibleUser,slot.job.id,slot.job.prompt)&&!slot.job.conversation_url){slot.job.conversation_url=currentUrl;await put(state);}
@@ -176,12 +179,12 @@ async function reconcile(state,slot,inspectOnly=false){
   }
   if(seen.blocked)return 'human-or-invalid';
   const matched=receiptMatches(seen.visibleUser,slot.job.id,slot.job.prompt);
-  if(matched&&seen.visibleReply){slot.job.phase='reply';slot.job.text=seen.visibleReply;await put(state);return 'reply';}
+  if(matched&&seen.visibleReply){slot.job.phase='reply';slot.job.text=seen.visibleReply;slot.job.reason=null;await put(state);return 'reply';}
   if(seen.visibleUser!==null&&!matched)return 'foreign-turn';
-  if(matched&&Date.now()-(slot.job.startedAt??Date.now())<360000)return 'pending';
+  if(matched)return 'pending';
   if(slot.job.phase==='dispatching'&&Date.now()-(slot.job.startedAt??Date.now())<30000)return 'pending';
   if(inspectOnly)return 'unresolved';
-  if(seen.unavailable&&slot.job.send_attempted===true)return 'awaiting-replacement';
+  if(slot.job.send_attempted===true)return 'awaiting-replacement';
   if(slot.job.attempt>=2)return 'exhausted';
   const priorTab=slot.job.chatTab;
   const tab=await chrome.tabs.create({url:'https://chatgpt.com/',active:false});

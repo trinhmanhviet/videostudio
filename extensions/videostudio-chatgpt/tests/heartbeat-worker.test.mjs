@@ -102,8 +102,16 @@ test('a forbidden or offline receipt cannot block another slot or bridge heartbe
     });
     w.seen(()=>({visibleUser:'YÊU CẦU STUDIO same\nhello',visibleReply:'child survives'}));
     await w.fire();assert.equal(w.requests.filter(r=>r.method==='POST').length,1);assert.equal(w.values.videostudio_bridge_v2.sessions[1].job.text,'child survives');
-    assert.equal(w.values.videostudio_bridge_v2.sessions[0].job.reason,'HTTP 403');assert.equal(w.messages.length,1);assert.equal(w.messages[0].tab,21);
+    assert.equal(w.values.videostudio_bridge_v2.sessions[0].job.phase,'reply');assert.equal(w.messages.length,2);
   }
+});
+
+test('long responses with a matching user turn never cause another Send after six minutes',async()=>{
+  const w=worker(pendingBridge());await w.flush();
+  w.seen(()=>({visibleUser:'YÊU CẦU STUDIO same\nhello',visibleReply:null}));
+  const reply=await w.send({kind:'reconcile',scope:root});
+  assert.equal(reply.ok,true);assert.equal(reply.status,'pending');
+  assert.equal(w.values.videostudio_bridge_v2.sessions[0].job.attempt,1);
 });
 
 test('automatic inspection skips cancelled and inactive slots and never runs after Stop',async()=>{
