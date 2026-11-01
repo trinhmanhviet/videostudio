@@ -6,7 +6,7 @@
 
 Trên máy hiện tại có thể bấm đúp **VideoStudio.exe** trong thư mục dự án. Cửa sổ Windows hiển thị trạng thái Studio/Flow/ComfyUI, có nút **Mở hệ thống**, **Khởi động lại**, **Dừng hệ thống** và **Vào Studio**. Giao diện tạo video mở trong Chrome thường để dùng extension bridge. Đóng launcher không dừng video; các nút dừng/restart vẫn kiểm tra job đang chạy.
 
-`VideoStudio.exe` là launcher, cần đặt cùng thư mục source (bên cạnh `scripts/`). Nó dùng lại Python, Chrome, ComfyUI và model đã cài; không chứa các runtime/model lớn. File exe được build tại máy và không đưa vào Git. Để build lại sau khi clone/cập nhật source:
+`VideoStudio.exe` là launcher, cần đặt cùng thư mục source (bên cạnh `scripts/`). Nó dùng lại Python, Chrome, ComfyUI và model đã cài; không chứa các runtime/model lớn. Repo có sẵn file exe để dùng sau khi clone. Để build lại sau khi cập nhật source launcher:
 
 ```powershell
 python -m pip install pyinstaller
@@ -119,6 +119,8 @@ Các điểm vào chính: API/exchange tại `videostudio/api.py` và `videostud
 | Render, phụ đề, probe media | `videostudio/media.py` |
 
 README mô tả luồng hiện hành; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
+
+Repo cũng giữ các tài liệu handoff, log thử nghiệm trong `docs/` và script chẩn đoán/cứu job trong `scripts/` để tham khảo lịch sử. Những script này có thể gắn với job ID, đường dẫn hoặc cổng Chrome của một lần xử lý cụ thể; không thuộc quy trình khởi động thông thường. Hướng dẫn vận hành hiện tại nằm trong README này.
 
 ## File và cài đặt local
 

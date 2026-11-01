@@ -1,0 +1,11 @@
+# Recovering video 67b0c73c after a partial Flow cohort
+
+The original video remains `67b0c73c-4008-4083-954d-5a9e9dc8d851`. It has 347 scenes. Before recovery, 200 scene PNGs existed and were recorded with hashes in `data/recovery-67b0c73c/before.json`.
+
+The original diagnosis that all ten cohort-21 images existed was incorrect. An exhaustive, single traversal of the virtualized grid found 204 distinct media: all 200 known older media and only four new media. Their saved full prompts were verified through the native Reuse control and mapped to zero-based ordinals 200–203. Those four were downloaded without regeneration. Six requested images at ordinals 204–209 were absent.
+
+While recovering the first missing image, Flow required authentication. The owner requested a pause to change Google account; the submitter stopped and its unresolved receipt was preserved. After the owner's explicit instruction to continue on the new account, a separate Flow run `70c474e1-09b6-564c-936e-5cbf8f646b59` created project `cfee57ae-9499-4f34-a631-979268a188c3`. All six missing scenes were generated and downloaded at 1K with separate, auditable recovery task IDs. Original task receipts link to these results; the original pending recovery receipt from the old account was not repurposed.
+
+Cohort 21 is complete with ten unique task/media mappings. The main job's active Flow project was rotated to the new project, retaining the old registry in `data/recovery-67b0c73c/project-before-account-switch.json`. Previously downloaded results remain usable without navigating to the old account's project. The same video job was resumed through its existing retry API with `cancel=0`; no new video job was created. All original 200 hashes still matched after resumption.
+
+Changes to Flow processing: account for known offscreen media in the baseline; reveal exact media IDs when virtualized; read missing info-panel prompts through native Reuse and restore only the verified tool-owned draft; limit submissions to three outstanding image requests; avoid repeated full-grid scrolling while waiting for a fresh cohort. All ten prompts are still completed before cohort downloads. Live recovery verified the existing four and newly generated six; this does not establish completion of the remaining video.
