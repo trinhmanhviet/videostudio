@@ -107,7 +107,7 @@ class NaturalDurationTests(unittest.TestCase):
             with patch('videostudio.providers.probe', return_value={'format': {'duration': '35'}}), patch('videostudio.providers.run', return_value=b''), patch('videostudio.music.normalize_music_levels', return_value={'path': 'music.wav', 'audio_quality': {}, 'raw_audio_quality': {}, 'assets': []}):
                 pipeline.music(job, lambda: None)
             self.assertEqual(pipeline.comfy_asset.call_args.args[2]['5']['inputs']['seconds'], 35)
-            with patch('videostudio.visual_quality.require_release', return_value={}), patch('videostudio.providers.render', return_value={}) as renderer:
+            with patch('videostudio.visual_quality.require_release', return_value={}), patch('videostudio.providers.render', return_value={'video':str(Path(tmp)/'video.mp4'),'assets':[]}) as renderer:
                 pipeline.render(job, lambda: None)
             self.assertEqual(renderer.call_args.args[5], 35)
             with patch('videostudio.visual_quality.require_release', return_value={}), patch('videostudio.providers.verify', return_value={}) as verifier, patch('videostudio.providers.run', return_value=b''), patch('videostudio.media.audio_report', return_value={}):

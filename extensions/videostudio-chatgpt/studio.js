@@ -24,10 +24,27 @@
     <p id="status" role="status" aria-live="polite">Chưa kết nối.</p>
     <div class="actions"><button id="start">Start</button><button id="smoke">Test chữ</button><button id="stop" class="secondary">Stop</button></div>
     <p class="hint">Video xử lý lần lượt. Thu gọn vẫn giữ kết nối. Giữ tab Studio này mở.</p>
-    <details data-browser-profile><summary>Chrome riêng · Google Flow</summary>
-      <p id="browser-state" role="status" aria-live="polite">Đang kiểm tra Chrome riêng…</p>
-      <div class="actions"><button id="browser-clean" class="secondary">Mở sạch</button><button id="browser-debug">Mở debug</button><button id="browser-stop" class="secondary">Tắt Chrome riêng</button><button id="browser-refresh" class="secondary">Kiểm tra Chrome</button></div>
-      <p class="hint">Mở sạch để đăng nhập Google; mở debug để tạo ảnh. Cùng một profile, giữ tài khoản và dữ liệu. Đổi chế độ sẽ đóng cửa sổ Chrome riêng hiện tại.</p><p id="browser-error" class="error" role="alert" hidden></p>
+    <details id="control-panel" data-control-panel data-browser-profile><summary>⚙️ Bảng điều khiển (Hệ thống &amp; Chrome)</summary>
+      <div style="margin-top:10px;padding-top:6px;border-top:1px solid #49644c">
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong style="font-size:12px;color:#c3ed91">🖥️ HỆ THỐNG VIDEOSTUDIO</strong>
+            <span id="system-badge" class="hint" style="color:#a9d890">Đang chạy</span>
+          </div>
+          <p id="system-state" role="status" aria-live="polite" style="margin:4px 0 6px">Server: Đang kết nối (Port 8877)</p>
+          <div class="actions">
+            <button id="system-restart" class="secondary">🔄 Khởi động lại Server</button>
+            <button id="system-stop" class="secondary" style="border-color:#ff8e85;color:#ffb7a8">⏹️ Tắt Server</button>
+          </div>
+          <p id="system-error" class="error" role="alert" hidden></p>
+        </div>
+        <div style="border-top:1px solid #49644c;padding-top:10px">
+          <strong style="font-size:12px;color:#c3ed91">🌐 CHROME RIÊNG (FLOW / CDP)</strong>
+          <p id="browser-state" role="status" aria-live="polite" style="margin:4px 0 6px">Đang kiểm tra Chrome riêng…</p>
+          <div class="actions"><button id="browser-clean" class="secondary">Mở sạch</button><button id="browser-debug">Mở debug</button><button id="browser-stop" class="secondary">Tắt Chrome riêng</button><button id="browser-refresh" class="secondary">Kiểm tra Chrome</button></div>
+          <p class="hint">Mở sạch để đăng nhập Google; mở debug để tạo ảnh. Cùng một profile, giữ tài khoản và dữ liệu. Đổi chế độ sẽ đóng cửa sổ Chrome riêng hiện tại.</p><p id="browser-error" class="error" role="alert" hidden></p>
+        </div>
+      </div>
     </details>
     <div id="sessions" role="list" aria-label="Video sessions"></div><p id="empty" class="hint">Chưa có video trong kết nối này.</p>
     </div><div id="dismiss-dialog" role="dialog" aria-modal="true" aria-labelledby="dismiss-title" aria-describedby="dismiss-video dismiss-warning" tabindex="-1" hidden>
@@ -46,6 +63,7 @@
   const intervals=[],listeners=[],cards=new Map(),errors=new Map(),working=new Set(),cancelledLocal=new Set(),reportedDiagnostics=new Set(),autoChecked=new Map(),autoResumed=new Set();
   const recoveries=new Map(),flowAccounts=new Map();
   let browserProfile=null,browserBusy=false,browserReading=false,browserError='';
+  let systemBusy=false,systemError='';
   const terminal=item=>['failed','completed','cancelled','canceled'].includes(item?.state);
   const cancelled=item=>item?.cancel_requested||['cancelled','canceled'].includes(item?.state);
   const stateLabels={queued:'Đang xếp hàng',running:'Đang xử lý',awaiting_flow_account:'Chờ đổi tài khoản Flow',retrying:'Đang chờ thử lại',failed:'Lỗi',completed:'Hoàn tất',cancelled:'Đã hủy',canceled:'Đã hủy'};
@@ -64,6 +82,7 @@
   }
   function render(){
     renderBrowser();
+    renderSystem();
     if(dismissal&&!dismissal.pending&&!sessions.some(item=>item.scope===dismissal.scope&&item.job_id===dismissal.job_id))dismissal=null;
     $('#manager-content').hidden=!!dismissal;$('#dismiss-dialog').hidden=!dismissal;
     if(dismissal){
@@ -169,6 +188,48 @@
     for(const id of ['clean','debug','stop'])$('#browser-'+id).disabled=retired||browserBusy||handoffPending||!state||state.can_change!==true||state.busy===true||(id==='stop'&&state.running===false);
     $('#browser-refresh').disabled=retired||browserBusy||browserReading;
     $('#browser-error').textContent=browserError;$('#browser-error').hidden=!browserError;
+  }
+  function renderSystem(){
+    $('#system-stop').disabled=retired||systemBusy;
+    $('#system-restart').disabled=retired||systemBusy;
+    $('#system-error').textContent=systemError;$('#system-error').hidden=!systemError;
+  }
+  async function stopSystem(force=false){
+    if(retired||systemBusy)return;
+    const msg=force?'CẢNH BÁO: Đang có video chạy! Bạn có chắc muốn BUỘC TẮT toàn bộ hệ thống VideoStudio không?':'Bạn có chắc muốn TẮT toàn bộ hệ thống VideoStudio (Server & Chrome riêng) không?';
+    if(!confirm(msg))return;
+    systemBusy=true;systemError='';renderSystem();
+    try{
+      const res=await api('/api/system/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force})});
+      $('#system-state').textContent=res.message||'VideoStudio đang tắt...';
+      $('#system-badge').textContent='Đã tắt';$('#system-badge').style.color='#ffb7a8';
+    }catch(err){
+      if(err.message&&err.message.includes('tác vụ đang chạy')){
+        if(confirm(err.message+'\n\nBạn có muốn BUỘC TẮT ngay không?')){
+          systemBusy=false;return stopSystem(true);
+        }
+      }
+      systemError=err.message;
+    }finally{systemBusy=false;renderSystem();}
+  }
+  async function restartSystem(force=false){
+    if(retired||systemBusy)return;
+    const msg=force?'CẢNH BÁO: Đang có video chạy! Bạn có chắc muốn BUỘC KHỞI ĐỘNG LẠI toàn bộ hệ thống không?':'Bạn có chắc muốn KHỞI ĐỘNG LẠI toàn bộ hệ thống VideoStudio không?';
+    if(!confirm(msg))return;
+    systemBusy=true;systemError='';renderSystem();
+    try{
+      const res=await api('/api/system/restart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force})});
+      $('#system-state').textContent=(res.message||'VideoStudio đang khởi động lại...')+' Đang nạp lại trang sau 3 giây...';
+      $('#system-badge').textContent='Đang khởi động lại';$('#system-badge').style.color='#f8e580';
+      setTimeout(()=>{location.reload();},3500);
+    }catch(err){
+      if(err.message&&err.message.includes('tác vụ đang chạy')){
+        if(confirm(err.message+'\n\nBạn có muốn BUỘC KHỞI ĐỘNG LẠI ngay không?')){
+          systemBusy=false;return restartSystem(true);
+        }
+      }
+      systemError=err.message;
+    }finally{systemBusy=false;renderSystem();}
   }
   async function refreshBrowser(){
     if(retired||browserBusy||browserReading)return;browserReading=true;
@@ -464,6 +525,16 @@
   chrome.runtime.onMessage.addListener(onReply);
   for(const mode of ['clean','debug','stop'])listen($('#browser-'+mode),'click',event=>{if(event.isTrusted)void controlBrowser(mode);});
   listen($('#browser-refresh'),'click',event=>{if(event.isTrusted)void refreshBrowser();});
+  listen($('#system-stop'),'click',event=>{if(event.isTrusted)void stopSystem();});
+  listen($('#system-restart'),'click',event=>{if(event.isTrusted)void restartSystem();});
+  const controlDetails=$('#control-panel');
+  try{
+    const savedControlOpen=localStorage.getItem('videostudio_control_panel_open');
+    if(savedControlOpen!==null)controlDetails.open=savedControlOpen==='true';
+  }catch{}
+  listen(controlDetails,'toggle',()=>{
+    try{localStorage.setItem('videostudio_control_panel_open',String(controlDetails.open));}catch{}
+  });
   const createForm=document.querySelector('#create');
   if(createForm){
     const guard=event=>{

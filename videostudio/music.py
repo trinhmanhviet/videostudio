@@ -40,3 +40,51 @@ def extend_music(source,target,output,check,ffmpeg='ffmpeg',ffprobe='ffprobe'):
     actual=float(probe(output,ffprobe)['format']['duration'])
     if abs(actual-target)>.1:raise PermanentError('Music extension does not cover target duration')
     return {'path':str(output),'duration_seconds':actual,'repeats':repeats,'crossfade_seconds':fade if repeats>1 else 0,'assets':[asset(output)]}
+
+def assemble_scene_soundtracks(clips, target_seconds, output, check, ffmpeg='ffmpeg', ffprobe='ffprobe'):
+    """Assemble per-scene music clips with smooth crossfades into one continuous soundtrack covering target_seconds."""
+    if not clips:
+        raise PermanentError('No scene music clips to assemble')
+    target_seconds = float(target_seconds)
+    if not math.isfinite(target_seconds) or target_seconds<=0:raise PermanentError('Invalid soundtrack target duration')
+    output = Path(output)
+    if len(clips) == 1:
+        return extend_music(clips[0]['path'], target_seconds, output, check, ffmpeg, ffprobe)
+
+    durs = []
+    for c in clips:
+        d = float(probe(c['path'], ffprobe)['format']['duration'])
+        if not math.isfinite(d) or d<=0:raise PermanentError('Invalid scene music duration')
+        durs.append(d)
+    timings=[float(c.get('duration',target_seconds/len(clips))) for c in clips]
+    if any(not math.isfinite(d) or d<=0 for d in timings):raise PermanentError('Invalid scene timeline duration')
+    # Preserve the measured timeline. Legacy clips without timings share it evenly.
+    total=sum(timings)
+    timings=[d*target_seconds/total for d in timings]
+    fade = min(1.5, min(durs)*0.15, min(timings)*0.5)
+    inputs = []
+    for c in clips:
+        inputs.extend(['-stream_loop','-1','-i', str(Path(c['path']).resolve())])
+
+    chain = ''
+    for i,duration in enumerate(timings):
+        length=duration+(fade if i<len(clips)-1 else 0)
+        chain+=f'[{i}:a]aresample=48000,atrim=duration={length:.6f},asetpts=PTS-STARTPTS[clip{i}];'
+    left = 'clip0'
+    for i in range(1, len(clips)):
+        out_label = f'fade{i}' if i < len(clips) - 1 else 'merged'
+        chain += f'[{left}][clip{i}]acrossfade=d={fade:.6f}:c1=tri:c2=tri[{out_label}];'
+        left = out_label
+
+    chain += f'[{left}]atrim=duration={target_seconds:.6f},asetpts=PTS-STARTPTS[out]'
+    run([ffmpeg, '-v', 'error', '-y', *inputs, '-filter_complex', chain, '-map', '[out]', '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', str(output)], check)
+    actual = float(probe(output, ffprobe)['format']['duration'])
+    if abs(actual - target_seconds) > 0.3:
+        raise PermanentError(f'Assembled soundtrack {actual:.2f}s does not cover target {target_seconds:.2f}s')
+    return {
+        'path': str(output),
+        'duration_seconds': actual,
+        'scene_tracks': len(clips),
+        'crossfade_seconds': fade,
+        'assets': [asset(output)]
+    }

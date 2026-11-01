@@ -22,9 +22,9 @@ class DurableTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.s.create(dict(REQUEST,idea='Different'),'key')
     def test_flow_batch_size_validation_and_legacy_idempotency(self):
         self.assertEqual(validate_request(REQUEST)['flow_batch_size'],1)
-        for size in (1,10,20,30):
+        for size in (1,3,5,10):
             self.assertEqual(validate_request({**REQUEST,'flow_batch_size':size})['flow_batch_size'],size)
-        for size in (True,False,0,2,31,'10',10.0,None):
+        for size in (True,False,0,2,20,30,31,'10',10.0,None):
             with self.subTest(size=size),self.assertRaises(ValueError):
                 validate_request({**REQUEST,'flow_batch_size':size})
         with self.assertRaises(ValueError):
@@ -38,9 +38,9 @@ class DurableTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'different request'):
             self.s.create({**REQUEST,'flow_batch_size':10},'legacy')
 
-    def test_output_directory_transliterates_vietnamese_title(self):
-        j,_=self.s.create({**REQUEST,'idea':'Cá trích ướp muối'},'vietnamese-title')
-        self.assertRegex(Path(j['output']).name,r'^ca-trich-uop-muoi-\d{8}-\d{6}$')
+    def test_output_directory_transliterates_vietnamese_project(self):
+        j,_=self.s.create({**REQUEST,'project':'Cá trích ướp muối'},'vietnamese-title')
+        self.assertEqual(Path(j['output']),self.s.outputs/'ca-trich-uop-muoi'/'data'/j['id'])
     def test_output_slug_normalizes_edge_cases(self):
         cases=(
             ('ĐỒNG Nai', 'dong-nai'),
@@ -125,6 +125,49 @@ class MediaTests(unittest.TestCase):
             with self.assertRaises(PermanentError):render(p/'image.png',p/'speech.wav',p/'music.wav',p/'subtitles.srt',p/'bad.mp4',8,lambda:None)
 
 class ApiTests(unittest.TestCase):
+    def test_reset_stage_images_in_place_and_api(self):
+        from fastapi.testclient import TestClient
+        from videostudio.api import create_app
+        class FakePipeline:
+            def handlers(self):return {}
+            def preflight(self):return {'ready':True,'checks':[]}
+        with tempfile.TemporaryDirectory() as t:
+            store=Store(Path(t)/'jobs.db',Path(t)/'out')
+            j,_=store.create({**REQUEST,'image_provider':'flow','flow_batch_size':3},'test-reset')
+            out=Path(j['output'])
+            # Cannot reset before script and speech exist
+            with self.assertRaises(ValueError):
+                store.reset_stage_images(j['id'])
+            # Populate checkpoints
+            with store.db() as c:
+                c.execute("INSERT INTO checkpoints VALUES(?,?,?)",(j['id'],'plan',json.dumps({'title':'P'})))
+                c.execute("INSERT INTO checkpoints VALUES(?,?,?)",(j['id'],'script',json.dumps({'scenes':[]})))
+                c.execute("INSERT INTO checkpoints VALUES(?,?,?)",(j['id'],'speech',json.dumps({'duration':10})))
+                c.execute("INSERT INTO checkpoints VALUES(?,?,?)",(j['id'],'images',json.dumps({'scenes':[]})))
+            # Create dummy files
+            img_file = out / 'images-0000.png'
+            img_file.write_text('dummy')
+            vid_file = out / 'video.mp4'
+            vid_file.write_text('dummy')
+            # Reset in place with new provider comfy
+            updated = store.reset_stage_images(j['id'], image_provider='comfy')
+            self.assertEqual(updated['stage'], 'images')
+            self.assertEqual(updated['state'], 'queued')
+            self.assertEqual(updated['request']['image_provider'], 'comfy')
+            self.assertEqual(updated['request']['flow_batch_size'], 1)
+            self.assertIn('speech', updated['checkpoints'])
+            self.assertIn('script', updated['checkpoints'])
+            self.assertNotIn('images', updated['checkpoints'])
+            self.assertFalse(img_file.exists())
+            self.assertFalse(vid_file.exists())
+
+            # Test API endpoint
+            with TestClient(create_app(store,FakePipeline(),False)) as client:
+                res = client.post(f"/api/jobs/{j['id']}/reset-images", json={'image_provider':'flow','flow_batch_size':5})
+                self.assertEqual(res.status_code, 200)
+                self.assertEqual(res.json()['request']['image_provider'], 'flow')
+                self.assertEqual(res.json()['request']['flow_batch_size'], 5)
+
     def test_flow_batch_size_admission_and_health(self):
         from fastapi.testclient import TestClient
         from videostudio.api import create_app
@@ -133,7 +176,7 @@ class ApiTests(unittest.TestCase):
             def preflight(self):return {'ready':True,'checks':[]}
         with tempfile.TemporaryDirectory() as t:
             store=Store(Path(t)/'jobs.db',Path(t)/'out')
-            with patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'0','VS_FLOW_BATCH_VALIDATED_SIZES':'10,20,30'}),TestClient(create_app(store,FakePipeline(),False)) as client:
+            with patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'0','VS_FLOW_BATCH_VALIDATED_SIZES':'3,5,10'}),TestClient(create_app(store,FakePipeline(),False)) as client:
                 self.assertEqual(client.get('/api/health').json()['flow_batch_sizes'],[1])
                 blocked=client.post('/api/jobs',json={**REQUEST,'flow_batch_size':10},headers={'Idempotency-Key':'blocked'})
                 self.assertEqual(blocked.status_code,422)
@@ -148,7 +191,7 @@ class ApiTests(unittest.TestCase):
     def test_job_form_advertises_disabled_unvalidated_batch_sizes_and_sends_integer(self):
         html=(Path(__file__).resolve().parents[1]/'static'/'index.html').read_text(encoding='utf8')
         self.assertIn('<select id="flowBatchSize"',html)
-        for size in (10,20,30):
+        for size in (3,5,10):
             self.assertIn(f'<option value="{size}" disabled>',html)
         self.assertIn("flow_batch_size:Number($('#flowBatchSize').value)",html)
         self.assertIn('health.flow_batch_sizes',html)
@@ -163,13 +206,13 @@ class ApiTests(unittest.TestCase):
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const html=fs.readFileSync(process.argv[1],'utf8'),start=html.indexOf('let availableFlowBatchSizes=[1];'),stop=html.indexOf('refreshFlowBatchChoices();',start)+'refreshFlowBatchChoices();'.length;
 assert(start>0 && stop>start);
-const provider={value:'flow'},selector={value:'1',disabled:false,options:[1,10,20,30].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''};
+const provider={value:'flow'},selector={value:'1',disabled:false,options:[1,3,5,10].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''};
 let response={flow_batch_sizes:[1]},fail=false;
 const context=vm.createContext({$:id=>({'#imageProvider':provider,'#flowBatchSize':selector,'#flowBatchNote':note,'#imageProviderNote':{textContent:''}}[id]),api:async()=>{if(fail)throw Error('offline');return response},console});
 vm.runInContext(html.slice(start,stop),context);
 (async()=>{
  response={flow_batch_sizes:[1,10]};await vm.runInContext('refreshFlowBatchChoices()',context);
- assert.deepEqual(selector.options.map(o=>o.disabled),[false,false,true,true]);
+ assert.deepEqual(selector.options.map(o=>o.disabled),[false,true,true,false]);
  vm.runInContext('flowBatchChoiceInitialized=false',context);await vm.runInContext('refreshFlowBatchChoices()',context);
  assert.equal(selector.value,'10');
  selector.value='1';selector.onchange();await vm.runInContext('refreshFlowBatchChoices()',context);assert.equal(selector.value,'1');
@@ -248,5 +291,39 @@ vm.runInContext(html.slice(start,stop),context);
                 r=c.post('/api/jobs',json=REQUEST,headers={'Idempotency-Key':'blocked'})
                 self.assertEqual(r.status_code,503)
                 self.assertEqual(store.list(),[])
+
+    def test_flow_prompt_normalization_and_portrait_prompt(self):
+        from videostudio.cdp_flow import normalize_flow_prompt
+        from videostudio.providers import Pipeline
+        # Test 1: Normalize leading @name and other @tags
+        mentions = [{'name': 'anh_vuong', 'character_id': '12345678-1234-1234-1234-123456789abc'}]
+        raw = '@anh_vuong [35-year-old Vietnamese man, 1.73m, tanned skin] holding @prop_lantern by @loc_dock'
+        cleaned = normalize_flow_prompt(raw, mentions)
+        self.assertEqual(cleaned, '[35-year-old Vietnamese man, 1.73m, tanned skin] holding prop_lantern by loc_dock')
+
+        # Test 2: Normalize without mentions
+        self.assertEqual(normalize_flow_prompt('A simple scene prompt.', []), 'A simple scene prompt.')
+
+        # Test 3: Flow portrait prompt generation
+        char = {
+            'character_id': 'anh_vuong',
+            'name': 'Anh Vương',
+            'appearance_evidence': ['35-year-old Vietnamese man', 'weathered tanned skin', 'side-parted straight dark hair']
+        }
+        portrait_prompt = Pipeline._flow_portrait_prompt(char)
+        self.assertIn('Anh Vương', portrait_prompt)
+        self.assertIn('35-year-old Vietnamese man', portrait_prompt)
+        self.assertIn('Authentic ethnic facial structure', portrait_prompt)
+        self.assertIn('neutral identity-reference portrait', portrait_prompt)
+
+    def test_reset_images_ui_elements_in_html(self):
+        html = (Path(__file__).resolve().parents[1] / 'static' / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('id="resetImagesModal"', html)
+        self.assertIn('id="resetImageProvider"', html)
+        self.assertIn('id="resetFlowBatchSize"', html)
+        self.assertIn('openResetImagesModal', html)
+        self.assertIn('appendJobActionButtons', html)
+        self.assertIn('job-reset-images', html)
+        self.assertIn('heroResetImagesBtn', html)
 
 if __name__=='__main__':unittest.main()

@@ -27,6 +27,26 @@ class FlowTaskError(RuntimeError):
         self.code = code
 
 
+def normalize_flow_prompt(prompt, mentions=None):
+    """Normalize scene prompt for Flow's composer:
+    1. Strip leading @name or @character_id matching native Character mentions (which are inserted as chips).
+    2. Strip bare '@' prefix from remaining entity tags so ProseMirror doesn't trigger unwanted autocomplete popups.
+    """
+    text = str(prompt or '').strip()
+    for m in (mentions or []):
+        if not isinstance(m, dict):
+            continue
+        name = m.get('name') or ''
+        cid = m.get('character_id') or ''
+        if name:
+            text = re.sub(rf'^\s*@{re.escape(name)}\s*[:\-]?\s*', '', text, flags=re.IGNORECASE)
+        if cid and cid != name:
+            text = re.sub(rf'^\s*@{re.escape(cid)}\s*[:\-]?\s*', '', text, flags=re.IGNORECASE)
+    # Strip '@' prefix from remaining words (e.g. '@prop_teapot' -> 'prop_teapot') to prevent ProseMirror dropdown
+    text = re.sub(r'@([a-zA-Z0-9_-]+)', r'\1', text)
+    return text.strip()
+
+
 class FlowImages:
     def __init__(self, bridge, root):
         self.bridge = bridge
@@ -108,7 +128,7 @@ class FlowImages:
 
     @staticmethod
     def _prompt_text(value):
-        return re.sub(r'\\s+',' ',unicodedata.normalize('NFC',str(value or ''))).strip()
+        return re.sub(r'\s+',' ',unicodedata.normalize('NFC',str(value or ''))).strip()
 
     @classmethod
     def _batch_prompt_fingerprint(cls,text,mention_ids):
@@ -349,7 +369,7 @@ class FlowImages:
 
     async def _snapshot(self, session, prompt=''):
         prompt_js = json.dumps(prompt, ensure_ascii=False)
-        expression = r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const norm=s=>(s||'').replace(/\s+/g,' ').trim();const body=document.body?.innerText||'';const lines=body.split('\n').map(x=>x.trim()).filter(Boolean);const box=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');const draft=box?norm(box.innerText||box.textContent):'';const attachedMediaIds=box?[...new Set([...box.querySelectorAll('[data-media-id]')].map(e=>e.getAttribute('data-media-id')).filter(Boolean))]:[];const mentionEntityIds=box?[...new Set([...box.querySelectorAll('[data-entity-id]')].map(e=>e.getAttribute('data-entity-id')).filter(Boolean))]:[];const agent=document.querySelector('button.agent-mode-chip');let agentOn=null;if(agent){const p=agent.getAttribute('aria-pressed');if(p==='true')agentOn=true;else if(p==='false')agentOn=false;else{const m=getComputedStyle(agent).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);if(m){const y=(.2126*+m[1]+.7152*+m[2]+.0722*+m[3])/255;if(y>.78)agentOn=true;else if(y<.28)agentOn=false;}}}const tiles=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible).map(t=>{const i=t.querySelector('img[data-media-id]'),r=t.getBoundingClientRect();return{tile_id:t.id||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),tile_width:r.width,tile_height:r.height,aria_label:t.getAttribute('aria-label')||'',text:norm(t.innerText||'').slice(0,14000),media_id:i?.getAttribute('data-media-id')||null,complete:!!i&&i.complete&&i.naturalWidth>0&&i.naturalHeight>0,data_asset_id:t.getAttribute('data-asset-id')||'',data_request_id:t.getAttribute('data-request-id')||'',data_task_id:t.getAttribute('data-task-id')||''}});const imgs=[...document.querySelectorAll('img[data-media-id]')].filter(i=>visible(i)&&i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256).map(i=>{let r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}});const genButton=document.querySelector('button[aria-label="Bắt đầu tạo"]');const genDisabled=!genButton||genButton.disabled;const credit=lines.filter(x=>/tín dụng|credit/i.test(x));const exact=norm(draft)===norm(PROMPT);const settingsOpen=document.querySelectorAll('button.mat-button-toggle-button').length>=8;return{url:location.href,title:document.title,login:/accounts\.google\.com/i.test(location.href)||/đăng nhập vào google|sign in to google/i.test(body.slice(0,900)),challenge:/captcha|verify you are human|xác minh bạn là người/i.test(body.slice(0,1200)),draftLength:draft.length,draftEmpty:!draft&&attachedMediaIds.length===0,composerAvailable:!!box,draftMatches:exact,attachedMediaIds,mentionEntityIds,agentOn,creditLines:credit,settingsOpen,settingsText:(document.querySelector('button.settings-trigger-button')?.innerText||''),generateDisabled:genDisabled,largeImages:imgs,assetTiles:tiles};})()'''
+        expression = r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const norm=s=>(s||'').replace(/\s+/g,' ').trim();const body=document.body?.innerText||'';const lines=body.split('\n').map(x=>x.trim()).filter(Boolean);const box=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');const draft=box?norm(box.innerText||box.textContent):'';const attachedMediaIds=box?[...new Set([...box.querySelectorAll('[data-media-id]')].map(e=>e.getAttribute('data-media-id')).filter(Boolean))]:[];const mentionEntityIds=box?[...new Set([...box.querySelectorAll('[data-entity-id],[data-mention-id]')].map(e=>e.getAttribute('data-entity-id')||e.getAttribute('data-mention-id')).filter(Boolean))]:[];const agent=document.querySelector('button.agent-mode-chip');let agentOn=null;if(agent){const p=agent.getAttribute('aria-pressed');if(p==='true')agentOn=true;else if(p==='false')agentOn=false;else{const m=getComputedStyle(agent).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);if(m){const y=(.2126*+m[1]+.7152*+m[2]+.0722*+m[3])/255;if(y>.78)agentOn=true;else if(y<.28)agentOn=false;}}}const tiles=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible).map(t=>{const i=t.querySelector('img[data-media-id]'),r=t.getBoundingClientRect();return{tile_id:t.id||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),tile_width:r.width,tile_height:r.height,aria_label:t.getAttribute('aria-label')||'',text:norm(t.innerText||'').slice(0,14000),media_id:i?.getAttribute('data-media-id')||null,complete:!!i&&i.complete&&i.naturalWidth>0&&i.naturalHeight>0,data_asset_id:t.getAttribute('data-asset-id')||'',data_request_id:t.getAttribute('data-request-id')||'',data_task_id:t.getAttribute('data-task-id')||''}});const imgs=[...document.querySelectorAll('img[data-media-id]')].filter(i=>visible(i)&&i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256).map(i=>{let r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}});const genButton=document.querySelector('button[aria-label="Bắt đầu tạo"]');const genDisabled=!genButton||genButton.disabled;const credit=lines.filter(x=>/tín dụng|credit/i.test(x));const exact=norm(draft)===norm(PROMPT);const settingsOpen=document.querySelectorAll('button.mat-button-toggle-button').length>=8;return{url:location.href,title:document.title,login:/accounts\.google\.com/i.test(location.href)||/đăng nhập vào google|sign in to google/i.test(body.slice(0,900)),challenge:/captcha|verify you are human|xác minh bạn là người/i.test(body.slice(0,1200)),draftLength:draft.length,draftEmpty:!draft&&attachedMediaIds.length===0,composerAvailable:!!box,draftMatches:exact,attachedMediaIds,mentionEntityIds,agentOn,creditLines:credit,settingsOpen,settingsText:(document.querySelector('button.settings-trigger-button')?.innerText||''),generateDisabled:genDisabled,largeImages:imgs,assetTiles:tiles};})()'''
         return await self._eval(session, expression.replace('PROMPT', prompt_js))
 
     async def _target(self):
@@ -473,7 +493,7 @@ class FlowImages:
         return state
 
     async def _prompt_box(self, session):
-        return await self._eval(session, r'''(()=>{const e=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,text:(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim()}})()''')
+        return await self._eval(session, r'''(()=>{const e=document.querySelector('[role="textbox"][aria-label="Bạn muốn tạo những gì?"],.ProseMirror[contenteditable="true"]');if(!e)return null;try{e.focus()}catch(err){};const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,text:(e.innerText||e.textContent||'').replace(/\s+/g,' ').trim()}})()''')
 
     async def _image(self, session):
         return await self._eval(session, r'''(()=>{const a=[...document.querySelectorAll('img[data-media-id]')].filter(i=>{const r=i.getBoundingClientRect(),s=getComputedStyle(i);return r.width>40&&r.height>40&&s.display!=='none'&&i.complete&&i.naturalWidth>=256&&i.naturalHeight>=256});return a.map(i=>{const r=i.getBoundingClientRect(),card=i.closest('flow-grid-tile-container');return{media_id:i.getAttribute('data-media-id'),title:card?.getAttribute('aria-label')||'',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:i.naturalWidth,height:i.naturalHeight,alt:i.alt||''}})})()''')
@@ -532,14 +552,15 @@ class FlowImages:
     async def _ensure_media_mounted(self,session,media_id):
         selector=json.dumps('img[data-media-id="'+media_id+'"]')
         if await self._eval(session,'Boolean(document.querySelector('+selector+'))'):return
-        state=await self._snapshot(session,'')
-        await self._scan_grid_tiles(session,state['url'],wanted={media_id})
+        state=await self._snapshot(session,'') or {}
+        project_url=state.get('url','')
+        if project_url:
+            await self._scan_grid_tiles(session,project_url,wanted={media_id})
         if not await self._eval(session,'Boolean(document.querySelector('+selector+'))'):
             raise FlowTaskError('Saved Flow media is not among the recent images at the top; no downward search performed','uncertain')
 
     async def _click_media_control(self,session,media_id,name):
         await self._dismiss_flow_popups(session)
-        await self._ensure_media_mounted(session,media_id)
         media_js=json.dumps(media_id);name_js=json.dumps(name,ensure_ascii=False)
         hover_expr="(()=>{const i=document.querySelector("+json.dumps('img[data-media-id="'+media_id+'"]')+");if(!i)return null;i.scrollIntoView({block:'center'});const r=i.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()"
         hover_point=await self._eval(session,hover_expr)
@@ -656,6 +677,7 @@ class FlowImages:
         return detail
 
     async def _attach_character_mentions(self,session,prompt,mentions,timeout=12):
+        prompt=normalize_flow_prompt(prompt,mentions)
         expected_ids=[item['character_id'] for item in mentions]
         expected_text=' '.join([item['name'] for item in mentions]+([prompt] if prompt else [])).strip()
         state=await self._snapshot(session,expected_text)
@@ -668,21 +690,31 @@ class FlowImages:
         for index,item in enumerate(mentions):
             await self.bridge.cdp.command('Input.insertText',{'text':'@'},session=session)
             deadline=time.monotonic()+timeout;options=[]
+            name_typed=False
             while time.monotonic()<deadline:
-                options=await self._eval(session,r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};return[...document.querySelectorAll('[role="listbox"] [role="option"]')].filter(visible).map(e=>({name:(e.innerText||'').split(String.fromCharCode(10))[0].trim(),active:e.classList.contains('asset-item-active'),selected:e.getAttribute('aria-selected')==='true'}))})()''')
+                options=await self._eval(session,r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};return[...document.querySelectorAll('[role="listbox"] [role="option"]')].filter(visible).map(e=>{const r=e.getBoundingClientRect();return{name:(e.innerText||'').split(String.fromCharCode(10))[0].trim(),active:e.classList.contains('asset-item-active'),selected:e.getAttribute('aria-selected')==='true',x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})})()''')
                 if any(option.get('name')==item['name'] for option in options):break
-                await asyncio.sleep(.12)
+                if not name_typed and options:
+                    await self.bridge.cdp.command('Input.insertText',{'text':item['name']},session=session)
+                    name_typed=True
+                await asyncio.sleep(.15)
             matches=[i for i,option in enumerate(options) if option.get('name')==item['name']]
             if len(matches)!=1:raise FlowTaskError('Flow @name lookup did not produce one exact native Character; no scene submitted','needs_flow_check')
-            selected=next((i for i,option in enumerate(options) if option.get('active') or option.get('selected')),0);delta=matches[0]-selected
-            key='ArrowDown' if delta>0 else 'ArrowUp'
-            for _ in range(abs(delta)):
-                await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyDown','key':key,'code':key},session=session)
-                await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyUp','key':key,'code':key},session=session)
-            await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyDown','key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
-            await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyUp','key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
+            match_opt=options[matches[0]]
+            if match_opt.get('x') and match_opt.get('y'):
+                await self._click_point(session,match_opt)
+                await self._eval(session,r'''(()=>{const hit=document.elementFromPoint(%d,%d);const b=hit?.closest('[role="option"],button');b?.click()})()'''%(match_opt['x'],match_opt['y']))
+            else:
+                selected=next((i for i,option in enumerate(options) if option.get('active') or option.get('selected')),0);delta=matches[0]-selected
+                key='ArrowDown' if delta>0 else 'ArrowUp'
+                for _ in range(abs(delta)):
+                    await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyDown','key':key,'code':key},session=session)
+                    await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyUp','key':key,'code':key},session=session)
+                await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyDown','key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
+                await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':'keyUp','key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
             state=await self._wait_page(session,lambda value:value.get('mentionEntityIds',[])==expected_ids[:index+1],timeout=timeout,prompt='')
             if state.get('attachedMediaIds'):raise FlowTaskError('Unexpected media attachment appeared while resolving @name; no scene submitted','needs_flow_check')
+            await self._eval(session,r'''(()=>{const box=document.querySelector('.ProseMirror,[role="textbox"]');if(!box)return;box.focus();const sel=window.getSelection();sel.selectAllChildren(box);sel.collapseToEnd()})()''')
             if index+1<len(mentions) or prompt:await self.bridge.cdp.command('Input.insertText',{'text':' '},session=session)
         if prompt:await self.bridge.cdp.command('Input.insertText',{'text':prompt},session=session)
         state=await self._wait_page(session,lambda value:value.get('draftMatches') and value.get('mentionEntityIds',[])==expected_ids,timeout=timeout,prompt=expected_text)
@@ -714,8 +746,10 @@ class FlowImages:
                 await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior': 'default', 'eventsEnabled': False})
                 self.bridge.images.download_behavior_uncertain = False
             await self.bridge.cdp.command('Browser.setDownloadBehavior', {'behavior':'allowAndName','downloadPath':str(folder.resolve()),'eventsEnabled':True})
-            if media_id:await self._ensure_media_mounted(session,media_id)
             images = await self._image(session)
+            if media_id and not any(image.get('media_id')==media_id for image in images):
+                await self._ensure_media_mounted(session,media_id)
+                images = await self._image(session)
             if media_id:
                 matches=[image for image in images if image.get('media_id')==media_id]
                 if len(matches)!=1:raise FlowTaskError('The task-specific Flow media card is missing or ambiguous; refusing to download another scene','uncertain')
@@ -834,6 +868,33 @@ class FlowImages:
         state=await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.rstrip('/')==project_path and value.get('composerAvailable'),timeout=30,prompt=prompt)
         return state
 
+    async def _wait_character_complete(self, session, timeout=900):
+        """Wait until Flow finishes generating the character portrait on /character/<id>."""
+        char_ready_expr = r'''(()=>{
+            const img = document.querySelector('img[alt="Hình ảnh nhân vật đã tạo"], img[alt*="nhân vật"], img[alt*="character" i]');
+            const dlBtn = document.querySelector('button[aria-label*="Tải hình ảnh xuống" i], button[aria-label*="Download" i]');
+            const replayBtn = Array.from(document.querySelectorAll('button')).find(b => {
+                const t = (b.innerText||'').trim();
+                return t.includes('Tạo lại') || t.includes('replay') || t.includes('Thử lại');
+            });
+            const spinners = document.querySelectorAll('mat-progress-spinner, mat-spinner, [role="progressbar"], .spinner, .loading');
+            const complete = (!!img && img.complete && img.naturalWidth > 0 && !!dlBtn && !!replayBtn && spinners.length === 0) || (!!img && !!dlBtn && spinners.length === 0);
+            return {
+                complete: !!complete,
+                hasImg: !!img,
+                imgReady: img ? (img.complete && img.naturalWidth > 0) : false,
+                hasDownload: !!dlBtn,
+                spinners: spinners.length
+            };
+        })()'''
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            res = await self._eval(session, char_ready_expr)
+            if res and res.get('complete'):
+                return True
+            await asyncio.sleep(1.0)
+        raise FlowTaskError('Flow Character generation timed out or failed to complete', 'uncertain')
+
     async def create_character(self,task_id,job_id,character_id,name,prompt,timeout=900):
         async with self._flow_batch_lock:
             return await self._create_character_unreserved(task_id,job_id,character_id,name,prompt,timeout)
@@ -847,8 +908,18 @@ class FlowImages:
         if not isinstance(name,str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,39}',name):raise ValueError('Flow registered Character name must be a stable ASCII identifier')
         if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=12000:raise ValueError('Invalid Flow Character appearance prompt')
         prompt=prompt.strip();prompt_sha=hashlib.sha256(prompt.encode('utf8')).hexdigest();receipt=self._read_receipt(task_id)
-        if receipt and (receipt.get('job_id')!=job_id or receipt.get('kind')!='native_character' or receipt.get('character_manifest_id')!=character_id or receipt.get('name')!=name or receipt.get('prompt_sha256')!=prompt_sha):
-            raise FlowTaskError('Flow Character task receipt identity differs; refusing a second creation','uncertain')
+        if receipt:
+            if receipt.get('job_id')!=job_id or receipt.get('prompt_sha256')!=prompt_sha:
+                raise FlowTaskError('Flow Character task receipt identity differs; refusing a second creation','uncertain')
+            if receipt.get('kind') and receipt.get('kind')!='native_character':
+                raise FlowTaskError('Flow Character task receipt identity differs; refusing a second creation','uncertain')
+            if receipt.get('character_manifest_id') and receipt.get('character_manifest_id')!=character_id:
+                raise FlowTaskError('Flow Character task receipt identity differs; refusing a second creation','uncertain')
+            if receipt.get('name') and receipt.get('name')!=name:
+                raise FlowTaskError('Flow Character task receipt identity differs; refusing a second creation','uncertain')
+            receipt.setdefault('kind','native_character')
+            receipt.setdefault('character_manifest_id',character_id)
+            receipt.setdefault('name',name)
         if receipt and receipt.get('stage')=='character_saved':
             async with self.bridge.job_lock:
                 await self.bridge.connect();target=await self._target();session=await self._session(target)
@@ -856,6 +927,11 @@ class FlowImages:
                 await self._return_to_project_root(session,receipt['project_url'],prompt)
             return {'task_id':task_id,'character_id':receipt['character_id'],'name':name,'project_url':receipt['project_url']}
         if receipt and receipt.get('character_create_stage') in ('submitting','saving'):
+            if receipt.get('character_create_stage') == 'saving' and receipt.get('character_id'):
+                async with self.bridge.job_lock:
+                    await self.bridge.connect();target=await self._target();session=await self._session(target)
+                    await self.bridge.cdp.command('Target.activateTarget',{'targetId':target})
+                    return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout)
             raise FlowTaskError('Flow Character creation may already have been submitted; manual reconciliation required, no duplicate generated','uncertain')
         async with self.bridge.job_lock:
             await self.bridge.connect();target=await self._target();session=await self._session(target)
@@ -865,8 +941,12 @@ class FlowImages:
                 await self._return_to_project_root(session,receipt['project_url'],prompt)
                 return {'task_id':task_id,'character_id':receipt['character_id'],'name':name,'project_url':receipt['project_url']}
             if receipt and receipt.get('character_create_stage') in ('submitting','saving'):
+                if receipt.get('character_create_stage') == 'saving' and receipt.get('character_id'):
+                    return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout)
                 raise FlowTaskError('Flow Character creation may already have been submitted; manual reconciliation required, no duplicate generated','uncertain')
             receipt,state=await self._ensure_project(task_id,job_id,prompt,target,session,receipt)
+            receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name})
+            self._write_receipt(task_id,receipt)
             project_url=receipt.get('project_url','').split('?')[0].rstrip('/');project_path=urlparse(project_url).path
             if state.get('url','').split('?')[0].rstrip('/')!=project_url:
                 if not state.get('draftEmpty') or not state.get('generateDisabled'):raise FlowTaskError('Flow tab has a draft or active request; refusing to switch to the Character project')
@@ -874,26 +954,41 @@ class FlowImages:
                 state=await self._wait_page(session,lambda value:value.get('url','').split('?')[0].rstrip('/')==project_url and value.get('composerAvailable'),prompt=prompt)
             if urlparse(state.get('url','')).path.rstrip('/')==project_path:
                 await self._click_named(session,'Nhân vật',selector='button,[role=button]')
-                state=await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.startswith(project_path+'/character'),timeout=20,prompt=prompt)
+                try:
+                    state=await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.startswith(project_path+'/character'),timeout=4,prompt=prompt)
+                except FlowTaskError:
+                    await self._click_named(session,'Nhân vật mới',selector='button,[role=button]')
+                    state=await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.startswith(project_path+'/character'),timeout=20,prompt=prompt)
             char_path=urlparse(state.get('url','')).path
             if not re.fullmatch(re.escape(project_path)+r'/character(?:/[0-9a-fA-F-]{36})?',char_path):raise FlowTaskError('Flow did not open the native Character workflow in the registered project','needs_flow_check')
             if char_path==project_path+'/character':
-                box=await self._eval(session,r'''(()=>{const boxes=[...document.querySelectorAll('[role="textbox"][contenteditable="true"]')].filter(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'});if(boxes.length!==1)return null;const r=boxes[0].getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,text:(boxes[0].innerText||'').trim()}})()''')
+                box=await self._eval(session,r'''(()=>{const boxes=[...document.querySelectorAll('[role="textbox"][contenteditable="true"]')].filter(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'});if(boxes.length!==1)return null;try{boxes[0].focus()}catch(e){};const r=boxes[0].getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2,text:(boxes[0].innerText||'').trim()}})()''')
                 if not box or box.get('text') not in ('',prompt):raise FlowTaskError('Native Flow Character prompt is absent or contains a different draft')
                 if not box.get('text'):
                     await self._click_point(session,box);await self.bridge.cdp.command('Input.insertText',{'text':prompt},session=session)
-                state_data=await self._eval(session,r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const buttons=[...document.querySelectorAll('button')].filter(visible);const models=buttons.filter(b=>(b.innerText||'').includes('Nano Banana 2.1'));const generate=buttons.filter(b=>(b.innerText||'').trim()==='arrow_forward');const body=document.body.innerText||'';return{prompt:(document.querySelector('[role="textbox"][contenteditable="true"]')?.innerText||'').trim(),models:models.length,generate:generate.map(b=>({disabled:b.disabled,rect:(()=>{const r=b.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()})),credits:body.split(String.fromCharCode(10)).map(x=>x.trim()).filter(x=>/tín dụng|credits?/i.test(x))}})()''')
-                if state_data.get('prompt')!=prompt or state_data.get('models')!=1 or len(state_data.get('generate',[]))!=1 or state_data['generate'][0]['disabled']:
+                deadline=time.monotonic()+10;state_data=None
+                check_expr=r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const buttons=[...document.querySelectorAll('button')].filter(visible);const models=buttons.filter(b=>(b.innerText||'').includes('Nano Banana 2.1'));const generate=buttons.filter(b=>(b.innerText||'').trim()==='arrow_forward'||b.getAttribute('aria-label')==='Bắt đầu tạo');const body=document.body.innerText||'';return{prompt:(document.querySelector('[role="textbox"][contenteditable="true"]')?.innerText||'').trim(),models:models.length,generate:generate.map(b=>({disabled:b.disabled,rect:(()=>{const r=b.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()})),credits:body.split(String.fromCharCode(10)).map(x=>x.trim()).filter(x=>/tín dụng|credits?/i.test(x))}})()'''
+                while time.monotonic()<deadline:
+                    state_data=await self._eval(session,check_expr)
+                    if state_data and state_data.get('prompt')==prompt and state_data.get('models')==1 and len(state_data.get('generate',[]))==1 and not state_data['generate'][0]['disabled']:
+                        break
+                    await asyncio.sleep(.25)
+                if not state_data or state_data.get('prompt')!=prompt or state_data.get('models')!=1 or len(state_data.get('generate',[]))!=1 or state_data['generate'][0]['disabled']:
                     raise FlowTaskError('Native Character model/prompt/Generate control could not be verified; no request sent','needs_flow_check')
                 credit_lines=state_data.get('credits',[]);credit_estimate=credit_lines[0] if credit_lines else None
                 receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name,'prompt_sha256':prompt_sha,'project_url':project_url,'target_id':target,'stage':'project_ready','character_create_stage':'submitting','submitted_at':time.time(),'credit_estimate':credit_estimate,'updated_at':time.time()});self._write_receipt(task_id,receipt)
-                await self._click_point(session,state_data['generate'][0]['rect'])
+                gen_point=state_data['generate'][0]['rect']
+                await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':gen_point['x'],'y':gen_point['y']},session=session)
+                await self._click_point(session,gen_point)
                 state=await self._wait_page(session,lambda value:re.fullmatch(re.escape(project_path)+r'/character/[0-9a-fA-F-]{36}',urlparse(value.get('url','')).path) is not None,timeout=timeout,prompt=prompt)
                 char_path=urlparse(state['url']).path
             entity_id=char_path.rsplit('/',1)[-1]
             try:uuid.UUID(entity_id)
             except (ValueError,TypeError,AttributeError) as error:raise FlowTaskError('Flow Character route lacks a UUID entity ID; manual reconciliation required','uncertain') from error
             receipt.update({'kind':'native_character','character_manifest_id':character_id,'name':name,'prompt_sha256':prompt_sha,'project_url':project_url,'character_id':entity_id,'target_id':target,'character_create_stage':'saving','updated_at':time.time()});self._write_receipt(task_id,receipt)
+            # Wait for character portrait generation to complete
+            await self._wait_character_complete(session, timeout=timeout)
+            await asyncio.sleep(0.5)
             fields=await self._eval(session,r'''(()=>[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0}).map(x=>({value:x.value,rect:(()=>{const r=x.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()})))()''')
             if not isinstance(fields,list) or len(fields)<2:raise FlowTaskError('Flow Character name field is not visible; manual reconciliation required','uncertain')
             if fields[1].get('value')!=name:
@@ -901,14 +996,49 @@ class FlowImages:
                 await self._click_point(session,point)
                 for event in ({'type':'keyDown','key':'a','code':'KeyA','windowsVirtualKeyCode':65,'nativeVirtualKeyCode':65,'modifiers':2},{'type':'keyUp','key':'a','code':'KeyA','windowsVirtualKeyCode':65,'nativeVirtualKeyCode':65,'modifiers':2}):await self.bridge.cdp.command('Input.dispatchKeyEvent',event,session=session)
                 await self.bridge.cdp.command('Input.insertText',{'text':name},session=session)
+                for event in ('keyDown','keyUp'):await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':event,'key':'Enter','code':'Enter','windowsVirtualKeyCode':13,'nativeVirtualKeyCode':13},session=session)
             named=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0});const done=[...document.querySelectorAll('button')].filter(b=>(b.innerText||'').trim().normalize('NFC')==='Xong'.normalize('NFC')&&(()=>{const r=b.getBoundingClientRect();return r.width>0&&r.height>0})());return{values:f.map(x=>x.value),done:done.length,disabled:done.map(b=>b.disabled),point:done.length===1?(()=>{const r=done[0].getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})():null}})()''')
             if not isinstance(named,dict) or len(named.get('values',[]))<2 or named['values'][1]!=name or named.get('done')!=1 or named.get('disabled')!=[False]:raise FlowTaskError('Flow Character name/save control could not be verified; manual reconciliation required','uncertain')
             await self._click_point(session,named['point'])
-            verified=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0});return f.length>=2&&f[1].value===NAME})()'''.replace('NAME',json.dumps(name)))
-            if verified is not True:raise FlowTaskError('Flow did not retain the registered Character name; manual reconciliation required','uncertain')
+            # Read back the persisted entity, not the draft field left on screen.
+            await self.bridge.cdp.command('Page.navigate',{'url':project_url+'/character/'+entity_id},session=session)
+            await self._wait_page(session,lambda value:urlparse(value.get('url','')).path.rstrip('/')==project_path+'/character/'+entity_id,timeout=30,prompt='')
+            deadline=time.monotonic()+10.0;verified=False
+            while time.monotonic()<deadline:
+                res=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(x=>{const r=x.getBoundingClientRect();return r.width>0&&r.height>0});return f.length>=2&&f[1].value===NAME})()'''.replace('NAME',json.dumps(name)))
+                if res is True:
+                    verified=True
+                    break
+                await asyncio.sleep(0.5)
+            if not verified:raise FlowTaskError('Flow did not retain the registered Character name; manual reconciliation required','uncertain')
             receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
             await self._return_to_project_root(session,project_url,prompt)
             return {'task_id':task_id,'character_id':entity_id,'name':name,'project_url':project_url}
+
+    async def _resume_character_save(self,session,task_id,receipt,name,prompt,timeout):
+        """Finish the same known entity; never generate another portrait."""
+        project=receipt['project_url'].split('?')[0].rstrip('/')
+        entity=str(uuid.UUID(receipt['character_id']))
+        if urlparse(project).scheme!='https' or urlparse(project).hostname!='flow.google.com' or not re.fullmatch(r'/project/[A-Za-z0-9-]+',urlparse(project).path):
+            raise FlowTaskError('Invalid saved Flow Character project','uncertain')
+        url=project+'/character/'+entity
+        await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
+        await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
+        await self._wait_character_complete(session,timeout=timeout)
+        fields=await self._eval(session,r'''(()=>[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>{const r=e.getBoundingClientRect();return{value:e.value,x:r.x+r.width/2,y:r.y+r.height/2}}))()''')
+        if not isinstance(fields,list) or len(fields)<2:raise FlowTaskError('Cannot read the saved Character name yet; retry this same Character','uncertain')
+        if fields[1].get('value')!=name:
+            await self._click_point(session,fields[1])
+            for kind in ('keyDown','keyUp'):await self.bridge.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':'a','code':'KeyA','windowsVirtualKeyCode':65,'modifiers':2},session=session)
+            await self.bridge.cdp.command('Input.insertText',{'text':name},session=session)
+            await self._click_named(session,'Xong',exact=True,native_only=True)
+            await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
+            await self._wait_page(session,lambda state:state.get('url','').split('?')[0].rstrip('/')==url,timeout=30)
+        verified=await self._eval(session,r'''(()=>{const f=[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});return f.length>=2&&f[1].value===NAME})()'''.replace('NAME',json.dumps(name)))
+        if verified is not True:raise FlowTaskError('Flow Character name is not persisted; retry this same Character','uncertain')
+        receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
+        await self._return_to_project_root(session,project,prompt)
+        return {'task_id':task_id,'character_id':entity,'name':name,'project_url':project}
 
     @asynccontextmanager
     async def _maybe_job_lock(self,held=False):

@@ -35,9 +35,10 @@ test('actual Studio runtime guards invalidated send and retires intervals/listen
   const domListeners=new Set();
   const button=()=>({style:{},dataset:{},textContent:'',setAttribute(){},addEventListener(type,fn){domListeners.add(fn)},removeEventListener(type,fn){domListeners.delete(fn)}});
   const nodes=new Map(['status','start','smoke','stop','manager','manager-content','collapse','badge','count','error-badge','empty','sessions','dismiss-dialog','dismiss-video','dismiss-files','dismiss-warning','dismiss-error','dismiss-confirm','dismiss-cancel'].map(key=>['#'+key,button()]));
+  for(const match of code.matchAll(/id="([A-Za-z0-9_-]+)"/g))if(!nodes.has('#'+match[1]))nodes.set('#'+match[1],button());
   const shadow={innerHTML:'',querySelector:key=>nodes.get(key)};
   const root={style:{},dataset:{},attachShadow:()=>shadow,remove(){removed++}};
-  const document={...button(),createElement:()=>root,documentElement:{append(){}}};
+  const document={...button(),createElement:()=>root,querySelector:()=>null,documentElement:{append(){}}};
   const context={location:{origin:'http://localhost:8877',pathname:`/story-video/projects/${scope}/production`},document,chrome:{runtime:{sendMessage:async()=>{throw Error('Extension context invalidated')},onMessage:{addListener:fn=>listeners.push(fn),removeListener:fn=>{listeners.splice(listeners.indexOf(fn),1)}}}},setInterval:fn=>{timers.set(++next,fn);return next},clearInterval:id=>timers.delete(id),fetch:async()=>({ok:true,json:async()=>({})}),localStorage:{getItem:()=>null},console};
   vm.runInNewContext(code,context);
   await new Promise(resolve=>setImmediate(resolve));

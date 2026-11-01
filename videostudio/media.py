@@ -3,6 +3,19 @@ import json, subprocess, time, math
 from pathlib import Path
 from .core import digest, PermanentError
 
+SUBTITLE_BOTTOM_MARGIN = 288
+
+def render_scenes(job):
+    checkpoint=job['checkpoints']['images']
+    provider=checkpoint.get('image_provider',job.get('request',{}).get('image_provider'))
+    return [{**scene,'image_provider':scene.get('image_provider',provider)} for scene in checkpoint['scenes']]
+
+def visual_clip_identity(sha, duration, provider=None):
+    import hashlib
+    policy='1080x1920-30-pan-v1'
+    if provider=='flow':policy+='-flow-bottom-crop-6pct-v1'
+    return hashlib.sha256((sha+str(duration)+policy).encode()).hexdigest()
+
 def run(args,check,timeout=900):
     p=subprocess.Popen([str(a) for a in args],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     start=time.monotonic()
@@ -40,14 +53,15 @@ def visual_track(scenes,output,check,ffmpeg='ffmpeg'):
     for index,scene in enumerate(scenes):
         check();source=Path(scene['path']).resolve();duration=float(scene['duration'])
         if not math.isfinite(duration) or duration<=0:raise PermanentError('Invalid scene duration')
-        identity=hashlib.sha256((digest(source)+str(duration)+'1080x1920-30-pan-v1').encode()).hexdigest()
+        identity=visual_clip_identity(digest(source),duration,scene.get('image_provider'))
         clip=target.parent/f'visual-{index:04}.mp4';receipt=clip.with_suffix('.json')
         reusable=clip.is_file() and receipt.is_file()
         if reusable:
             saved=json.loads(receipt.read_text());reusable=saved.get('identity')==identity and saved.get('sha256')==digest(clip)
         if not reusable:
             part=clip.with_suffix('.part.mp4')
-            run([ffmpeg,'-v','error','-y','-loop','1','-i',source,'-vf',"scale=1120:1992:force_original_aspect_ratio=increase,crop=1120:1992,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,setsar=1",'-t',duration,'-an','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p',part],check)
+            framing='crop=iw:trunc(ih*0.94/2)*2:0:0,' if scene.get('image_provider')=='flow' else ''
+            run([ffmpeg,'-v','error','-y','-loop','1','-i',source,'-vf',framing+"scale=1120:1992:force_original_aspect_ratio=increase,crop=1120:1992,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,setsar=1",'-t',duration,'-an','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p',part],check)
             part.replace(clip);receipt.write_text(json.dumps({'identity':identity,'sha256':digest(clip)}))
         clips.append(clip)
     # Paths are generated locally and cannot include user-provided filter text.
@@ -71,7 +85,7 @@ def render(image,speech,music,subtitles,output,seconds,check,ffmpeg='ffmpeg',ffp
     sub=Path(subtitles).name
     fade=min(1.5,seconds/5)
     vol=max(0.0,min(1.0,float(music_volume)))
-    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,subtitles=filename={sub}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume={vol:.2f},aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.08:ratio=2.5:attack=30:release=400[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false[mix]'
+    filt=f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,subtitles=filename={sub}:force_style=MarginV={SUBTITLE_BOTTOM_MARGIN}[v];[1:a]aresample=48000,apad=whole_dur={seconds},asplit=2[a][side];[2:a]volume={vol:.2f},aresample=48000,afade=t=in:d={fade},afade=t=out:st={seconds-fade}:d={fade}[m];[m][side]sidechaincompress=threshold=0.08:ratio=2.5:attack=30:release=400[duck];[a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=false[mix]'
     # Filter paths are relative to output directory; no shell and no user filter text.
     args=[ffmpeg,'-y','-loop','1','-i',str(Path(image[0]['path'] if isinstance(image,list) else image).resolve()),'-i',str(Path(speech).resolve()),'-i',str(Path(music).resolve()),'-filter_complex',filt,'-map','[v]','-map','[mix]','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',str(tmp.resolve())]
     if isinstance(image,list):
@@ -101,7 +115,7 @@ def render_visual_revision(scenes,audio_source,subtitles,output,seconds,check,ff
     target=Path(output);tmp=target.with_name(target.stem+'.part.mp4')
     track=visual_track(scenes,target.parent/'visual-track.mp4',check,ffmpeg)
     sub=Path(subtitles).name
-    args=[ffmpeg,'-v','error','-y','-i',str(track.resolve()),'-i',str(Path(audio_source).resolve()),'-vf','subtitles=filename='+sub,'-map','0:v:0','-map','1:a:0','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',str(tmp.resolve())]
+    args=[ffmpeg,'-v','error','-y','-i',str(track.resolve()),'-i',str(Path(audio_source).resolve()),'-vf','subtitles=filename='+sub+f':force_style=MarginV={SUBTITLE_BOTTOM_MARGIN}','-map','0:v:0','-map','1:a:0','-t',str(seconds),'-r','30','-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p','-c:a','copy','-movflags','+faststart',str(tmp.resolve())]
     p=subprocess.Popen(args,cwd=target.parent,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE);start=time.monotonic()
     try:
         while True:

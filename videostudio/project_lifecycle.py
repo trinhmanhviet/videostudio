@@ -67,6 +67,16 @@ class OutputRemoval:
             if target.exists() and any(_alias(p) for p in target.rglob('*')):
                 raise ValueError('Output chứa symlink/junction; giữ lại tệp để an toàn')
             self.targets.append(target)
+        # Finished videos live beside data/, so include only each selected
+        # job's deterministic file, never the shared project directory.
+        from .output_layout import job_video_files
+        for final in [path for job in jobs for path in job_video_files(job)]:
+            target=final.resolve()
+            if any(target==directory or target.is_relative_to(directory) for directory in self.targets):continue
+            if not target.is_relative_to(self.root) or any(_alias(p) for p in [final,*final.parents]):
+                raise ValueError('Không thể xóa video qua symlink/junction hoặc ngoài thư mục output')
+            if target.exists() and not target.is_file():raise ValueError('Output video không phải tệp')
+            self.targets.append(target)
         if len(set(self.targets))!=len(self.targets) or any(a!=b and a.is_relative_to(b) for a in self.targets for b in self.targets):
             raise ValueError('Output dùng chung hoặc lồng nhau; hãy giữ lại tệp')
         def touches(value):
@@ -114,7 +124,9 @@ class OutputRemoval:
     def purge(self):
         pending=False
         for _,quarantine in self.moves:
-            try:shutil.rmtree(quarantine)
+            try:
+                if quarantine.is_dir():shutil.rmtree(quarantine)
+                else:quarantine.unlink()
             except OSError:pending=True
         return pending
 

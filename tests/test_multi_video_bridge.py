@@ -59,7 +59,7 @@ class BridgeQueueTests(unittest.TestCase):
         self.assertEqual((replay['id'], replay['connector_scope']), (a['id'], a['connector_scope']))
         cards = self.client.get(self.path('sessions')).json()['items']
         self.assertEqual({c['scope'] for c in cards}, {a['connector_scope'], b['connector_scope']})
-        self.assertEqual(set(cards[0]), {'scope', 'job_id', 'title', 'project', 'state', 'stage', 'error', 'cancel_requested', 'created'})
+        self.assertEqual(set(cards[0]), {'scope', 'job_id', 'title', 'project', 'state', 'stage', 'error', 'cancel_requested', 'created', 'image_provider'})
         self.assertEqual(self.client.get(self.path('sessions', self.other)).json()['items'], [])
 
     def test_wrong_bridge_replay_and_child_as_bridge_leave_no_orphan(self):

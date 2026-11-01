@@ -34,14 +34,37 @@ class SceneEditor:
     def _layout(self,j):
         cp=j['checkpoints']
         if 'speech' not in cp or 'images' not in cp:raise ValueError('Scenes are available after narration and images have completed')
-        utterances=bind_scene_ids(cp['speech']['utterances']);images=cp['images']['scenes']
-        if not utterances or len(utterances)!=len(images):raise ValueError('Narration/image scene count mismatch')
+        images=cp['images']['scenes']
+        # Multiple spoken lines share one scene ID. Validate identities only
+        # after grouping lines into their image scenes.
+        raw_utts=cp['speech']['utterances']
+        if not images or not raw_utts:raise ValueError('Scenes are available after narration and images have completed')
+        scene_timing_groups = []
+        if len(raw_utts) == len(images):
+            for u in raw_utts:
+                scene_timing_groups.append([u])
+        else:
+            for i in range(len(images)):
+                grouped = [u for u in raw_utts if u.get('scene_index') == i]
+                if not grouped and i < len(raw_utts):
+                    grouped = [raw_utts[i]]
+                scene_timing_groups.append(grouped)
+        if len(scene_timing_groups) != len(images):
+            raise ValueError('Narration/image scene count mismatch')
         attested={str(Path(a['path']).resolve()):a['sha256'] for a in cp['images'].get('assets',[])}
         layout=[]
-        for i,(u,img) in enumerate(zip(utterances,images)):
+        for i,(utts,img) in enumerate(zip(scene_timing_groups,images)):
             p=Path(img['path']).resolve();sha=attested.get(str(p))
             if not sha:raise ValueError('Original image is not checkpoint-attested')
-            layout.append({'scene_id':u['scene_id'],'index':i,'narration':u['narration'],'visual_prompt':u.get('visual_prompt',''),'start':u['start'],'end':u['end'],'duration':img['duration'],'original_path':str(p),'original_sha256':sha})
+            sid=utts[0].get('scene_id') if utts else f'scene-{i:04}'
+            combined_narration=' '.join(u['narration'] for u in utts) if utts else ''
+            prompt=utts[0].get('visual_prompt','') if utts else ''
+            start=utts[0]['start'] if utts else 0.0
+            end=utts[-1]['end'] if utts else float(img['duration'])
+            layout.append({'scene_id':sid,'index':i,'narration':combined_narration,'visual_prompt':prompt,'start':start,'end':end,'duration':img['duration'],'original_path':str(p),'original_sha256':sha})
+        layout=bind_scene_ids(layout)
+        default_provider=cp['images'].get('image_provider',j.get('request',{}).get('image_provider'))
+        for row,img in zip(layout,images):row['image_provider']=img.get('image_provider',default_provider)
         timeline=fingerprint({'scene_timing':[{k:r[k] for k in ('scene_id','narration','start','end','duration')} for r in layout], 'speech':cp['speech'].get('assets',[]),'subtitles':cp.get('subtitles',{}).get('assets',[]),'music':cp.get('music',{}).get('assets',[])})
         return layout,timeline
     def view(self,jid):
@@ -54,6 +77,7 @@ class SceneEditor:
             for r in c.execute('SELECT e.id,e.scene,e.sha256,e.fit,e.created,COALESCE(s.provider,"upload") AS provider FROM scene_image_edits e LEFT JOIN scene_image_sources s ON s.edit=e.id WHERE e.job=? ORDER BY e.created DESC',(jid,)):history.setdefault(r['scene'],[]).append(dict(r))
         for row in layout:
             sid=row['scene_id'];edit=edits.get(sid);row.update(image_path=edit['path'] if edit else row['original_path'],image_sha256=edit['sha256'] if edit else row['original_sha256'],edit_id=edit['id'] if edit else 'original',fit=edit['fit'] if edit else 'original',history=history.get(sid,[]))
+            if edit:row['image_provider']=next((item['provider'] for item in history.get(sid,[]) if item['id']==edit['id']),'upload')
             approved=approvals.get(sid)
             row['review_status']='user_approved' if approved and approved['image_sha256']==row['image_sha256'] and approved['timeline_sha256']==timeline else 'needs_review'
             row['image_url']=f'/api/jobs/{jid}/scene-editor/scenes/{sid}/image?edit={row["edit_id"]}'
@@ -143,7 +167,7 @@ class SceneEditor:
         if not path.is_file() or digest(path)!=sha:raise ValueError('Image artifact changed')
         return path
     def audio_file(self,jid,sid):
-        j=self.store.get(jid);v=self.view(jid);row=self._scene(v,sid);cp=j['checkpoints']['speech'];p=Path(cp['utterances'][row['index']]['path'])
+        j=self.store.get(jid);v=self.view(jid);row=self._scene(v,sid);cp=j['checkpoints']['speech'];scene_utts=[u for u in cp['utterances'] if u.get('scene_index')==row['index']];p=Path(scene_utts[0]['path'] if scene_utts else cp['utterances'][row['index']]['path'])
         hashes={a['path']:a['sha256'] for a in cp['assets']}
         if str(p) not in hashes or not p.is_file() or digest(p)!=hashes[str(p)]:raise ValueError('Audio artifact changed')
         return p
@@ -168,12 +192,13 @@ class SceneEditor:
                         if not Path(a['path']).is_file() or digest(a['path'])!=a['sha256']:raise ValueError('Source checkpoint changed')
                 for r in v['scenes']:
                     if digest(r['image_path'])!=r['image_sha256']:raise ValueError('Selected image changed')
-                child=str(uuid.uuid4());output=self.store.outputs/(output_slug(parent['request']['idea'])+'-edit-'+child[:12]);output.mkdir(parents=True,exist_ok=False)
+                from .output_layout import allocate_output
+                child=str(uuid.uuid4());output=allocate_output(self.store,c,parent['request'],child)
                 req=validate_request(dict(parent['request'],quality_mode=head['mode']));now=time.time()
                 snap={'schema_version':1,'parent_job':jid,'editor_version':version,'mode':head['mode'],'actor':'user_selection','confirmed_all':confirm_all,'timeline_sha256':v['timeline_sha256'],'scenes':[{k:r[k] for k in ('scene_id','index','narration','start','end','duration','image_path','image_sha256','edit_id')} for r in v['scenes']]}
                 manifest=output/'visual-edit-snapshot.json';atomic_json(manifest,snap)
                 cps={s:copy.deepcopy(parent['checkpoints'][s]) for s in ('plan','research','script','speech','subtitles','music')}
-                images=[{'path':r['image_path'],'duration':r['duration'],'scene_id':r['scene_id']} for r in v['scenes']]
+                images=[{'path':r['image_path'],'duration':r['duration'],'scene_id':r['scene_id'],'image_provider':r.get('image_provider')} for r in v['scenes']]
                 cps['images']={'scenes':images,'assets':[asset(r['path']) for r in images]+[asset(manifest)],'editor_snapshot':str(manifest),'visual_qa_status':'not_checked','visual_qa_required':False,'review_source':'quick','automatic_visual_review':False}
                 if parent['state']=='completed' and parent['checkpoints'].get('verify',{}).get('verified') is True:
                     video=Path(parent['checkpoints']['render']['video'])
@@ -185,8 +210,8 @@ class SceneEditor:
                 for i,r in enumerate(v['scenes']):
                     clip=Path(parent['output'])/f'visual-{i:04}.mp4';receipt=clip.with_suffix('.json')
                     if clip.is_file() and receipt.is_file():
-                        import hashlib
-                        expected=hashlib.sha256((r['image_sha256']+str(r['duration'])+'1080x1920-30-pan-v1').encode()).hexdigest()
+                        from .media import visual_clip_identity
+                        expected=visual_clip_identity(r['image_sha256'],float(r['duration']),r.get('image_provider'))
                         try:cache=json.loads(receipt.read_text())
                         except (OSError,ValueError):cache={}
                         if cache.get('identity')==expected and cache.get('sha256')==digest(clip):

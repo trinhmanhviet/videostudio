@@ -30,7 +30,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             states="('running')" if flow_accounts.blocks_workers() else "('queued','running','retrying')"
             count=connection.execute('SELECT COUNT(*) FROM jobs WHERE state IN '+states).fetchone()[0]
             count+=connection.execute("SELECT COUNT(*) FROM scene_image_tasks WHERE state IN ('queued','running')").fetchone()[0]
-            if flow_accounts.blocks_browser_changes() or flow_accounts.blocks_workers():count=max(count,1)
+            if flow_accounts.blocks_browser_changes():count=max(count,1)
             return count
     browser_manager=BrowserManager(active_jobs=browser_active_jobs)
     from .exchanges import Exchanges, EXTENSION_HEARTBEAT_SECONDS
@@ -242,6 +242,17 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             return public_job(job)
         except KeyError:raise HTTPException(404,'Job not found')
         except ValueError as e:raise HTTPException(400,str(e))
+    @app.post('/api/jobs/{job_id}/reset-images')
+    def reset_images(job_id:str,data:dict|None=None,request:Request=None):
+        if request:same_origin(request)
+        data=data or {}
+        provider=data.get('image_provider')
+        batch_size=data.get('flow_batch_size')
+        try:
+            job=store.reset_stage_images(job_id,image_provider=provider,flow_batch_size=batch_size)
+            return public_job(job)
+        except KeyError:raise HTTPException(404,'Job not found')
+        except ValueError as e:raise HTTPException(400,str(e))
     @app.get('/api/system/logs')
     def system_logs():
         with store.db() as c:
@@ -403,6 +414,43 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         from urllib.parse import urlparse
         origin=request.headers.get('origin')
         if origin and urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
+    @app.get('/api/system/status')
+    def system_status(request:Request):
+        browser_request_local(request)
+        active=browser_active_jobs()
+        return {'status':'running','port':8877,'active_jobs':active,'cdp_port':8879}
+    @app.post('/api/system/stop')
+    def system_stop(request:Request,data:dict|None=None):
+        browser_request_local(request);same_origin(request)
+        data=data or {}
+        force=bool(data.get('force',False))
+        active=browser_active_jobs()
+        if active>0 and not force:
+            raise HTTPException(409,f'Có {active} tác vụ đang chạy. Hãy hủy video trước hoặc chọn Buộc tắt.')
+        import subprocess
+        flags=0
+        if os.name=='nt':
+            flags=getattr(subprocess,'DETACHED_PROCESS',0x00000008)|getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0x00000200)
+        script=str(ROOT/'scripts'/'stop_system.ps1')
+        cmd=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-Command',f"Start-Sleep -Milliseconds 600; & '{script}'"+(' -Force' if force else '')]
+        subprocess.Popen(cmd,creationflags=flags,close_fds=True)
+        return {'ok':True,'message':'VideoStudio đang tắt...'}
+    @app.post('/api/system/restart')
+    def system_restart(request:Request,data:dict|None=None):
+        browser_request_local(request);same_origin(request)
+        data=data or {}
+        force=bool(data.get('force',False))
+        active=browser_active_jobs()
+        if active>0 and not force:
+            raise HTTPException(409,f'Có {active} tác vụ đang chạy. Hãy hủy video trước hoặc chọn Buộc khởi động lại.')
+        import subprocess
+        flags=0
+        if os.name=='nt':
+            flags=getattr(subprocess,'DETACHED_PROCESS',0x00000008)|getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0x00000200)
+        script=str(ROOT/'scripts'/'restart_system.ps1')
+        cmd=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-Command',f"Start-Sleep -Milliseconds 600; & '{script}'"+(' -Force' if force else '')]
+        subprocess.Popen(cmd,creationflags=flags,close_fds=True)
+        return {'ok':True,'message':'VideoStudio đang khởi động lại...'}
     from .editor_api import register_editor_routes
     register_editor_routes(app,store,scene_editor,same_origin,public_job,image_jobs)
     @app.post('/api/connector/sessions')
@@ -608,6 +656,11 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         # Only checkpoint-attested files may be streamed, never arbitrary paths.
         root=Path(j['output']).resolve();candidate=(root/name).resolve()
         if candidate.parent!=root:raise HTTPException(404,'File not found')
+        if name=='video.mp4':
+            from .output_layout import final_video_path
+            expected=final_video_path(j).resolve()
+            recorded=j['checkpoints'].get('render',{}).get('video')
+            if recorded and Path(recorded).resolve()==expected:candidate=expected
         allowed={Path(a['path']).resolve() for cp in j['checkpoints'].values() for a in cp.get('assets',[])}
         if candidate not in allowed or not candidate.is_file():raise HTTPException(404,'File not checkpointed')
         if name=='video.mp4' and j['state']!='completed':raise HTTPException(409,'Video not verified')

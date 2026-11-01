@@ -55,8 +55,10 @@ def write_captions(utterances,path):
     def ass_stamp(value):
         cs=round(float(value)*100);h,cs=divmod(cs,360000);m,cs=divmod(cs,6000);s,cs=divmod(cs,100);return f'{h}:{m:02}:{s:02}.{cs:02}'
     events=[]
+    # 15% of the 1920px canvas; renderer also overrides legacy ASS styles.
+    header=header.replace(',90,90,130,1',',90,90,288,1')
     for u in utterances:
         caption=wrap_caption(u['narration']).replace('\n',r'\N')
         events.append(f"Dialogue: 0,{ass_stamp(u['start'])},{ass_stamp(u['end'])},Default,,0,0,0,,{caption}\n")
     ass.write_text(header+''.join(events),encoding='utf8')
-    return {'cue_count':len(rows),'timing_policy':'measured_independent_utterance','max_columns':32,'max_lines':3,'ass_path':str(ass),'safe_margins_pixels':{'left':90,'right':90,'bottom':130},'font_size_pixels':52}
+    return {'cue_count':len(rows),'timing_policy':'measured_independent_utterance','max_columns':32,'max_lines':3,'ass_path':str(ass),'safe_margins_pixels':{'left':90,'right':90,'bottom':288},'font_size_pixels':52}

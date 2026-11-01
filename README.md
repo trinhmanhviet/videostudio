@@ -19,7 +19,7 @@ Nếu chưa có `py -3.12`, cài Python 3.12 trước. Launcher dùng `C:\Python
 
 2. Nạp extension: Chrome thường → `chrome://extensions` → bật Developer mode → **Load unpacked** → chọn `D:\Projects\videostudio\extensions\videostudio-chatgpt`.
 3. Đăng nhập Google qua `Chrome - Clean.cmd`; sau đó mở **Mở debug** trong float để Flow cho phép tool điều khiển.
-4. Bấm đúp **Start VideoStudio.cmd**. Mở Studio, đăng nhập ChatGPT trong Chrome thường. Trong float bấm **Start**, rồi **Test chữ** nếu bridge chưa kết nối.
+4. Bấm đúp **Start VideoStudio.cmd**. Mở Studio, đăng nhập ChatGPT trong Chrome thường. Trong float bấm **Start**, rồi **Test chữ** nếu bridge chưa kết nối. Muốn tắt hoặc khởi động lại hệ thống, dùng **Stop VideoStudio.cmd** hoặc **Restart VideoStudio.cmd**.
 
 Muốn tự mở Chrome riêng: dùng **Chrome - Clean.cmd** để đăng nhập bình thường; **Chrome - Debug.cmd** để điều khiển Flow; **Chrome - Stop.cmd** để tắt Chrome riêng. Cả ba cùng dùng `data/chrome-profile`, giữ tài khoản và dữ liệu. Chế độ sạch để đăng nhập; debug để điều khiển. Không đổi chế độ khi video hoặc tác vụ ảnh đang chạy.
 
@@ -36,6 +36,8 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 - Google Flow mặc định tạo **10 ảnh mỗi đợt**, mỗi prompt tạo x1. Tool gửi prompt, chờ ảnh của nhóm tạo xong, ghép theo ID cảnh rồi tải. Nếu 2K lỗi, nó đóng thông báo Flow và dùng 1K cùng ảnh. Sau một lần 2K lỗi, ảnh còn lại trong nhóm dùng 1K để tránh chờ timeout lặp lại.
 - Đổi tài khoản Flow giữa video: float video → **Đổi tài khoản Flow** → **Chuẩn bị đổi tài khoản**. Chờ ảnh được đối chiếu và giữ lại; sau đó mở sạch, đăng nhập Google, bật debug rồi chọn **Tiếp tục video này**. Tool tiếp tục chính job đó và chỉ tạo cảnh còn thiếu. Luồng này giữ dữ liệu ảnh/checkpoint cũ và giữ nguyên biên nhận Flow.
 - Nếu một lô bị lỗi, **Tiếp tục từ bước tạo ảnh** sẽ dùng lại các ảnh/biên nhận đã lưu. Đừng tạo video thứ hai để thay thế job đang phục hồi.
+- Khi đã có ID Character nhưng chưa xác nhận lưu tên, retry mở lại đúng Character đó để hoàn tất và đọc lại tên; không tạo nhân vật thay thế. Nếu không đọc được trạng thái Flow, job giữ receipt để thử lại an toàn.
+- Reset ảnh chỉ thao tác sau khi kiểm tra lại job và các bản xuất phụ thuộc. File trung gian cũ được giữ trong `.reset-backup` bên trong thư mục dữ liệu job; nếu cập nhật database thất bại, file được trả về chỗ cũ.
 - Mười ảnh mỗi đợt đã có một lô Flow thực tế chạy xong. Hai mươi và ba mươi ảnh mỗi đợt vẫn khóa.
 
 ## Kiến trúc và luồng xử lý
@@ -108,6 +110,19 @@ Các điểm vào chính: API/exchange tại `videostudio/api.py` và `videostud
 README mô tả luồng hiện hành; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
 
 ## File và cài đặt local
+
+Job mới dùng thư mục theo tên dự án (chuyển thành slug an toàn), ví dụ:
+
+```text
+E:\Videos\vuan1\
+├── video-<job-id-1>.mp4
+├── video-<job-id-2>.mp4
+└── data\
+    ├── <job-id-1>\  # ảnh, lời đọc, nhạc, phụ đề, checkpoint, log, cache dựng
+    └── <job-id-2>\
+```
+
+Xuất lại sau khi sửa ảnh hoặc đổi giọng sẽ tạo file thành phẩm riêng trong cùng thư mục dự án. Thư mục `data` tách theo job để tránh ghi đè. Dữ liệu đã tạo theo cấu trúc cũ tiếp tục dùng đường dẫn cũ; hệ thống không tự di chuyển checkpoint hoặc asset cũ.
 
 `data/` chứa database job, Chrome profile riêng, cache, Flow receipts và trạng thái runtime. Git ignore thư mục này. Video/ảnh đầu ra mặc định lưu ở `E:\Videos`; máy khác có thể đặt `VS_OUTPUT_DIR` trước khi khởi động.
 

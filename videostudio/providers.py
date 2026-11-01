@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 from .core import PermanentError, Cancelled, digest, available_flow_batch_sizes
+from .cdp_flow import normalize_flow_prompt
 from .media import asset, probe, render, verify, run
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -79,6 +80,48 @@ def flow_reference_enabled(job):
         words=len(re.findall(r'\S+',request.get('idea','')))
         duration=words/3
     return request.get('image_provider')=='flow' and isinstance(duration,(int,float)) and not isinstance(duration,bool) and duration<=300
+
+def _flow_checkpoint_prompt_matches(saved, prompt, mentions):
+    if saved.get('prompt') == prompt:
+        return True
+    # Older batch checkpoints stored the submitted text instead of the source.
+    normalized = normalize_flow_prompt(prompt, mentions)
+    return saved.get('prompt') == normalized and saved.get('submitted_prompt') == normalized
+
+
+def split_caption_lines(text):
+    """Split narration text into individual sentence clauses safe for wrap_caption without duplicating scenes."""
+    import unicodedata
+    import re
+    from .captions import wrap_caption
+    text = unicodedata.normalize('NFC', text or '').strip()
+    if not text:
+        return []
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?…\n])\s+', text) if s.strip()]
+    if not sentences:
+        sentences = [text]
+
+    chunks = []
+    for sentence in sentences:
+        try:
+            wrap_caption(sentence)
+            chunks.append(sentence)
+        except ValueError:
+            sub_chunks = []
+            current = []
+            for word in sentence.split():
+                try:
+                    wrap_caption(' '.join(current + [word]))
+                except ValueError:
+                    if current:
+                        sub_chunks.append(' '.join(current))
+                        current = []
+                    wrap_caption(word)
+                current.append(word)
+            if current:
+                sub_chunks.append(' '.join(current))
+            chunks.extend(sub_chunks)
+    return chunks
 
 def validate_flow_character_manifest(script):
     """Validate explicit Flow character IDs and evidence copied from scene prompts.
@@ -686,10 +729,14 @@ class Pipeline:
         target_sec=j['request']['duration_seconds']
         if target_sec>300:
             return self._script_draft_chapters(j,check,feedback)
-        max_scenes=max(100,int(target_sec*0.6))
+        target_scenes = max(2, min(30, round(target_sec / 12)))
+        max_scenes = max(5, int(target_scenes * 1.5))
         flow_references=flow_reference_enabled(j)
         flow_manifest_rules=(
-            'FLOW CHARACTER REFERENCES: Return a top-level characters list for recurring characters that are visually present in at least two scenes. Each entry is {"character_id": short stable ASCII id, "name": short label, "appearance_evidence": [1-8 exact phrases copied verbatim from the visual_prompt of a scene where this character appears]}. Every scene must include character_ids (a list, empty when no recurring character is visible). Do not invent or infer physical traits. If appearance is not explicitly present in the visual prompts, leave appearance_evidence empty; the pipeline will stop for user input. Use the same ID for the same person in every scene. Do not change narration or visual_prompt for this manifest.\n'
+            'FLOW CHARACTER REFERENCES: Return a top-level characters list for recurring characters that are visually present in at least two scenes. Each entry is {"character_id": short stable ASCII id, "name": short label, "appearance_evidence": [1-8 exact phrases copied verbatim from the visual_prompt of a scene where this character appears]}. Every scene must include character_ids (a list, empty when no recurring character is visible). Use the same ID for the same person in every scene. '
+            'To maintain strict visual consistency across scenes, in every scene where this character appears, the visual_prompt MUST include both @<character_id> and their canonical physical traits in brackets (e.g. "@anh_vuong [35-year-old Vietnamese man, 1.73m, weathered tanned skin, short side-parted straight dark hair, faint scar near left eyebrow, dark brown linen bà ba shirt]"), and list their id in the scene\'s "character_ids" list. '
+            'Each phrase in appearance_evidence must specify ethnicity, age/build, skin tone, hair, scars/marks, or clothing copied verbatim from their scene visual prompts. '
+            'Also apply consistent tagging to recurring key props (e.g. @prop_<name>) and recurring key locations (e.g. @loc_<name>).\n'
             if flow_references else '')
         flow_schema=('"characters":[{"character_id":str,"name":str,"appearance_evidence":[str]}],' if flow_references else '')
         scene_character_schema=',"character_ids":[str]' if flow_references else ''
@@ -707,23 +754,34 @@ class Pipeline:
                      '   - STAGE 3 (ESCALATION & DEEP DIVE): Build cascading micro-loops (resolve a question, open a new tension). Vary pacing between rapid facts (Compression) and emotional depth (Expansion).\n'
                      '   - STAGE 4 (CLIMAX / GRAND PAYOFF): Shock moment pattern-interrupt, then reveal the ultimate truth that resolves the opening hook.\n'
                      '   - STAGE 5 (LINGERING THOUGHT): Zoom-out to a deep philosophical takeaway or paradox. Never summarize or beg for likes/shares.\n'
-                     '6. PACING & LENGTH: Every individual scene narration MUST be <= 85 characters (spaces included). Alternate between punchy short clauses (15-30 chars) and narrative core clauses (45-80 chars). Target ~3 spoken words per second.\n'
-                     '7. TOKEN SANDWICH VISUAL PROMPTS: Each scene must have an English visual_prompt using 4-layer physical camera syntax: [CAMERA & LENS] (e.g. 35mm f/2.0, slow dolly push-in) + [SUBJECT & MICRO-ACTION] + [ENVIRONMENT & ATMOSPHERE] + [LIGHTING & COLOR PALETTE]. No buzzwords like "8k", "photorealistic", "masterpiece". Maintain consistent character and visual style across all scenes.\n'
-                     +('8. FACTUAL INTEGRITY: Ground factual claims in the provided ChatGPT research context. It is not independently URL-verified; do not claim independent verification. If a detail is unclear, omit it or keep a broad supported description. Do not invent specifics or unsupported claims about what records do not confirm.\n' if j['request'].get('workflow_mode')=='research' else '8. FACTUAL INTEGRITY: Ground all material historical/scientific claims strictly in the supplied sources. Do not invent citations or dates.\n')
+                     '6. SCENE PACING & MULTI-SENTENCE GROUPING: Do NOT create a separate image for every sentence! Group 2 to 4 related sentences sharing the same visual context/environment into ONE scene (~8 to 15 seconds per scene). In each scene provide:\n'
+                     '   - "visual_prompt": A single 4-layer Token Sandwich English prompt for this scene (Camera + Subject + Environment + Lighting). One steady cinematic visual per scene.\n'
+                     '   - "music_prompt": A specific instrumental background music description matching the mood, tempo, and emotion of this scene (e.g. "Tense low strings, quiet bamboo flute, building suspense, documentary style, instrumental").\n'
+                     '   - "narration_lines": A list of 2 to 4 punchy, related sentences for this scene. Every individual sentence MUST be <= 85 characters (spaces included). Target ~3 spoken words per second.\n'
+                     '7. TOKEN SANDWICH VISUAL PROMPTS: Maintain consistent character, lighting, and visual style across all scenes.\n'
+                     +('10. FACTUAL INTEGRITY: Ground factual claims in the provided ChatGPT research context. It is not independently URL-verified; do not claim independent verification. If a detail is unclear, omit it or keep a broad supported description. Do not invent specifics or unsupported claims about what records do not confirm.\n' if j['request'].get('workflow_mode')=='research' else '8. FACTUAL INTEGRITY: Ground all material historical/scientific claims strictly in the supplied sources. Do not invent citations or dates.\n')
+                     +('8. CULTURAL & ETHNIC ANCHORING: If the subject is set in Vietnam, China, East Asia, or any non-Western culture or history, NEVER allow characters, faces, hair, clothing, or architecture to default to Western or Caucasian appearance. Always explicitly specify the authentic ethnicity and nationality in English visual prompts (e.g. "Vietnamese man in his 30s with East Asian facial features", "Han Chinese artisan", "traditional northern Vietnamese đình làng", "Song Dynasty marketplace with terracotta roof tiles"). For historical or traditional settings, specify authentic clothing (e.g. dark brown bà ba linen shirt, traditional silk áo dài, period robes).\n')
                      +flow_manifest_rules
-                     +f'Return JSON: {{"narration":str,"source_paths":[str],{flow_schema}"scenes":[{{"narration":str,"visual_prompt":str{scene_character_schema}}}]}}. At most {max_scenes} scenes. Concatenated scenes must equal narration. '
+                     +f'Return JSON: {{"narration":str,"source_paths":[str],{flow_schema}"scenes":[{{"scene_id":str,"visual_prompt":str,"music_prompt":str,"narration":str,"narration_lines":[str]{scene_character_schema}}}]}}. At most {max_scenes} scenes. Concatenated scenes must equal narration. '
                      +json.dumps({'request':j['request'],'plan':j['checkpoints']['plan'],'research':j['checkpoints']['research'],'repair_feedback':feedback},ensure_ascii=False))
         d=self.llm_json(prompt_text,check)
         allowed={s['path'] for s in j['checkpoints']['research']['sources']}
         if not isinstance(d.get('narration'),str) or not d['narration'].strip() or (allowed and not d.get('source_paths')) or not set(d.get('source_paths',[]))<=allowed:raise ValueError('Unattributed or empty script')
-        from .captions import wrap_caption
         scenes=d.get('scenes')
         if not isinstance(scenes,list) or not scenes or len(scenes)>max_scenes:raise ValueError(f'Timed utterance storyboard required (1-{max_scenes} scenes)')
-        from .captions import split_caption_scenes
-        scenes=d['scenes']=split_caption_scenes(scenes)
-        for scene in scenes:
+        from .captions import wrap_caption
+        for scene_idx,scene in enumerate(scenes):
             if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError('Missing scene visual prompt')
-            wrap_caption(scene.get('narration',''))
+            if 'scene_id' not in scene or not scene['scene_id']:scene['scene_id']=f'scene-{scene_idx:04}'
+            if not scene.get('music_prompt'):scene['music_prompt']=j.get('checkpoints',{}).get('plan',{}).get('music_prompt','Cinematic documentary soundtrack')
+            raw_lines=scene.get('narration_lines')
+            if not raw_lines and isinstance(scene.get('narration'),str):raw_lines=[scene['narration']]
+            clean_lines=[]
+            for item in (raw_lines or []):
+                for chunk in split_caption_lines(str(item or '')):clean_lines.append(chunk)
+            if not clean_lines:raise ValueError('Missing scene narration')
+            scene['narration_lines']=clean_lines
+            scene['narration']=' '.join(clean_lines)
         d['narration']=' '.join(scene['narration'] for scene in scenes)
         if flow_references:validate_flow_character_manifest(d)
         return d
@@ -822,34 +880,43 @@ class Pipeline:
         from .core import digest
         import hashlib
         utterances=[];assets=[];cursor=0
-        total=len(j['checkpoints']['script']['scenes'])
-        for i,scene in enumerate(j['checkpoints']['script']['scenes']):
-            check()
-            if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {i+1}/{total} (GPU)...')
-            part=out.with_name(f'speech-{i:04}.wav');receipt=part.with_suffix('.json')
-            identity=hashlib.sha256(json.dumps({'narration':scene['narration'],'voice':v},sort_keys=True).encode()).hexdigest()
-            saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
-            if not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part)):
-                args=[self.speech_python,'-m','videostudio.speech_worker',json.dumps({'text':scene['narration'],'voice':v,'cache':self.speech_cache,'output':str(part)},ensure_ascii=False)]
-                run(args,check,timeout=900)
-                receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
-            audio_data=probe(part,self.ffprobe)
-            duration=float(audio_data['format']['duration'])
-            if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in audio_data.get('streams',[])):
-                raise PermanentError('Invalid utterance audio stream/duration')
-            from .media import audio_report
-            try:
-                quality=audio_report(part,check,self.ffmpeg)
-            except PermanentError as e:
-                if 'Silent or clipped audio' in str(e):
-                    tmp_part=part.with_suffix('.norm.wav')
-                    run([self.ffmpeg,'-v','error','-y','-i',str(part),'-af','volume=0.95',str(tmp_part)],check)
-                    tmp_part.replace(part)
+        scenes_input=j['checkpoints']['script']['scenes']
+        total_scenes=len(scenes_input)
+        total_lines=sum(len(s.get('narration_lines') or [s.get('narration','')]) for s in scenes_input)
+        u_idx=0
+        for scene_idx,scene in enumerate(scenes_input):
+            lines=scene.get('narration_lines') or [scene.get('narration','')]
+            for line_idx,line in enumerate(lines):
+                check()
+                line_text=line.strip()
+                if not line_text:continue
+                if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {u_idx+1}/{total_lines} (cảnh {scene_idx+1}/{total_scenes})...')
+                part=out.with_name(f'speech-{u_idx:04}.wav');receipt=part.with_suffix('.json')
+                identity=hashlib.sha256(json.dumps({'narration':line_text,'voice':v},sort_keys=True).encode()).hexdigest()
+                saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
+                if not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part)):
+                    args=[self.speech_python,'-m','videostudio.speech_worker',json.dumps({'text':line_text,'voice':v,'cache':self.speech_cache,'output':str(part)},ensure_ascii=False)]
+                    run(args,check,timeout=900)
                     receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
+                audio_data=probe(part,self.ffprobe)
+                duration=float(audio_data['format']['duration'])
+                if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in audio_data.get('streams',[])):
+                    raise PermanentError('Invalid utterance audio stream/duration')
+                from .media import audio_report
+                try:
                     quality=audio_report(part,check,self.ffmpeg)
-                else:
-                    raise
-            utterances.append({**scene,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration,'audio_quality':quality});cursor+=duration;assets.append(asset(part))
+                except PermanentError as e:
+                    if 'Silent or clipped audio' in str(e):
+                        tmp_part=part.with_suffix('.norm.wav')
+                        run([self.ffmpeg,'-v','error','-y','-i',str(part),'-af','volume=0.95',str(tmp_part)],check)
+                        tmp_part.replace(part)
+                        receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
+                        quality=audio_report(part,check,self.ffmpeg)
+                    else:
+                        raise
+                utterances.append({**scene,'scene_index':scene_idx,'scene_id':scene.get('scene_id',f'scene-{scene_idx:04}'),'line_index':line_idx,'narration':line_text,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration,'audio_quality':quality})
+                cursor+=duration;assets.append(asset(part))
+                u_idx+=1
         listing=out.with_name('speech-concat.txt')
         listing.write_text('\n'.join("file '"+Path(u['path']).resolve().as_posix()+"'" for u in utterances))
         pitch=float(j['request'].get('pitch',0))
@@ -864,14 +931,19 @@ class Pipeline:
             raise PermanentError('Invalid narration audio stream/duration')
         if not utterances or abs(actual_dur-cursor)>max(.1,cursor*.001):
             raise PermanentError('Narration audio duration does not match its utterances')
-        # Reconcile container rounding without changing any speech samples or pace.
         scale=actual_dur/cursor
         for utterance in utterances:
             utterance['start']*=scale;utterance['end']*=scale
             utterance['duration']=utterance['end']-utterance['start']
         utterances[-1]['end']=actual_dur
         utterances[-1]['duration']=actual_dur-utterances[-1]['start']
-        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'assets':assets+[asset(out)]}
+        scenes_timing=[]
+        for s_idx,s in enumerate(scenes_input):
+            s_utts=[u for u in utterances if u.get('scene_index',s_idx)==s_idx]
+            s_start=s_utts[0]['start'] if s_utts else 0.0
+            s_end=s_utts[-1]['end'] if s_utts else 0.0
+            scenes_timing.append({**s,'scene_index':s_idx,'start':s_start,'end':s_end,'duration':s_end-s_start})
+        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'scenes':scenes_timing,'assets':assets+[asset(out)]}
     def _visual_workflow(self,j,compiled,index):
         # Fixed prefix only for identity; output filename is derived from the resulting key.
         return image_graph(compiled['positive'],int(j['id'].replace('-','')[:8],16)+index,'visual-conditioning-key',compiled['negative'])
@@ -1057,9 +1129,10 @@ class Pipeline:
     def _flow_portrait_prompt(character):
         traits='; '.join(character.get('appearance_evidence',[]))
         if not traits:raise PermanentError('Flow character '+str(character.get('character_id'))+' needs explicit appearance details before a portrait can be generated')
-        return ('Create a neutral identity-reference portrait of one fictional character. Preserve only these stated visual traits: '+traits+'. '
-                'Head-and-shoulders, neutral expression, plain light-gray background, even natural lighting, front three-quarter view. '
-                'No props, no scene-specific action, no extra person, no text.')
+        name=character.get('name') or character.get('character_id')
+        return (f'Create a high-detail neutral identity-reference portrait of {name}. Visual identity and physical traits: {traits}. '
+                'Authentic ethnic facial structure and hair, head-and-shoulders portrait, neutral expression, front three-quarter view, looking towards camera, plain light-gray studio background, soft even cinematic lighting, 35mm portrait photography. '
+                'Single person only, no props, no scene-specific action, no extra person, no text, no watermark.')
 
     @staticmethod
     def _flow_scene_mentions(scene,references):
@@ -1124,21 +1197,40 @@ class Pipeline:
 
     def _flow_batch_images(self,j,check,references,reference_assets,reference_mode,batch_size):
         from PIL import Image,ImageStat
-        utterances=j['checkpoints']['speech']['utterances'];prepared=[];tasks=[];assets=list(reference_assets)
+        speech_cp=j['checkpoints']['speech']
+        scenes_items=speech_cp.get('scenes') or speech_cp['utterances']
+        prepared=[];tasks=[];assets=list(reference_assets)
         flow_run=self._active_flow_run(j);migrated=flow_run!=j['id']
-        for index,utterance in enumerate(utterances):
+        for index,utterance in enumerate(scenes_items):
             check();kind=f'images-{index:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
+            task_id=str(uuid.uuid5(uuid.UUID(flow_run),f'bulk-scene-image:{index}'))
             saved=json.loads(checkpoint.read_text(encoding='utf8')) if checkpoint.is_file() else {}
+            if not saved and path.is_file():
+                task_file=ROOT/'data'/'flow-images'/'tasks'/(task_id+'.json')
+                if task_file.is_file():
+                    try:
+                        trec=json.loads(task_file.read_text(encoding='utf8'))
+                        if trec.get('stage')=='downloaded' and trec.get('download_sha256')==digest(path):
+                            with Image.open(path) as picture:
+                                picture.load()
+                                width,height=picture.size
+                            saved={'sha256':digest(path),'prompt':utterance['visual_prompt'],'submitted_prompt':utterance['visual_prompt'],'provider':'flow','task_id':task_id,
+                                   'request_id':trec.get('request_id') or ('flow-'+task_id),'width':width,'height':height,'character_mentions':self._flow_scene_mentions(utterance,references),
+                                   'media_id':trec.get('media_id'),'project_url':trec.get('project_url')}
+                            temporary=checkpoint.with_suffix('.part.json')
+                            temporary.write_text(json.dumps(saved,ensure_ascii=False),encoding='utf8')
+                            temporary.replace(checkpoint)
+                    except Exception:pass
             mentions=self._flow_scene_mentions(utterance,references);saved_provider=saved.get('provider','comfy')
             legacy=saved.get('reference_media_ids',[]) or saved.get('reference_identity',[]);saved_mentions=saved.get('character_mentions',[])
-            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==utterance['visual_prompt'] and saved_provider=='flow' and (migrated or (not legacy and saved_mentions==mentions))
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and _flow_checkpoint_prompt_matches(saved,utterance['visual_prompt'],saved_mentions) and saved_provider=='flow' and (migrated or (not legacy and saved_mentions==mentions))
             if migrated and reusable:mentions=saved_mentions
             if path.is_file() and not reusable and (mentions or saved_mentions or legacy):
                 raise PermanentError('Existing scene image has different native Flow Character conditioning; refusing to overwrite '+kind)
-            task_id=str(uuid.uuid5(uuid.UUID(flow_run),f'bulk-scene-image:{index}'))
             item={'index':index,'utterance':utterance,'kind':kind,'path':path,'checkpoint':checkpoint,'saved':saved,'mentions':mentions,'reusable':reusable,'task_id':task_id}
             prepared.append(item)
-            if not reusable:tasks.append({'task_id':task_id,'prompt':utterance['visual_prompt'],'character_mentions':mentions,'ordinal':index,'output_path':path})
+            clean_prompt=normalize_flow_prompt(utterance['visual_prompt'],mentions)
+            if not reusable:tasks.append({'task_id':task_id,'prompt':clean_prompt,'original_prompt':utterance['visual_prompt'],'character_mentions':mentions,'ordinal':index,'output_path':path})
         batch_results={}
         if tasks:
             if batch_size not in available_flow_batch_sizes() or batch_size==1:
@@ -1150,7 +1242,19 @@ class Pipeline:
             for number,cohort in enumerate(cohorts,1):
                 check()
                 if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo và tải nhóm ảnh {number}/{len(cohorts)}: {len(cohort)} cảnh. Gửi prompt trước, chờ tạo xong cả nhóm rồi tải.')
-                batch_results.update(self._browser_scene_images_batch(j,cohort,check,timeout=batch_timeout))
+                cohort_results=self._browser_scene_images_batch(j,cohort,check,timeout=batch_timeout)
+                batch_results.update(cohort_results)
+                for task in cohort:
+                    tid=task['task_id'];c_path=task['output_path'];c_check=c_path.with_suffix('.checkpoint.json')
+                    receipt=cohort_results.get(tid)
+                    if receipt and c_path.is_file() and not c_check.is_file():
+                        with Image.open(c_path) as picture:
+                            picture.load()
+                            width,height=picture.size
+                        saved_data={'sha256':digest(c_path),'prompt':task['original_prompt'],'submitted_prompt':task['prompt'],'provider':'flow','task_id':tid,
+                                    'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':task.get('character_mentions',[]),
+                                    'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
+                        temp=c_check.with_suffix('.part.json');temp.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temp.replace(c_check)
         scenes=[]
         for item in prepared:
             check();u=item['utterance'];path=item['path'];checkpoint=item['checkpoint'];mentions=item['mentions'];task_id=item['task_id']
@@ -1161,7 +1265,7 @@ class Pipeline:
                     picture.load()
                     if picture.width<512 or picture.height<512 or max(ImageStat.Stat(picture.convert('RGB')).stddev)<1:raise PermanentError('Invalid/near-uniform scene image')
                     width,height=picture.size
-                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'submitted_prompt':u['visual_prompt'],'provider':'flow','task_id':task_id,
+                saved_data={'sha256':digest(path),'prompt':u['visual_prompt'],'submitted_prompt':normalize_flow_prompt(u['visual_prompt'],mentions),'provider':'flow','task_id':task_id,
                             'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':mentions,
                             'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
                 temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
@@ -1174,7 +1278,7 @@ class Pipeline:
         provider=j.get('request',{}).get('image_provider','comfy')
         if provider not in ('flow','chatgpt','comfy'):raise PermanentError('Unknown initial image provider')
         batch_size=j.get('request',{}).get('flow_batch_size',1)
-        if type(batch_size) is not int or batch_size not in (1,10,20,30):
+        if type(batch_size) is not int or batch_size not in (1,3,5,10):
             raise PermanentError('Invalid persisted Flow cohort size; no image submitted')
         if (provider!='flow' and batch_size!=1) or (provider=='flow' and batch_size not in available_flow_batch_sizes()):
             raise PermanentError('Selected Flow cohort size is not validated/enabled; no image submitted')
@@ -1190,16 +1294,18 @@ class Pipeline:
                 reference_mode='account_change_fixed_prompt_fallback'
             elif script_checkpoint.get('flow_character_manifest_version')==FLOW_CHARACTER_MANIFEST_VERSION:
                 recurring=[character for character in script_checkpoint.get('characters',[]) if sum(character['character_id'] in scene.get('character_ids',[]) for scene in script_checkpoint.get('scenes',[]))>=2]
-                if recurring and os.getenv('VS_FLOW_REFERENCE_UI_VERIFIED')!='1':
+                if recurring and os.getenv('VS_FLOW_REFERENCE_UI_VERIFIED','1')!='1':
                     raise PermanentError('Native Flow Character/@name path is not enabled; no Character or scene image was generated')
                 references,reference_assets=self._flow_native_characters(j,check);assets.extend(reference_assets)
                 reference_mode='native_flow_characters' if references else 'flow_no_recurring_characters'
             else:
                 reference_mode='legacy_text_only'
-        total=len(j['checkpoints']['speech']['utterances'])
+        speech_cp=j['checkpoints']['speech']
+        scenes_items=speech_cp.get('scenes') or speech_cp['utterances']
+        total=len(scenes_items)
         if provider=='flow' and batch_size>1:
             return self._flow_batch_images(j,check,references,reference_assets,reference_mode,batch_size)
-        for i,u in enumerate(j['checkpoints']['speech']['utterances']):
+        for i,u in enumerate(scenes_items):
             check()
             if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo hình ảnh: cảnh {i+1}/{total} ({provider})...')
             kind=f'images-{i:04}';path=Path(j['output'])/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
@@ -1209,11 +1315,12 @@ class Pipeline:
             legacy_reference_data=saved.get('reference_media_ids',[]) or saved.get('reference_identity',[])
             saved_mentions=saved.get('character_mentions',[])
             migrated=provider=='flow' and self._active_flow_run(j)!=j['id']
-            reusable=path.is_file() and saved.get('sha256')==digest(path) and saved.get('prompt')==u['visual_prompt'] and saved_provider==provider and (migrated or (not legacy_reference_data and saved_mentions==scene_mentions))
+            prompt_matches=_flow_checkpoint_prompt_matches(saved,u['visual_prompt'],saved_mentions) if provider=='flow' else saved.get('prompt')==u['visual_prompt']
+            reusable=path.is_file() and saved.get('sha256')==digest(path) and prompt_matches and saved_provider==provider and (migrated or (not legacy_reference_data and saved_mentions==scene_mentions))
             if migrated and reusable:scene_mentions=saved_mentions
             if path.is_file() and not reusable and (scene_mentions or saved_mentions or legacy_reference_data):
                 raise PermanentError('Existing scene image has different native Flow Character conditioning; refusing to overwrite '+kind)
-            sent_prompt=u['visual_prompt']
+            sent_prompt=normalize_flow_prompt(u['visual_prompt'],scene_mentions) if provider=='flow' else u['visual_prompt']
             if not reusable:
                 check()
                 if provider=='comfy':
@@ -1240,35 +1347,75 @@ class Pipeline:
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
         check()
-        if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền và chuẩn hóa âm thanh (Stable Audio 3)...')
+        if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền theo từng cảnh và chuẩn hóa âm thanh (Stable Audio 3)...')
         if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
-        prompt='Instrumental only, no vocals. '+j['checkpoints']['plan']['music_prompt'][:500]
-        from .comfy_recovery import resolve_music_kind
-        kind=resolve_music_kind(j['output'])
-        graph=music_graph(prompt,timeline_duration(j),int(j['id'].replace('-','')[:8],16),'videostudio/'+j['id']+'-'+kind)
-        path=Path(j['output'])/'music.mp3';result=self.comfy_asset(j,kind,graph,path,check)
-        result['recovery_kind']=kind
-        run([self.ffmpeg,'-v','error','-i',path,'-f','null','-'],check)
-        seconds=float(probe(path,self.ffprobe)['format']['duration'])
-        if seconds<1:raise PermanentError('Empty music output')
-        from .music import normalize_music_levels
-        normalized=normalize_music_levels(path,j['output'],check,self.ffmpeg)
-        result.update(duration_seconds=seconds,path=normalized['path'],raw_path=str(path),audio_quality=normalized['audio_quality'],raw_audio_quality=normalized['raw_audio_quality'],full_decode_ok=True,license_reviewed=False)
-        result['assets'].extend(normalized['assets'])
-        return result
+        target_dur=timeline_duration(j)
+        script=j.get('checkpoints',{}).get('script',{})
+        script_scenes=script.get('scenes',[])
+        scenes_timing=j.get('checkpoints',{}).get('images',{}).get('scenes') or j.get('checkpoints',{}).get('speech',{}).get('scenes',[])
+        has_per_scene=len(script_scenes)>1 and any(s.get('music_prompt') for s in script_scenes)
+        if not has_per_scene:
+            prompt='Instrumental only, no vocals. '+j['checkpoints']['plan'].get('music_prompt','Cinematic documentary soundtrack')[:500]
+            from .comfy_recovery import resolve_music_kind
+            kind=resolve_music_kind(j['output'])
+            graph=music_graph(prompt,target_dur,int(j['id'].replace('-','')[:8],16),'videostudio/'+j['id']+'-'+kind)
+            path=Path(j['output'])/'music.mp3';result=self.comfy_asset(j,kind,graph,path,check)
+            result['recovery_kind']=kind
+            run([self.ffmpeg,'-v','error','-i',path,'-f','null','-'],check)
+            seconds=float(probe(path,self.ffprobe)['format']['duration'])
+            if seconds<1:raise PermanentError('Empty music output')
+            from .music import normalize_music_levels
+            normalized=normalize_music_levels(path,j['output'],check,self.ffmpeg)
+            result.update(duration_seconds=seconds,path=normalized['path'],raw_path=str(path),audio_quality=normalized['audio_quality'],raw_audio_quality=normalized['raw_audio_quality'],full_decode_ok=True,license_reviewed=False)
+            result['assets'].extend(normalized['assets'])
+            return result
+
+        scene_clips=[]
+        assets=[]
+        for i,s in enumerate(script_scenes):
+            check()
+            s_dur=float(scenes_timing[i]['duration']) if i<len(scenes_timing) else (target_dur/len(script_scenes))
+            s_prompt='Instrumental only, no vocals. '+(s.get('music_prompt') or j['checkpoints']['plan'].get('music_prompt','Cinematic documentary soundtrack'))[:500]
+            kind=f'music-scene-{i:04}'
+            part_path=Path(j['output'])/(kind+'.mp3')
+            gen_sec=max(5.0,s_dur+2.0)
+            graph=music_graph(s_prompt,gen_sec,int(j['id'].replace('-','')[:8],16)+i,f'videostudio/{j["id"]}-{kind}')
+            part_res=self.comfy_asset(j,kind,graph,part_path,check)
+            run([self.ffmpeg,'-v','error','-i',part_path,'-f','null','-'],check)
+            scene_clips.append({'path':str(part_path),'duration':s_dur})
+            assets.extend(part_res.get('assets',[]))
+
+        from .music import assemble_scene_soundtracks, normalize_music_levels
+        assembled_path=Path(j['output'])/'music-assembled.wav'
+        assembled=assemble_scene_soundtracks(scene_clips,target_dur,assembled_path,check,self.ffmpeg,self.ffprobe)
+        normalized=normalize_music_levels(assembled['path'],j['output'],check,self.ffmpeg)
+        return {
+            'duration_seconds':target_dur,
+            'path':normalized['path'],
+            'raw_path':str(assembled_path),
+            'audio_quality':normalized['audio_quality'],
+            'raw_audio_quality':normalized['raw_audio_quality'],
+            'full_decode_ok':True,
+            'license_reviewed':False,
+            'scene_tracks':len(scene_clips),
+            'assets':assets+assembled['assets']+normalized['assets']
+        }
     def render(self,j,check):
         if getattr(self,'scene_editor',None):self.scene_editor.require_user_review(j)
         from .visual_quality import require_release
         require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'store',None):self.store.log(j['id'],'render','Đang kết hợp hình ảnh, phụ đề, âm thanh và xuất video MP4...')
         cp=j['checkpoints'];vol=j['request'].get('music_volume',0.35)
+        from .media import render_scenes
+        from .output_layout import publish_video
+        framed_scenes=render_scenes(j)
         reused=cp['images'].get('reuse_audio')
         if reused:
             from .core import digest
             from .media import render_visual_revision
             if digest(reused['path'])!=reused['sha256']:raise PermanentError('Verified original soundtrack source changed')
-            return render_visual_revision(cp['images']['scenes'],reused['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe)
-        return render(cp['images']['scenes'],cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe,music_volume=vol)
+            return publish_video(j,render_visual_revision(framed_scenes,reused['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe))
+        return publish_video(j,render(framed_scenes,cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe,music_volume=vol))
     def verify(self,j,check):
         from .visual_quality import require_release
         visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
