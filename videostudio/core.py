@@ -638,7 +638,7 @@ class Worker:
 
                     c.execute('INSERT OR REPLACE INTO attempts VALUES(?,?,?)',(jid,stage,count))
 
-                    c.execute("UPDATE jobs SET state='running',stage=?,updated=? WHERE id=?",(stage,time.time(),jid));s.event(c,jid,stage,'started')
+                    c.execute("UPDATE jobs SET state='running',stage=?,error=NULL,updated=? WHERE id=?",(stage,time.time(),jid));s.event(c,jid,stage,'started')
 
                     attempt_started=True
 

@@ -8,6 +8,15 @@ from videostudio.hybrid_images import run
 
 
 class ReferenceGraphTests(unittest.TestCase):
+    def test_old_batch_requires_unique_job_prompt_and_explicit_failure(self):
+        import hashlib
+        task={'task_id':'one','job_id':'job','prompt':'A unique full scene description','prompt_sha256':hashlib.sha256(b'A unique full scene description').hexdigest(),'character_mentions':[]}
+        receipt={**task,'stage':'waiting_result'}
+        tile={'tile_id':'failed','complete':False,'text':'Generation failed. A unique full scene description'}
+        self.assertEqual(FlowImages._legacy_failed_tasks([task],[tile],[receipt]),{'one':'failed'})
+        self.assertEqual(FlowImages._legacy_failed_tasks([task],[tile],[receipt,{**receipt,'task_id':'other'}]),{})
+        self.assertEqual(FlowImages._legacy_failed_tasks([task],[{**tile,'text':'Still generating'}],[receipt]),{})
+
     def test_only_new_terminal_cards_with_unambiguous_full_prompt_are_blocked(self):
         tasks=[{'task_id':'one','prompt':'The unique long description of this scene'}]
         failure={'tile_id':'new-card','text':'Generation failed. The unique long description of this scene','complete':False}

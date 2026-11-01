@@ -235,6 +235,16 @@ class FlowImages:
                 failed[task]=tile['tile_id']
         return failed
 
+    @classmethod
+    def _legacy_failed_tasks(cls,tasks,tiles,receipts):
+        # Old batches have no tile baseline. Accept only a terminal card whose
+        # full prompt identifies exactly one durable task in this entire job.
+        unique=[]
+        for task in tasks:
+            same=[r for r in receipts if r.get('job_id')==task['job_id'] and r.get('prompt_sha256')==task['prompt_sha256'] and r.get('kind')!='native_character']
+            if len(same)==1 and same[0].get('task_id')==task['task_id'] and same[0].get('character_mentions',[])==task.get('character_mentions',[]):unique.append(task)
+        return cls._confirmed_failed_tasks(unique,tiles,[])
+
     async def _ensure_batch_row_layout(self,session,project_url,tasks,baseline,tiles):
         def expected_rows(rows):
             count=len(tasks);expected=(count+9)//10;last=count%10 or 10
@@ -1454,14 +1464,20 @@ class FlowImages:
                 # A failure card is usable evidence only when it exposes the full,
                 # unique prompt and belongs to this submission's new tile set.
                 failed=self._confirmed_failed_tasks(normalized,(state or {}).get('assetTiles',[]),manifest.get('baseline_tile_ids'))
+                legacy=manifest.get('baseline_tile_ids') is None
+                if legacy:
+                    records=[json.loads(p.read_text(encoding='utf8')) for p in self.tasks.glob('*.json')]
+                    failed=self._legacy_failed_tasks(normalized,(state or {}).get('assetTiles',[]),records)
                 fresh_cards=[tile for tile in (state or {}).get('assetTiles',[]) if tile.get('tile_id') and tile['tile_id'] not in set(manifest.get('baseline_tile_ids') or [])]
-                if failed and len(fresh_cards)==len(normalized) and len(new_tiles)+len(failed)==len(normalized):
+                pending_cards=[tile for tile in fresh_cards if not tile.get('complete') and tile.get('tile_id') not in set(failed.values()) and any(self._prompt_text(t['prompt'])[:60] in self._prompt_text(tile.get('text','')) for t in normalized)]
+                if failed and not pending_cards and (legacy or len(fresh_cards)==len(normalized)) and len(new_tiles)+len(failed)==len(normalized):
                     for item in normalized:
                         if item['task_id'] not in failed:continue
                         record=self._read_receipt(item['task_id']) or {}
                         record.update(stage='blocked',blocked_confirmed=True,failed_tile_id=failed[item['task_id']],updated_at=time.time());self._write_receipt(item['task_id'],record)
                     return await self._generate_batch_unreserved(job_id,tasks,timeout,bridge_lock_held,download_results,require_zero_credit)
                 if len(new_tiles)!=len(normalized):
+                    manifest['last_observation']={'complete_media_ids':[t.get('media_id') for t in new_tiles],'expected_tasks':len(normalized),'tiles':[{'tile_id':t.get('tile_id'),'complete':t.get('complete'),'text':t.get('text','')[:1800]} for t in (state or {}).get('assetTiles',[])[:12]],'at':time.time()}
                     manifest['stage']='waiting_result';manifest['updated_at']=time.time();self._write_batch_manifest(batch_id,manifest)
                     raise FlowTaskError('Flow cohort results are incomplete; no task will be resubmitted','uncertain')
                 media_prompts=[]
