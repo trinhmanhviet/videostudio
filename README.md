@@ -4,6 +4,17 @@
 
 ## Cài trên máy Windows mới
 
+Trên máy hiện tại có thể bấm đúp **VideoStudio.exe** trong thư mục dự án. Cửa sổ Windows hiển thị trạng thái Studio/Flow/ComfyUI, có nút **Mở hệ thống**, **Khởi động lại**, **Dừng hệ thống** và **Vào Studio**. Giao diện tạo video mở trong Chrome thường để dùng extension bridge. Đóng launcher không dừng video; các nút dừng/restart vẫn kiểm tra job đang chạy.
+
+`VideoStudio.exe` là launcher, cần đặt cùng thư mục source (bên cạnh `scripts/`). Nó dùng lại Python, Chrome, ComfyUI và model đã cài; không chứa các runtime/model lớn. File exe được build tại máy và không đưa vào Git. Để build lại sau khi clone/cập nhật source:
+
+```powershell
+python -m pip install pyinstaller
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_windows_launcher.ps1
+```
+
+Nhật ký thao tác trong app: `data/launcher.log`. Bộ khởi động `.cmd` bên dưới vẫn dùng được độc lập.
+
 1. Cài Git, Python 3.12 x64, Google Chrome và FFmpeg (`ffmpeg`, `ffprobe` phải có trong `PATH`). Runtime/model/cache giọng đọc và ComfyUI là phần cài riêng; requirements không tự tải model lớn.
 
 ```powershell

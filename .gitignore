@@ -5,3 +5,6 @@ data/
 .cache/
 tmp/
 unused/
+build/
+dist/
+/VideoStudio.exe
