@@ -512,12 +512,13 @@ function renderJobCard(j){
     dbox.append(text('p','Gợi ý: '+j.diagnostics.suggestion));
     n.append(dbox);
   }
-  if(j.status==='failed'){
-    const retryBtn=text('button',recoveryLabel(j.stage),'job-retry');
+  if(j.status==='failed'||(j.status==='cancelled'&&j.checkpoints?.script&&['speech','images','subtitles','music','render','verify'].includes(j.stage))){
+    const cancelled=j.status==='cancelled';
+    const retryBtn=text('button',cancelled?'Tiếp tục job đã hủy':recoveryLabel(j.stage),'job-retry');
     retryBtn.type='button';
     retryBtn.onclick=async()=>{
       retryBtn.disabled=true;const card=retryBtn.closest('.job');
-      try{const resumed=await api('/api/jobs/'+encodeURIComponent(j.id)+'/retry',{method:'POST'});if(card?.isConnected)updateJobCard(card,resumed);await loadJobs();}
+      try{const resumed=await api('/api/jobs/'+encodeURIComponent(j.id)+'/retry',{method:'POST',...(cancelled?{body:JSON.stringify({resume_cancelled:true})}:{})});if(card?.isConnected)updateJobCard(card,resumed);await loadJobs();}
       catch(err){alert('Lỗi thử lại: '+err.message);retryBtn.disabled=false;}
     };
     n.append(retryBtn,text('p','Giữ nguyên lời đọc, ảnh và các bước đã hoàn tất.','notice'));

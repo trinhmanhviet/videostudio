@@ -211,11 +211,18 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if request:same_origin(request)
         try:j=store.get(job_id)
         except KeyError:raise HTTPException(404,'Job not found')
-        if j['state']!='failed':raise HTTPException(400,'Chỉ có thể thử lại job ở trạng thái thất bại')
+        resume_cancelled=(data or {}).get('resume_cancelled') is True
+        resumable_stages=('speech','images','subtitles','music','render','verify')
+        if j['state']!='failed' and not (j['state']=='cancelled' and resume_cancelled and j['stage'] in resumable_stages and 'script' in j['checkpoints']):
+            raise HTTPException(400,'Chỉ thử lại job lỗi hoặc chủ động tiếp tục job đã hủy sau bước kịch bản')
         stage=j['stage']
         new_idea=(data or {}).get('idea')
         with store.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            current=c.execute('SELECT state,cancel,stage FROM jobs WHERE id=?',(job_id,)).fetchone()
+            if current['state'] not in ('failed','cancelled'):raise HTTPException(400,'Trạng thái job đã thay đổi; hãy làm mới trang')
+            if current['state']=='cancelled' and (not resume_cancelled or current['stage'] not in resumable_stages):raise HTTPException(400,'Cần chủ động chọn tiếp tục job đã hủy')
+            if c.execute("SELECT 1 FROM flow_account_changes WHERE job=? AND json_extract(data,'$.needs_quiescence')=1",(job_id,)).fetchone():raise HTTPException(409,'Flow chưa xác nhận dừng thao tác cũ; hãy chuẩn bị lại kết nối Flow trước')
             try:reject_retired_job(c,job_id)
             except ValueError as error:raise HTTPException(409,str(error))
             if new_idea and isinstance(new_idea,str) and new_idea.strip():
@@ -223,7 +230,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 c.execute('UPDATE jobs SET request=? WHERE id=?',(json.dumps(req,ensure_ascii=False),job_id))
             if stage:
                 c.execute('DELETE FROM attempts WHERE job=? AND stage=?',(job_id,stage))
-            c.execute("UPDATE jobs SET state='queued',error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),job_id))
+            c.execute("UPDATE jobs SET state='queued',cancel=0,error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),job_id))
             store.event(c,job_id,stage,'retried','Người dùng yêu cầu thử lại bước '+str(stage))
         return public_job(store.get(job_id))
     @app.post('/api/jobs/{job_id}/change-voice')

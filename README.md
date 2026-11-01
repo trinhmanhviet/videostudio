@@ -43,6 +43,8 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 
 ## Tạo và phục hồi video
 
+- Job lỗi dùng **Tiếp tục từ bước…**. Job đã hủy sau khi có kịch bản dùng **Tiếp tục job đã hủy** trên thẻ lịch sử; chỉ thao tác chủ động này mới bỏ cờ hủy. Kịch bản/lời đọc/nhạc/ảnh đã có checkpoint được giữ lại, không tạo job mới. Phiên ChatGPT đã hủy trước khi xong kịch bản không tự được khởi động lại bằng nút này.
+
 - Với batch Flow 3/5/10: chỉ khi có bằng chứng từ chối rõ ràng gắn đúng cảnh, tool chuyển các cảnh còn thiếu sang Comfy trong hai batch, rồi thử một cảnh bằng Flow. Ảnh đã tải không bị tạo lại; timeout/thiếu ảnh đơn thuần không bị suy thành đã thất bại. Trạng thái chuyển nguồn và nguồn từng cảnh được lưu qua retry.
 - Khi cảnh Comfy có nhân vật tham chiếu, tool tải portrait từ Character ID đã lưu, cache PNG/hash trong dữ liệu job, upload sang Comfy và nối vào `TextEncodeQwenImage21` qua cổng ảnh + VAE; sampler dùng latent của encoder. Ref giữ nguyên theo job, không tái tạo để chấm điểm. Node hiện cài hỗ trợ tối đa 16 ảnh ref/cảnh. `VS_FLOW_COMFY_FALLBACK=0` tắt nhánh fallback nếu cần dùng lại đường Flow thuần.
 - Phụ đề xuất mới/xuất lại nằm trên dải 30% phía dưới khung hình (576px trên canvas 1080×1920), tránh vùng caption/nút của Shorts và Reels. Video đã xuất trước đó cần xuất lại để nhận vị trí mới.
