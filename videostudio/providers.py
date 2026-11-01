@@ -1310,6 +1310,8 @@ class Pipeline:
             clean_prompt=normalize_flow_prompt(utterance['visual_prompt'],mentions)
             if not reusable:tasks.append({'task_id':task_id,'prompt':clean_prompt,'original_prompt':utterance['visual_prompt'],'character_mentions':mentions,'ordinal':index,'output_path':path})
         batch_results={}
+        completed_ids={item['task_id'] for item in prepared if item['reusable']}
+        total_images=len(prepared)
         if tasks:
             if batch_size not in available_flow_batch_sizes() or batch_size==1:
                 raise PermanentError('Selected Flow cohort size is unavailable; refusing silent fallback')
@@ -1317,9 +1319,9 @@ class Pipeline:
             except ValueError as error:raise PermanentError('VS_FLOW_BATCH_TIMEOUT_SECONDS must be an integer 60..3600') from error
             if not 60<=batch_timeout<=3600:raise PermanentError('VS_FLOW_BATCH_TIMEOUT_SECONDS must be 60..3600')
             cohorts=self._flow_cohorts(tasks,batch_size)
-            for number,cohort in enumerate(cohorts,1):
+            for cohort in cohorts:
                 check()
-                if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đang tạo và tải nhóm ảnh {number}/{len(cohorts)}: {len(cohort)} cảnh. Gửi prompt trước, chờ tạo xong cả nhóm rồi tải.')
+                if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh · đang xử lý nhóm {len(cohort)} cảnh.')
                 cohort_results=self._browser_scene_images_batch(j,cohort,check,timeout=batch_timeout)
                 batch_results.update(cohort_results)
                 for task in cohort:
@@ -1333,6 +1335,10 @@ class Pipeline:
                                     'request_id':receipt.get('request_id'),'width':width,'height':height,'character_mentions':task.get('character_mentions',[]),
                                     'media_id':receipt.get('media_id'),'project_url':receipt.get('project_url')}
                         temp=c_check.with_suffix('.part.json');temp.write_text(json.dumps(saved_data,ensure_ascii=False),encoding='utf8');temp.replace(c_check)
+                    if receipt and receipt.get('task_id')==tid and c_path.is_file():completed_ids.add(tid)
+                if getattr(self,'store',None):self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh.')
+        elif getattr(self,'store',None):
+            self.store.log(j['id'],'images',f'Đã tải {len(completed_ids)}/{total_images} ảnh · dùng lại các ảnh đã xác nhận.')
         scenes=[]
         for item in prepared:
             check();u=item['utterance'];path=item['path'];checkpoint=item['checkpoint'];mentions=item['mentions'];task_id=item['task_id']
