@@ -85,7 +85,7 @@ class NaturalDurationTests(unittest.TestCase):
         self.assertEqual(timeline_duration(job), 30)
 
     def test_flow_reference_limit_uses_actual_timeline(self):
-        for requested, measured, enabled in ((30, 310, False), (600, 120, True)):
+        for requested, measured, enabled in ((30, 310, True), (600, 120, True), (7200, 7200, True)):
             with self.subTest(measured=measured):
                 job = {'request': {'image_provider': 'flow', 'duration_seconds': requested}, 'checkpoints': {'speech': {'duration_seconds': measured}}}
                 self.assertEqual(flow_reference_enabled(job), enabled)

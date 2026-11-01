@@ -12,6 +12,29 @@ from videostudio.core import Store
 
 
 class CharacterRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_submitted_character_is_recovered_only_from_exact_project_tab_and_prompt(self):
+        for matches in (True,False):
+            with self.subTest(matches=matches),tempfile.TemporaryDirectory() as folder:
+                command=AsyncMock();project='https://flow.google.com/project/test';entity=str(uuid.uuid4())
+                bridge=type('Bridge',(),{'job_lock':asyncio.Lock(),'connect':AsyncMock(),'cdp':type('CDP',(),{'command':command})()})()
+                flow=FlowImages(bridge,Path(folder));task=str(uuid.uuid4());job=str(uuid.uuid4())
+                receipt={'task_id':task,'job_id':job,'kind':'native_character','name':'marie','character_manifest_id':'marie',
+                    'prompt_sha256':hashlib.sha256(b'portrait').hexdigest(),'project_url':project,'target_id':'owned-tab',
+                    'stage':'project_ready','character_create_stage':'submitting'}
+                flow._write_receipt(task,receipt)
+                flow._target=AsyncMock(return_value='owned-tab');flow._session=AsyncMock(return_value='session')
+                flow._snapshot=AsyncMock(return_value={'url':project+'/character/'+entity})
+                flow._eval=AsyncMock(side_effect=[matches,[{'value':'portrait'},{'value':'marie'}],True])
+                flow._wait_page=AsyncMock();flow._wait_character_complete=AsyncMock();flow._return_to_project_root=AsyncMock();flow._click_named=AsyncMock()
+                if matches:
+                    result=await flow.create_character(task,job,'marie','marie','portrait')
+                    self.assertEqual(result['character_id'],entity)
+                else:
+                    with self.assertRaises(RuntimeError):await flow.create_character(task,job,'marie','marie','portrait')
+                    self.assertEqual(flow._read_receipt(task)['character_create_stage'],'submitting')
+                flow._click_named.assert_not_awaited()
+                self.assertFalse(any(call.args[0]=='Input.insertText' for call in command.await_args_list))
+
     async def test_recovery_reads_same_entity_and_only_commits_a_verified_name(self):
         for verified in (True,False):
             with self.subTest(verified=verified),tempfile.TemporaryDirectory() as folder:

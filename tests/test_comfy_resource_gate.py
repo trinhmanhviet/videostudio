@@ -18,6 +18,20 @@ GB = 1024 ** 3
 
 
 class ComfyResourceGateTests(unittest.TestCase):
+    def test_absent_comfy_before_first_queue_check_recovers_then_submits_once(self):
+        original=self.handle;offline=[True]
+        def handle(request):
+            if request.url.path=='/queue' and offline[0]:
+                offline[0]=False
+                raise httpx.ConnectError('Service absent',request=request)
+            return original(request)
+        self.handle=handle
+        with patch('videostudio.gpu.recover_comfy') as recover:
+            result=self.call()
+        recover.assert_called_once()
+        self.assertEqual(result['prompt_id'],'owned')
+        self.assertEqual(self.calls.count(('POST','/prompt')),1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -252,6 +266,15 @@ class FreeComfyTests(unittest.TestCase):
 
 
 class RecoveryLauncherTests(unittest.TestCase):
+    def test_already_starting_comfy_is_awaited_without_launching_another_process(self):
+        module=self.launcher_module()
+        config={'launcher':'existing.bat','url':'http://127.0.0.1:8188','sha256':module.AUTHORIZED_SHA256}
+        response=Mock();response.read.return_value=b'{"system":{},"devices":[]}'
+        with patch.object(module,'CONFIG',Mock(read_text=Mock(return_value=json.dumps(config)))),patch.object(module.Path,'read_bytes',return_value=b'launcher'),patch.object(module.hashlib,'sha256',return_value=Mock(hexdigest=Mock(return_value=module.AUTHORIZED_SHA256))),patch.object(module,'require_absent_service',side_effect=RuntimeError('already booting')),patch.object(module.urllib.request,'urlopen') as get,patch.object(module.subprocess,'Popen') as start:
+            get.return_value.__enter__.return_value=response
+            result=module.main(config['url'])
+        self.assertTrue(result['ready']);start.assert_not_called()
+
     def launcher_module(self):
         source = Path(__file__).resolve().parents[1] / 'scripts' / 'start_comfy_recovery.py'
         self.assertIn("if __name__ == '__main__':", source.read_text(), 'Launcher must be import-safe before testing its absent-service guard')

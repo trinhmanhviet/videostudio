@@ -111,6 +111,9 @@ function Start-VideoStudioSystem{
   try{Ensure-StartupComfy}catch{Write-Host ('[ERROR] '+$_.Exception.Message) -ForegroundColor Red;$failed=$true}
   if($serverReady){try{Open-StartupStudio}catch{Write-Host ('[ERROR] '+$_.Exception.Message) -ForegroundColor Red;$failed=$true}}
   Write-Host 'In ordinary Chrome: keep Studio open. If disconnected, press Start in the floating panel, then Test chu.'
+  if(Test-Path -LiteralPath (Join-Path $script:StartupRoot 'data/restart-baseline.json')){
+   try{Invoke-StartupScript 'check_restart.ps1'}catch{Write-Host ('Restart acceptance: '+$_.Exception.Message)}
+  }
   if($failed){Write-Host 'Some components need attention. Log: data\startup.log';return 1}
   Write-Host 'Services ready. Google/ChatGPT sign-in may still need your action.'
   return 0

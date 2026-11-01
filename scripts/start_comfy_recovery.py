@@ -30,6 +30,20 @@ def require_absent_service():
         raise RuntimeError('Comfy listener/process present or state unknown; refusing duplicate start')
 
 
+def wait_existing(url,timeout=180):
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        try:
+            with urllib.request.urlopen(url.rstrip('/')+'/system_stats',timeout=3) as response:data=json.load(response)
+            if isinstance(data,dict) and isinstance(data.get('system'),dict) and isinstance(data.get('devices'),list):
+                record={'ready':True,'existing_service':True,'generation_submitted':False,'devices':data['devices']}
+                print(json.dumps(record),flush=True)
+                return record
+        except (OSError,ValueError):pass
+        time.sleep(1)
+    raise TimeoutError('Existing Comfy process is not ready; no duplicate was started')
+
+
 def main(expected_url=None):
     config = json.loads(CONFIG.read_text())
     launcher = Path(config['launcher'])
@@ -40,7 +54,9 @@ def main(expected_url=None):
         raise RuntimeError('Requested Comfy URL does not match the authorized launcher')
     if os.name != 'nt':
         raise RuntimeError('This launcher is for Windows host only')
-    require_absent_service()
+    try:require_absent_service()
+    except RuntimeError:
+        return wait_existing(config['url'])
     logdir = ROOT / 'data/comfy-recovery'
     logdir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()

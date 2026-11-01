@@ -50,6 +50,12 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 - Khi đã có ID Character nhưng chưa xác nhận lưu tên, retry mở lại đúng Character đó để hoàn tất và đọc lại tên; không tạo nhân vật thay thế. Nếu không đọc được trạng thái Flow, job giữ receipt để thử lại an toàn.
 - Reset ảnh chỉ thao tác sau khi kiểm tra lại job và các bản xuất phụ thuộc. File trung gian cũ được giữ trong `.reset-backup` bên trong thư mục dữ liệu job; nếu cập nhật database thất bại, file được trả về chỗ cũ.
 - Mười ảnh mỗi đợt đã có một lô Flow thực tế chạy xong. Hai mươi và ba mươi ảnh mỗi đợt vẫn khóa.
+- Ref Flow áp dụng cho mọi độ dài hợp lệ, gồm kịch bản nhiều chương; không giới hạn ở 5 phút. Các chương dùng chung ID và mô tả ngoại hình, dữ liệu chương cũ được bổ sung metadata riêng để giữ nguyên lời đọc.
+- Nếu daemon Flow tắt, tool thử mở lại một lần và gửi lại đúng task ID cũ. Timeout sau khi đã gửi không bị coi là chưa gửi. Comfy tắt trước công đoạn được phục hồi qua launcher đã xác nhận; nếu đang boot thì chờ thay vì mở trùng.
+
+### Kiểm tra sau khi restart Windows
+
+Chuẩn bị một lần bằng `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_restart.ps1 -Prepare`. Sau khi tự restart Windows, mở `VideoStudio.exe` → **Mở hệ thống**. Bộ khởi động tự ghi kết quả vào `data/restart-acceptance.json`: xác nhận boot đã đổi, Studio dùng extension, Chrome Flow đã nối và Comfy phản hồi. Báo cáo này chỉ xác nhận khởi động dịch vụ; tạo và xuất một video thật vẫn là bước nghiệm thu tiếp theo.
 
 ## Kiến trúc và luồng xử lý
 

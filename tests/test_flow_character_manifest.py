@@ -143,9 +143,9 @@ class FlowCharacterManifestTests(unittest.TestCase):
             self.assertTrue((Path(tmp)/'flow-character-references.json').is_file())
 
 
-    def test_long_form_flow_preserves_existing_path_without_reference_mode(self):
-        self.assertFalse(flow_reference_enabled({'request':{'image_provider':'flow','duration_seconds':301}}))
-        self.assertTrue(flow_reference_enabled({'request':{'image_provider':'flow','duration_seconds':300}}))
+    def test_long_form_flow_uses_references_without_five_minute_limit(self):
+        for duration in (8,300,301,1800,7200):
+            self.assertTrue(flow_reference_enabled({'request':{'image_provider':'flow','duration_seconds':duration}}))
 
 
 if __name__ == '__main__':

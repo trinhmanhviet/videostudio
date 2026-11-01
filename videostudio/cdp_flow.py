@@ -927,6 +927,10 @@ class FlowImages:
                 await self._return_to_project_root(session,receipt['project_url'],prompt)
             return {'task_id':task_id,'character_id':receipt['character_id'],'name':name,'project_url':receipt['project_url']}
         if receipt and receipt.get('character_create_stage') in ('submitting','saving'):
+            if receipt.get('character_create_stage')=='submitting' and receipt.get('target_id'):
+                async with self.bridge.job_lock:
+                    await self.bridge.connect();target=await self._target();session=await self._session(target)
+                    return await self._recover_submitted_character(session,target,task_id,receipt,name,prompt,timeout)
             if receipt.get('character_create_stage') == 'saving' and receipt.get('character_id'):
                 async with self.bridge.job_lock:
                     await self.bridge.connect();target=await self._target();session=await self._session(target)
@@ -941,6 +945,8 @@ class FlowImages:
                 await self._return_to_project_root(session,receipt['project_url'],prompt)
                 return {'task_id':task_id,'character_id':receipt['character_id'],'name':name,'project_url':receipt['project_url']}
             if receipt and receipt.get('character_create_stage') in ('submitting','saving'):
+                if receipt.get('character_create_stage')=='submitting' and receipt.get('target_id'):
+                    return await self._recover_submitted_character(session,target,task_id,receipt,name,prompt,timeout)
                 if receipt.get('character_create_stage') == 'saving' and receipt.get('character_id'):
                     return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout)
                 raise FlowTaskError('Flow Character creation may already have been submitted; manual reconciliation required, no duplicate generated','uncertain')
@@ -1014,6 +1020,21 @@ class FlowImages:
             receipt.update({'character_create_stage':'saved','stage':'character_saved','saved_at':time.time(),'updated_at':time.time()});self._write_receipt(task_id,receipt)
             await self._return_to_project_root(session,project_url,prompt)
             return {'task_id':task_id,'character_id':entity_id,'name':name,'project_url':project_url}
+
+    async def _recover_submitted_character(self,session,target,task_id,receipt,name,prompt,timeout):
+        project=receipt.get('project_url','').split('?')[0].rstrip('/')
+        state=await self._snapshot(session,prompt)
+        path=urlparse(state.get('url','')).path
+        pattern=re.escape(urlparse(project).path)+r'/character/([0-9a-fA-F-]{36})'
+        match=re.fullmatch(pattern,path)
+        if target!=receipt.get('target_id') or not state.get('url','').startswith(project+'/character/') or not match:
+            raise FlowTaskError('Cannot correlate the submitted Character with its original project/tab; no replacement generated','uncertain')
+        expression=r'''(()=>{const norm=s=>(s||'').normalize('NFC').replace(/\s+/g,' ').trim();const expected=norm(PROMPT);return [...document.querySelectorAll('input,textarea,[contenteditable="true"]')].some(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&norm(e.value||e.innerText||e.textContent)===expected})})()'''.replace('PROMPT',json.dumps(prompt,ensure_ascii=False))
+        if await self._eval(session,expression) is not True:
+            raise FlowTaskError('Existing Character prompt does not match the durable request; no replacement generated','uncertain')
+        entity=str(uuid.UUID(match.group(1)))
+        receipt.update(character_id=entity,character_create_stage='saving',updated_at=time.time());self._write_receipt(task_id,receipt)
+        return await self._resume_character_save(session,task_id,receipt,name,prompt,timeout)
 
     async def _resume_character_save(self,session,task_id,receipt,name,prompt,timeout):
         """Finish the same known entity; never generate another portrait."""

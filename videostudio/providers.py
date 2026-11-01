@@ -79,7 +79,7 @@ def flow_reference_enabled(job):
     if request.get('workflow_mode')=='provided_narration' and 'speech' not in job.get('checkpoints',{}):
         words=len(re.findall(r'\S+',request.get('idea','')))
         duration=words/3
-    return request.get('image_provider')=='flow' and isinstance(duration,(int,float)) and not isinstance(duration,bool) and duration<=300
+    return request.get('image_provider')=='flow' and isinstance(duration,(int,float)) and not isinstance(duration,bool) and math.isfinite(duration) and duration>0
 
 def _flow_checkpoint_prompt_matches(saved, prompt, mentions):
     if saved.get('prompt') == prompt:
@@ -361,8 +361,14 @@ class Pipeline:
         with httpx.Client(base_url=self.comfy+'/',timeout=30) as c:
             from .gpu import free_comfy,recover_comfy
             recovery_attempted=False
+            def ready_get(route):
+                try:return c.get(route)
+                except (httpx.ConnectError,httpx.ConnectTimeout):
+                    if strict_resume:raise
+                    recover_once()
+                    return c.get(route)
             def idle_queue():
-                q=c.get('queue');q.raise_for_status();queue=q.json()
+                q=ready_get('queue');q.raise_for_status();queue=q.json()
                 return all(isinstance(queue.get(key),list) and not queue[key] for key in ('queue_running','queue_pending'))
             def recover_once():
                 nonlocal recovery_attempted
@@ -390,9 +396,9 @@ class Pipeline:
                 saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
                 if not pid:raise PermanentError('Indeterminate Comfy submission; refusing duplicate GPU work')
                 # If Comfy restarted, verify if old prompt still exists in history or queue
-                r=c.get('history/'+pid);r.raise_for_status()
+                r=ready_get('history/'+pid);r.raise_for_status()
                 if pid not in r.json():
-                    q=c.get('queue');q.raise_for_status();queue=q.json()
+                    q=ready_get('queue');q.raise_for_status();queue=q.json()
                     running=[x[1] for x in queue.get('queue_running',[])]
                     pending=[x[1] for x in queue.get('queue_pending',[])]
                     if pid not in running and pid not in pending:
@@ -402,7 +408,7 @@ class Pipeline:
                 if not idle_queue():
                     raise RuntimeError('ComfyUI busy with other work; no submission/unload/interrupt performed')
                 if not skip_vram_check:
-                    stats=c.get('system_stats');stats.raise_for_status()
+                    stats=ready_get('system_stats');stats.raise_for_status()
                     devices=stats.json().get('devices',[])
                     minimum=int(os.getenv('VS_MIN_FREE_VRAM_MB','8192'))*1024*1024
                     from .gpu import headroom
@@ -559,7 +565,10 @@ class Pipeline:
             else:
                 d=self._provided_script_draft(j,check)
                 temporary=draft_path.with_suffix('.part.json');temporary.write_text(json.dumps(d,ensure_ascii=False,indent=2),encoding='utf8');temporary.replace(draft_path)
-            if flow_reference_enabled(j):validate_flow_character_manifest(d)
+            if flow_reference_enabled(j):
+                if not isinstance(d.get('characters'),list):
+                    canonical={};d=self._chapter_flow_references(d,canonical,folder/'script-attempt-00.flow.json',check);d['characters']=list(canonical.values())
+                validate_flow_character_manifest(d)
             return d
         budget=int(os.getenv('VS_SCRIPT_REPAIR_ATTEMPTS','4'))
         if not 1<=budget<=5:raise PermanentError('Invalid script repair budget')
@@ -608,7 +617,10 @@ class Pipeline:
                 except ValueError as error:
                     feedback=[str(error)];previous_review=None;continue
             if flow_reference_enabled(j):
-                try:validate_flow_character_manifest(d)
+                try:
+                    if not isinstance(d.get('characters'),list):
+                        canonical={};d=self._chapter_flow_references(d,canonical,folder/f'script-attempt-{attempt:02}.flow.json',check);d['characters']=list(canonical.values())
+                    validate_flow_character_manifest(d)
                 except ValueError as error:
                     feedback=[str(error)];previous=d;previous_review=None;continue
             if review_path.is_file():
@@ -800,7 +812,10 @@ class Pipeline:
             chapters_data=self.llm_json(prompt,check)
             if not isinstance(chapters_data.get('chapters'),list) or len(chapters_data['chapters'])<2:raise ValueError('Invalid chapter breakdown')
             chapters_file.write_text(json.dumps(chapters_data,ensure_ascii=False,indent=2),encoding='utf8')
-        all_scenes=[];all_sources=set()
+        all_scenes=[];all_sources=set();canonical_characters={}
+        flow_references=flow_reference_enabled(j)
+        chapter_character_schema=',"character_ids":[str]' if flow_references else ''
+        chapter_manifest_schema='"characters":[{"character_id":str,"name":str,"appearance_evidence":[str]}],' if flow_references else ''
         allowed={s['path'] for s in j['checkpoints']['research']['sources']}
         prev_summary=''
         from .captions import wrap_caption
@@ -818,21 +833,58 @@ class Pipeline:
                            '2. Every scene narration must be <= 85 characters. Alternate short and narrative clauses.\n'
                            '3. Token Sandwich visual prompt in English for each scene (Camera + Subject + Environment + Lighting).\n'
                            '4. Ground all claims in supplied research. If a detail is unclear, OMIT it or use a broad supported description. Do not invent specifics or replace them with unsupported negative claims about what records do not confirm.\n'
-                           f'Return JSON: {{"narration":str,"source_paths":[str],"scenes":[{{"narration":str,"visual_prompt":str}}]}}. At most {ch_max_scenes} scenes. '
-                           +json.dumps({'chapter':ch,'verified_sources':j['checkpoints']['research']},ensure_ascii=False))
+                           +('FLOW REFERENCES: Reuse the exact IDs and physical appearance in canonical_characters across all chapters. Return characters as [{"character_id":str,"name":str,"appearance_evidence":[str]}], with short concrete physical traits. Each scene includes character_ids, using [] for a scene without a visible character. Introduce a new ID only for a genuinely different person. ' if flow_references else '')
+                           +f'Return JSON: {{"narration":str,"source_paths":[str],{chapter_manifest_schema}"scenes":[{{"narration":str,"visual_prompt":str{chapter_character_schema}}}]}}. At most {ch_max_scenes} scenes. '
+                           +json.dumps({'chapter':ch,'verified_sources':j['checkpoints']['research'],'canonical_characters':list(canonical_characters.values())},ensure_ascii=False))
                 ch_result=self.llm_json(ch_prompt,check)
                 if not isinstance(ch_result.get('scenes'),list) or not ch_result['scenes']:raise ValueError(f'Invalid chapter {idx} scenes')
                 ch_file.write_text(json.dumps(ch_result,ensure_ascii=False,indent=2),encoding='utf8')
+            if flow_references:
+                ch_result=self._chapter_flow_references(ch_result,canonical_characters,folder/f'chapter-{idx:02}.flow.json',check)
             from .captions import split_caption_scenes
             for scene in split_caption_scenes(ch_result['scenes']):
                 if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError(f'Missing visual prompt in chapter {idx}')
                 wrap_caption(scene.get('narration',''))
-                all_scenes.append(scene)
+                all_scenes.append({**scene,'scene_id':f'scene-{len(all_scenes):04}'})
             if ch_result.get('source_paths'):all_sources.update(ch_result['source_paths'])
             prev_summary=ch_result.get('narration','')[-200:]
         total_narration=' '.join(s['narration'] for s in all_scenes)
         final_sources=list(all_sources&allowed) or list(allowed)
-        return {'narration':total_narration,'source_paths':final_sources,'scenes':all_scenes,'chapters':chapters_data['chapters']}
+        result={'narration':total_narration,'source_paths':final_sources,'scenes':all_scenes,'chapters':chapters_data['chapters']}
+        if flow_references:
+            result['characters']=list(canonical_characters.values())
+            validate_flow_character_manifest(result)
+        return result
+
+    def _chapter_flow_references(self,chapter,canonical,path,check):
+        """Upgrade metadata once; keep narration and character identity across chapters."""
+        scenes=[dict(scene) for scene in chapter['scenes']]
+        characters=chapter.get('characters')
+        if not isinstance(characters,list) or any('character_ids' not in scene for scene in scenes):
+            if path.is_file():metadata=json.loads(path.read_text(encoding='utf8'))
+            else:
+                metadata=self.llm_json('Map visible recurring characters in these existing visual prompts. Return JSON {"characters":[{"character_id":str,"name":str,"appearance_evidence":[str]}],"scene_character_ids":[[str]]}. '
+                    'One character_ids list per input scene in the same order. Reuse canonical IDs/appearance. Traits must be short concrete appearance phrases. Do not return narration or rewrite it. '
+                    +json.dumps({'visual_prompts':[s['visual_prompt'] for s in scenes],'canonical_characters':list(canonical.values())},ensure_ascii=False),check)
+                temporary=path.with_suffix('.part.json');temporary.write_text(json.dumps(metadata,ensure_ascii=False),encoding='utf8');temporary.replace(path)
+            characters=metadata.get('characters',[])
+            mapping=metadata.get('scene_character_ids',[])
+            for index,scene in enumerate(scenes):scene['character_ids']=mapping[index] if isinstance(mapping,list) and len(mapping)==len(scenes) else []
+        for character in characters if isinstance(characters,list) else []:
+            if not isinstance(character,dict):continue
+            cid=character.get('character_id');evidence=character.get('appearance_evidence')
+            if not isinstance(cid,str) or not _FLOW_CHARACTER_ID.fullmatch(cid) or not isinstance(evidence,list):continue
+            traits=[text.strip() for text in evidence if isinstance(text,str) and 3<=len(text.strip())<=180][:8]
+            if cid not in canonical and traits:
+                name=character.get('name')
+                canonical[cid]={'character_id':cid,'name':name.strip()[:100] if isinstance(name,str) and name.strip() else cid,'appearance_evidence':traits}
+        for scene in scenes:
+            ids=scene.get('character_ids',[])
+            scene['character_ids']=list(dict.fromkeys(cid for cid in ids if isinstance(cid,str) and cid in canonical)) if isinstance(ids,list) else []
+            for cid in scene['character_ids']:
+                traits=canonical[cid]['appearance_evidence']
+                scene['visual_prompt']+=' | Canonical appearance @'+cid+': '+'; '.join(traits)
+        return {**chapter,'scenes':scenes}
     def _rewrite_chapters_duration(self,j,previous,target_sec,last_error,check):
         chapters=previous.get('chapters',[])
         scenes=previous.get('scenes',[])
@@ -983,6 +1035,17 @@ class Pipeline:
         if hold<0:raise PermanentError('Visual quality: narration duration is inconsistent with speech checkpoint')
         entries[-1]['duration']+=hold
         return {'scenes':entries,'assets':assets,'visual_qa_status':'pass','visual_qa_required':True,'visual_qa_scope':'artifact_bound_review','reviewer_accuracy_validated':False}
+    def _flow_post(self,url,payload,check,timeout):
+        from .service_recovery import ensure_flow_service
+        def post():
+            check()
+            return httpx.post(url,json=payload,headers={'X-VS-Client':'videostudio'},timeout=timeout,trust_env=False)
+        try:return post()
+        except (httpx.ConnectError,httpx.ConnectTimeout):
+            parsed=urlparse(url)
+            ensure_flow_service(parsed.scheme+'://'+parsed.netloc,check)
+            return post()  # Same durable IDs and immutable request, once only.
+
     def _browser_flow_character(self,j,character,prompt,check,*,task_id):
         base=os.getenv('VS_CDP_DAEMON_URL','http://127.0.0.1:8879').rstrip('/');parsed=urlparse(base)
         if parsed.scheme!='http' or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password:raise PermanentError('Only loopback dedicated browser daemon allowed')
@@ -992,7 +1055,7 @@ class Pipeline:
         if not isinstance(character_id,str) or not _FLOW_CHARACTER_ID.fullmatch(character_id):raise PermanentError('Invalid Flow character manifest ID')
         check()
         payload={'task_id':task_id,'job_id':j['id'],'character_id':character_id,'name':name,'prompt':prompt}
-        try:r=httpx.post(base+'/api/flow/characters/create',json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
+        try:r=self._flow_post(base+'/api/flow/characters/create',payload,check,1200)
         except httpx.HTTPError as error:raise UncertainDeliveryError('Flow Character creation result uncertain; reconcile the same durable Character receipt, never create a replacement') from error
         try:body=r.json()
         except ValueError as error:raise UncertainDeliveryError(f'Flow Character response malformed (HTTP {r.status_code}); reconcile same receipt') from error
@@ -1039,7 +1102,7 @@ class Pipeline:
             route='/api/flow/images/generate';payload={'task_id':task_id,'job_id':self._active_flow_run(j),'prompt':prompt,'character_mentions':mentions};root=ROOT/'data'/'flow-images'
         else:route='/api/images/generate';payload={'task_id':task_id,'prompt':prompt};root=ROOT/'data'/'chatgpt-images'
         check()
-        try:r=httpx.post(base+route,json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
+        try:r=self._flow_post(base+route,payload,check,1200) if provider=='flow' else httpx.post(base+route,json=payload,headers={'X-VS-Client':'videostudio'},timeout=1200,trust_env=False)
         except httpx.HTTPError as e:raise UncertainDeliveryError('Browser image result uncertain; reconcile the same scene receipt, never issue a replacement task') from e
         try:body=r.json()
         except ValueError as e:raise UncertainDeliveryError(f'Browser image response malformed (HTTP {r.status_code}); same scene receipt must be reconciled') from e
@@ -1093,7 +1156,7 @@ class Pipeline:
             prepared.append({'task_id':task_id,'prompt':prompt.strip(),'character_mentions':mentions,'ordinal':ordinal,'output_path':Path(item['output_path'])})
         payload={'job_id':self._active_flow_run(j),'tasks':[{k:item[k] for k in ('task_id','prompt','character_mentions','ordinal')} for item in prepared],'timeout':timeout}
         check()
-        try:r=httpx.post(base+'/api/flow/images/generate-batch',json=payload,headers={'X-VS-Client':'videostudio'},timeout=timeout+60,trust_env=False)
+        try:r=self._flow_post(base+'/api/flow/images/generate-batch',payload,check,timeout+60)
         except httpx.HTTPError as error:raise UncertainDeliveryError('Flow batch result uncertain; reconcile the same durable batch receipts, never resubmit a replacement') from error
         try:body=r.json()
         except ValueError as error:raise UncertainDeliveryError(f'Flow batch response malformed (HTTP {r.status_code}); receipts must be reconciled') from error
