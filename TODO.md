@@ -9,3 +9,17 @@
 - [ ] **Để sau — cài máy khác:** tách cấu hình runtime/Comfy khỏi đường dẫn của máy hiện tại.
 
 - [ ] **Chạy video song song thật sự** — sau bản quản lý nhiều phiên. Hiện tại cho nhận nhiều video và hiển thị hàng đợi, worker/GPU vẫn tuần tự. Cần bộ điều phối tách lượt ChatGPT/network khỏi bước GPU/render, giới hạn số lượt ChatGPT đồng thời, khóa GPU dùng chung, chống nhầm request/ảnh/audio giữa các job, phục hồi sau restart và hủy một job không ảnh hưởng job khác. Chỉ mở song song sau kiểm thử ít nhất hai video đi qua đầy đủ các bước cùng lúc. Không coi việc mở nhiều tab hoặc nhận nhiều job là đã hoàn thành TODO này.
+
+## Để sau — cải thiện chất lượng dựng (tham khảo EverMind / HyperFrames)
+
+Ghi nhận ngày 2026-11-02 từ `video-tool.mp4` (clip quay workflow khoảng 55,9 giây) và ba ảnh `FB_IMG_1793509205695.jpg`, `FB_IMG_1793509269896.jpg`, `FB_IMG_1793509278355.jpg`. Người dùng yêu cầu lưu để quay lại sau; **chưa triển khai**. Các màn hình tham khảo cho thấy tách nguồn media, camera, captions, hiệu ứng, SFX và nhạc; không phải bằng chứng về chất lượng hay độ ổn định của mọi provider trong menu.
+
+Thứ tự đề xuất khi quay lại:
+
+1. [ ] **Thống nhất nhóm cảnh cho video ngắn và nhiều chương.** Tách câu lời đọc/phụ đề khỏi cảnh hình ảnh: nhiều câu có cùng bối cảnh có thể dùng một ảnh, còn phụ đề giữ timing đo được của từng câu. Luồng ngắn đã có `narration_lines`; luồng nhiều chương vẫn chia cảnh theo câu ngắn và `split_caption_scenes`, dễ làm số ảnh tăng mạnh. Nhóm theo nội dung/bối cảnh, không ép một số câu cố định cho mọi cảnh. Mục tiêu giảm yêu cầu Flow mà vẫn giữ nhịp xem.
+2. [ ] **Kế hoạch dựng riêng, có phiên bản và scene ID ổn định.** Ví dụ `edit_plan.json` mô tả chuyển động/crop, nhãn, điểm nhấn chữ, transition, SFX và đoạn nhạc cho từng cảnh. Chỉnh phần dựng chỉ render lại phần cần thiết, tái sử dụng ảnh, lời đọc và nhạc hợp lệ. Hash kế hoạch dựng phải tham gia cache để không dùng nhầm clip cũ.
+3. [ ] **Preset phong cách có thể tái sử dụng.** Khởi đầu bằng lịch sử/tài liệu, giải thích khoa học và kể chuyện đời sống. Mỗi preset quy định font, màu, vùng phụ đề an toàn, chuyển động và nhịp chuyển cảnh. Nhãn/từ khóa/mốc thời gian lấy từ kịch bản; nhấn cụm từ theo cue đã đo, không giả định có timing chính xác từng từ. Một ảnh có thể kết hợp pan nhẹ và các lớp nhãn để tạo nhịp mà không xin thêm ảnh AI.
+4. [ ] **Nhạc theo phần/chương, SFX có chọn lọc.** Đổi mood khi nội dung chuyển phần, crossfade và giữ lời đọc rõ. Tránh bắt buộc sinh một đoạn nhạc cho từng câu/cảnh nhỏ. Thư viện SFX có metadata nguồn; gắn vào điểm nhấn/chuyển đoạn thay vì rải dày toàn video.
+5. [ ] **Timeline đơn giản trong editor.** Hiển thị quan hệ giữa cảnh, ảnh và nguồn Flow/Comfy, bộ ref, lời đọc/phụ đề, nhạc và hiệu ứng. Cho sửa từng phần và preview trước khi xuất; giao diện chính vẫn thuận tiện cho quy trình tự động.
+
+Ràng buộc: ưu tiên tool chạy mượt; áp dụng cho job mới trước, không tự nhóm lại scene ID hoặc thay checkpoint của job đang chạy/đã hoàn tất. Kế hoạch dựng hay hiệu ứng tùy chọn không hợp lệ phải trở về bộ dựng hiện hành và ghi cảnh báo, không làm dừng cả video. **Canvas node và chuỗi nhiều LLM bắt buộc để sau**; chưa cần sao chép toàn bộ giao diện tham khảo.
