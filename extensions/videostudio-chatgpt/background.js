@@ -1,4 +1,5 @@
 import {start,claim,beginAttempt,retryAttempt,result,studioScope,acknowledge,receiptPath,archivePrevious,migrateBridge,syncBridge,sessionSlot,callbackSlot,bridgeSnapshot,allSlots,receiptMatches} from './protocol.mjs';
+import './flow/background.mjs';
 const KEY='videostudio_bridge_v2';
 const get=async()=>migrateBridge((await chrome.storage.local.get(KEY))[KEY]??null);
 const put=async state=>chrome.storage.local.set({[KEY]:syncBridge(state)});
@@ -266,6 +267,7 @@ async function dismissSession(state,scope,jobId){
   for(const item of removed)await closeOwned(item);
 }
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
+  if(message?.kind?.startsWith('flow:'))return false;
   const operation=serialize(async()=>{
     if(message?.kind==='connection'){
       if(!studioPage(sender))throw Error('Studio page required');

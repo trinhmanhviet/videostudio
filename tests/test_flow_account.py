@@ -238,7 +238,6 @@ class FlowAccountTests(unittest.TestCase):
         class FakeCDP:
             async def connect(self,endpoint):events.append('connect')
             async def command(self,name,*args,**kwargs):
-                if name=='Browser.getBrowserCommandLine':return {'arguments':['--user-data-dir='+str(service.flow_root.resolve())]}
                 if name=='Target.getTargets':return {'targetInfos':[{'type':'page','url':'https://flow.google.com/project/old','targetId':'target'}]}
                 raise AssertionError('Unexpected CDP command '+name)
             async def close(self):events.append('close')
@@ -250,6 +249,7 @@ class FlowAccountTests(unittest.TestCase):
         class FakeLauncher:
             def __init__(self):self.config=SimpleNamespace(profile=service.flow_root)
             def discover(self):return 'ws://127.0.0.1/fake'
+            def attest_endpoint(self,endpoint):events.append('attest');return True
 
         class FakeFlow:
             _batch_prompt_fingerprint=staticmethod(fingerprint)
@@ -269,10 +269,9 @@ class FlowAccountTests(unittest.TestCase):
                 self._write_receipt(task,value);return value
 
         with patch('videostudio.cdp_daemon.ChromeChatGPTBridge',FakeBridge),patch('videostudio.chrome_browser.DedicatedChrome',FakeLauncher),patch('videostudio.cdp_flow.FlowImages',FakeFlow):
-            coroutine=service._reconcile_browser_async(job,tasks)
-            try:coroutine.send(None)
-            except StopIteration as result:self.assertIn('1',result.value)
-            else:self.fail('Offline CDP fixture unexpectedly yielded')
+            import asyncio
+            self.assertIn('1',asyncio.run(service._reconcile_browser_async(job,tasks)))
+        self.assertEqual(events.count('attest'),1)
         self.assertEqual(events.count('scan'),1)
         self.assertIn('download:saved-existing',events)
         self.assertEqual(receipt_path.read_bytes(),original)

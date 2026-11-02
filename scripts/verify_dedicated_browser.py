@@ -16,13 +16,15 @@ async def main():
     targets=[]
     try:
         await cdp.connect(endpoint)
-        args=(await cdp.command('Browser.getBrowserCommandLine'))['arguments']
-        assert '--user-data-dir='+results['profile'] in args
-        assert not any('remote-allow-origins' in a for a in args)
+        await asyncio.to_thread(launcher.attest_endpoint,endpoint)
         results['dedicated_profile_attested']=True
+        results['profile_attestation']='Windows process identity and owned loopback listener'
         target=(await cdp.command('Target.createTarget',{'url':'about:blank'}))['targetId'];targets.append(target)
         sid=(await cdp.command('Target.attachToTarget',{'targetId':target,'flatten':True}))['sessionId']
         await cdp.command('Page.enable',session=sid)
+        webdriver=(await cdp.command('Runtime.evaluate',{'expression':'navigator.webdriver','returnByValue':True},session=sid))['result']['value']
+        assert webdriver is False
+        results['navigator_webdriver']=webdriver
         frame=(await cdp.command('Page.getFrameTree',session=sid))['frameTree']['frame']['id']
         await cdp.command('Page.setDocumentContent',{'frameId':frame,'html':'<html><body><textarea id="input"></textarea><button id="send" onclick="document.body.dataset.result=document.querySelector(\'#input\').value">Send</button></body></html>'},session=sid)
         await cdp.command('Runtime.evaluate',{'expression':"document.querySelector('#input').focus()"},session=sid)
@@ -40,6 +42,7 @@ async def main():
         await cdp.close()
         assert await asyncio.to_thread(launcher.ensure_started)==endpoint
         await cdp.connect(endpoint)
+        await asyncio.to_thread(launcher.attest_endpoint,endpoint)
         await cdp.command('Browser.getVersion')
         results['reconnect_existing_owned_browser']=True
         results['limitations']=['Fixture only, not live ChatGPT DOM or login acceptance.','No Memory Saver/discard test performed.']

@@ -55,10 +55,7 @@ class ChromeChatGPTBridge:
             endpoint = await asyncio.to_thread(self.launcher.ensure_started)
             await self.cdp.connect(endpoint)
             try:
-                command = await self.cdp.command('Browser.getBrowserCommandLine')
-                expected = '--user-data-dir='+str(self.launcher.config.profile.resolve())
-                if expected not in command.get('arguments', []):
-                    raise RuntimeError('CDP endpoint does not attest the dedicated profile')
+                await asyncio.to_thread(self.launcher.attest_endpoint,endpoint)
                 await self.cdp.command('Target.setDiscoverTargets', {'discover':True})
             except BaseException:
                 await self.cdp.close()
@@ -549,13 +546,15 @@ async def create_app(bridge=None):
             elif request.path == '/api/flow/images/generate-batch':
                 job_id,tasks=body.get('job_id'),body.get('tasks')
                 timeout=body.get('timeout',1200);download_results=body.get('download_results',True)
+                reopen_project=body.get('reopen_project',False)
                 if not isinstance(job_id,str) or not isinstance(tasks,list) or not 1<=len(tasks)<=30:
                     raise web.HTTPBadRequest(text='Flow batch requires a job_id and 1..30 tasks')
                 if not isinstance(timeout,(int,float)) or not 1<=timeout<=3600:
                     raise web.HTTPBadRequest(text='Flow batch timeout must be 1..3600 seconds')
                 if type(download_results) is not bool:
                     raise web.HTTPBadRequest(text='download_results must be boolean')
-                value={'ok':True,'data':await bridge.flow_images.generate_batch(job_id,tasks,timeout=float(timeout),download_results=download_results)}
+                if type(reopen_project) is not bool:raise web.HTTPBadRequest(text='reopen_project must be boolean')
+                value={'ok':True,'data':await bridge.flow_images.generate_batch(job_id,tasks,timeout=float(timeout),download_results=download_results,reopen_project=reopen_project)}
             elif request.path == '/api/gemini':
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt, str) or not 1 <= len(prompt) <= 500000 or not isinstance(job, str) or not 1 <= len(job) <= 200:

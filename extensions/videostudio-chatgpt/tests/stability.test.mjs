@@ -6,7 +6,7 @@ import * as protocol from '../protocol.mjs';
 
 const scope='123e4567-e89b-42d3-a456-426614174000';
 const prompt='YÊU CẦU STUDIO req\nhello';
-const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/,'');
+const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/gm,'');
 function worker({probeFailures=0,receiptOffline=false}={}){
   let listener,next=20;
   let now=Date.now();

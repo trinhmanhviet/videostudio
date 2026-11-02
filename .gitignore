@@ -7,3 +7,7 @@ tmp/
 unused/
 build/
 dist/
+# Flow research contains a signed-in Chrome profile and captured credentials.
+FlowAPI/flow_profile/
+FlowAPI/cookie*.txt
+FlowAPI/*.har

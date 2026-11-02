@@ -1,5 +1,5 @@
 """Exercise real Windows process ownership with an isolated headless test profile."""
-import json,uuid
+import json,uuid,socket
 from pathlib import Path
 from videostudio.chrome_browser import BrowserConfig,DedicatedChrome
 from videostudio.browser_manager import BrowserManager
@@ -13,7 +13,10 @@ class FixtureConfig(BrowserConfig):
 def main():
     actual=DedicatedChrome();before=actual.host_state()['processes']
     profile=ROOT/'data/browser-control-tests'/str(uuid.uuid4())
-    manager=BrowserManager(launcher=DedicatedChrome(FixtureConfig(profile=profile)))
+    with socket.socket() as reservation:
+        reservation.bind(('127.0.0.1',0))
+        fixture_port=reservation.getsockname()[1]
+    manager=BrowserManager(launcher=DedicatedChrome(FixtureConfig(profile=profile,debug_port=fixture_port)))
     try:
         clean=manager.open('clean');assert clean['mode']=='clean' and clean['running']
         assert not manager.launcher.discover();print('PASS clean process has no debug endpoint',flush=True)

@@ -59,7 +59,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
         sendMessage:async(id,message)=>{if(id===7)return {ok:true};return tabs.get(id).evaluate(message=>new Promise(resolve=>contentListener(message,null,resolve)),message);},
         remove:async id=>{closed.push(id);await tabs.get(id)?.close();tabs.delete(id);}}};
     const workerFetch=(url,options={})=>fetch(base+new URL(url).pathname,{...options,headers:{...options.headers,Origin:'chrome-extension://'+'a'.repeat(32)}});
-    const source=fs.readFileSync(path.join(root,'extensions/videostudio-chatgpt/background.js'),'utf8').replace(/^import .*?;\r?\n/,'');
+    const source=fs.readFileSync(path.join(root,'extensions/videostudio-chatgpt/background.js'),'utf8').replace(/^import .*?;\r?\n/gm,'');
     vm.runInNewContext(source,{...protocol,chrome,URL,fetch:workerFetch,AbortSignal,Date,Error,Number,String,Promise,setTimeout,clearTimeout});
     assert.equal((await send({kind:'start',scope})).ok,true);
     const pulse=async()=>{alarmListener({name:'videostudio-bridge-heartbeat'});await send({kind:'snapshot'});};

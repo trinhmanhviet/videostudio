@@ -221,14 +221,21 @@ class FlowImages:
         return rows
 
     @classmethod
+    def _explicit_failure(cls,tile):
+        return not tile.get('complete') and bool(re.search(r'vi phạm|không thể tạo|không tạo được|không thành công|hoạt động bất thường|unusual activity|generation failed|could not generate|couldn.t generate|policy violation',cls._prompt_text(tile.get('text','')),re.I))
+
+    @classmethod
     def _confirmed_failed_tasks(cls,tasks,tiles,baseline_tile_ids):
         if baseline_tile_ids is None:return {}
         failed={}
         for tile in tiles:
             text=cls._prompt_text(tile.get('text',''))
             if tile.get('complete') or not tile.get('tile_id') or tile['tile_id'] in set(baseline_tile_ids):continue
-            if not re.search(r'vi phạm|không thể tạo|không tạo được|generation failed|could not generate|couldn.t generate|policy violation',text,re.I):continue
-            matches=[item for item in tasks if cls._prompt_text(item['prompt']) in text]
+            if not cls._explicit_failure(tile):continue
+            if tile.get('full_prompt'):
+                fingerprint=cls._batch_prompt_fingerprint(tile['full_prompt'],tile.get('mention_entity_ids',[]))
+                matches=[item for item in tasks if cls._batch_prompt_fingerprint(' '.join([m['name'] for m in item.get('character_mentions',[])]+[item['prompt']]),[m['character_id'] for m in item.get('character_mentions',[])])==fingerprint]
+            else:matches=[item for item in tasks if cls._prompt_text(item['prompt']) in text]
             if len(matches)==1:
                 task=matches[0]['task_id']
                 if task in failed:raise FlowTaskError('More than one failed card matches a scene; keep original receipts','uncertain')
@@ -244,6 +251,39 @@ class FlowImages:
             same=[r for r in receipts if r.get('job_id')==task['job_id'] and r.get('prompt_sha256')==task['prompt_sha256'] and r.get('kind')!='native_character']
             if len(same)==1 and same[0].get('task_id')==task['task_id'] and same[0].get('character_mentions',[])==task.get('character_mentions',[]):unique.append(task)
         return cls._confirmed_failed_tasks(unique,tiles,[])
+
+    async def _read_failed_card_prompts(self,session,project_url,tiles,tasks=None):
+        """Recover full identity from terminal cards lacking IDs/titles; never click Retry/Send."""
+        observed=[dict(tile) for tile in tiles]
+        for index,tile in enumerate(observed):
+            if not self._explicit_failure(tile):continue
+            state=await self._snapshot(session,'')
+            if state.get('url','').split('?')[0].rstrip('/')!=project_url.split('?')[0].rstrip('/'):
+                raise FlowTaskError('Flow project changed before failed-card reconciliation','uncertain')
+            if tasks:
+                labels=await self._eval(session,r'''/* VS_FAILED_CARD_LABELS */(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const t=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible)[INDEX];if(!t)return [];const norm=s=>(s||'').replace(/\s+/g,' ').trim();if(norm(t.innerText)!==TEXT)return [];return [...new Set([t,...t.querySelectorAll('[aria-label],[aria-labelledby],[title]')].flatMap(e=>[e.getAttribute('aria-label'),e.getAttribute('title'),(e.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ')]).filter(Boolean).map(norm))]})()'''.replace('INDEX',str(index)).replace('TEXT',json.dumps(tile.get('text',''),ensure_ascii=False)))
+                matches=[task for task in tasks if self._prompt_text(' '.join([m['name'] for m in task.get('character_mentions',[])]+[task['prompt']])) in (labels or [])]
+                if len(matches)==1:
+                    task=matches[0];prompt=' '.join([m['name'] for m in task.get('character_mentions',[])]+[task['prompt']])
+                    tile.update(full_prompt=prompt,mention_entity_ids=[m['character_id'] for m in task.get('character_mentions',[])])
+                    if not tile.get('tile_id'):tile['tile_id']='verified-failure:'+self._batch_prompt_fingerprint(prompt,tile['mention_entity_ids'])
+                    continue
+            if not state.get('draftEmpty') or not state.get('generateDisabled'):
+                raise FlowTaskError('Flow composer occupied before failed-card reconciliation (draft='+str(state.get('draftLength'))+', disabled='+str(state.get('generateDisabled'))+')','uncertain')
+            expression=r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const tiles=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible),t=tiles[INDEX];if(!t)return null;const norm=s=>(s||'').replace(/\s+/g,' ').trim(),r=t.getBoundingClientRect();if(norm(t.innerText)!==TEXT||Math.abs(r.x+r.width/2-X)>8||Math.abs(r.y+r.height/2-Y)>8)return null;const b=[...t.querySelectorAll('button')].find(b=>/^(Sử dụng lại câu lệnh|Reuse prompt)$/i.test(b.getAttribute('aria-label')||b.getAttribute('title')||'')||norm(b.innerText)==='undo');if(!b||!visible(b)||b.disabled)return null;const q=b.getBoundingClientRect(),x=q.x+q.width/2,y=q.y+q.height/2,h=document.elementFromPoint(x,y);return{x,y,hitIsButton:h===b||b.contains(h)}})()'''.replace('INDEX',str(index)).replace('TEXT',json.dumps(tile.get('text',''),ensure_ascii=False)).replace('X)',str(tile.get('x',-10000))+')').replace('Y)',str(tile.get('y',-10000))+')')
+            await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':tile.get('x',0),'y':tile.get('y',0)},session=session)
+            button=await self._eval(session,expression)
+            if not button or not button.get('hitIsButton'):continue
+            await self._click_point(session,button)
+            reused=await self._wait_page(session,lambda s:s.get('draftLength',0)>0,timeout=6,prompt='')
+            prompt=(await self._prompt_box(session) or {}).get('text','')
+            if not prompt:raise FlowTaskError('Failed Flow card did not expose its saved prompt','uncertain')
+            try:
+                tile.update(full_prompt=prompt,mention_entity_ids=reused.get('mentionEntityIds',[]))
+                if not tile.get('tile_id'):
+                    tile['tile_id']='verified-failure:'+self._batch_prompt_fingerprint(prompt,tile['mention_entity_ids'])
+            finally:await self._clear_verified_reused_prompt(session,project_url,prompt)
+        return observed
 
     async def _ensure_batch_row_layout(self,session,project_url,tasks,baseline,tiles):
         def expected_rows(rows):
@@ -1299,9 +1339,33 @@ class FlowImages:
             output=Path(receipt['download_path'])
             return {'task_id':task_id,'file_path':str(output),'sha256':digest(output),'width':receipt['width'],'height':receipt['height'],'request_id':'flow-'+task_id,'source':'google_flow_nano_banana_2_1','format':'PNG','flow_download_format':receipt.get('format'),'project_url':receipt.get('project_url'),'download_guid':receipt.get('download_guid'),'media_id':receipt.get('media_id')}
 
-    async def generate_batch(self,job_id,tasks,timeout=1200,download_results=True,require_zero_credit=True):
+    async def _reopen_after_fallback(self,job_id,tasks):
+        # A resumed submitted probe must reconcile its result before any navigation.
+        pending_stages=('submitting','waiting_result','image_ready','download_menu_open','downloading')
+        if not isinstance(tasks,list) or not tasks:raise ValueError('Flow probe requires scene tasks')
+        for task in tasks:
+            try:uuid.UUID(task['task_id'])
+            except (KeyError,TypeError,ValueError,AttributeError) as error:raise ValueError('Invalid Flow probe task') from error
+            if (self._read_receipt(task['task_id']) or {}).get('stage') in pending_stages:return
+        project=self._load_project_registry(job_id)
+        if not project:raise FlowTaskError('Flow probe has no saved project; refusing a replacement project','uncertain')
+        for path in self.tasks.glob('*.json'):
+            receipt=json.loads(path.read_text(encoding='utf8'))
+            if receipt.get('job_id')==job_id and receipt.get('stage') in pending_stages:
+                raise FlowTaskError('Reconcile pending Flow scenes before reopening the project','uncertain')
+        await self.bridge.connect();target=await self._target();session=await self._session(target)
+        state=await self._snapshot(session,'')
+        if not state.get('draftEmpty'):raise FlowTaskError('Flow draft is occupied; keeping it before project recovery','uncertain')
+        await self.bridge.cdp.command('Page.navigate',{'url':FLOW_HOME},session=session)
+        await self._wait_page(session,lambda s:s.get('url','').split('?')[0].rstrip('/')==FLOW_HOME.rstrip('/'),timeout=30)
+        url=project['project_url'].split('?')[0].rstrip('/')
+        await self.bridge.cdp.command('Page.navigate',{'url':url},session=session)
+        await self._wait_page(session,lambda s:s.get('url','').split('?')[0].rstrip('/')==url and s.get('composerAvailable') and s.get('draftEmpty'),timeout=30)
+
+    async def generate_batch(self,job_id,tasks,timeout=1200,download_results=True,require_zero_credit=True,reopen_project=False):
         async with self._flow_batch_lock:
             async with self.bridge.job_lock:
+                if reopen_project:await self._reopen_after_fallback(job_id,tasks)
                 return await self._generate_batch_unreserved(job_id,tasks,timeout=timeout,bridge_lock_held=True,download_results=download_results,require_zero_credit=require_zero_credit)
 
     async def _generate_batch_unreserved(self,job_id,tasks,timeout=1200,bridge_lock_held=False,download_results=True,require_zero_credit=True):
@@ -1463,14 +1527,19 @@ class FlowImages:
                     await asyncio.sleep(.4)
                 # A failure card is usable evidence only when it exposes the full,
                 # unique prompt and belongs to this submission's new tile set.
-                failed=self._confirmed_failed_tasks(normalized,(state or {}).get('assetTiles',[]),manifest.get('baseline_tile_ids'))
+                tiles=(state or {}).get('assetTiles',[])
+                if any(self._explicit_failure(tile) for tile in tiles):
+                    tiles=await self._read_failed_card_prompts(session,manifest['project_url'],tiles,normalized)
+                    state['assetTiles']=tiles
+                failed=self._confirmed_failed_tasks(normalized,tiles,manifest.get('baseline_tile_ids'))
                 legacy=manifest.get('baseline_tile_ids') is None
-                if legacy:
+                if legacy or any(str(value).startswith('verified-failure:') for value in failed.values()):
                     records=[json.loads(p.read_text(encoding='utf8')) for p in self.tasks.glob('*.json')]
                     failed=self._legacy_failed_tasks(normalized,(state or {}).get('assetTiles',[]),records)
                 fresh_cards=[tile for tile in (state or {}).get('assetTiles',[]) if tile.get('tile_id') and tile['tile_id'] not in set(manifest.get('baseline_tile_ids') or [])]
                 pending_cards=[tile for tile in fresh_cards if not tile.get('complete') and tile.get('tile_id') not in set(failed.values()) and any(self._prompt_text(t['prompt'])[:60] in self._prompt_text(tile.get('text','')) for t in normalized)]
-                if failed and not pending_cards and (legacy or len(fresh_cards)==len(normalized)) and len(new_tiles)+len(failed)==len(normalized):
+                verified_failures=failed and all(any(t.get('tile_id')==value and t.get('full_prompt') for t in tiles) for value in failed.values())
+                if failed and not pending_cards and (legacy or verified_failures or len(fresh_cards)==len(normalized)) and len(new_tiles)+len(failed)==len(normalized):
                     for item in normalized:
                         if item['task_id'] not in failed:continue
                         record=self._read_receipt(item['task_id']) or {}

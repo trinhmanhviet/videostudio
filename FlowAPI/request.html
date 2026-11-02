@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VideoStudio · Flow request</title>
+<style>
+*{box-sizing:border-box}body{font:15px system-ui;background:#101b16;color:#eef5e9;max-width:900px;margin:32px auto;padding:0 20px}section{background:#17271f;border:1px solid #46674f;border-radius:12px;padding:20px;margin:18px 0}h1{font-size:24px}h2{font-size:18px}label{display:block;margin:12px 0}input,textarea,select{display:block;width:100%;background:#0e1813;color:inherit;border:1px solid #63816b;padding:10px;border-radius:6px;margin-top:6px;font:inherit}button{font:inherit;background:#c2ec91;color:#132312;border:0;border-radius:6px;padding:10px 15px;cursor:pointer;margin:5px 6px 5px 0}button:disabled{opacity:.5;cursor:wait}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.hint{color:#b4c7b4;line-height:1.6}code{color:#c2ec91}a{color:#c2ec91}[hidden]{display:none!important}.check{display:flex;gap:9px;align-items:center}.check input{width:auto}img{max-width:100%;max-height:420px}#error{color:#ffb3a2}
+</style>
+<h1>VideoStudio · Flow request</h1>
+<p class="hint">Bản thử độc lập. Request dùng phiên Flow trong Chrome thường; không thay đổi job video đang chạy.</p>
+<section><h2>1. Kết nối Chrome</h2>
+<p class="hint">Reload extension VideoStudio hiện có từ <code>extensions\videostudio-chatgpt</code>. Mở Flow, đăng nhập rồi bấm icon extension VideoStudio để chọn tab và nhập mã kết nối.</p>
+<button id="invite">Lấy mã kết nối</button><code id="code"></code>
+<p id="connection" role="status">Đang kiểm tra…</p>
+<label>Phiên Flow<select id="client"><option value="">Chưa kết nối</option></select></label>
+</section>
+<section><h2>2. Gửi request</h2>
+<p class="hint">Thử “Liệt kê dự án” trước. Với thao tác có dự án, giữ tab Flow đã chọn ở đúng dự án đó.</p>
+<form id="request-form">
+<label>Thao tác<select id="operation">
+<option value="list_projects">Liệt kê dự án (không tạo ảnh)</option>
+<option value="list_characters">Đọc nhân vật trong dự án</option>
+<option value="create_project">Tạo dự án mới</option>
+<option value="create_character">Tạo nhân vật</option>
+<option value="rename_character">Đổi tên nhân vật</option>
+<option value="generate_image">Tạo x1 ảnh bằng request</option>
+</select></label>
+<label id="project-field">Project ID<input id="project" autocomplete="off"></label>
+<label id="name-field" hidden>Tên<input id="name" maxlength="200" autocomplete="off"></label>
+<label id="character-field" hidden>Character ID<input id="character" autocomplete="off"></label>
+<div id="generation-fields" hidden>
+<label>Prompt<textarea id="prompt" rows="4" maxlength="30000"></textarea></label>
+<label>Tham chiếu (tùy chọn, JSON)<textarea id="references" rows="3" placeholder='[{"character_id":"UUID", "name":"Tên nhân vật"}]'>[]</textarea></label>
+<label>Character ID cần tạo portrait (để trống nếu tạo ảnh cảnh)<input id="target-character" autocomplete="off"></label>
+<label class="check"><input id="confirm" type="checkbox">Gửi một prompt tạo x1 ảnh thật bằng tài khoản Flow đã chọn.</label>
+</div>
+<button id="send" type="submit">Gửi request</button><button id="check" type="button" hidden>Kiểm tra lại biên nhận</button>
+</form>
+<p id="error" role="alert"></p><p id="state" role="status"></p><pre id="result"></pre><div id="images"></div>
+<p class="hint">Nếu Flow từ chối request, mã lỗi sẽ được hiển thị. Timeout/mất kết nối giữ nguyên ID để kiểm tra; không tự gửi lại hay chuyển sang bấm UI.</p>
+</section><script type="module" src="/flow-request.js"></script></html>

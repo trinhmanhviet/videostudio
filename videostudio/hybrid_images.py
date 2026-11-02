@@ -56,7 +56,8 @@ def run(pipeline,job,tasks,batch_size,references,on_result,check,*,timeout=2400)
             save();continue
         size=1 if state.get('probe') else batch_size
         cohort=pipeline._flow_cohorts(pending,size)[0]
-        returned=pipeline._browser_scene_images_batch(job,cohort,check,timeout=timeout)
+        submitted=[{**task,'reopen_project':True} for task in cohort] if state.get('probe') else cohort
+        returned=pipeline._browser_scene_images_batch(job,submitted,check,timeout=timeout)
         if set(returned)!={task['task_id'] for task in cohort}:raise UncertainDeliveryError('Hybrid Flow result set differs')
         blocked=[]
         for task in cohort:

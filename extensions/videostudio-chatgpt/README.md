@@ -1,4 +1,14 @@
-# VideoStudio ChatGPT Bridge (isolated, text only)
+# VideoStudio ChatGPT Bridge
+
+## Version 0.3.14: Flow verification diagnostics
+
+The opt-in Flow lab reports whether the current public SDK contains the `extension_hijack_detected` guard marker, without modifying or calling it for diagnostics. 0.3.13 added the page's existing SDK verification to generation requests and preserved proof values inside that single browser call. A live image request with that addition was still rejected; this is not accepted direct image-generation transport. See [G-Labs findings](../../FlowAPI/g-labs-research.md).
+
+## Version 0.3.12: optional Flow request bridge
+
+Flow request testing is integrated into this same extension; no second extension is needed. Click the toolbar icon while on Flow to open its popup. The Flow `scripting`/host permissions are optional and requested only when the user connects Flow. The existing ChatGPT permissions, scope/receipt protocol and floating manager remain compatible. Flow is idle until explicitly paired and connected; its `flow:` messages and storage keys are separate from ChatGPT.
+
+Instructions and current acceptance limits: [Flow request bridge](../../FlowAPI/README.md). It is an experimental request path, not the image provider used by existing video jobs. Reload this extension to install the new files; avoid reloading while the extension is actively submitting a prompt.
 
 ## Version 0.3.9: user-operated recovery from the floating manager
 

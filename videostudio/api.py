@@ -64,6 +64,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         for t in threads:t.join(timeout=2)
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
     app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs;app.state.flow_accounts=flow_accounts
+    # Explicit request lab only; video jobs keep their existing Flow provider.
+    from FlowAPI.server import create_router as flow_request_router
+    app.include_router(flow_request_router(store.path.parent/'flow-request.sqlite3'))
     @app.get('/api/health')
     def health():return {'status':'ok','service':'videostudio','durable':True,'worker_enabled':worker_enabled,'text_transport':os.getenv('VS_LLM_TRANSPORT','cdp'),'chatgpt_scene_images':True,'comfy_scene_images':True,'flow_scene_images':True,'flow_batch_sizes':available_flow_batch_sizes()}
     def diagnose_job_error(j):

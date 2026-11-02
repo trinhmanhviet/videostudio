@@ -9,7 +9,7 @@ class BrowserModeTests(unittest.TestCase):
         clean=cfg.arguments(mode='clean');debug=cfg.arguments(mode='debug')
         self.assertEqual([s for s in clean if s.startswith('--user-data-dir=')],[s for s in debug if s.startswith('--user-data-dir=')])
         self.assertFalse(any('remote-debugging' in s or s=='--enable-automation' for s in clean))
-        self.assertIn('--remote-debugging-port=0',debug);self.assertIn('--enable-automation',debug)
+        self.assertIn('--remote-debugging-port=19223',debug);self.assertNotIn('--enable-automation',debug)
     def manager(self,state,active=0):
         from videostudio.browser_manager import BrowserManager
         launcher=Mock();launcher.config.profile=Path('data/test-profile');launcher.host_state.return_value={'processes':state}

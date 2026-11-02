@@ -6,7 +6,7 @@ import * as protocol from '../protocol.mjs';
 
 const root='123e4567-e89b-42d3-a456-426614174000';
 const production=`http://localhost:8877/story-video/projects/${root}/production`;
-const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/,'');
+const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/gm,'');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function worker(initial=protocol.start({studioTab:7,scope:root}),existingAlarm=null){
   let listener,onAlarm,alarm=existingAlarm,ownerUrl=production,closed=false,failure=false,hold=null,now=Date.now(),lookup=null,observation=null;

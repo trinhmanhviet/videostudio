@@ -1,0 +1,10 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><title>VideoStudio Flow</title>
+<style>body{width:330px;margin:16px;font:13px system-ui;background:#14231b;color:#f3f8ef}h1{font-size:17px}label{display:block;margin:12px 0}select,input{box-sizing:border-box;width:100%;padding:8px;margin-top:5px;background:#0e1912;color:inherit;border:1px solid #729075;border-radius:5px}button{padding:8px 10px;margin:4px 3px 4px 0;background:#c2ec91;border:0;border-radius:5px;cursor:pointer}p{line-height:1.5;overflow-wrap:anywhere}#status{white-space:pre-line}</style>
+<h1>VideoStudio · Flow request</h1>
+<label>Hệ thống<select id="server"><option value="http://localhost:8878">Flow request lab · 8878</option><option value="http://localhost:8877">VideoStudio · 8877</option></select></label>
+<label>Tab Flow<select id="tab"></select></label>
+<label>Mã kết nối<input id="code" autocomplete="off" placeholder="Lấy mã trên trang Flow request"></label>
+<button id="connect">Kết nối / Tiếp tục</button><button id="sync">Kiểm tra</button><button id="stop">Ngừng nhận lệnh</button>
+<p id="status" role="status"></p>
+<p>Giữ tab Flow mở. Cookie và thông tin phiên nằm trong Chrome. Nếu vừa cài extension, F5 Flow một lần khi không có tác vụ đang chạy.</p>
+<script type="module" src="popup.mjs"></script></html>

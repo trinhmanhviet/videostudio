@@ -336,9 +336,7 @@ class FlowAccountService:
             bridge=ChromeChatGPTBridge(launcher=launcher,journal=object())
             try:
                 await bridge.cdp.connect(endpoint)
-                command=await bridge.cdp.command('Browser.getBrowserCommandLine')
-                if '--user-data-dir='+str(launcher.config.profile.resolve()) not in command.get('arguments',[]):
-                    raise ValueError('Kết nối Chrome không xác nhận đúng hồ sơ riêng của Studio')
+                await asyncio.to_thread(launcher.attest_endpoint,endpoint)
                 tab=self._select_continue_tab((await bridge.cdp.command('Target.getTargets')).get('targetInfos',[]))
                 session=await bridge.session(tab['targetId'])
                 if urlparse(tab['url']).path.rstrip('/') not in ('','/home'):
@@ -397,9 +395,7 @@ class FlowAccountService:
         else:flow=bridge.flow_images
         try:
             await bridge.cdp.connect(endpoint)
-            command=await bridge.cdp.command('Browser.getBrowserCommandLine')
-            if '--user-data-dir='+str(launcher.config.profile.resolve()) not in command.get('arguments',[]):
-                raise ValueError('Kết nối Chrome không xác nhận đúng hồ sơ riêng của Studio')
+            await asyncio.to_thread(launcher.attest_endpoint,endpoint)
             pages=(await bridge.cdp.command('Target.getTargets')).get('targetInfos',[])
             projects=self._reconciliation_projects(job,tasks)
             if not projects:raise ConnectionError('Không có dự án Flow cũ đã lưu; ảnh đã tải vẫn được giữ nguyên')

@@ -12,7 +12,9 @@ let listener;
 globalThis.chrome={
   storage:{local:{get:async key=>({[key]:values.get(key)}),set:async data=>{for(const [k,v] of Object.entries(data))values.set(k,v);}}},
   tabs:{remove:async id=>{removed.push(id);},create:async()=>{throw Error('unexpected ChatGPT send')},get:async()=>{throw Error('unexpected inspect')}},
-  runtime:{onMessage:{addListener:fn=>{listener=fn;}}},
+  runtime:{onMessage:{addListener:fn=>{listener=fn;}},onInstalled:{addListener(){}},onStartup:{addListener(){}}},
+  permissions:{contains:async()=>false},
+  alarms:{get:async()=>null,create:async()=>{},clear:async()=>{},onAlarm:{addListener:()=>{}}},
 };
 globalThis.fetch=async()=>{throw Error('unexpected server call/retry of old exchange')};
 await import('../background.js?lifecycle-test');

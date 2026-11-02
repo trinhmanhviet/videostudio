@@ -8,6 +8,8 @@ Installed `TextEncodeQwenImage21` supports up to 16 references using `images.ima
 
 Hybrid routing state is persisted; completed Flow scenes are retained if another scene is refused. A terminal refusal needs scoped UI evidence, never inferred from timeout or missing tiles alone. Unknown receipt identity, auth and missing ref cases remain explicit recoverable errors. Each backend keeps its durable generation receipts.
 
+2026-11-02: Flow's Vietnamese “Không thành công / hoạt động bất thường” cards can lack both DOM tile ID and media ID. First read the card's complete accessible prompt label without editing the composer. If unavailable, read its full prompt through the native Reuse prompt button and clear only that reused draft without sending. Match the exact prompt/entities against a unique durable scene receipt. Confirmed failed scenes go to Comfy; keep successful Flow outputs. After two batches (the configured batch size), leave Flow for its home page and reopen the same saved project before a one-scene probe. If refused again, repeat two Comfy batches. Resume an already-submitted probe by reconciliation without navigating or generating a replacement.
+
 Subtitle work is independent: bottom margin576 for Shorts/Reels, same timing/font and Flow crop.
 
 Verification: offline fixtures for portrait capture/cache/identity, Qwen graph/image upload, partial refusal and two-batch/probe routing, cancellation and retry of mixed providers. No active job or services are changed during implementation; rollout only when idle. Live GPU test must be isolated from user video and an idle Comfy queue.

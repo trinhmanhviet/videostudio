@@ -34,6 +34,8 @@ Nếu chưa có `py -3.12`, cài Python 3.12 trước. Launcher dùng `C:\Python
 
 Muốn tự mở Chrome riêng: dùng **Chrome - Clean.cmd** để đăng nhập bình thường; **Chrome - Debug.cmd** để điều khiển Flow; **Chrome - Stop.cmd** để tắt Chrome riêng. Cả ba cùng dùng `data/chrome-profile`, giữ tài khoản và dữ liệu. Chế độ sạch để đăng nhập; debug để điều khiển. Không đổi chế độ khi video hoặc tác vụ ảnh đang chạy.
 
+Chrome debug dùng cổng local cố định `19223` và không thêm `--enable-automation`; người dùng đã xác nhận tạo ảnh Flow thủ công thành công với cấu hình này. Tool xác nhận executable/profile, PID, thời điểm khởi động và listener loopback, rồi kiểm tra lại sau khi nối WebSocket. Không sửa `navigator.webdriver`. Cổng bị tiến trình khác chiếm sẽ báo lỗi, không dừng tiến trình đó. Có thể đặt `VS_CHROME_DEBUG_PORT` thành một cổng trống từ 1024 đến 65535; dùng cùng giá trị cho backend, daemon và lệnh mở Chrome. Chrome cũ dùng cổng tự chọn được giữ kết nối nếu khớp PID/listener và token; lần mở debug mới dùng cổng cố định.
+
 ComfyUI nếu đã chạy được mở bởi shortcut của người dùng thì launcher sẽ dùng lại. Nếu chưa chạy, launcher gọi `scripts/start_comfy_recovery.py`, cần có cấu hình launcher/runtime hợp lệ trên máy đó. Launcher này không cài ComfyUI, model, node hay tài khoản. Khởi động backend thủ công:
 
 ```powershell
@@ -41,7 +43,15 @@ Set-Location D:\Projects\videostudio
 python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 ```
 
+## Thử Flow bằng request qua extension
+
+Đường thử mới nằm trong **extension VideoStudio hiện có**, bật qua popup icon extension và quyền Flow tùy chọn. Chạy `Start Flow Request.cmd`, mở `http://localhost:8878/flow-request`, ghép mã kết nối rồi thử liệt kê dự án trước. Không cần cài extension thứ hai, xuất cookie hay restart backend đang chạy. Hướng dẫn đầy đủ và giới hạn nghiệm thu: [FlowAPI/README.md](FlowAPI/README.md). Các video hiện tại vẫn dùng provider Flow cũ; tạo ảnh bằng request chưa được mặc định bật.
+
 ## Tạo và phục hồi video
+
+Nghiệm thu ngày 2026-11-03: người dùng đã tạo thành công video 8 giây bằng tool sau bản CDP cổng cố định. Video dài hơn vẫn đang chờ nghiệm thu. Đây là luồng Flow qua trình duyệt/giao diện; nhánh thử nghiệm FlowAPI request trực tiếp vẫn chưa tạo ảnh thành công.
+
+- Kế hoạch sản xuất mới tự chia cảnh theo nội dung/bối cảnh: nhiều câu có thể dùng chung một ảnh; đổi địa điểm, thời gian, nhân vật chính hoặc hành động thì đổi cảnh. Lời đọc và phụ đề vẫn có timing riêng theo từng câu. Áp dụng cho video ngắn, nhiều chương và lời đọc có sẵn; không cần duyệt thêm hay thêm lượt ChatGPT. Metadata nhóm thiếu/sai được xử lý cục bộ; nhóm lời đọc có sẵn không nhất quán sẽ giữ cảnh riêng. Plan/chapter cache cũ và các checkpoint đã có không bị nhóm lại. Cần nạp backend mới trước khi tạo job để nhận `visual_grouping_version: 1` trong checkpoint plan.
 
 - Job lỗi dùng **Tiếp tục từ bước…**. Job đã hủy sau khi có kịch bản dùng **Tiếp tục job đã hủy** trên thẻ lịch sử; chỉ thao tác chủ động này mới bỏ cờ hủy. Kịch bản/lời đọc/nhạc/ảnh đã có checkpoint được giữ lại, không tạo job mới. Phiên ChatGPT đã hủy trước khi xong kịch bản không tự được khởi động lại bằng nút này.
 

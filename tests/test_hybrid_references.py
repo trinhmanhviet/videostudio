@@ -8,6 +8,14 @@ from videostudio.hybrid_images import run
 
 
 class ReferenceGraphTests(unittest.TestCase):
+    def test_vietnamese_failed_card_matches_reused_full_prompt_without_dom_id(self):
+        import hashlib
+        prompt='The full scene with Miguel in a laboratory'
+        task={'task_id':'one','job_id':'job','prompt':prompt,'prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),'character_mentions':[]}
+        tile={'tile_id':'verified-failure:prompt','complete':False,'text':'warning Không thành công Chúng tôi nhận thấy có hoạt động bất thường','full_prompt':prompt,'mention_entity_ids':[]}
+        self.assertEqual(FlowImages._legacy_failed_tasks([task],[tile],[task]),{'one':tile['tile_id']})
+        self.assertEqual(FlowImages._legacy_failed_tasks([task],[{**tile,'full_prompt':'Another scene'}],[task]),{})
+
     def test_old_batch_requires_unique_job_prompt_and_explicit_failure(self):
         import hashlib
         task={'task_id':'one','job_id':'job','prompt':'A unique full scene description','prompt_sha256':hashlib.sha256(b'A unique full scene description').hexdigest(),'character_mentions':[]}
@@ -37,6 +45,48 @@ class ReferenceGraphTests(unittest.TestCase):
 
 
 class PortraitDownloadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_failure_accessible_name_needs_no_composer_edit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            bridge=type('Bridge',(),{'cdp':type('CDP',(),{'command':AsyncMock()})()})()
+            flow=FlowImages(bridge,Path(folder));project='https://flow.google.com/project/existing'
+            flow._snapshot=AsyncMock(return_value={'url':project,'draftEmpty':False,'draftLength':1})
+            flow._eval=AsyncMock(return_value=['The complete failed scene prompt'])
+            flow._click_point=AsyncMock()
+            result=await flow._read_failed_card_prompts('session',project,[{'tile_id':'','text':'Không thành công','complete':False}],[{'task_id':'one','prompt':'The complete failed scene prompt'}])
+            self.assertEqual(result[0]['full_prompt'],'The complete failed scene prompt')
+            flow._click_point.assert_not_awaited();bridge.cdp.command.assert_not_awaited()
+
+    async def test_failed_cards_without_ids_recover_prompt_and_clear_only_reused_draft(self):
+        with tempfile.TemporaryDirectory() as folder:
+            bridge=type('Bridge',(),{'cdp':type('CDP',(),{'command':AsyncMock()})()})()
+            flow=FlowImages(bridge,Path(folder));project='https://flow.google.com/project/existing'
+            flow._snapshot=AsyncMock(return_value={'url':project,'draftEmpty':True,'generateDisabled':True})
+            flow._eval=AsyncMock(return_value={'x':10,'y':20,'hitIsButton':True})
+            flow._click_point=AsyncMock();flow._wait_page=AsyncMock(return_value={'draftLength':20,'mentionEntityIds':[]})
+            flow._prompt_box=AsyncMock(side_effect=[{'text':'Full first scene prompt'},{'text':'Full second scene prompt'}])
+            flow._clear_verified_reused_prompt=AsyncMock()
+            result=await flow._read_failed_card_prompts('session',project,[{'tile_id':'','text':'warning Không thành công','complete':False,'x':10,'y':20} for _ in range(2)])
+            self.assertEqual([r['full_prompt'] for r in result],['Full first scene prompt','Full second scene prompt'])
+            self.assertTrue(all(r['tile_id'].startswith('verified-failure:') for r in result))
+            self.assertEqual(flow._clear_verified_reused_prompt.await_count,2)
+            self.assertFalse(any(c.args[0]=='Input.insertText' for c in bridge.cdp.command.await_args_list))
+
+    async def test_reopen_after_fallback_visits_home_and_same_saved_project(self):
+        with tempfile.TemporaryDirectory() as folder:
+            command=AsyncMock(return_value={})
+            bridge=type('Bridge',(),{'job_lock':asyncio.Lock(),'connect':AsyncMock(),'cdp':type('CDP',(),{'command':command})()})()
+            flow=FlowImages(bridge,Path(folder));job=str(uuid.uuid4());task=str(uuid.uuid4());project='https://flow.google.com/project/existing'
+            flow._save_project_registry(job,project)
+            flow._target=AsyncMock(return_value='tab');flow._session=AsyncMock(return_value='session')
+            flow._snapshot=AsyncMock(return_value={'url':project,'draftEmpty':True})
+            flow._wait_page=AsyncMock()
+            await flow._reopen_after_fallback(job,[{'task_id':task}])
+            self.assertEqual([c.args[1]['url'] for c in command.await_args_list if c.args[0]=='Page.navigate'],['https://flow.google.com/',project])
+            command.reset_mock()
+            flow._write_receipt(task,{'task_id':task,'job_id':job,'stage':'waiting_result'})
+            await flow._reopen_after_fallback(job,[{'task_id':task}])
+            command.assert_not_awaited()
+
     async def test_download_uses_saved_entity_and_cache_never_generates(self):
         with tempfile.TemporaryDirectory() as folder:
             import io,base64
@@ -56,6 +106,23 @@ class PortraitDownloadTests(unittest.IsolatedAsyncioTestCase):
 
 
 class HybridRoutingTests(unittest.TestCase):
+    def test_refused_probe_repeats_comfy_cycle_and_reopens_on_next_probe(self):
+        with tempfile.TemporaryDirectory() as folder:
+            from videostudio.providers import Pipeline
+            pipeline=Mock();pipeline.store=None;pipeline._flow_cohorts=Pipeline._flow_cohorts
+            tasks=[{'task_id':str(uuid.uuid4()),'prompt':f'scene {i}','ordinal':i} for i in range(15)]
+            calls=[];reopen=[];done=[]
+            def flow(job,cohort,check,timeout):
+                calls.append([t['ordinal'] for t in cohort]);reopen.append(any(t.get('reopen_project') for t in cohort))
+                return {t['task_id']:({'task_id':t['task_id'],'status':'blocked','blocked_confirmed':True} if len(calls)<=2 else {'task_id':t['task_id']}) for t in cohort}
+            pipeline._browser_scene_images_batch=Mock(side_effect=flow)
+            with patch('videostudio.hybrid_images.comfy_scene',side_effect=lambda p,j,t,r,c:{'task_id':t['task_id'],'provider':'comfy'}):
+                run(pipeline,{'id':str(uuid.uuid4()),'output':folder},tasks,3,{},lambda t,r:done.append((t['ordinal'],r.get('provider','flow'))),lambda:None)
+            self.assertEqual(calls,[[0,1,2],[6],[12],[13,14]])
+            self.assertEqual(reopen,[False,True,True,False])
+            self.assertEqual(done[:12],[(i,'comfy') for i in range(12)])
+            self.assertEqual(len({i for i,_ in done}),15)
+
     def test_mixed_provider_checkpoint_survives_retry_and_keeps_render_source(self):
         from videostudio.providers import Pipeline
         with tempfile.TemporaryDirectory() as folder:
@@ -99,14 +166,17 @@ class HybridRoutingTests(unittest.TestCase):
             from videostudio.providers import Pipeline
             pipeline._flow_cohorts=Pipeline._flow_cohorts
             calls=[]
+            reopen=[]
             def flow(job,cohort,check,timeout):
                 calls.append([t['ordinal'] for t in cohort])
+                reopen.append(any(t.get('reopen_project') for t in cohort))
                 return {t['task_id']:({'task_id':t['task_id'],'status':'blocked','blocked_confirmed':True} if len(calls)==1 else {'task_id':t['task_id']}) for t in cohort}
             pipeline._browser_scene_images_batch=Mock(side_effect=flow);done=[]
             def comfy(p,j,t,r,check):return {'task_id':t['task_id'],'provider':'comfy'}
             with patch('videostudio.hybrid_images.comfy_scene',side_effect=comfy):
                 result=run(pipeline,job,tasks,3,{},lambda t,r:done.append((t['ordinal'],r.get('provider','flow'))),lambda:None)
             self.assertEqual(calls,[[0,1,2],[6],[7,8,9]])
+            self.assertEqual(reopen,[False,True,False])
             self.assertEqual(done[:6],[(i,'comfy') for i in range(6)])
             self.assertEqual(len(result),10);self.assertEqual(len(set(i for i,_ in done)),10)
             self.assertEqual(json.loads((Path(folder)/'image-routing.json').read_text())['mode'],'flow')

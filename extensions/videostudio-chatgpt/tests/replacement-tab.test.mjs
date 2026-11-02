@@ -6,7 +6,7 @@ import * as protocol from '../protocol.mjs';
 const scope='123e4567-e89b-42d3-a456-426614174000',id='request-closed-tab';
 const url='https://chatgpt.com/c/123e4567-e89b-42d3-a456-426614174111';
 const prompt=`YÊU CẦU STUDIO ${id}\nScript request`;
-const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/,'');
+const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/gm,'');
 function worker({matches=1,known=true,foreign=false,original='closed',foreignMarker=false}={}){
  let state=protocol.start({studioTab:7,scope}),listener;
  state.job={id,prompt,version:1,attempt:1,phase:'sent',send_attempted:true,chatTab:20,startedAt:Date.now()-600000};state.chatTab=20;state.ownedTabs=[20];

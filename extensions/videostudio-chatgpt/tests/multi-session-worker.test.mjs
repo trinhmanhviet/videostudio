@@ -8,7 +8,7 @@ const root='123e4567-e89b-42d3-a456-426614174000';
 const a='123e4567-e89b-42d3-a456-426614174001';
 const b='123e4567-e89b-42d3-a456-426614174002';
 const foreign='123e4567-e89b-42d3-a456-426614174003';
-const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/,'');
+const source=(await readFile(new URL('../background.js',import.meta.url),'utf8')).replace(/^import .*?;\r?\n/gm,'');
 function worker(initial=null){
   let listener,next=20,now=Date.now(),observed={ok:true,visibleUser:null,visibleReply:null};
   class Clock extends Date{static now(){return now;}}
