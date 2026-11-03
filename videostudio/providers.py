@@ -55,9 +55,22 @@ class UncertainDeliveryError(RuntimeError):
 FLOW_CHARACTER_MANIFEST_VERSION=1
 _FLOW_CHARACTER_ID=re.compile(r'^[a-z][a-z0-9_-]{0,39}$')
 
+def editing_opted_in(job):
+    request=job.get('request',{})
+    return any(key in request for key in ('edit_preset','workflow','references_enabled','captions_enabled','music_enabled','sfx_enabled'))
+
 def timeline_duration(job):
     request=job.get('request',{}) if isinstance(job,dict) else {}
     checkpoints=job.get('checkpoints',{})
+    snapshot=checkpoints.get('images',{}).get('edit_plan_snapshot') or checkpoints.get('render',{}).get('edit_plan_snapshot')
+    if snapshot:
+        path=Path(snapshot)
+        attestations=checkpoints.get('images',{}).get('assets',[])+checkpoints.get('render',{}).get('assets',[])
+        expected=next((a.get('sha256') for a in attestations if Path(a['path']).resolve()==path.resolve()),None)
+        if not expected or not path.is_file() or digest(path)!=expected:raise PermanentError('Edit-plan timeline snapshot changed')
+        measured=json.loads(path.read_text(encoding='utf8'))['plan']['duration']
+        if type(measured) not in (int,float) or not math.isfinite(measured) or measured<=0:raise PermanentError('Invalid edited timeline duration')
+        return float(measured)
     verified=checkpoints.get('verify',{})
     # Existing verified videos and their visual-only revisions retain their soundtrack.
     if verified.get('verified') is True:
@@ -77,6 +90,7 @@ def timeline_duration(job):
 
 def flow_reference_enabled(job):
     request=job.get('request',{}) if isinstance(job,dict) else {}
+    if request.get('references_enabled') is False:return False
     duration=timeline_duration(job)
     if request.get('workflow_mode')=='provided_narration' and 'speech' not in job.get('checkpoints',{}):
         words=len(re.findall(r'\S+',request.get('idea','')))
@@ -480,7 +494,11 @@ class Pipeline:
         def wrapped(name):
             def invoke(j,check):
                 if hasattr(self,'context'):self.context.job=j['id'];self.context.text_provider=j['request'].get('text_provider','chatgpt')
-                try:return getattr(self,name)(j,check)
+                try:
+                    result=getattr(self,name)(j,check)
+                    if name=='plan' and editing_opted_in(j):
+                        result={**result,'editing_version':1,'edit_preset':j['request'].get('edit_preset','documentary')}
+                    return result
                 finally:
                     if hasattr(self,'context'):self.context.job=None
             return invoke
@@ -888,7 +906,8 @@ class Pipeline:
             for scene in chapter_scenes:
                 if not isinstance(scene,dict) or not isinstance(scene.get('visual_prompt'),str) or not scene['visual_prompt'].strip():raise ValueError(f'Missing visual prompt in chapter {idx}')
                 if not grouped:wrap_caption(scene.get('narration',''))
-                all_scenes.append({**scene,'scene_id':f'scene-{len(all_scenes):04}'})
+                metadata={'chapter_index':idx} if editing_opted_in(j) else {}
+                all_scenes.append({**scene,**metadata,'scene_id':f'scene-{len(all_scenes):04}'})
             if ch_result.get('source_paths'):all_sources.update(ch_result['source_paths'])
             prev_summary=ch_result.get('narration','')[-200:]
         total_narration=' '.join(s['narration'] for s in all_scenes)
@@ -1530,6 +1549,9 @@ class Pipeline:
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
         check()
+        if editing_opted_in(j):
+            from .edit_audio import generate_chapter_music
+            return generate_chapter_music(self,j,check)
         if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền theo từng cảnh và chuẩn hóa âm thanh (Stable Audio 3)...')
         if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
         target_dur=timeline_duration(j)
@@ -1584,6 +1606,25 @@ class Pipeline:
             'assets':assets+assembled['assets']+normalized['assets']
         }
     def render(self,j,check):
+        from .output_layout import publish_video
+        if j['checkpoints'].get('images',{}).get('edit_plan_snapshot'):
+            from .edit_render import render_edit_plan
+            return publish_video(j,render_edit_plan(j,check,self.ffmpeg,self.ffprobe))
+        if editing_opted_in(j):
+            try:
+                import copy
+                from .edit_plan import EditPlanService
+                from .edit_render import render_edit_plan
+                service=getattr(self,'edit_plan_service',None) or EditPlanService(self.store,self.ffmpeg,self.ffprobe)
+                path=service.automatic_snapshot(j)
+                edited=copy.deepcopy(j);edited['checkpoints']['images']['edit_plan_snapshot']=str(path)
+                edited['checkpoints']['images'].setdefault('assets',[]).append(asset(path))
+                result=render_edit_plan(edited,check,self.ffmpeg,self.ffprobe)
+                result['edit_plan_snapshot']=str(path);result['assets'].append(asset(path));result['editing_source']='automatic_defaults'
+                return publish_video(j,result)
+            except Cancelled:raise
+            except (ValueError,OSError,RuntimeError) as error:
+                if getattr(self,'store',None):self.store.log(j['id'],'render','Bộ dựng tùy chọn chưa áp dụng được; dùng bộ dựng hiện tại: '+str(error)[:400])
         if getattr(self,'scene_editor',None):self.scene_editor.require_user_review(j)
         from .visual_quality import require_release
         require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
@@ -1600,6 +1641,15 @@ class Pipeline:
             return publish_video(j,render_visual_revision(framed_scenes,reused['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe))
         return publish_video(j,render(framed_scenes,cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe,music_volume=vol))
     def verify(self,j,check):
+        snapshot=j['checkpoints'].get('images',{}).get('edit_plan_snapshot') or j['checkpoints'].get('render',{}).get('edit_plan_snapshot')
+        if snapshot:
+            import copy
+            from .edit_render import verify_edit_render
+            edited=copy.deepcopy(j)
+            if not edited['checkpoints']['images'].get('edit_plan_snapshot'):
+                edited['checkpoints']['images']['edit_plan_snapshot']=snapshot
+                edited['checkpoints']['images'].setdefault('assets',[]).extend(edited['checkpoints']['render']['assets'])
+            return verify_edit_render(edited,check,self.ffmpeg,self.ffprobe)
         from .visual_quality import require_release
         visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'scene_editor',None):

@@ -90,9 +90,9 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size','text_provider'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
 
-    if not required.issubset(set(data)) or not set(data).issubset(allowed):
+    if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
         raise ValueError('Exactly idea, voice_id, duration_seconds required')
 
@@ -131,6 +131,17 @@ def validate_request(data):
     res=dict(data,idea=data['idea'].strip(),image_provider=provider,flow_batch_size=batch_size,text_provider=text_provider)
 
     if mode is not None:res['workflow_mode']=mode
+
+    # Revalidation must preserve explicit scalar edits (derived voice jobs and
+    # editor exports). Workflow compilation happens only at API submission.
+    if 'workflow' in data:
+        from .workflow import validate_workflow
+        res['workflow']=validate_workflow(data['workflow'])
+    if 'edit_preset' in data and data['edit_preset'] not in ('documentary','science','everyday'):
+        raise ValueError('edit_preset must be documentary, science, or everyday')
+    for field in ('references_enabled','captions_enabled','music_enabled','sfx_enabled'):
+        if field in data and type(data[field]) is not bool:
+            raise ValueError(field+' must be boolean')
 
     if 'quality_mode' in data and data['quality_mode'] not in ('quick','careful'):raise ValueError('quality_mode must be quick or careful')
 

@@ -493,6 +493,15 @@ $('#create').onsubmit=async e=>{
   catch(e){$('#submitError').textContent=e.message}finally{submitting=false;enable()}
 };
 
+function openOptionalWorkspace(jobId=null,view='editor'){
+  const url=new URL(extensionScope?`/story-video/projects/${extensionScope}/production`:'/editor.html',location.origin);
+  if(extensionScope){url.searchParams.set('workspace','editor');url.searchParams.set('scope',extensionScope);}
+  if(jobId)url.searchParams.set('job',jobId);url.searchParams.set('view',view);if(activeProject)url.searchParams.set('project',activeProject);
+  window.open(url.href,'_blank','noopener');
+}
+window.openOptionalWorkspace=openOptionalWorkspace;
+const optionalWorkflowEntry=text('button','Workflow canvas (tùy chọn)','secondary');optionalWorkflowEntry.type='button';optionalWorkflowEntry.id='optionalWorkflowEntry';optionalWorkflowEntry.style.marginBottom='12px';optionalWorkflowEntry.onclick=()=>openOptionalWorkspace(null,'workflow');$('#create').before(optionalWorkflowEntry);
+window.addEventListener('load',()=>{const editor=new URLSearchParams(location.search).get('editor');if(editor&&/^[0-9a-f-]{36}$/i.test(editor)&&window.openSceneEditor)window.openSceneEditor(editor);});
 function renderJobCard(j){
   const n=document.createElement('article');n.className='job';n.id='job-'+j.id;n.dataset.status=j.status;
   n.dataset.renderState=jobCardRenderState(j);
@@ -548,6 +557,7 @@ function appendJobActionButtons(n,j){
   }
   if(j.checkpoints?.images&&['completed','failed','awaiting_visual_review'].includes(j.status)&&!n.querySelector('.scene-editor-open')){
     const b=text('button','Xem / sửa ảnh từng cảnh','secondary scene-editor-open');b.type='button';b.onclick=()=>window.openSceneEditor(j.id);n.append(b);
+    const optional=text('button','Bàn dựng mới (tùy chọn)','secondary optional-editor-open');optional.type='button';optional.onclick=()=>openOptionalWorkspace(j.id);n.append(optional);
   }
 }
 
@@ -598,6 +608,9 @@ function updateHeroCompletedVideo(filtered){
   if(!resetBtn){resetBtn=text('button','🔄 Tạo lại bộ ảnh','secondary');resetBtn.id='heroResetImagesBtn';resetBtn.type='button';editBtn.after(resetBtn);}
   resetBtn.onclick=()=>openResetImagesModal(latestCompleted);
   editBtn.onclick=()=>window.openSceneEditor(latestCompleted.id);
+  let optionalEdit=$('#heroOptionalEditBtn');
+  if(!optionalEdit){optionalEdit=text('button','Bàn dựng mới (tùy chọn)','secondary');optionalEdit.id='heroOptionalEditBtn';optionalEdit.type='button';editBtn.after(optionalEdit);}
+  optionalEdit.onclick=()=>openOptionalWorkspace(latestCompleted.id);
   const btnChange=$('#heroChangeVoiceBtn');
   btnChange.onclick=async()=>{
     const newVoice=$('#heroChangeVoiceSelect').value;

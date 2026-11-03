@@ -162,9 +162,10 @@ class ApiTests(unittest.TestCase):
             self.assertFalse(vid_file.exists())
 
             # Test API endpoint
-            with TestClient(create_app(store,FakePipeline(),False)) as client:
+            from unittest.mock import patch
+            with patch('videostudio.core.available_flow_batch_sizes',return_value=[1,3,5,10]),TestClient(create_app(store,FakePipeline(),False)) as client:
                 res = client.post(f"/api/jobs/{j['id']}/reset-images", json={'image_provider':'flow','flow_batch_size':5})
-                self.assertEqual(res.status_code, 200)
+                self.assertEqual(res.status_code, 200, res.text)
                 self.assertEqual(res.json()['request']['image_provider'], 'flow')
                 self.assertEqual(res.json()['request']['flow_batch_size'], 5)
 
@@ -269,8 +270,10 @@ vm.runInContext(html.slice(start,stop),context);
                     conn.execute("UPDATE jobs SET state='completed',stage='verify' WHERE id=?",(jid,))
                     conn.execute("INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)",(jid,'plan',json.dumps({'title':'T'})))
                     conn.execute("INSERT OR REPLACE INTO checkpoints VALUES(?,?,?)",(jid,'images',json.dumps({'scenes':[]})))
-                cv_res=c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh','pitch':-2})
-                self.assertEqual(cv_res.status_code,200)
+                from unittest.mock import patch
+                with patch('videostudio.api.Voices.selected',return_value={'id':'Thiện Minh'}):
+                    cv_res=c.post('/api/jobs/'+jid+'/change-voice',json={'voice_id':'Thiện Minh','pitch':-2})
+                self.assertEqual(cv_res.status_code,200,cv_res.text)
                 new_j=cv_res.json()
                 self.assertEqual(new_j['request']['voice_id'],'Thiện Minh')
                 self.assertEqual(new_j['request']['pitch'],-2)

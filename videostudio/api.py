@@ -463,6 +463,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         return {'ok':True,'message':'VideoStudio đang khởi động lại...'}
     from .editor_api import register_editor_routes
     register_editor_routes(app,store,scene_editor,same_origin,public_job,image_jobs)
+    from .workflow_api import register_workflow_routes
+    register_workflow_routes(app,store,same_origin)
+    from .edit_plan_api import register_edit_plan_routes
+    edit_plan_service=register_edit_plan_routes(app,store,same_origin,public_job,ffmpeg=getattr(pipeline,'ffmpeg','ffmpeg'),ffprobe=getattr(pipeline,'ffprobe','ffprobe'))
+    app.state.edit_plan_service=edit_plan_service
+    pipeline.edit_plan_service=edit_plan_service
     @app.post('/api/connector/sessions')
     def connector_session(request:Request):
         same_origin(request)
@@ -567,6 +573,13 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
         if not idempotency_key:
             raise HTTPException(422,'Idempotency-Key required')
+        # Graph compilation belongs to the new-job submission boundary, not
+        # Store.validate_request: voice derivatives and editor exports retain
+        # explicit scalar overrides while preserving their source graph.
+        if 'workflow' in data:
+            from .workflow import compile_workflow
+            try:data=compile_workflow(data['workflow'],data)
+            except ValueError as error:raise HTTPException(422,str(error)) from error
         # Reject new jobs before allocation; existing idempotent receipts remain readable.
         with store.db() as connection:
             previous=connection.execute('SELECT id FROM jobs WHERE idem=?',(idempotency_key,)).fetchone()
@@ -678,10 +691,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     static=ROOT/'static'
     if static.is_dir():
         @app.get('/story-video/projects/{project_id}/production')
-        def production_page(project_id:str,connector_test:bool=False):
+        def production_page(project_id:str,connector_test:bool=False,workspace:str|None=None):
             try:exchanges.pending(project_id)
             except KeyError:raise HTTPException(404,'Unknown connector scope')
-            return FileResponse(static/('connector-test.html' if connector_test else 'index.html'))
+            return FileResponse(static/('connector-test.html' if connector_test else 'editor.html' if workspace=='editor' else 'index.html'))
         app.mount('/',StaticFiles(directory=static,html=True),name='frontend')
     app.state.browser_manager=browser_manager
     return app

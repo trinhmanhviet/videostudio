@@ -43,6 +43,16 @@ Set-Location D:\Projects\videostudio
 python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 ```
 
+## Bàn dựng mới và Workflow canvas — UI tùy chọn
+
+**UI cũ được giữ nguyên.** Bản dựng kiểu mới không thay form tạo video, float hay editor ảnh từng cảnh hiện hành. Có thêm bàn dựng với media/preview/inspector/timeline nhiều lớp, `edit_plan.json`, ba preset, nhạc theo chương, SFX và canvas kéo/nối/cấu hình workflow.
+
+Đã kiểm tra 619 Python + 139 JavaScript test, xuất MP4 thật từ editor và kéo/nối/cấu hình/lưu/Run workflow trên fixture riêng. Không cần build frontend hoặc reload extension; sau khi cập nhật/nạp backend lúc rảnh, F5 Studio để thấy nút mới. Nghiệm thu video AI dài và restart máy vẫn do người dùng thực hiện riêng.
+
+- [Tài liệu bàn dựng mới và Workflow](docs/editor-workflow.md): hướng dẫn, trạng thái nghiệm thu, thiết kế, schema/API, sơ đồ kỹ thuật, cache và các việc còn lại trong một file.
+
+Các hành vi dựng tự động mới chỉ bật khi chủ động opt-in bằng `edit_preset`/`workflow` hoặc các tùy chọn node tương ứng. Request từ UI cũ không tự bị đổi sang preset hay cách tạo nhạc mới. Bản xuất editor tạo child render-only job, dùng lại media và giữ video cũ.
+
 ## Thử Flow bằng request qua extension
 
 Đường thử mới nằm trong **extension VideoStudio hiện có**, bật qua popup icon extension và quyền Flow tùy chọn. Chạy `Start Flow Request.cmd`, mở `http://localhost:8878/flow-request`, ghép mã kết nối rồi thử liệt kê dự án trước. Không cần cài extension thứ hai, xuất cookie hay restart backend đang chạy. Hướng dẫn đầy đủ và giới hạn nghiệm thu: [FlowAPI/README.md](FlowAPI/README.md). Các video hiện tại vẫn dùng provider Flow cũ; tạo ảnh bằng request chưa được mặc định bật.
@@ -143,7 +153,7 @@ Các điểm vào chính: API/exchange tại `videostudio/api.py` và `videostud
 | ChatGPT bridge | `extensions/videostudio-chatgpt/` |
 | Render, phụ đề, probe media | `videostudio/media.py` |
 
-README mô tả luồng hiện hành; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
+README phân biệt luồng production hiện hành và UI mới đang phát triển; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
 
 Repo cũng giữ các tài liệu handoff, log thử nghiệm trong `docs/` và script chẩn đoán/cứu job trong `scripts/` để tham khảo lịch sử. Những script này có thể gắn với job ID, đường dẫn hoặc cổng Chrome của một lần xử lý cụ thể; không thuộc quy trình khởi động thông thường. Hướng dẫn vận hành hiện tại nằm trong README này.
 
