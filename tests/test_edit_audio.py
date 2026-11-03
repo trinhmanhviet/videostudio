@@ -104,7 +104,7 @@ class AudioTests(unittest.TestCase):
             ffprobe = 'ffprobe'
             calls = []
             def accepted_music(self):
-                return True
+                raise AssertionError('Old smoke file must not gate real music generation')
             def comfy_asset(self, job, kind, graph, path, check):
                 self.calls.append(kind)
                 source = Path(path).with_suffix('.wav')

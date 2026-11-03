@@ -288,7 +288,6 @@ class Pipeline:
         required=image_graph('',0,'x')|{}
         classes={v['class_type'] for v in required.values()}|{v['class_type'] for v in music_graph('',8,0,'x').values()}
         add('comfy_nodes',all(c in info for c in classes),'Source-derived Qwen2.1/Stable Audio3 blueprint node availability only; not live workflow validation. Flux2Klein unavailable (no verified graph)')
-        add('stable_audio3_integration',self.accepted_music(),'Local smoke audio attestation required. Successful decode does not establish semantic/music quality or commercial licensing.')
         for cls,param,expected in [('UNETLoader','unet_name','qwen_image_2.1_int8_convrot.safetensors'),('CLIPLoader','clip_name','qwen3vl_8b_int8_convrot.safetensors'),('VAELoader','vae_name','qwen_image_2.1_vae_bf16.safetensors'),('CheckpointLoaderSimple','ckpt_name','stable_audio_3_medium_base.safetensors'),('CLIPLoader','clip_name','t5gemma_b_b_ul2.safetensors')]:
             choices=info.get(cls,{}).get('input',{}).get('required',{}).get(param,[[]])[0]
             add('model:'+expected,isinstance(choices,list) and expected in choices,'Must already exist in Comfy; no download')
@@ -1553,7 +1552,6 @@ class Pipeline:
             from .edit_audio import generate_chapter_music
             return generate_chapter_music(self,j,check)
         if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền theo từng cảnh và chuẩn hóa âm thanh (Stable Audio 3)...')
-        if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
         target_dur=timeline_duration(j)
         script=j.get('checkpoints',{}).get('script',{})
         script_scenes=script.get('scenes',[])

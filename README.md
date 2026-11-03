@@ -15,6 +15,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_windows_launch
 
 Nhật ký thao tác trong app: `data/launcher.log`. Bộ khởi động `.cmd` bên dưới vẫn dùng được độc lập.
 
+Tạo nhạc không phụ thuộc file nhạc mẫu/smoke cũ. Preflight vẫn kiểm tra Comfy, node và model; mỗi job kiểm tra âm thanh vừa tạo, nên dọn thư mục video thử cũ không làm mất điều kiện chạy nhạc.
+
 1. Cài Git, Python 3.12 x64, Google Chrome và FFmpeg (`ffmpeg`, `ffprobe` phải có trong `PATH`). Runtime/model/cache giọng đọc và ComfyUI là phần cài riêng; requirements không tự tải model lớn.
 
 ```powershell
