@@ -10,6 +10,7 @@ Cập nhật: **2026-11-03**. Đây là tài liệu duy nhất cho phần bàn d
 2. [Hướng dẫn dùng editor, preset, âm thanh và canvas](#guide)
 3. [Kiến trúc, JSON schema, API, lưu trữ và cache](#architecture)
 4. [Hợp đồng tích hợp và tiêu chí hoàn thành](#implementation)
+5. [Kế hoạch thêm animation bằng asset và code — chưa triển khai](#code-animation)
 
 README chỉ giữ cách khởi động và đường dẫn vào tài liệu; TODO giữ các việc chưa làm. Không tách thêm guide/architecture/status/spec/plan riêng cho tính năng này.
 
@@ -587,3 +588,71 @@ onRun nhận request đã compile; việc tạo job phải đi qua admission/con
 8. Chỉ đánh dấu hoàn thành khi từng yêu cầu có bằng chứng thực tế. Module đã viết, lượt test thành phần hoặc screenshot đẹp chưa đủ.
 
 Mọi cập nhật sau tiếp tục sửa tài liệu này và TODO, không tạo thêm một bộ handoff/status/plan trùng lặp.
+
+<a id="code-animation"></a>
+## Kế hoạch mở rộng: animation bằng asset và code
+
+**Trạng thái: TODO, chưa triển khai.** Ghi nhận ngày 2026-11-03 từ đề xuất “Nâng cấp Story Video Pipeline sang Code-Driven Animation bằng HyperFrames”. Nội dung được điều chỉnh theo code hiện tại, không áp dụng nguyên văn các lệnh “implement”, “thay renderer chính” trong đề xuất. Việc tham khảo UI HyperFrames trước đây không có nghĩa VideoStudio đã dùng engine đó.
+
+### Điểm giữ lại và điểm cần điều chỉnh
+
+| Nội dung đề xuất | Áp dụng cho VideoStudio hiện tại |
+|---|---|
+| Thay chuỗi image → AI-video bằng code animation | Luồng đang dùng ảnh Flow/Comfy và FFmpeg, không có bước AI-video bắt buộc cần loại bỏ. Thêm khả năng animation nhiều lớp trên nền này. |
+| Tạo scene planner/timeline/audio mới | Tái dùng scene ID, speech timing, `edit_plan.json`, asset registry, preset, chapter music, SFX, editor và workflow canvas. Không tạo pipeline song song cùng quản lý một timeline. |
+| Comfy là nguồn asset duy nhất | Giữ cả Flow/Comfy và ref sẵn có; layer PNG alpha/mask/pose là capability bổ sung. Ảnh phẳng vẫn dùng được. |
+| HyperFrames là renderer chính ngay | Chỉ là ứng viên engine cần kiểm chứng. Tích hợp qua adapter tùy chọn; FFmpeg tiếp tục mux/audio/verify và dựng các cảnh thường. |
+| Word/phoneme timestamps đã có | Hiện dùng timing câu lời đọc đo được. Không suy ra thời gian từng từ/viseme chính xác từ timing câu. Alignment là khả năng bổ sung, không chặn video thường. |
+| Ưu tiên 1920×1080, dọc để sau | Dọc 1080×1920 đang là mặc định của editor. Giữ mặc định đó và thử cả hai hướng ở demo mới. |
+| Phải có đầy đủ rig/action/FX ở mọi cảnh | Phân loại theo asset thực có; thiếu bộ phận thì giảm motion hoặc dùng ảnh thường. Không ép thêm nhiều lượt AI cho mọi cảnh. |
+| Tạo doc motion-engine riêng | Ghi thiết kế trong tài liệu này, tiến độ trong TODO; README chỉ dẫn vào đây. |
+
+### Luồng tích hợp dự kiến
+
+```mermaid
+flowchart TD
+  Story[Kịch bản và scene ID hiện có] --> Assets[Ảnh/ref Flow hoặc Comfy đã xác nhận]
+  Story --> Speech[TTS và timing đo được hiện có]
+  Assets --> Pack[Asset pack và capability từng cảnh]
+  Speech --> Director[Motion Director chọn preset và tham số]
+  Pack --> Director
+  Director --> Manifest[Motion manifest có version, seed và frame timing]
+  Manifest --> Plan[Revision và snapshot kế hoạch dựng]
+  Plan --> Choice{Cảnh có motion phù hợp?}
+  Choice -->|Có| Engine[Adapter animation, engine cần kiểm chứng]
+  Choice -->|Không hoặc fallback tự động đã quy định| Simple[Dựng ảnh/pan/chữ hiện có]
+  Engine --> Clips[Clip cảnh được cache]
+  Simple --> Clips
+  Clips --> Final[FFmpeg, mix voice/nhạc/SFX/sub, verify và xuất]
+  Speech --> Final
+```
+
+Đây là sơ đồ trách nhiệm, không phải thay thứ tự checkpoint đang chạy. Khi triển khai cần quyết định adapter nằm trong bước render hay có checkpoint con; không tự thêm stage top-level, đổi dependency của job cũ hoặc chuyển job đang chạy sang engine mới. Một video có thể dùng cả cảnh animation và cảnh ảnh thường.
+
+### Hợp đồng dữ liệu và thư viện motion
+
+- `edit_plan` vẫn là kế hoạch dựng tổng; asset pack/motion manifest là dữ liệu con có version và tham chiếu bằng scene ID/asset ID. Không lưu hai bản thời gian có thể lệch nhau; cue câu đã đo được quy đổi sang frame và giữ quy tắc làm tròn thống nhất. Schema v1 hiện kiểm tra field chặt, nên phải thiết kế version/migration trước khi mở rộng.
+- Asset pack ghi nền, tiền cảnh, nhân vật, đạo cụ, mask, pose, mắt/miệng và metadata depth/pivot/anchor/bounds khi thực sự tồn tại. File đi qua registry hiện có, có hash; không chấp nhận đường dẫn tùy ý hoặc coi mask/alpha là có sẵn chỉ từ tên prompt. Capability phải kiểm tra cả nhóm asset cần cho một action.
+- Motion Director dùng mô tả cảnh, mood, asset capability và audio timing để chọn từ thư viện đã cho phép: camera, parallax, micro motion, sprite/pose, prop/mask, FX và SFX events. LLM chỉ chọn preset/tham số, không sinh/chạy JavaScript tùy ý theo cảnh. Có đường chọn preset cục bộ khi không cần thêm lượt LLM.
+- Mỗi primitive có schema tham số, version, giới hạn intensity và asset requirements; có thể phối hợp qua hierarchy/channel transform để blink, mouth, breathe, camera không ghi đè nhau. Random phải có seed; render lấy frame index làm đầu vào, không phụ thuộc đồng hồ realtime hoặc thứ tự seek.
+- Cache/receipt bao gồm source hashes, manifest, preset/engine version, seed, fps, canvas và timing. Bản xuất đóng băng toàn bộ tham chiếu; đổi chữ/motion không sinh lại ảnh, giọng hoặc nhạc còn hợp lệ. Engine/primitive chưa cài hoặc khác version phải được phát hiện trước render.
+
+### Tự động hóa và hạ cấp khi thiếu khả năng
+
+Người dùng chọn kiểu video; tool tự kiểm tra và chọn motion phù hợp. Không yêu cầu user tự rig, tạo mask hoặc duyệt mọi scene trong luồng tự động. Asset nhập thủ công vẫn được hỗ trợ như lựa chọn nâng cao. Bắt đầu bằng một ảnh với camera/chữ; chỉ tạo/tách thêm layer có ích, trong ngân sách định trước và dùng lại ref đã xác nhận. Chưa mặc định rằng Comfy hiện đã có model/workflow tách bộ phận nhân vật.
+
+Thứ tự hạ cấp dự kiến: motion đầy đủ → pose/layer đơn giản → camera/chữ trên ảnh phẳng → bộ dựng hiện hành. Mỗi trường hợp phải có giới hạn retry/timeout, trạng thái tiến độ, receipt và lý do fallback nhìn được trong UI. Không bỏ qua kiểm tra nguồn hoặc resubmit Flow khi kết quả cũ còn chưa rõ. Thiếu animation không được biến thành vòng lặp sinh lại asset/ref cho đến khi user can thiệp.
+
+Nhánh tự động có thể hạ cấp theo chính sách đã ghi trong snapshot. Với export manual đã đóng băng, không âm thầm thay hiệu ứng user chọn: lỗi rõ ràng và cho user chọn bản xuất hạ cấp mới. Giữ checkpoint lời đọc/nhạc/ảnh và cho tiếp tục đúng phần còn thiếu. AI-video không phải đường cứu mặc định; chỉ xem xét sau, khi có provider khả dụng và user chủ động bật.
+
+Lip sync đầu tiên có thể dùng closed/half/open theo năng lượng audio và khoảng ngắt, giới hạn tốc độ đổi miệng. Phải ghi là mouth animation theo audio, không tuyên bố khớp âm vị. Khi có alignment đáng tin mới bổ sung word/phoneme/viseme. Không có mouth/eye variants thì dùng head/camera motion, không chặn job. SFX gắn cùng event/frame của motion; mục tiêu sai số tối đa một frame cho event đã có timing, không áp đặt độ chính xác giả lên nội dung lời nói.
+
+### Thứ tự thực hiện và tiêu chí nghiệm thu
+
+1. **Engine spike:** kiểm tra package/phiên bản/license/API, deterministic seek, render headless, Windows, font và tài nguyên của ứng viên HyperFrames. Nếu không phù hợp, giữ contract và chọn adapter khác sau khi đánh giá; chưa thêm dependency vào production. Không cần áp đặt TypeScript/Zod lên backend Python và static ES modules hiện tại.
+2. **Demo end-to-end:** asset thử cố định có một nhân vật blink/breathe/mouth, push/pan/parallax, đạo cụ + mask, particles/glint/flash, voice/SFX/sub; xuất MP4 30 fps cả dọc/ngang. Dùng synthetic assets trước để kiểm tra engine mà không tốn lượt AI. Seek lại frame cho cùng ảnh; không gọi AI-video.
+3. **Tự động asset/Director:** thêm capability detection, asset preparation đã kiểm chứng và preset selection với ngân sách hữu hạn. Mở rộng camera/micro-motion trước; pose/action/impact/dash/weapon/FX phong phú làm dần sau khi đường cơ bản ổn.
+4. **Editor/workflow:** thêm lựa chọn engine/style và inspector motion/capability trên UI sẵn có, không xây lại editor. Preview và export dùng chung manifest/primitive. Chỉ thêm node/port sau khi compiler/pipeline thật hỗ trợ; UI cũ giữ mặc định.
+5. **Độ bền:** thử video hỗn hợp 30–100+ cảnh, cache reuse, bộ nhớ, hủy/resume, lỗi engine giữa chừng và fallback; chạy regression pipeline cũ. Runtime dùng tài nguyên theo cảnh/chunk, không giữ mọi asset full resolution hoặc mở browser mới cho từng layer.
+
+Tiêu chí cuối là video tự chạy hết, giữ nguồn/checkpoint và không cần can thiệp khi chỉ thiếu motion tùy chọn. Có demo đẹp hoặc unit test không đủ để mặc định thay renderer cho mọi video. Các mục triển khai tương ứng vẫn để chưa hoàn thành trong TODO.

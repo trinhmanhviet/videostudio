@@ -51,6 +51,8 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 
 - [Tài liệu bàn dựng mới và Workflow](docs/editor-workflow.md): hướng dẫn, trạng thái nghiệm thu, thiết kế, schema/API, sơ đồ kỹ thuật, cache và các việc còn lại trong một file.
 
+Kế hoạch **animation bằng asset + code** (parallax, nhân vật/đạo cụ nhiều lớp, mask, mouth animation và FX) đã được ghi trong [TODO](TODO.md) và [phần mở rộng kỹ thuật](docs/editor-workflow.md#code-animation), **chưa triển khai**. HyperFrames là ứng viên engine cần kiểm chứng; bàn dựng hiện tại dùng FFmpeg, không phải engine HyperFrames.
+
 Các hành vi dựng tự động mới chỉ bật khi chủ động opt-in bằng `edit_preset`/`workflow` hoặc các tùy chọn node tương ứng. Request từ UI cũ không tự bị đổi sang preset hay cách tạo nhạc mới. Bản xuất editor tạo child render-only job, dùng lại media và giữ video cũ.
 
 ## Thử Flow bằng request qua extension
