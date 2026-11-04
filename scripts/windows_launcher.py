@@ -1,4 +1,7 @@
-"""Windows control panel. Uses the existing guarded service launchers."""
+"""VideoStudio for Windows: tray icon by default, the control panel with --panel.
+
+Both use the existing guarded service launchers (start/stop/restart_system.ps1).
+"""
 import base64
 import json
 import os
@@ -65,7 +68,7 @@ def open_studio():
     subprocess.Popen([str(chrome),'http://localhost:8877/'],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
 
 
-def main():
+def panel_main():
     import tkinter as tk
     from tkinter import ttk,messagebox
     try:root_path=workspace_root()
@@ -146,6 +149,15 @@ def main():
             window.destroy()
         window.after(400,finish_check)
     window.mainloop();return 0
+
+
+def main():
+    if '--panel' in sys.argv or '--self-check' in sys.argv or sys.platform!='win32':
+        return panel_main()
+    # Sibling module, bundled by PyInstaller; imported lazily so tests can load this file alone.
+    sys.path.insert(0,str(Path(__file__).resolve().parent))
+    from tray_app import tray_main
+    return tray_main(sys.argv[1:],sys.modules[__name__])
 
 
 if __name__=='__main__':sys.exit(main())

@@ -4,9 +4,16 @@
 
 ## Cài trên máy Windows mới
 
-Trên máy hiện tại có thể bấm đúp **VideoStudio.exe** trong thư mục dự án. Cửa sổ Windows hiển thị trạng thái Studio/Flow/ComfyUI, có nút **Mở hệ thống**, **Khởi động lại**, **Dừng hệ thống** và **Vào Studio**. Giao diện tạo video mở trong Chrome thường để dùng extension bridge. Đóng launcher không dừng video; các nút dừng/restart vẫn kiểm tra job đang chạy.
+Trên máy hiện tại bấm đúp **VideoStudio.bat** trong thư mục dự án, hoặc shortcut **VideoStudio** trên Desktop/Start Menu (tự tạo ở lần chạy đầu). Không cần build: file này chạy thẳng mã nguồn bằng `pythonw`, giống `vTransfer.bat`. App chạy ở **khay hệ thống** (góc phải thanh tác vụ), giống vTransfer:
 
-`VideoStudio.exe` là launcher, cần đặt cùng thư mục source (bên cạnh `scripts/`). Nó dùng lại Python, Chrome, ComfyUI và model đã cài; không chứa các runtime/model lớn. Repo có sẵn file exe để dùng sau khi clone. Để build lại sau khi cập nhật source launcher:
+- **Bấm** biểu tượng: vào Studio trong Chrome thường. Nếu hệ thống chưa chạy, app tự mở hệ thống rồi vào Studio.
+- **Chuột phải**: Mở hệ thống, Khởi động lại, Dừng hệ thống, Bảng điều khiển & nhật ký, Mở thư mục video, **Cài đặt** (khởi động cùng Windows, tự mở hệ thống khi khởi động cùng Windows, thông báo khi video xong/lỗi, shortcut Desktop và Start Menu), Thoát khay.
+- Chấm màu trên biểu tượng: xanh là đang chạy, vàng là đang thao tác, xám là chưa mở hệ thống. Rê chuột lên biểu tượng để xem trạng thái Studio/Flow/ComfyUI và số video đang xử lý.
+- Thoát khay không dừng dịch vụ hay video. Dừng/Khởi động lại vẫn bị chặn khi có video đang chạy. Lần chạy đầu app tự tạo shortcut trên Desktop và Start Menu; cài đặt lưu ở `data/tray.json`.
+
+Cửa sổ điều khiển cũ vẫn mở được bằng menu **Bảng điều khiển & nhật ký** hoặc `VideoStudio.bat --panel`. Giao diện tạo video mở trong Chrome thường để dùng extension bridge.
+
+`VideoStudio.exe` là bản đóng gói tùy chọn, cần đặt cùng thư mục source (bên cạnh `scripts/`); bản trong repo có thể cũ hơn mã nguồn, nên ưu tiên dùng `VideoStudio.bat`. Trước khi build lại exe, chuột phải biểu tượng ở khay → **Thoát khay** để file exe không bị khóa. Nó dùng lại Python, Chrome, ComfyUI và model đã cài; không chứa các runtime/model lớn. Repo có sẵn file exe để dùng sau khi clone. Để build lại sau khi cập nhật source launcher:
 
 ```powershell
 python -m pip install pyinstaller

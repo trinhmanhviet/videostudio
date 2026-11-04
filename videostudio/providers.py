@@ -288,7 +288,6 @@ class Pipeline:
         required=image_graph('',0,'x')|{}
         classes={v['class_type'] for v in required.values()}|{v['class_type'] for v in music_graph('',8,0,'x').values()}
         add('comfy_nodes',all(c in info for c in classes),'Source-derived Qwen2.1/Stable Audio3 blueprint node availability only; not live workflow validation. Flux2Klein unavailable (no verified graph)')
-        add('stable_audio3_integration',self.accepted_music(),'Local smoke audio attestation required. Successful decode does not establish semantic/music quality or commercial licensing.')
         for cls,param,expected in [('UNETLoader','unet_name','qwen_image_2.1_int8_convrot.safetensors'),('CLIPLoader','clip_name','qwen3vl_8b_int8_convrot.safetensors'),('VAELoader','vae_name','qwen_image_2.1_vae_bf16.safetensors'),('CheckpointLoaderSimple','ckpt_name','stable_audio_3_medium_base.safetensors'),('CLIPLoader','clip_name','t5gemma_b_b_ul2.safetensors')]:
             choices=info.get(cls,{}).get('input',{}).get('required',{}).get(param,[[]])[0]
             add('model:'+expected,isinstance(choices,list) and expected in choices,'Must already exist in Comfy; no download')
@@ -474,7 +473,7 @@ class Pipeline:
                         # A downloaded owned result survives maintenance failure; the receipt records service health.
                         if hold:
                             self._comfy_resident=j.get('id')
-                            cleanup={'deferred':'images_stage_end'}
+                            cleanup={'deferred':(getattr(self,'_comfy_hold_stage',None) or 'images')+'_stage_end'}
                             result['comfy_cleanup']=cleanup
                             receipt.write_text(json.dumps({'prompt_id':pid,'comfy_cleanup':cleanup}))
                             check()
@@ -504,6 +503,7 @@ class Pipeline:
             return invoke
         return {s:wrapped(s) for s in ('plan','research','script','speech','images','subtitles','music','render','verify')}
     def plan(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.plan(self,j,check)
         if getattr(self,'store',None):self.store.log(j['id'],'plan','Đang phân tích ý tưởng và lập kế hoạch sản xuất...')
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
         scope=self.exchanges.for_job(j['id']) if transport in ('chrome','extension') and hasattr(self,'exchanges') else None
@@ -549,6 +549,7 @@ class Pipeline:
         if not isinstance(d.get('research_required'),bool) or not isinstance(d.get('source_urls'),list):raise ValueError('Plan must classify factuality and provide source URLs')
         return {**d,'visual_grouping_version':VISUAL_GROUPING_VERSION}
     def research(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.research(self,j,check)
         check()
         plan=j['checkpoints']['plan'];mode=j['request'].get('workflow_mode')
         if getattr(self,'store',None):self.store.log(j['id'],'research','Bỏ qua nghiên cứu theo lựa chọn lời đọc có sẵn.' if mode=='provided_narration' else 'Đang nhận thông tin theo chế độ đã chọn...')
@@ -589,6 +590,7 @@ class Pipeline:
         manifest=Path(j['output'])/'sources.json';manifest.write_text(json.dumps({'sources':sources,'retrieval_errors':errors},ensure_ascii=False,indent=2),encoding='utf8')
         return {'sources':sources,'assets':[{'path':s['path'],'sha256':s['sha256']} for s in sources]+[asset(manifest)],'mode':'retrieved_reference_data','retrieval_errors':errors}
     def script(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.script(self,j,check)
         """Research uses one review and local omissions; source-quote mode stays strict."""
         if j['request'].get('workflow_mode')=='provided_narration':
             folder=Path(j['output']);folder.mkdir(parents=True,exist_ok=True)
@@ -1452,13 +1454,17 @@ class Pipeline:
         return {'scenes':scenes,'assets':assets,'image_provider':'flow','character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
 
     def images(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.images(self,j,check)
         """Run the images stage with Comfy models kept resident; unload them once at the end."""
-        previous=getattr(self,'_comfy_hold',None);self._comfy_hold=j['id']
-        try:return self._images(j,check)
+        return self._with_comfy_hold(j,'images',self._images,check)
+    def _with_comfy_hold(self,j,stage,run_stage,check):
+        previous=(getattr(self,'_comfy_hold',None),getattr(self,'_comfy_hold_stage',None))
+        self._comfy_hold=j['id'];self._comfy_hold_stage=stage
+        try:return run_stage(j,check)
         finally:
-            self._comfy_hold=previous
-            self.release_held_comfy(j)
-    def release_held_comfy(self,j):
+            self._comfy_hold,self._comfy_hold_stage=previous
+            self.release_held_comfy(j,stage)
+    def release_held_comfy(self,j,stage='images'):
         """Unload models this job's images stage left in VRAM; never touches foreign queued work."""
         if getattr(self,'_comfy_resident',None)!=j.get('id'):return None
         self._comfy_resident=None
@@ -1472,7 +1478,8 @@ class Pipeline:
         except (httpx.HTTPError,OSError,ValueError) as error:
             outcome={'error':str(error)}
         if getattr(self,'store',None):
-            try:self.store.log(j['id'],'images','Đã giải phóng VRAM Comfy sau ảnh cuối.' if outcome.get('freed') else f'Chưa giải phóng VRAM Comfy sau bước ảnh: {outcome}')
+            done='Đã giải phóng VRAM Comfy sau '+('đoạn nhạc cuối.' if stage=='music' else 'ảnh cuối.')
+            try:self.store.log(j['id'],stage,done if outcome.get('freed') else f'Chưa giải phóng VRAM Comfy sau bước {stage}: {outcome}')
             except Exception:pass
         return outcome
     def _images(self,j,check):
@@ -1548,12 +1555,16 @@ class Pipeline:
         result=write_captions(j['checkpoints']['speech']['utterances'],p)
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
+        """Music parts reuse the same Stable Audio models; unload once after the last part."""
+        if j.get('request',{}).get('workflow_mode')=='meme':
+            from . import meme_pipeline;j=meme_pipeline.music_job(j)
+        return self._with_comfy_hold(j,'music',self._music,check)
+    def _music(self,j,check):
         check()
         if editing_opted_in(j):
             from .edit_audio import generate_chapter_music
             return generate_chapter_music(self,j,check)
         if getattr(self,'store',None):self.store.log(j['id'],'music','Đang tạo nhạc nền theo từng cảnh và chuẩn hóa âm thanh (Stable Audio 3)...')
-        if not self.accepted_music():raise PermanentError('Stable Audio3 live workflow attestation absent')
         target_dur=timeline_duration(j)
         script=j.get('checkpoints',{}).get('script',{})
         script_scenes=script.get('scenes',[])
@@ -1606,11 +1617,15 @@ class Pipeline:
             'assets':assets+assembled['assets']+normalized['assets']
         }
     def render(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.render(self,j,check)
         from .output_layout import publish_video
         if j['checkpoints'].get('images',{}).get('edit_plan_snapshot'):
             from .edit_render import render_edit_plan
             return publish_video(j,render_edit_plan(j,check,self.ffmpeg,self.ffprobe))
         if editing_opted_in(j):
+            if getattr(self,'scene_editor',None):self.scene_editor.require_user_review(j)
+            from .visual_quality import require_release
+            require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
             try:
                 import copy
                 from .edit_plan import EditPlanService
@@ -1623,8 +1638,8 @@ class Pipeline:
                 result['edit_plan_snapshot']=str(path);result['assets'].append(asset(path));result['editing_source']='automatic_defaults'
                 return publish_video(j,result)
             except Cancelled:raise
-            except (ValueError,OSError,RuntimeError) as error:
-                if getattr(self,'store',None):self.store.log(j['id'],'render','Bộ dựng tùy chọn chưa áp dụng được; dùng bộ dựng hiện tại: '+str(error)[:400])
+            except Exception as error:  # Optional editor must never stop the video; keep the legacy render.
+                if getattr(self,'store',None):self.store.log(j['id'],'render','Bộ dựng tùy chọn chưa áp dụng được; dùng bộ dựng hiện tại: '+(type(error).__name__+': '+str(error))[:400])
         if getattr(self,'scene_editor',None):self.scene_editor.require_user_review(j)
         from .visual_quality import require_release
         require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
@@ -1641,6 +1656,7 @@ class Pipeline:
             return publish_video(j,render_visual_revision(framed_scenes,reused['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe))
         return publish_video(j,render(framed_scenes,cp['speech']['path'],cp['music']['path'],cp['subtitles']['path'],Path(j['output'])/'video.mp4',timeline_duration(j),check,self.ffmpeg,self.ffprobe,music_volume=vol))
     def verify(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.verify(self,j,check)
         snapshot=j['checkpoints'].get('images',{}).get('edit_plan_snapshot') or j['checkpoints'].get('render',{}).get('edit_plan_snapshot')
         if snapshot:
             import copy
@@ -1649,7 +1665,15 @@ class Pipeline:
             if not edited['checkpoints']['images'].get('edit_plan_snapshot'):
                 edited['checkpoints']['images']['edit_plan_snapshot']=snapshot
                 edited['checkpoints']['images'].setdefault('assets',[]).extend(edited['checkpoints']['render']['assets'])
-            return verify_edit_render(edited,check,self.ffmpeg,self.ffprobe)
+            if j['checkpoints'].get('render',{}).get('editing_source')!='automatic_defaults':
+                return verify_edit_render(edited,check,self.ffmpeg,self.ffprobe)
+            # Automatic defaults were not a user edit: report the same release status as the legacy path.
+            from .visual_quality import require_release
+            visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
+            if getattr(self,'scene_editor',None):
+                manual=self.scene_editor.require_user_review(j)
+                if manual['status']=='user_approved':visual_quality=manual
+            return {**verify_edit_render(edited,check,self.ffmpeg,self.ffprobe),'visual_quality':visual_quality}
         from .visual_quality import require_release
         visual_quality=require_release(j,lambda compiled,i:self._visual_workflow(j,compiled,i))
         if getattr(self,'scene_editor',None):

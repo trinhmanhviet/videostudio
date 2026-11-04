@@ -1,0 +1,14 @@
+# Normalize line endings in the repository; tools on Windows/Linux may write CRLF or LF.
+* text=auto
+
+# Binary files
+*.exe binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.sqlite3 binary
+*.tgz binary

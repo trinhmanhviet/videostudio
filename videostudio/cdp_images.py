@@ -14,13 +14,25 @@ MAX_IMAGE=20*1024*1024
 def image_prompt(prompt,identifier):
     return ('Create exactly ONE portrait 9:16 image for a video scene. Return the generated image, not a written description or JSON. Do not draw tracking markers, labels or watermarks. Follow this scene description:\n'+prompt+'\nTracking marker (never draw it): [VideoStudio image request '+identifier+']')
 
+# User role is semantic; heading text includes a hidden print label in the new UI
+# ("You said:You"). Never correlate a marker echoed by an assistant response.
+IMAGE_USER_TEXT = r'''(()=>{
+  const user=t.querySelector('[data-message-author-role="user"],[data-chatgpt-search-unit-key$=":user"]');
+  if(user)return user.textContent||'';
+  const heading=t.querySelector('h4[data-conversation-role="user"]')||[...t.querySelectorAll('h4')].find(h=>{
+    const label=h.querySelector('span:not([aria-hidden="true"])')?.textContent||h.textContent;
+    return /^(You said:|Bạn đã nói:|Bạn nói:)$/i.test(label.trim());
+  });
+  return heading?.parentElement?.textContent||'';
+})()'''
+
+
 def image_snapshot(marker):
     return r'''(()=>{const base=BASE;const turns=[...document.querySelectorAll('[data-talvt-turn-state]')].map(t=>{
-      const h=[...t.querySelectorAll('h4')].find(h=>/^(You said:|Bạn đã nói:|Bạn nói:)$/i.test(h.textContent.trim()));
-      const user=h?.parentElement?.textContent||'';
+      const user=USER_TEXT;
       const generated=[...t.querySelectorAll('button[data-testid="generated-image-preview"] img')];
       return {user,state:t.getAttribute('data-talvt-turn-state'),text:t.innerText.slice(-2500),images:generated.map(i=>({src:i.currentSrc,width:i.naturalWidth,height:i.naturalHeight,loaded:i.complete}))};
-    });return {...base,image_turns:turns};})()'''.replace('BASE',snapshot_expression(marker))
+    });return {...base,image_turns:turns};})()'''.replace('BASE',snapshot_expression(marker)).replace('USER_TEXT',IMAGE_USER_TEXT)
 
 def match_image(state,marker):
     if not state or state.get('login') or state.get('challenge') or state.get('mode') not in ('chat','unknown'):return None
@@ -195,7 +207,7 @@ class ChatGPTImages:
             self._record('failure',error_type=type(e).__name__,error=str(e)[:400]);self._save_attempt(folder);raise
         # Arm browser-level capture before opening the image viewer or measuring controls.
         download_expr=r'''(()=>{const dialogs=[...document.querySelectorAll('[role=dialog]')].filter(d=>[...d.querySelectorAll('img')].some(i=>i.currentSrc===SOURCE));const bs=[...new Set(dialogs.flatMap(d=>[...d.querySelectorAll('button[aria-label="Download"],button[aria-label="Save"]')]))].filter(e=>e.getBoundingClientRect().width);if(bs.length!==1)return null;const r=bs[0].getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);if(bs[0].disabled||!hit||!(hit===bs[0]||bs[0].contains(hit)))return null;return {x,y,width:Math.round(r.width),height:Math.round(r.height)}})()'''.replace('SOURCE',json.dumps(found['src']))
-        preview_expr=r'''(()=>{const turns=[...document.querySelectorAll('[data-talvt-turn-state]')].filter(t=>{const h=[...t.querySelectorAll('h4')].find(h=>/^(You said:|Bạn đã nói:|Bạn nói:)$/i.test(h.textContent.trim()));return h?.parentElement?.textContent.includes(MARKER)});if(turns.length!==1)return null;const bs=[...turns[0].querySelectorAll('button[data-testid="generated-image-preview"]')].filter(e=>e.querySelector('img')?.currentSrc===SOURCE);if(bs.length!==1)return null;bs[0].scrollIntoView({block:'center'});const r=bs[0].getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);if(bs[0].disabled||!hit||!(hit===bs[0]||bs[0].contains(hit)))return null;return {x,y,width:Math.round(r.width),height:Math.round(r.height)}})()'''.replace('MARKER',json.dumps(marker)).replace('SOURCE',json.dumps(found['src']))
+        preview_expr=r'''(()=>{const turns=[...document.querySelectorAll('[data-talvt-turn-state]')].filter(t=>{return USER_TEXT.includes(MARKER)});if(turns.length!==1)return null;const bs=[...turns[0].querySelectorAll('button[data-testid="generated-image-preview"]')].filter(e=>e.querySelector('img')?.currentSrc===SOURCE);if(bs.length!==1)return null;bs[0].scrollIntoView({block:'center'});const r=bs[0].getBoundingClientRect();const x=Math.round(r.x+r.width/2),y=Math.round(r.y+r.height/2),hit=document.elementFromPoint(x,y);if(bs[0].disabled||!hit||!(hit===bs[0]||bs[0].contains(hit)))return null;return {x,y,width:Math.round(r.width),height:Math.round(r.height)}})()'''.replace('USER_TEXT',IMAGE_USER_TEXT).replace('MARKER',json.dumps(marker)).replace('SOURCE',json.dumps(found['src']))
         try:
             if self.download_behavior_uncertain:
                 await b.cdp.command('Browser.setDownloadBehavior',{'behavior':'default','eventsEnabled':False})

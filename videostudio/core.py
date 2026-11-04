@@ -110,7 +110,9 @@ def validate_request(data):
 
     mode=data.get('workflow_mode')
 
-    if 'workflow_mode' in data and mode not in ('research','provided_narration'):raise ValueError('workflow_mode must be research or provided_narration')
+    if 'workflow_mode' in data and mode not in ('research','provided_narration','meme'):raise ValueError('workflow_mode must be research, provided_narration or meme')
+
+    if mode=='meme' and not 15<=d<=600:raise ValueError('Video meme dài 15–600 giây')
 
     if mode=='provided_narration' and not any(line.strip() for line in data['idea'].splitlines()):raise ValueError('Provide at least one non-empty narration line')
 

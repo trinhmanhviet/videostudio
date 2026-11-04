@@ -1,0 +1,886 @@
+{
+ "version": 1,
+ "character": "panda",
+ "items": [
+  {
+   "id": "sit_phone",
+   "kind": "pose",
+   "tags": "ngồi bấm điện thoại, lướt mạng, nhắn tin",
+   "file": "panda/pose_sit_phone.png",
+   "size": [
+    133,
+    192
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "laptop",
+   "kind": "pose",
+   "tags": "ngồi gõ laptop, làm việc, chơi máy tính",
+   "file": "panda/pose_laptop.png",
+   "size": [
+    208,
+    168
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "gaming",
+   "kind": "pose",
+   "tags": "ngồi cầm tay cầm chơi game",
+   "file": "panda/pose_gaming.png",
+   "size": [
+    148,
+    192
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "drink_hot",
+   "kind": "pose",
+   "tags": "phì phèo tẩu thuốc bốc khói, thư thái, ra vẻ",
+   "file": "panda/pose_drink_hot.png",
+   "size": [
+    172,
+    192
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "megaphone",
+   "kind": "pose",
+   "tags": "cầm loa hét to, thông báo, quảng cáo",
+   "file": "panda/pose_megaphone.png",
+   "size": [
+    161,
+    201
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "stand",
+   "kind": "pose",
+   "tags": "đứng bình thường, nói chuyện",
+   "file": "panda/pose_stand.png",
+   "size": [
+    129,
+    187
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "clipboard",
+   "kind": "pose",
+   "tags": "cầm bảng ghi chép, kiểm tra, ghi sổ",
+   "file": "panda/pose_clipboard.png",
+   "size": [
+    141,
+    194
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "hammer",
+   "kind": "pose",
+   "tags": "giơ búa tức giận, đòi đánh, quyết tâm",
+   "file": "panda/pose_hammer.png",
+   "size": [
+    151,
+    234
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "umbrella",
+   "kind": "pose",
+   "tags": "che ô dưới mưa, buồn, ướt",
+   "file": "panda/pose_umbrella.png",
+   "size": [
+    184,
+    225
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "camera",
+   "kind": "pose",
+   "tags": "cầm máy ảnh chụp hình, quay lén",
+   "file": "panda/pose_camera.png",
+   "size": [
+    153,
+    200
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "money_fan",
+   "kind": "pose",
+   "tags": "cầm xấp tiền, giàu, khoe tiền, nhận lương",
+   "file": "panda/pose_money_fan.png",
+   "size": [
+    161,
+    196
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "gift",
+   "kind": "pose",
+   "tags": "ôm hộp quà, tặng quà, sinh nhật",
+   "file": "panda/pose_gift.png",
+   "size": [
+    148,
+    188
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "lean_table",
+   "kind": "pose",
+   "tags": "chống cằm bên bàn, chán nản, suy nghĩ",
+   "file": "panda/pose_lean_table.png",
+   "size": [
+    165,
+    154
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "sleep_table",
+   "kind": "pose",
+   "tags": "gục đầu xuống bàn ngủ, kiệt sức",
+   "file": "panda/pose_sleep_table.png",
+   "size": [
+    193,
+    170
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "overwork",
+   "kind": "pose",
+   "tags": "ngồi bàn chất đống giấy tờ, toát mồ hôi, tăng ca",
+   "file": "panda/pose_overwork.png",
+   "size": [
+    310,
+    192
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "stop_hand",
+   "kind": "half",
+   "tags": "giơ tay chặn lại, từ chối, dừng lại",
+   "file": "panda/half_stop_hand.png",
+   "size": [
+    153,
+    156
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "phone_call",
+   "kind": "half",
+   "tags": "nghe điện thoại, gọi điện",
+   "file": "panda/half_phone_call.png",
+   "size": [
+    142,
+    156
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "clap",
+   "kind": "half",
+   "tags": "vỗ tay, khen ngợi",
+   "file": "panda/half_clap.png",
+   "size": [
+    126,
+    155
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "trophy",
+   "kind": "half",
+   "tags": "đeo huy chương cầm cúp, chiến thắng",
+   "file": "panda/half_trophy.png",
+   "size": [
+    189,
+    158
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "selfie",
+   "kind": "half",
+   "tags": "chụp ảnh tự sướng bằng gậy, sống ảo",
+   "file": "panda/half_selfie.png",
+   "size": [
+    186,
+    156
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "beg",
+   "kind": "pose",
+   "tags": "quỳ chắp tay van xin, cầu nguyện",
+   "file": "panda/pose_beg.png",
+   "size": [
+    129,
+    178
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "crawl",
+   "kind": "pose",
+   "tags": "bò lết dưới đất, mệt lả, lén lút",
+   "file": "panda/pose_crawl.png",
+   "size": [
+    230,
+    142
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "peek",
+   "kind": "pose",
+   "tags": "nấp sau tường nhìn trộm",
+   "file": "panda/pose_peek.png",
+   "size": [
+    126,
+    174
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "facepalm",
+   "kind": "pose",
+   "tags": "tay đặt lên trán, bất lực, đau đầu",
+   "file": "panda/pose_facepalm.png",
+   "size": [
+    137,
+    178
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "laugh_floor",
+   "kind": "pose",
+   "tags": "ngồi cười lăn cười bò",
+   "file": "panda/pose_laugh_floor.png",
+   "size": [
+    172,
+    175
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "scream",
+   "kind": "pose",
+   "tags": "ôm má hét lên, hoảng sợ, sốc",
+   "file": "panda/pose_scream.png",
+   "size": [
+    119,
+    176
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "whisper",
+   "kind": "half",
+   "tags": "hai con gấu thì thầm, buôn chuyện, mách lẻo",
+   "file": "panda/half_whisper.png",
+   "size": [
+    245,
+    160
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "shrug",
+   "kind": "pose",
+   "tags": "nhún vai, không biết, kệ",
+   "file": "panda/pose_shrug.png",
+   "size": [
+    213,
+    171
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "run",
+   "kind": "pose",
+   "tags": "chạy vội, chạy trốn, trễ giờ",
+   "file": "panda/pose_run.png",
+   "size": [
+    246,
+    175
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "stand_talk",
+   "kind": "pose",
+   "tags": "đứng thẳng nói chuyện, chính diện",
+   "file": "panda/pose_stand_talk.png",
+   "size": [
+    152,
+    246
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "stand_side",
+   "kind": "pose",
+   "tags": "đứng nghiêng nhìn sang bên",
+   "file": "panda/pose_stand_side.png",
+   "size": [
+    126,
+    251
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "stand_back",
+   "kind": "pose",
+   "tags": "quay lưng lại, bỏ đi, giận dỗi",
+   "file": "panda/pose_stand_back.png",
+   "size": [
+    152,
+    246
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "open_arms",
+   "kind": "half",
+   "tags": "nửa người dang tay, giải thích, thế đấy",
+   "file": "panda/half_open_arms.png",
+   "size": [
+    301,
+    158
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "clap_half",
+   "kind": "half",
+   "tags": "nửa người vỗ tay đắc ý",
+   "file": "panda/half_clap_half.png",
+   "size": [
+    158,
+    158
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "pray_half",
+   "kind": "half",
+   "tags": "nửa người chắp tay xin xỏ",
+   "file": "panda/half_pray_half.png",
+   "size": [
+    136,
+    159
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "arms_crossed",
+   "kind": "half",
+   "tags": "nửa người khoanh tay, nghiêm, không chịu",
+   "file": "panda/half_arms_crossed.png",
+   "size": [
+    144,
+    153
+   ],
+   "scale": 0.78
+  },
+  {
+   "id": "talk",
+   "kind": "face",
+   "tags": "nói bình thường",
+   "file": "panda/face_talk.png",
+   "size": [
+    139,
+    118
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "worried",
+   "kind": "face",
+   "tags": "lo lắng, buồn, ngán ngẩm",
+   "file": "panda/face_worried.png",
+   "size": [
+    135,
+    118
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "angry",
+   "kind": "face",
+   "tags": "tức giận, cáu",
+   "file": "panda/face_angry.png",
+   "size": [
+    136,
+    117
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "shock",
+   "kind": "face",
+   "tags": "sốc, há hốc, mắt tròn",
+   "file": "panda/face_shock.png",
+   "size": [
+    135,
+    116
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "suspicious",
+   "kind": "face",
+   "tags": "nghi ngờ, khó chịu, cau mày",
+   "file": "panda/face_suspicious.png",
+   "size": [
+    137,
+    115
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "cry",
+   "kind": "face",
+   "tags": "khóc, nước mắt chảy dài",
+   "file": "panda/face_cry.png",
+   "size": [
+    135,
+    115
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "laugh",
+   "kind": "face",
+   "tags": "cười to, sung sướng",
+   "file": "panda/face_laugh.png",
+   "size": [
+    135,
+    114
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "smug",
+   "kind": "face",
+   "tags": "cười đểu, gian xảo, đắc ý",
+   "file": "panda/face_smug.png",
+   "size": [
+    133,
+    113
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "sleepy",
+   "kind": "face",
+   "tags": "lim dim, chán, ngáp",
+   "file": "panda/face_sleepy.png",
+   "size": [
+    127,
+    110
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "pout",
+   "kind": "face",
+   "tags": "chu mỏ, làm nũng, giả vờ ngây thơ",
+   "file": "panda/face_pout.png",
+   "size": [
+    128,
+    110
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "question",
+   "kind": "fx",
+   "tags": "dấu hỏi, thắc mắc",
+   "file": "panda/fx_question.png",
+   "size": [
+    53,
+    80
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "exclaim",
+   "kind": "fx",
+   "tags": "dấu chấm than, giật mình",
+   "file": "panda/fx_exclaim.png",
+   "size": [
+    66,
+    82
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "emphasis",
+   "kind": "fx",
+   "tags": "vạch nhấn mạnh, chú ý",
+   "file": "panda/fx_emphasis.png",
+   "size": [
+    109,
+    68
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "burst",
+   "kind": "fx",
+   "tags": "khung nổ, bùng lên, hét",
+   "file": "panda/fx_burst.png",
+   "size": [
+    150,
+    117
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "burst2",
+   "kind": "fx",
+   "tags": "khung nổ lớn",
+   "file": "panda/fx_burst2.png",
+   "size": [
+    141,
+    123
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "thought",
+   "kind": "fx",
+   "tags": "bong bóng suy nghĩ",
+   "file": "panda/fx_thought.png",
+   "size": [
+    137,
+    99
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "sparkle",
+   "kind": "fx",
+   "tags": "lấp lánh",
+   "file": "panda/fx_sparkle.png",
+   "size": [
+    61,
+    74
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "sparkles",
+   "kind": "fx",
+   "tags": "nhiều lấp lánh, sáng ý tưởng",
+   "file": "panda/fx_sparkles.png",
+   "size": [
+    113,
+    80
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "drop",
+   "kind": "fx",
+   "tags": "giọt mồ hôi",
+   "file": "panda/fx_drop.png",
+   "size": [
+    35,
+    67
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "sweat",
+   "kind": "fx",
+   "tags": "nhiều giọt mồ hôi, căng thẳng",
+   "file": "panda/fx_sweat.png",
+   "size": [
+    67,
+    80
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "anger",
+   "kind": "fx",
+   "tags": "dấu gân tức giận",
+   "file": "panda/fx_anger.png",
+   "size": [
+    80,
+    74
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "tears",
+   "kind": "fx",
+   "tags": "dòng nước mắt",
+   "file": "panda/fx_tears.png",
+   "size": [
+    110,
+    77
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "steam",
+   "kind": "fx",
+   "tags": "xì khói, bực bội",
+   "file": "panda/fx_steam.png",
+   "size": [
+    86,
+    77
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "rage_puff",
+   "kind": "fx",
+   "tags": "bốc khói giận dữ hai bên",
+   "file": "panda/fx_rage_puff.png",
+   "size": [
+    134,
+    66
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "dizzy",
+   "kind": "fx",
+   "tags": "chóng mặt, xoáy",
+   "file": "panda/fx_dizzy.png",
+   "size": [
+    100,
+    79
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "smoke",
+   "kind": "fx",
+   "tags": "đám khói lớn, biến mất",
+   "file": "panda/fx_smoke.png",
+   "size": [
+    156,
+    92
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "boom",
+   "kind": "fx",
+   "tags": "nổ tung, va chạm",
+   "file": "panda/fx_boom.png",
+   "size": [
+    142,
+    83
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "phone",
+   "kind": "prop",
+   "tags": "điện thoại",
+   "file": "panda/prop_phone.png",
+   "size": [
+    68,
+    81
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "laptop_prop",
+   "kind": "prop",
+   "tags": "laptop",
+   "file": "panda/prop_laptop_prop.png",
+   "size": [
+    145,
+    77
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "gamepad",
+   "kind": "prop",
+   "tags": "tay cầm game",
+   "file": "panda/prop_gamepad.png",
+   "size": [
+    103,
+    64
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "mug",
+   "kind": "prop",
+   "tags": "cốc nóng",
+   "file": "panda/prop_mug.png",
+   "size": [
+    70,
+    59
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "megaphone_prop",
+   "kind": "prop",
+   "tags": "cái loa",
+   "file": "panda/prop_megaphone_prop.png",
+   "size": [
+    82,
+    86
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "clipboard_prop",
+   "kind": "prop",
+   "tags": "bảng kẹp giấy",
+   "file": "panda/prop_clipboard_prop.png",
+   "size": [
+    82,
+    95
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "hammer_prop",
+   "kind": "prop",
+   "tags": "cái búa",
+   "file": "panda/prop_hammer_prop.png",
+   "size": [
+    73,
+    101
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "umbrella_prop",
+   "kind": "prop",
+   "tags": "cái ô",
+   "file": "panda/prop_umbrella_prop.png",
+   "size": [
+    138,
+    113
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "camera_prop",
+   "kind": "prop",
+   "tags": "máy ảnh",
+   "file": "panda/prop_camera_prop.png",
+   "size": [
+    93,
+    66
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "money",
+   "kind": "prop",
+   "tags": "xấp tiền",
+   "file": "panda/prop_money.png",
+   "size": [
+    112,
+    80
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "gift_prop",
+   "kind": "prop",
+   "tags": "hộp quà",
+   "file": "panda/prop_gift_prop.png",
+   "size": [
+    101,
+    92
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "trophy_prop",
+   "kind": "prop",
+   "tags": "cúp vàng",
+   "file": "panda/prop_trophy_prop.png",
+   "size": [
+    94,
+    89
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "medal",
+   "kind": "prop",
+   "tags": "huy chương",
+   "file": "panda/prop_medal.png",
+   "size": [
+    62,
+    88
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "door",
+   "kind": "prop",
+   "tags": "cánh cửa",
+   "file": "panda/prop_door.png",
+   "size": [
+    63,
+    101
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "table",
+   "kind": "prop",
+   "tags": "cái bàn",
+   "file": "panda/prop_table.png",
+   "size": [
+    152,
+    76
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "lamp",
+   "kind": "prop",
+   "tags": "đèn bàn",
+   "file": "panda/prop_lamp.png",
+   "size": [
+    85,
+    93
+   ],
+   "scale": 1.0
+  },
+  {
+   "id": "papers",
+   "kind": "prop",
+   "tags": "chồng giấy tờ",
+   "file": "panda/prop_papers.png",
+   "size": [
+    78,
+    72
+   ],
+   "scale": 1.0
+  }
+ ]
+}

@@ -1,0 +1,1589 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "id": "music_notes",
+   "kind": "fx",
+   "tags": "nốt nhạc",
+   "file": "library/music_notes.png",
+   "size": [
+    337,
+    315
+   ],
+   "scale": 0.2077
+  },
+  {
+   "id": "flames",
+   "kind": "fx",
+   "tags": "lửa cháy",
+   "file": "library/flames.png",
+   "size": [
+    311,
+    360
+   ],
+   "scale": 0.1944
+  },
+  {
+   "id": "light_bulb",
+   "kind": "fx",
+   "tags": "bóng đèn ý tưởng",
+   "file": "library/light_bulb.png",
+   "size": [
+    267,
+    277
+   ],
+   "scale": 0.2527
+  },
+  {
+   "id": "rain_cloud",
+   "kind": "fx",
+   "tags": "mây mưa trên đầu",
+   "file": "library/rain_cloud.png",
+   "size": [
+    371,
+    225
+   ],
+   "scale": 0.1887
+  },
+  {
+   "id": "snowflake",
+   "kind": "fx",
+   "tags": "bông tuyết lạnh",
+   "file": "library/snowflake.png",
+   "size": [
+    286,
+    315
+   ],
+   "scale": 0.2222
+  },
+  {
+   "id": "skull",
+   "kind": "fx",
+   "tags": "đầu lâu, chết rồi",
+   "file": "library/skull.png",
+   "size": [
+    286,
+    274
+   ],
+   "scale": 0.2448
+  },
+  {
+   "id": "puddle_tears",
+   "kind": "fx",
+   "tags": "vũng nước mắt",
+   "file": "library/puddle_tears.png",
+   "size": [
+    341,
+    144
+   ],
+   "scale": 0.2053
+  },
+  {
+   "id": "heart_eyes",
+   "kind": "fx",
+   "tags": "hai trái tim mê mẩn",
+   "file": "library/heart_eyes.png",
+   "size": [
+    315,
+    275
+   ],
+   "scale": 0.2222
+  },
+  {
+   "id": "dizzy_birds",
+   "kind": "fx",
+   "tags": "chim bay vòng chóng mặt",
+   "file": "library/dizzy_birds.png",
+   "size": [
+    404,
+    263
+   ],
+   "scale": 0.1733
+  },
+  {
+   "id": "sweat_drop",
+   "kind": "fx",
+   "tags": "giọt mồ hôi",
+   "file": "library/sweat_drop.png",
+   "size": [
+    191,
+    351
+   ],
+   "scale": 0.1994
+  },
+  {
+   "id": "question_mark",
+   "kind": "fx",
+   "tags": "dấu hỏi",
+   "file": "library/question_mark.png",
+   "size": [
+    255,
+    359
+   ],
+   "scale": 0.195
+  },
+  {
+   "id": "exclamation_mark",
+   "kind": "fx",
+   "tags": "dấu chấm than",
+   "file": "library/exclamation_mark.png",
+   "size": [
+    143,
+    361
+   ],
+   "scale": 0.1939
+  },
+  {
+   "id": "red_heart",
+   "kind": "fx",
+   "tags": "trái tim",
+   "file": "library/red_heart.png",
+   "size": [
+    317,
+    287
+   ],
+   "scale": 0.2208
+  },
+  {
+   "id": "broken_heart",
+   "kind": "fx",
+   "tags": "tim vỡ",
+   "file": "library/broken_heart.png",
+   "size": [
+    315,
+    272
+   ],
+   "scale": 0.2222
+  },
+  {
+   "id": "star_ring",
+   "kind": "fx",
+   "tags": "vòng sao chóng mặt",
+   "file": "library/star_ring.png",
+   "size": [
+    347,
+    326
+   ],
+   "scale": 0.2017
+  },
+  {
+   "id": "smoke_puff",
+   "kind": "fx",
+   "tags": "làn khói",
+   "file": "library/smoke_puff.png",
+   "size": [
+    334,
+    343
+   ],
+   "scale": 0.2041
+  },
+  {
+   "id": "lightning",
+   "kind": "fx",
+   "tags": "tia sét",
+   "file": "library/lightning.png",
+   "size": [
+    225,
+    365
+   ],
+   "scale": 0.1918
+  },
+  {
+   "id": "water_splash",
+   "kind": "fx",
+   "tags": "nước bắn",
+   "file": "library/water_splash.png",
+   "size": [
+    300,
+    328
+   ],
+   "scale": 0.2134
+  },
+  {
+   "id": "dog",
+   "kind": "prop",
+   "tags": "con chó",
+   "file": "library/dog.png",
+   "size": [
+    253,
+    236
+   ],
+   "scale": 0.3755
+  },
+  {
+   "id": "cat",
+   "kind": "prop",
+   "tags": "con mèo",
+   "file": "library/cat.png",
+   "size": [
+    237,
+    235
+   ],
+   "scale": 0.4008
+  },
+  {
+   "id": "chicken",
+   "kind": "prop",
+   "tags": "con gà",
+   "file": "library/chicken.png",
+   "size": [
+    233,
+    248
+   ],
+   "scale": 0.3831
+  },
+  {
+   "id": "duck",
+   "kind": "prop",
+   "tags": "con vịt",
+   "file": "library/duck.png",
+   "size": [
+    234,
+    245
+   ],
+   "scale": 0.3878
+  },
+  {
+   "id": "pig",
+   "kind": "prop",
+   "tags": "con lợn",
+   "file": "library/pig.png",
+   "size": [
+    276,
+    201
+   ],
+   "scale": 0.3442
+  },
+  {
+   "id": "goldfish_bowl",
+   "kind": "prop",
+   "tags": "bể cá vàng",
+   "file": "library/goldfish_bowl.png",
+   "size": [
+    255,
+    212
+   ],
+   "scale": 0.3725
+  },
+  {
+   "id": "parrot",
+   "kind": "prop",
+   "tags": "con vẹt",
+   "file": "library/parrot.png",
+   "size": [
+    203,
+    243
+   ],
+   "scale": 0.3909
+  },
+  {
+   "id": "buffalo",
+   "kind": "prop",
+   "tags": "con trâu",
+   "file": "library/buffalo.png",
+   "size": [
+    336,
+    233
+   ],
+   "scale": 0.5655
+  },
+  {
+   "id": "tshirt",
+   "kind": "prop",
+   "tags": "áo phông",
+   "file": "library/tshirt.png",
+   "size": [
+    280,
+    247
+   ],
+   "scale": 0.3393
+  },
+  {
+   "id": "jeans",
+   "kind": "prop",
+   "tags": "quần jean",
+   "file": "library/jeans.png",
+   "size": [
+    209,
+    259
+   ],
+   "scale": 0.3668
+  },
+  {
+   "id": "sneakers",
+   "kind": "prop",
+   "tags": "giày thể thao",
+   "file": "library/sneakers.png",
+   "size": [
+    269,
+    185
+   ],
+   "scale": 0.3532
+  },
+  {
+   "id": "cap",
+   "kind": "prop",
+   "tags": "mũ lưỡi trai",
+   "file": "library/cap.png",
+   "size": [
+    261,
+    173
+   ],
+   "scale": 0.364
+  },
+  {
+   "id": "conical_hat",
+   "kind": "prop",
+   "tags": "nón lá",
+   "file": "library/conical_hat.png",
+   "size": [
+    292,
+    202
+   ],
+   "scale": 0.3253
+  },
+  {
+   "id": "sunglasses",
+   "kind": "prop",
+   "tags": "kính râm",
+   "file": "library/sunglasses.png",
+   "size": [
+    263,
+    106
+   ],
+   "scale": 0.3612
+  },
+  {
+   "id": "necktie",
+   "kind": "prop",
+   "tags": "cà vạt",
+   "file": "library/necktie.png",
+   "size": [
+    99,
+    236
+   ],
+   "scale": 0.4025
+  },
+  {
+   "id": "raincoat",
+   "kind": "prop",
+   "tags": "áo mưa",
+   "file": "library/raincoat.png",
+   "size": [
+    260,
+    308
+   ],
+   "scale": 0.3084
+  },
+  {
+   "id": "paper_money",
+   "kind": "prop",
+   "tags": "tiền giấy",
+   "file": "library/paper_money.png",
+   "size": [
+    312,
+    191
+   ],
+   "scale": 0.3045
+  },
+  {
+   "id": "wallet",
+   "kind": "prop",
+   "tags": "ví",
+   "file": "library/wallet.png",
+   "size": [
+    227,
+    207
+   ],
+   "scale": 0.4185
+  },
+  {
+   "id": "handbag",
+   "kind": "prop",
+   "tags": "túi xách",
+   "file": "library/handbag.png",
+   "size": [
+    247,
+    261
+   ],
+   "scale": 0.364
+  },
+  {
+   "id": "toilet_paper",
+   "kind": "prop",
+   "tags": "cuộn giấy vệ sinh",
+   "file": "library/toilet_paper.png",
+   "size": [
+    195,
+    181
+   ],
+   "scale": 0.4872
+  },
+  {
+   "id": "toothbrush",
+   "kind": "prop",
+   "tags": "bàn chải",
+   "file": "library/toothbrush.png",
+   "size": [
+    265,
+    140
+   ],
+   "scale": 0.3585
+  },
+  {
+   "id": "medicine_box",
+   "kind": "prop",
+   "tags": "hộp thuốc",
+   "file": "library/medicine_box.png",
+   "size": [
+    273,
+    179
+   ],
+   "scale": 0.348
+  },
+  {
+   "id": "gift_box",
+   "kind": "prop",
+   "tags": "hộp quà",
+   "file": "library/gift_box.png",
+   "size": [
+    208,
+    209
+   ],
+   "scale": 0.4545
+  },
+  {
+   "id": "cardboard_box",
+   "kind": "prop",
+   "tags": "thùng carton",
+   "file": "library/cardboard_box.png",
+   "size": [
+    247,
+    199
+   ],
+   "scale": 0.3846
+  },
+  {
+   "id": "noodles",
+   "kind": "prop",
+   "tags": "bát mì",
+   "file": "library/noodles.png",
+   "size": [
+    235,
+    201
+   ],
+   "scale": 0.4043
+  },
+  {
+   "id": "rice_plate",
+   "kind": "prop",
+   "tags": "đĩa cơm",
+   "file": "library/rice_plate.png",
+   "size": [
+    235,
+    129
+   ],
+   "scale": 0.4043
+  },
+  {
+   "id": "banh_mi",
+   "kind": "prop",
+   "tags": "bánh mì",
+   "file": "library/banh_mi.png",
+   "size": [
+    260,
+    152
+   ],
+   "scale": 0.3654
+  },
+  {
+   "id": "bubble_tea",
+   "kind": "prop",
+   "tags": "trà sữa",
+   "file": "library/bubble_tea.png",
+   "size": [
+    144,
+    220
+   ],
+   "scale": 0.4318
+  },
+  {
+   "id": "coffee_cup",
+   "kind": "prop",
+   "tags": "cốc cà phê",
+   "file": "library/coffee_cup.png",
+   "size": [
+    209,
+    188
+   ],
+   "scale": 0.4545
+  },
+  {
+   "id": "beer_can",
+   "kind": "prop",
+   "tags": "lon bia",
+   "file": "library/beer_can.png",
+   "size": [
+    119,
+    187
+   ],
+   "scale": 0.508
+  },
+  {
+   "id": "water_bottle",
+   "kind": "prop",
+   "tags": "chai nước",
+   "file": "library/water_bottle.png",
+   "size": [
+    94,
+    197
+   ],
+   "scale": 0.4822
+  },
+  {
+   "id": "birthday_cake",
+   "kind": "prop",
+   "tags": "bánh sinh nhật",
+   "file": "library/birthday_cake.png",
+   "size": [
+    241,
+    198
+   ],
+   "scale": 0.3942
+  },
+  {
+   "id": "plastic_stool",
+   "kind": "prop",
+   "tags": "ghế nhựa",
+   "file": "library/plastic_stool.png",
+   "size": [
+    191,
+    181
+   ],
+   "scale": 0.4974
+  },
+  {
+   "id": "office_chair",
+   "kind": "prop",
+   "tags": "ghế văn phòng",
+   "file": "library/office_chair.png",
+   "size": [
+    170,
+    228
+   ],
+   "scale": 0.4167
+  },
+  {
+   "id": "small_table",
+   "kind": "prop",
+   "tags": "bàn nhỏ",
+   "file": "library/small_table.png",
+   "size": [
+    247,
+    149
+   ],
+   "scale": 0.3846
+  },
+  {
+   "id": "sofa",
+   "kind": "prop",
+   "tags": "ghế sofa",
+   "file": "library/sofa.png",
+   "size": [
+    289,
+    156
+   ],
+   "scale": 0.6574
+  },
+  {
+   "id": "bed",
+   "kind": "prop",
+   "tags": "giường",
+   "file": "library/bed.png",
+   "size": [
+    272,
+    181
+   ],
+   "scale": 0.6985
+  },
+  {
+   "id": "wardrobe",
+   "kind": "prop",
+   "tags": "tủ quần áo",
+   "file": "library/wardrobe.png",
+   "size": [
+    177,
+    208
+   ],
+   "scale": 0.9135
+  },
+  {
+   "id": "door_wood",
+   "kind": "prop",
+   "tags": "cửa gỗ",
+   "file": "library/door_wood.png",
+   "size": [
+    147,
+    196
+   ],
+   "scale": 0.9694
+  },
+  {
+   "id": "window",
+   "kind": "prop",
+   "tags": "cửa sổ",
+   "file": "library/window.png",
+   "size": [
+    241,
+    192
+   ],
+   "scale": 0.7884
+  },
+  {
+   "id": "standing_fan",
+   "kind": "prop",
+   "tags": "quạt cây",
+   "file": "library/standing_fan.png",
+   "size": [
+    147,
+    218
+   ],
+   "scale": 0.4358
+  },
+  {
+   "id": "tv",
+   "kind": "prop",
+   "tags": "TV",
+   "file": "library/tv.png",
+   "size": [
+    225,
+    163
+   ],
+   "scale": 0.4222
+  },
+  {
+   "id": "floor_lamp",
+   "kind": "prop",
+   "tags": "đèn cây",
+   "file": "library/floor_lamp.png",
+   "size": [
+    114,
+    219
+   ],
+   "scale": 0.4338
+  },
+  {
+   "id": "fridge",
+   "kind": "prop",
+   "tags": "tủ lạnh",
+   "file": "library/fridge.png",
+   "size": [
+    158,
+    219
+   ],
+   "scale": 0.8676
+  },
+  {
+   "id": "wall_clock",
+   "kind": "prop",
+   "tags": "đồng hồ treo tường",
+   "file": "library/wall_clock.png",
+   "size": [
+    167,
+    162
+   ],
+   "scale": 0.5689
+  },
+  {
+   "id": "pillow",
+   "kind": "prop",
+   "tags": "gối",
+   "file": "library/pillow.png",
+   "size": [
+    238,
+    138
+   ],
+   "scale": 0.3992
+  },
+  {
+   "id": "blanket",
+   "kind": "prop",
+   "tags": "chăn",
+   "file": "library/blanket.png",
+   "size": [
+    256,
+    165
+   ],
+   "scale": 0.3711
+  },
+  {
+   "id": "umbrella_open",
+   "kind": "prop",
+   "tags": "ô mở",
+   "file": "library/umbrella_open.png",
+   "size": [
+    227,
+    192
+   ],
+   "scale": 0.4185
+  },
+  {
+   "id": "cooking_pot",
+   "kind": "prop",
+   "tags": "nồi",
+   "file": "library/cooking_pot.png",
+   "size": [
+    286,
+    204
+   ],
+   "scale": 0.3322
+  },
+  {
+   "id": "frying_pan",
+   "kind": "prop",
+   "tags": "chảo",
+   "file": "library/frying_pan.png",
+   "size": [
+    263,
+    190
+   ],
+   "scale": 0.3612
+  },
+  {
+   "id": "smartphone",
+   "kind": "prop",
+   "tags": "điện thoại",
+   "file": "library/smartphone.png",
+   "size": [
+    139,
+    213
+   ],
+   "scale": 0.446
+  },
+  {
+   "id": "laptop_open",
+   "kind": "prop",
+   "tags": "laptop",
+   "file": "library/laptop_open.png",
+   "size": [
+    287,
+    207
+   ],
+   "scale": 0.331
+  },
+  {
+   "id": "headphones",
+   "kind": "prop",
+   "tags": "tai nghe",
+   "file": "library/headphones.png",
+   "size": [
+    222,
+    228
+   ],
+   "scale": 0.4167
+  },
+  {
+   "id": "tv_remote",
+   "kind": "prop",
+   "tags": "điều khiển TV",
+   "file": "library/tv_remote.png",
+   "size": [
+    160,
+    235
+   ],
+   "scale": 0.4043
+  },
+  {
+   "id": "phone_charger",
+   "kind": "prop",
+   "tags": "sạc điện thoại",
+   "file": "library/phone_charger.png",
+   "size": [
+    208,
+    196
+   ],
+   "scale": 0.4567
+  },
+  {
+   "id": "game_controller",
+   "kind": "prop",
+   "tags": "tay cầm game",
+   "file": "library/game_controller.png",
+   "size": [
+    280,
+    177
+   ],
+   "scale": 0.3393
+  },
+  {
+   "id": "pill_bottle",
+   "kind": "prop",
+   "tags": "lọ thuốc",
+   "file": "library/pill_bottle.png",
+   "size": [
+    163,
+    257
+   ],
+   "scale": 0.3696
+  },
+  {
+   "id": "pills",
+   "kind": "prop",
+   "tags": "viên thuốc",
+   "file": "library/pills.png",
+   "size": [
+    244,
+    194
+   ],
+   "scale": 0.3893
+  },
+  {
+   "id": "thermometer",
+   "kind": "prop",
+   "tags": "nhiệt kế",
+   "file": "library/thermometer.png",
+   "size": [
+    283,
+    196
+   ],
+   "scale": 0.3357
+  },
+  {
+   "id": "bandage",
+   "kind": "prop",
+   "tags": "băng dán",
+   "file": "library/bandage.png",
+   "size": [
+    270,
+    183
+   ],
+   "scale": 0.3519
+  },
+  {
+   "id": "face_mask",
+   "kind": "prop",
+   "tags": "khẩu trang",
+   "file": "library/face_mask.png",
+   "size": [
+    301,
+    157
+   ],
+   "scale": 0.3156
+  },
+  {
+   "id": "ice_pack",
+   "kind": "prop",
+   "tags": "túi chườm đá",
+   "file": "library/ice_pack.png",
+   "size": [
+    268,
+    191
+   ],
+   "scale": 0.3545
+  },
+  {
+   "id": "crutches",
+   "kind": "prop",
+   "tags": "nạng",
+   "file": "library/crutches.png",
+   "size": [
+    187,
+    255
+   ],
+   "scale": 0.3725
+  },
+  {
+   "id": "wheelchair",
+   "kind": "prop",
+   "tags": "xe lăn",
+   "file": "library/wheelchair.png",
+   "size": [
+    317,
+    270
+   ],
+   "scale": 0.5994
+  },
+  {
+   "id": "balloons",
+   "kind": "prop",
+   "tags": "chùm bóng bay",
+   "file": "library/balloons.png",
+   "size": [
+    242,
+    305
+   ],
+   "scale": 0.3115
+  },
+  {
+   "id": "party_hat",
+   "kind": "prop",
+   "tags": "mũ sinh nhật",
+   "file": "library/party_hat.png",
+   "size": [
+    216,
+    263
+   ],
+   "scale": 0.3612
+  },
+  {
+   "id": "party_popper",
+   "kind": "prop",
+   "tags": "pháo giấy",
+   "file": "library/party_popper.png",
+   "size": [
+    226,
+    196
+   ],
+   "scale": 0.4204
+  },
+  {
+   "id": "microphone",
+   "kind": "prop",
+   "tags": "micro",
+   "file": "library/microphone.png",
+   "size": [
+    167,
+    208
+   ],
+   "scale": 0.4567
+  },
+  {
+   "id": "guitar",
+   "kind": "prop",
+   "tags": "đàn guitar",
+   "file": "library/guitar.png",
+   "size": [
+    276,
+    285
+   ],
+   "scale": 0.6667
+  },
+  {
+   "id": "speaker",
+   "kind": "prop",
+   "tags": "loa thùng",
+   "file": "library/speaker.png",
+   "size": [
+    197,
+    233
+   ],
+   "scale": 0.8155
+  },
+  {
+   "id": "wine_glass",
+   "kind": "prop",
+   "tags": "ly rượu",
+   "file": "library/wine_glass.png",
+   "size": [
+    135,
+    213
+   ],
+   "scale": 0.446
+  },
+  {
+   "id": "beer_crate",
+   "kind": "prop",
+   "tags": "két bia",
+   "file": "library/beer_crate.png",
+   "size": [
+    277,
+    218
+   ],
+   "scale": 0.6859
+  },
+  {
+   "id": "calculator",
+   "kind": "prop",
+   "tags": "máy tính bỏ túi",
+   "file": "library/calculator.png",
+   "size": [
+    231,
+    245
+   ],
+   "scale": 0.3878
+  },
+  {
+   "id": "test_paper",
+   "kind": "prop",
+   "tags": "bài kiểm tra bị gạch đỏ",
+   "file": "library/test_paper.png",
+   "size": [
+    248,
+    260
+   ],
+   "scale": 0.3654
+  },
+  {
+   "id": "ruler",
+   "kind": "prop",
+   "tags": "thước kẻ",
+   "file": "library/ruler.png",
+   "size": [
+    289,
+    150
+   ],
+   "scale": 0.3287
+  },
+  {
+   "id": "eraser",
+   "kind": "prop",
+   "tags": "tẩy",
+   "file": "library/eraser.png",
+   "size": [
+    229,
+    162
+   ],
+   "scale": 0.4148
+  },
+  {
+   "id": "globe",
+   "kind": "prop",
+   "tags": "quả địa cầu",
+   "file": "library/globe.png",
+   "size": [
+    222,
+    278
+   ],
+   "scale": 0.3417
+  },
+  {
+   "id": "school_bell",
+   "kind": "prop",
+   "tags": "trống trường",
+   "file": "library/school_bell.png",
+   "size": [
+    275,
+    237
+   ],
+   "scale": 0.3455
+  },
+  {
+   "id": "chalk",
+   "kind": "prop",
+   "tags": "phấn",
+   "file": "library/chalk.png",
+   "size": [
+    245,
+    171
+   ],
+   "scale": 0.3878
+  },
+  {
+   "id": "abacus",
+   "kind": "prop",
+   "tags": "bàn tính",
+   "file": "library/abacus.png",
+   "size": [
+    304,
+    217
+   ],
+   "scale": 0.3125
+  },
+  {
+   "id": "gold_coins",
+   "kind": "prop",
+   "tags": "đống tiền vàng",
+   "file": "library/gold_coins.png",
+   "size": [
+    260,
+    223
+   ],
+   "scale": 0.3654
+  },
+  {
+   "id": "gold_bar",
+   "kind": "prop",
+   "tags": "thỏi vàng",
+   "file": "library/gold_bar.png",
+   "size": [
+    283,
+    179
+   ],
+   "scale": 0.3357
+  },
+  {
+   "id": "piggy_bank",
+   "kind": "prop",
+   "tags": "lợn đất tiết kiệm",
+   "file": "library/piggy_bank.png",
+   "size": [
+    268,
+    216
+   ],
+   "scale": 0.3545
+  },
+  {
+   "id": "bank_card",
+   "kind": "prop",
+   "tags": "thẻ ngân hàng",
+   "file": "library/bank_card.png",
+   "size": [
+    273,
+    191
+   ],
+   "scale": 0.348
+  },
+  {
+   "id": "atm",
+   "kind": "prop",
+   "tags": "cây ATM",
+   "file": "library/atm.png",
+   "size": [
+    208,
+    239
+   ],
+   "scale": 0.795
+  },
+  {
+   "id": "shopping_bag",
+   "kind": "prop",
+   "tags": "túi mua sắm",
+   "file": "library/shopping_bag.png",
+   "size": [
+    246,
+    240
+   ],
+   "scale": 0.3862
+  },
+  {
+   "id": "shopping_cart",
+   "kind": "prop",
+   "tags": "xe đẩy siêu thị",
+   "file": "library/shopping_cart.png",
+   "size": [
+    285,
+    238
+   ],
+   "scale": 0.6667
+  },
+  {
+   "id": "price_tag",
+   "kind": "prop",
+   "tags": "nhãn giá",
+   "file": "library/price_tag.png",
+   "size": [
+    279,
+    227
+   ],
+   "scale": 0.3405
+  },
+  {
+   "id": "soccer_ball",
+   "kind": "prop",
+   "tags": "quả bóng đá",
+   "file": "library/soccer_ball.png",
+   "size": [
+    227,
+    225
+   ],
+   "scale": 0.4185
+  },
+  {
+   "id": "dumbbell",
+   "kind": "prop",
+   "tags": "tạ tay",
+   "file": "library/dumbbell.png",
+   "size": [
+    299,
+    166
+   ],
+   "scale": 0.3177
+  },
+  {
+   "id": "badminton_racket",
+   "kind": "prop",
+   "tags": "vợt cầu lông",
+   "file": "library/badminton_racket.png",
+   "size": [
+    266,
+    255
+   ],
+   "scale": 0.3571
+  },
+  {
+   "id": "running_shoes",
+   "kind": "prop",
+   "tags": "giày chạy bộ",
+   "file": "library/running_shoes.png",
+   "size": [
+    301,
+    192
+   ],
+   "scale": 0.3156
+  },
+  {
+   "id": "jump_rope",
+   "kind": "prop",
+   "tags": "dây nhảy",
+   "file": "library/jump_rope.png",
+   "size": [
+    262,
+    213
+   ],
+   "scale": 0.3626
+  },
+  {
+   "id": "yoga_mat",
+   "kind": "prop",
+   "tags": "thảm tập",
+   "file": "library/yoga_mat.png",
+   "size": [
+    324,
+    193
+   ],
+   "scale": 0.2932
+  },
+  {
+   "id": "whistle",
+   "kind": "prop",
+   "tags": "còi",
+   "file": "library/whistle.png",
+   "size": [
+    272,
+    160
+   ],
+   "scale": 0.3493
+  },
+  {
+   "id": "basketball",
+   "kind": "prop",
+   "tags": "quả bóng rổ",
+   "file": "library/basketball.png",
+   "size": [
+    233,
+    236
+   ],
+   "scale": 0.4025
+  },
+  {
+   "id": "book",
+   "kind": "prop",
+   "tags": "sách",
+   "file": "library/book.png",
+   "size": [
+    218,
+    215
+   ],
+   "scale": 0.4358
+  },
+  {
+   "id": "notebook",
+   "kind": "prop",
+   "tags": "vở",
+   "file": "library/notebook.png",
+   "size": [
+    223,
+    203
+   ],
+   "scale": 0.426
+  },
+  {
+   "id": "pen",
+   "kind": "prop",
+   "tags": "bút",
+   "file": "library/pen.png",
+   "size": [
+    164,
+    209
+   ],
+   "scale": 0.4545
+  },
+  {
+   "id": "school_backpack",
+   "kind": "prop",
+   "tags": "cặp sách",
+   "file": "library/school_backpack.png",
+   "size": [
+    252,
+    255
+   ],
+   "scale": 0.3725
+  },
+  {
+   "id": "paper_stack",
+   "kind": "prop",
+   "tags": "xấp giấy",
+   "file": "library/paper_stack.png",
+   "size": [
+    270,
+    189
+   ],
+   "scale": 0.3519
+  },
+  {
+   "id": "briefcase",
+   "kind": "prop",
+   "tags": "cặp tài liệu",
+   "file": "library/briefcase.png",
+   "size": [
+    260,
+    193
+   ],
+   "scale": 0.3654
+  },
+  {
+   "id": "desktop_computer",
+   "kind": "prop",
+   "tags": "máy tính bàn",
+   "file": "library/desktop_computer.png",
+   "size": [
+    279,
+    204
+   ],
+   "scale": 0.681
+  },
+  {
+   "id": "whiteboard",
+   "kind": "prop",
+   "tags": "bảng trắng",
+   "file": "library/whiteboard.png",
+   "size": [
+    312,
+    199
+   ],
+   "scale": 0.609
+  },
+  {
+   "id": "banh_chung",
+   "kind": "prop",
+   "tags": "bánh chưng",
+   "file": "library/banh_chung.png",
+   "size": [
+    305,
+    287
+   ],
+   "scale": 0.3115
+  },
+  {
+   "id": "red_envelope",
+   "kind": "prop",
+   "tags": "bao lì xì",
+   "file": "library/red_envelope.png",
+   "size": [
+    238,
+    309
+   ],
+   "scale": 0.3074
+  },
+  {
+   "id": "peach_blossom",
+   "kind": "prop",
+   "tags": "cành đào",
+   "file": "library/peach_blossom.png",
+   "size": [
+    347,
+    355
+   ],
+   "scale": 0.2676
+  },
+  {
+   "id": "kumquat_tree",
+   "kind": "prop",
+   "tags": "cây quất",
+   "file": "library/kumquat_tree.png",
+   "size": [
+    335,
+    355
+   ],
+   "scale": 0.5352
+  },
+  {
+   "id": "red_lantern",
+   "kind": "prop",
+   "tags": "đèn lồng đỏ",
+   "file": "library/red_lantern.png",
+   "size": [
+    262,
+    369
+   ],
+   "scale": 0.2575
+  },
+  {
+   "id": "fruit_tray",
+   "kind": "prop",
+   "tags": "mâm ngũ quả",
+   "file": "library/fruit_tray.png",
+   "size": [
+    411,
+    308
+   ],
+   "scale": 0.2311
+  },
+  {
+   "id": "candy_box",
+   "kind": "prop",
+   "tags": "hộp mứt Tết",
+   "file": "library/candy_box.png",
+   "size": [
+    409,
+    318
+   ],
+   "scale": 0.2323
+  },
+  {
+   "id": "apricot_blossom",
+   "kind": "prop",
+   "tags": "cành mai",
+   "file": "library/apricot_blossom.png",
+   "size": [
+    393,
+    332
+   ],
+   "scale": 0.2417
+  },
+  {
+   "id": "broom",
+   "kind": "prop",
+   "tags": "chổi",
+   "file": "library/broom.png",
+   "size": [
+    242,
+    278
+   ],
+   "scale": 0.3417
+  },
+  {
+   "id": "bucket",
+   "kind": "prop",
+   "tags": "xô nước",
+   "file": "library/bucket.png",
+   "size": [
+    220,
+    219
+   ],
+   "scale": 0.4318
+  },
+  {
+   "id": "mop",
+   "kind": "prop",
+   "tags": "cây lau nhà",
+   "file": "library/mop.png",
+   "size": [
+    261,
+    265
+   ],
+   "scale": 0.3585
+  },
+  {
+   "id": "toolbox",
+   "kind": "prop",
+   "tags": "hộp đồ nghề",
+   "file": "library/toolbox.png",
+   "size": [
+    288,
+    184
+   ],
+   "scale": 0.3299
+  },
+  {
+   "id": "ladder",
+   "kind": "prop",
+   "tags": "thang",
+   "file": "library/ladder.png",
+   "size": [
+    242,
+    246
+   ],
+   "scale": 0.7724
+  },
+  {
+   "id": "watering_can",
+   "kind": "prop",
+   "tags": "bình tưới",
+   "file": "library/watering_can.png",
+   "size": [
+    275,
+    219
+   ],
+   "scale": 0.3455
+  },
+  {
+   "id": "screwdriver",
+   "kind": "prop",
+   "tags": "tua vít",
+   "file": "library/screwdriver.png",
+   "size": [
+    266,
+    173
+   ],
+   "scale": 0.3571
+  },
+  {
+   "id": "flashlight",
+   "kind": "prop",
+   "tags": "đèn pin",
+   "file": "library/flashlight.png",
+   "size": [
+    273,
+    164
+   ],
+   "scale": 0.348
+  },
+  {
+   "id": "scooter",
+   "kind": "prop",
+   "tags": "xe máy",
+   "file": "library/scooter.png",
+   "size": [
+    325,
+    289
+   ],
+   "scale": 0.5846
+  },
+  {
+   "id": "bicycle",
+   "kind": "prop",
+   "tags": "xe đạp",
+   "file": "library/bicycle.png",
+   "size": [
+    356,
+    229
+   ],
+   "scale": 0.5337
+  },
+  {
+   "id": "car",
+   "kind": "prop",
+   "tags": "ô tô",
+   "file": "library/car.png",
+   "size": [
+    336,
+    207
+   ],
+   "scale": 0.5655
+  },
+  {
+   "id": "bus",
+   "kind": "prop",
+   "tags": "xe buýt",
+   "file": "library/bus.png",
+   "size": [
+    347,
+    224
+   ],
+   "scale": 0.5476
+  },
+  {
+   "id": "taxi",
+   "kind": "prop",
+   "tags": "taxi",
+   "file": "library/taxi.png",
+   "size": [
+    340,
+    214
+   ],
+   "scale": 0.5588
+  },
+  {
+   "id": "delivery_tricycle",
+   "kind": "prop",
+   "tags": "xe ba gác giao hàng",
+   "file": "library/delivery_tricycle.png",
+   "size": [
+    327,
+    240
+   ],
+   "scale": 0.581
+  }
+ ]
+}

@@ -1,0 +1,152 @@
+[
+  {
+    "url": "https://chatgpt.com/c/6aea3016-7fac-83ec-9592-ed538511e356",
+    "talvt_turns": 1,
+    "turn_states": [
+      "complete"
+    ],
+    "h4": [
+      "You said:You",
+      "ChatGPT said:ChatGPT",
+      "Latest response"
+    ],
+    "articles": 0,
+    "preview_buttons": 1,
+    "images": [
+      {
+        "src": "blob:https://chatgpt.com/6a4b7949-d7df-4eb4-a1e1-ae70ef00bc5",
+        "w": 941,
+        "h": 1672,
+        "complete": true,
+        "alt": "Generated image 1",
+        "in_talvt_turn": true,
+        "turn_state": "complete",
+        "preview_button": true,
+        "parents": [
+          {
+            "tag": "BUTTON",
+            "testid": "generated-image-preview",
+            "aria": "Generated image 1",
+            "role": null,
+            "cls": "shrink-0 cursor-interaction overflow-hidden rounded-[16px] bg-surface focus:outl"
+          },
+          {
+            "tag": "DIV",
+            "testid": null,
+            "aria": null,
+            "role": null,
+            "cls": "group/generated-image-preview relative shrink-0"
+          },
+          {
+            "tag": "DIV",
+            "testid": null,
+            "aria": null,
+            "role": null,
+            "cls": "flex gap-2 transition-transform duration-basic ease-out motion-reduce:transition"
+          },
+          {
+            "tag": "DIV",
+            "testid": "generated-image-gallery",
+            "aria": null,
+            "role": null,
+            "cls": "group/generated-image-gallery-controls relative overflow-hidden w-full max-w-[25"
+          },
+          {
+            "tag": "DIV",
+            "testid": null,
+            "aria": null,
+            "role": null,
+            "cls": ""
+          },
+          {
+            "tag": "DIV",
+            "testid": null,
+            "aria": null,
+            "role": null,
+            "cls": ""
+          }
+        ]
+      }
+    ],
+    "last_turn_buttons": [
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Copy message",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Share prompt",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Edit message",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": "generated-image-preview",
+        "aria": "Generated image 1",
+        "role": null,
+        "cls": "shrink-0 cursor-interaction overflow-hidden rounded-[16px] bg-surface focus:outl"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Edit generated image 1",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Share generated image 1",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Copy image",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Like this image",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Dislike this image",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "Share",
+        "role": null,
+        "cls": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+      },
+      {
+        "tag": "BUTTON",
+        "testid": null,
+        "aria": "More actions",
+        "role": null,
+        "cls": "Button-BZrLNX outline-hidden cursor-interaction"
+      }
+    ],
+    "stop_button": false
+  }
+]

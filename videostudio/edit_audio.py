@@ -177,8 +177,6 @@ def generate_chapter_music(pipeline, job, check):
                 return saved['result']
         except (ValueError, KeyError, TypeError):
             pass
-    if not pipeline.accepted_music():
-        raise PermanentError('Stable Audio3 live workflow attestation absent')
     from .providers import music_graph
     from .music import assemble_scene_soundtracks, extend_music, normalize_music_levels
     seed = int(hashlib.sha256(job['id'].encode()).hexdigest()[:8], 16)

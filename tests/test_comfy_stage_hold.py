@@ -128,7 +128,7 @@ class ComfyStageHoldTests(unittest.TestCase):
         self.pipeline.release_held_comfy = Mock()
         self.assertEqual(self.pipeline.images(self.job, lambda: None), {'scenes': []})
         self.assertEqual(seen, ['job'])
-        self.pipeline.release_held_comfy.assert_called_once_with(self.job)
+        self.pipeline.release_held_comfy.assert_called_once_with(self.job, 'images')
         self.assertIsNone(self.pipeline._comfy_hold)
         self.pipeline._images = Mock(side_effect=RuntimeError('scene failed'))
         with self.assertRaises(RuntimeError):

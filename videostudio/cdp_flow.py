@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from PIL import Image
 from .core import digest
+from .cdp_templates import fill_card_template
 
 FLOW_HOME = 'https://flow.google.com/'
 MAX_FLOW_DOWNLOAD = 25 * 1024 * 1024
@@ -261,7 +262,7 @@ class FlowImages:
             if state.get('url','').split('?')[0].rstrip('/')!=project_url.split('?')[0].rstrip('/'):
                 raise FlowTaskError('Flow project changed before failed-card reconciliation','uncertain')
             if tasks:
-                labels=await self._eval(session,r'''/* VS_FAILED_CARD_LABELS */(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const t=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible)[INDEX];if(!t)return [];const norm=s=>(s||'').replace(/\s+/g,' ').trim();if(norm(t.innerText)!==TEXT)return [];return [...new Set([t,...t.querySelectorAll('[aria-label],[aria-labelledby],[title]')].flatMap(e=>[e.getAttribute('aria-label'),e.getAttribute('title'),(e.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ')]).filter(Boolean).map(norm))]})()'''.replace('INDEX',str(index)).replace('TEXT',json.dumps(tile.get('text',''),ensure_ascii=False)))
+                labels=await self._eval(session,fill_card_template(r'''/* VS_FAILED_CARD_LABELS */(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const t=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible)[INDEX];if(!t)return [];const norm=s=>(s||'').replace(/\s+/g,' ').trim();if(norm(t.innerText)!==TEXT)return [];return [...new Set([t,...t.querySelectorAll('[aria-label],[aria-labelledby],[title]')].flatMap(e=>[e.getAttribute('aria-label'),e.getAttribute('title'),(e.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ')]).filter(Boolean).map(norm))]})()''',index,tile.get('text','')))
                 matches=[task for task in tasks if self._prompt_text(' '.join([m['name'] for m in task.get('character_mentions',[])]+[task['prompt']])) in (labels or [])]
                 if len(matches)==1:
                     task=matches[0];prompt=' '.join([m['name'] for m in task.get('character_mentions',[])]+[task['prompt']])
@@ -270,7 +271,7 @@ class FlowImages:
                     continue
             if not state.get('draftEmpty') or not state.get('generateDisabled'):
                 raise FlowTaskError('Flow composer occupied before failed-card reconciliation (draft='+str(state.get('draftLength'))+', disabled='+str(state.get('generateDisabled'))+')','uncertain')
-            expression=r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const tiles=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible),t=tiles[INDEX];if(!t)return null;const norm=s=>(s||'').replace(/\s+/g,' ').trim(),r=t.getBoundingClientRect();if(norm(t.innerText)!==TEXT||Math.abs(r.x+r.width/2-X)>8||Math.abs(r.y+r.height/2-Y)>8)return null;const b=[...t.querySelectorAll('button')].find(b=>/^(Sử dụng lại câu lệnh|Reuse prompt)$/i.test(b.getAttribute('aria-label')||b.getAttribute('title')||'')||norm(b.innerText)==='undo');if(!b||!visible(b)||b.disabled)return null;const q=b.getBoundingClientRect(),x=q.x+q.width/2,y=q.y+q.height/2,h=document.elementFromPoint(x,y);return{x,y,hitIsButton:h===b||b.contains(h)}})()'''.replace('INDEX',str(index)).replace('TEXT',json.dumps(tile.get('text',''),ensure_ascii=False)).replace('X)',str(tile.get('x',-10000))+')').replace('Y)',str(tile.get('y',-10000))+')')
+            expression=fill_card_template(r'''(()=>{const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};const tiles=[...document.querySelectorAll('flow-grid-tile-container')].filter(visible),t=tiles[INDEX];if(!t)return null;const norm=s=>(s||'').replace(/\s+/g,' ').trim(),r=t.getBoundingClientRect();if(norm(t.innerText)!==TEXT||Math.abs(r.x+r.width/2-X)>8||Math.abs(r.y+r.height/2-Y)>8)return null;const b=[...t.querySelectorAll('button')].find(b=>/^(Sử dụng lại câu lệnh|Reuse prompt)$/i.test(b.getAttribute('aria-label')||b.getAttribute('title')||'')||norm(b.innerText)==='undo');if(!b||!visible(b)||b.disabled)return null;const q=b.getBoundingClientRect(),x=q.x+q.width/2,y=q.y+q.height/2,h=document.elementFromPoint(x,y);return{x,y,hitIsButton:h===b||b.contains(h)}})()''',index,tile.get('text',''),tile.get('x',-10000),tile.get('y',-10000))
             await self.bridge.cdp.command('Input.dispatchMouseEvent',{'type':'mouseMoved','x':tile.get('x',0),'y':tile.get('y',0)},session=session)
             button=await self._eval(session,expression)
             if not button or not button.get('hitIsButton'):continue
