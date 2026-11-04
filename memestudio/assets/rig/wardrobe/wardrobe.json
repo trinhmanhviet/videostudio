@@ -1,0 +1,2033 @@
+{
+ "version": 2,
+ "rig": {
+  "torso_top": [
+   1.0,
+   -56.0
+  ],
+  "neck": [
+   3.0,
+   -52.0
+  ],
+  "head_scale": 0.6372,
+  "head": "faces/head_base.png",
+  "head_chin": [
+   86.5,
+   143
+  ],
+  "faces": {
+   "noi": "faces/face_noi.png",
+   "lo": "faces/face_lo.png",
+   "gian": "faces/face_gian.png",
+   "soc": "faces/face_soc.png",
+   "khoc": "faces/face_khoc.png",
+   "buon": "faces/face_buon.png",
+   "cuoi": "faces/face_cuoi.png",
+   "cuoi_deu": "faces/face_cuoi_deu.png",
+   "ngap": "faces/face_ngap.png",
+   "chu_moi": "faces/face_chu_moi.png"
+  }
+ },
+ "items": [
+  {
+   "id": "ao_ba_lo_trang",
+   "kind": "costume",
+   "file": "costume/ao_ba_lo_trang.png",
+   "size": [
+    457,
+    356
+   ],
+   "anchor": [
+    228.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "ao_phong_xanh",
+   "kind": "costume",
+   "file": "costume/ao_phong_xanh.png",
+   "size": [
+    456,
+    357
+   ],
+   "anchor": [
+    228.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "so_mi_ca_vat",
+   "kind": "costume",
+   "file": "costume/so_mi_ca_vat.png",
+   "size": [
+    453,
+    355
+   ],
+   "anchor": [
+    226.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "so_mi_caro",
+   "kind": "costume",
+   "file": "costume/so_mi_caro.png",
+   "size": [
+    456,
+    363
+   ],
+   "anchor": [
+    228.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "ao_len_nau",
+   "kind": "costume",
+   "file": "costume/ao_len_nau.png",
+   "size": [
+    457,
+    364
+   ],
+   "anchor": [
+    228.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "ao_khoac_da",
+   "kind": "costume",
+   "file": "costume/ao_khoac_da.png",
+   "size": [
+    471,
+    364
+   ],
+   "anchor": [
+    235.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C1_thuong_ngay.png"
+  },
+  {
+   "id": "blouse_bac_si",
+   "kind": "costume",
+   "file": "costume/blouse_bac_si.png",
+   "size": [
+    459,
+    377
+   ],
+   "anchor": [
+    229.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "ao_cong_nhan",
+   "kind": "costume",
+   "file": "costume/ao_cong_nhan.png",
+   "size": [
+    457,
+    376
+   ],
+   "anchor": [
+    228.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "tap_de_dau_bep",
+   "kind": "costume",
+   "file": "costume/tap_de_dau_bep.png",
+   "size": [
+    456,
+    377
+   ],
+   "anchor": [
+    228.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "vest_den",
+   "kind": "costume",
+   "file": "costume/vest_den.png",
+   "size": [
+    454,
+    384
+   ],
+   "anchor": [
+    227.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "ao_bao_ve",
+   "kind": "costume",
+   "file": "costume/ao_bao_ve.png",
+   "size": [
+    455,
+    382
+   ],
+   "anchor": [
+    227.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "ao_ba_ba_nau",
+   "kind": "costume",
+   "file": "costume/ao_ba_ba_nau.png",
+   "size": [
+    453,
+    384
+   ],
+   "anchor": [
+    226.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C2_nghe_nghiep.png"
+  },
+  {
+   "id": "so_mi_hoc_sinh",
+   "kind": "costume",
+   "file": "costume/so_mi_hoc_sinh.png",
+   "size": [
+    443,
+    381
+   ],
+   "anchor": [
+    221.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "ao_da_bong",
+   "kind": "costume",
+   "file": "costume/ao_da_bong.png",
+   "size": [
+    451,
+    381
+   ],
+   "anchor": [
+    225.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "hoodie_xam",
+   "kind": "costume",
+   "file": "costume/hoodie_xam.png",
+   "size": [
+    459,
+    404
+   ],
+   "anchor": [
+    229.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "ao_mua_vang",
+   "kind": "costume",
+   "file": "costume/ao_mua_vang.png",
+   "size": [
+    495,
+    417
+   ],
+   "anchor": [
+    247.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "ao_phao_den",
+   "kind": "costume",
+   "file": "costume/ao_phao_den.png",
+   "size": [
+    479,
+    411
+   ],
+   "anchor": [
+    239.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "ao_the_duc",
+   "kind": "costume",
+   "file": "costume/ao_the_duc.png",
+   "size": [
+    470,
+    396
+   ],
+   "anchor": [
+    235.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C3_hoc_sinh_the_thao.png"
+  },
+  {
+   "id": "ao_hoa_hong",
+   "kind": "costume",
+   "file": "costume/ao_hoa_hong.png",
+   "size": [
+    462,
+    395
+   ],
+   "anchor": [
+    231.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "ao_ba_ba_hoa",
+   "kind": "costume",
+   "file": "costume/ao_ba_ba_hoa.png",
+   "size": [
+    470,
+    395
+   ],
+   "anchor": [
+    235.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "so_mi_co_no",
+   "kind": "costume",
+   "file": "costume/so_mi_co_no.png",
+   "size": [
+    467,
+    395
+   ],
+   "anchor": [
+    233.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "ao_len_co_lo",
+   "kind": "costume",
+   "file": "costume/ao_len_co_lo.png",
+   "size": [
+    469,
+    430
+   ],
+   "anchor": [
+    234.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "ao_hai_day",
+   "kind": "costume",
+   "file": "costume/ao_hai_day.png",
+   "size": [
+    473,
+    425
+   ],
+   "anchor": [
+    236.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "cardigan_be",
+   "kind": "costume",
+   "file": "costume/cardigan_be.png",
+   "size": [
+    477,
+    427
+   ],
+   "anchor": [
+    238.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.1436,
+   "hides_legs": false,
+   "sheet": "sheet_C4_ao_nu.png"
+  },
+  {
+   "id": "vay_hoa_dai",
+   "kind": "costume",
+   "file": "costume/vay_hoa_dai.png",
+   "size": [
+    354,
+    484
+   ],
+   "anchor": [
+    177.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "dam_do",
+   "kind": "costume",
+   "file": "costume/dam_do.png",
+   "size": [
+    359,
+    481
+   ],
+   "anchor": [
+    179.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "ao_dai_trang",
+   "kind": "costume",
+   "file": "costume/ao_dai_trang.png",
+   "size": [
+    347,
+    490
+   ],
+   "anchor": [
+    173.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "vay_yem",
+   "kind": "costume",
+   "file": "costume/vay_yem.png",
+   "size": [
+    368,
+    493
+   ],
+   "anchor": [
+    184.0,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "dam_ngu_hong",
+   "kind": "costume",
+   "file": "costume/dam_ngu_hong.png",
+   "size": [
+    379,
+    500
+   ],
+   "anchor": [
+    189.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "vay_cuoi",
+   "kind": "costume",
+   "file": "costume/vay_cuoi.png",
+   "size": [
+    405,
+    498
+   ],
+   "anchor": [
+    202.5,
+    0
+   ],
+   "place": [
+    1.0,
+    -56.0
+   ],
+   "scale": 0.22923,
+   "hides_legs": true,
+   "sheet": "sheet_C5_vay.png"
+  },
+  {
+   "id": "toc_xoan_ngan",
+   "kind": "hair",
+   "file": "hair/toc_xoan_ngan.png",
+   "size": [
+    362,
+    281
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    181.0,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -6
+   ],
+   "scale": 0.4558,
+   "rotation": 0
+  },
+  {
+   "id": "toc_dai_thang",
+   "kind": "hair",
+   "file": "hair/toc_dai_thang.png",
+   "size": [
+    343,
+    356
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    171.5,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -9
+   ],
+   "scale": 0.46647,
+   "rotation": 0
+  },
+  {
+   "id": "toc_bui_cao",
+   "kind": "hair",
+   "file": "hair/toc_bui_cao.png",
+   "size": [
+    305,
+    328
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    152.5,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -24
+   ],
+   "scale": 0.51803,
+   "rotation": 0
+  },
+  {
+   "id": "toc_hui_cua",
+   "kind": "hair",
+   "file": "hair/toc_hui_cua.png",
+   "size": [
+    312,
+    249
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    156.0,
+    0.0
+   ],
+   "at": [
+    86.5,
+    0
+   ],
+   "scale": 0.5,
+   "rotation": 0
+  },
+  {
+   "id": "toc_dung_nguoc",
+   "kind": "hair",
+   "file": "hair/toc_dung_nguoc.png",
+   "size": [
+    344,
+    293
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    172.0,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -16
+   ],
+   "scale": 0.4593,
+   "rotation": 0
+  },
+  {
+   "id": "hoi_toc_bac",
+   "kind": "hair",
+   "file": "hair/hoi_toc_bac.png",
+   "size": [
+    332,
+    229
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    166.0,
+    0.0
+   ],
+   "at": [
+    86.5,
+    14
+   ],
+   "scale": 0.49699,
+   "rotation": 0
+  },
+  {
+   "id": "toc_tet_bim",
+   "kind": "hair",
+   "file": "hair/toc_tet_bim.png",
+   "size": [
+    311,
+    387
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    155.5,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -9
+   ],
+   "scale": 0.51447,
+   "rotation": 0
+  },
+  {
+   "id": "toc_mai_ngo",
+   "kind": "hair",
+   "file": "hair/toc_mai_ngo.png",
+   "size": [
+    343,
+    259
+   ],
+   "frame": "head",
+   "sheet": "sheet_A1_toc.png",
+   "anchor": [
+    171.5,
+    0.0
+   ],
+   "at": [
+    86.5,
+    -9
+   ],
+   "scale": 0.46064,
+   "rotation": 0
+  },
+  {
+   "id": "non_la",
+   "kind": "hat",
+   "file": "hat/non_la.png",
+   "size": [
+    363,
+    317
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    181.5,
+    133.14
+   ],
+   "at": [
+    86.5,
+    37
+   ],
+   "scale": 0.59229,
+   "rotation": 0
+  },
+  {
+   "id": "mu_bao_hiem",
+   "kind": "hat",
+   "file": "hat/mu_bao_hiem.png",
+   "size": [
+    312,
+    326
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    156.0,
+    195.6
+   ],
+   "at": [
+    86.5,
+    55
+   ],
+   "scale": 0.52885,
+   "rotation": 0
+  },
+  {
+   "id": "mu_luoi_trai",
+   "kind": "hat",
+   "file": "hat/mu_luoi_trai.png",
+   "size": [
+    311,
+    222
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    155.5,
+    222.0
+   ],
+   "at": [
+    86.5,
+    55
+   ],
+   "scale": 0.50804,
+   "rotation": 0
+  },
+  {
+   "id": "mu_len",
+   "kind": "hat",
+   "file": "hat/mu_len.png",
+   "size": [
+    324,
+    271
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    162.0,
+    271.0
+   ],
+   "at": [
+    86.5,
+    52
+   ],
+   "scale": 0.48765,
+   "rotation": 0
+  },
+  {
+   "id": "mu_dau_bep",
+   "kind": "hat",
+   "file": "hat/mu_dau_bep.png",
+   "size": [
+    343,
+    243
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    171.5,
+    243.0
+   ],
+   "at": [
+    86.5,
+    48
+   ],
+   "scale": 0.3965,
+   "rotation": 0
+  },
+  {
+   "id": "mu_coi",
+   "kind": "hat",
+   "file": "hat/mu_coi.png",
+   "size": [
+    366,
+    218
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    183.0,
+    218.0
+   ],
+   "at": [
+    86.5,
+    59
+   ],
+   "scale": 0.49454,
+   "rotation": 0
+  },
+  {
+   "id": "vuong_mien",
+   "kind": "hat",
+   "file": "hat/vuong_mien.png",
+   "size": [
+    317,
+    201
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    158.5,
+    201.0
+   ],
+   "at": [
+    86.5,
+    32
+   ],
+   "scale": 0.32177,
+   "rotation": 0
+  },
+  {
+   "id": "bang_do",
+   "kind": "hat",
+   "file": "hat/bang_do.png",
+   "size": [
+    363,
+    219
+   ],
+   "frame": "head",
+   "sheet": "sheet_A2_mu.png",
+   "anchor": [
+    181.5,
+    109.5
+   ],
+   "at": [
+    86.5,
+    37
+   ],
+   "scale": 0.43526,
+   "rotation": 0
+  },
+  {
+   "id": "kinh_ram",
+   "kind": "face",
+   "file": "face/kinh_ram.png",
+   "size": [
+    379,
+    130
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      96.0,
+      55.95
+     ],
+     "scale": 0.22586,
+     "rotation": 1.58
+    },
+    "lo": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      96.1,
+      61.05
+     ],
+     "scale": 0.25679,
+     "rotation": -6.21
+    },
+    "gian": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      96.8,
+      59.5
+     ],
+     "scale": 0.23372,
+     "rotation": 0.0
+    },
+    "soc": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      95.0,
+      58.85
+     ],
+     "scale": 0.25755,
+     "rotation": 0.13
+    },
+    "khoc": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      94.7,
+      59.0
+     ],
+     "scale": 0.25307,
+     "rotation": 1.28
+    },
+    "buon": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      92.15,
+      62.65
+     ],
+     "scale": 0.25563,
+     "rotation": -7.27
+    },
+    "cuoi": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      95.35,
+      51.3
+     ],
+     "scale": 0.24904,
+     "rotation": -0.26
+    },
+    "cuoi_deu": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      99.55,
+      62.5
+     ],
+     "scale": 0.2255,
+     "rotation": 2.88
+    },
+    "ngap": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      94.4,
+      59.2
+     ],
+     "scale": 0.26441,
+     "rotation": -1.23
+    },
+    "chu_moi": {
+     "anchor": [
+      189.5,
+      65.0
+     ],
+     "at": [
+      93.85,
+      59.4
+     ],
+     "scale": 0.2514,
+     "rotation": -1.55
+    }
+   }
+  },
+  {
+   "id": "kinh_can",
+   "kind": "face",
+   "file": "face/kinh_can.png",
+   "size": [
+    383,
+    161
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      96.0,
+      55.45
+     ],
+     "scale": 0.21831,
+     "rotation": 1.58
+    },
+    "lo": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      96.1,
+      60.55
+     ],
+     "scale": 0.24819,
+     "rotation": -6.21
+    },
+    "gian": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      96.8,
+      59.0
+     ],
+     "scale": 0.2259,
+     "rotation": 0.0
+    },
+    "soc": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      95.0,
+      58.35
+     ],
+     "scale": 0.24893,
+     "rotation": 0.13
+    },
+    "khoc": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      94.7,
+      58.5
+     ],
+     "scale": 0.2446,
+     "rotation": 1.28
+    },
+    "buon": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      92.15,
+      62.15
+     ],
+     "scale": 0.24708,
+     "rotation": -7.27
+    },
+    "cuoi": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      95.35,
+      50.8
+     ],
+     "scale": 0.24071,
+     "rotation": -0.26
+    },
+    "cuoi_deu": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      99.55,
+      62.0
+     ],
+     "scale": 0.21795,
+     "rotation": 2.88
+    },
+    "ngap": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      94.4,
+      58.7
+     ],
+     "scale": 0.25557,
+     "rotation": -1.23
+    },
+    "chu_moi": {
+     "anchor": [
+      191.5,
+      80.5
+     ],
+     "at": [
+      93.85,
+      58.9
+     ],
+     "scale": 0.24299,
+     "rotation": -1.55
+    }
+   }
+  },
+  {
+   "id": "rau_mep",
+   "kind": "face",
+   "file": "face/rau_mep.png",
+   "size": [
+    338,
+    110
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      99.0,
+      85.0
+     ],
+     "scale": 0.08994,
+     "rotation": 0.79
+    },
+    "lo": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      103.0,
+      91.5
+     ],
+     "scale": 0.09556,
+     "rotation": -3.11
+    },
+    "gian": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      99.5,
+      86.5
+     ],
+     "scale": 0.09275,
+     "rotation": 0.0
+    },
+    "soc": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      99.0,
+      92.5
+     ],
+     "scale": 0.08876,
+     "rotation": 0.06
+    },
+    "khoc": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      97.5,
+      86.5
+     ],
+     "scale": 0.09275,
+     "rotation": 0.64
+    },
+    "buon": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      99.5,
+      92.0
+     ],
+     "scale": 0.09275,
+     "rotation": -3.63
+    },
+    "cuoi": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      99.5,
+      78.0
+     ],
+     "scale": 0.1321,
+     "rotation": -0.13
+    },
+    "cuoi_deu": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      97.0,
+      86.5
+     ],
+     "scale": 0.15178,
+     "rotation": 1.44
+    },
+    "ngap": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      102.0,
+      89.5
+     ],
+     "scale": 0.08876,
+     "rotation": -0.61
+    },
+    "chu_moi": {
+     "anchor": [
+      169.0,
+      55.0
+     ],
+     "at": [
+      103.0,
+      87.5
+     ],
+     "scale": 0.09556,
+     "rotation": -0.78
+    }
+   }
+  },
+  {
+   "id": "rau_quai_non",
+   "kind": "face",
+   "file": "face/rau_quai_non.png",
+   "size": [
+    379,
+    267
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      99.0,
+      105.5
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "lo": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      103.0,
+      108.5
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "gian": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      99.5,
+      107.0
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "soc": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      99.0,
+      115.0
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "khoc": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      97.5,
+      108.0
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "buon": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      99.5,
+      111.5
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "cuoi": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      99.5,
+      104.0
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "cuoi_deu": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      97.0,
+      104.5
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "ngap": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      102.0,
+      111.0
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    },
+    "chu_moi": {
+     "anchor": [
+      189.5,
+      133.5
+     ],
+     "at": [
+      103.0,
+      106.5
+     ],
+     "scale": 0.36412,
+     "rotation": 0
+    }
+   }
+  },
+  {
+   "id": "rau_de",
+   "kind": "face",
+   "file": "face/rau_de.png",
+   "size": [
+    302,
+    254
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      99.0,
+      114
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "lo": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      103.0,
+      113
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "gian": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      99.5,
+      116
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "soc": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      99.0,
+      125
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "khoc": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      97.5,
+      118
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "buon": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      99.5,
+      119
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "cuoi": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      99.5,
+      118
+     ],
+     "scale": 0.0856,
+     "rotation": 0
+    },
+    "cuoi_deu": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      97.0,
+      113
+     ],
+     "scale": 0.09834,
+     "rotation": 0
+    },
+    "ngap": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      102.0,
+      121
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    },
+    "chu_moi": {
+     "anchor": [
+      151.0,
+      0
+     ],
+     "at": [
+      103.0,
+      114
+     ],
+     "scale": 0.07947,
+     "rotation": 0
+    }
+   }
+  },
+  {
+   "id": "khau_trang",
+   "kind": "face",
+   "file": "face/khau_trang.png",
+   "size": [
+    398,
+    213
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      99.0,
+      97.0
+     ],
+     "scale": 0.28141,
+     "rotation": 0.79
+    },
+    "lo": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      103.0,
+      99.5
+     ],
+     "scale": 0.28141,
+     "rotation": -3.11
+    },
+    "gian": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      99.5,
+      99.0
+     ],
+     "scale": 0.28141,
+     "rotation": 0.0
+    },
+    "soc": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      99.0,
+      106.0
+     ],
+     "scale": 0.28141,
+     "rotation": 0.06
+    },
+    "khoc": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      97.5,
+      100.0
+     ],
+     "scale": 0.28141,
+     "rotation": 0.64
+    },
+    "buon": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      99.5,
+      103.0
+     ],
+     "scale": 0.28141,
+     "rotation": -3.63
+    },
+    "cuoi": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      99.5,
+      95.5
+     ],
+     "scale": 0.28141,
+     "rotation": -0.13
+    },
+    "cuoi_deu": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      97.0,
+      98.5
+     ],
+     "scale": 0.28141,
+     "rotation": 1.44
+    },
+    "ngap": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      102.0,
+      103.0
+     ],
+     "scale": 0.28141,
+     "rotation": -0.61
+    },
+    "chu_moi": {
+     "anchor": [
+      199.0,
+      106.5
+     ],
+     "at": [
+      103.0,
+      98.5
+     ],
+     "scale": 0.28141,
+     "rotation": -0.78
+    }
+   }
+  },
+  {
+   "id": "bang_ca_nhan",
+   "kind": "face",
+   "file": "face/bang_ca_nhan.png",
+   "size": [
+    236,
+    186
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      119.9,
+      39.0
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "lo": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      122.6,
+      41.1
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "gian": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      121.4,
+      42.0
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "soc": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      121.7,
+      41.4
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "khoc": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      121.0,
+      42.0
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "buon": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      118.5,
+      42.3
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "cuoi": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      121.3,
+      33.7
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "cuoi_deu": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      123.4,
+      46.0
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "ngap": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      121.7,
+      41.2
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    },
+    "chu_moi": {
+     "anchor": [
+      118.0,
+      93.0
+     ],
+     "at": [
+      120.0,
+      41.3
+     ],
+     "scale": 0.19068,
+     "rotation": 0
+    }
+   }
+  },
+  {
+   "id": "ma_hong",
+   "kind": "face",
+   "file": "face/ma_hong.png",
+   "size": [
+    387,
+    112
+   ],
+   "frame": "head",
+   "sheet": "sheet_A3_do_deo_mat.png",
+   "per_face": {
+    "noi": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      96.0,
+      73.38
+     ],
+     "scale": 0.16975,
+     "rotation": 1.58
+    },
+    "lo": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      96.1,
+      79.62
+     ],
+     "scale": 0.19299,
+     "rotation": -6.21
+    },
+    "gian": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      96.8,
+      75.4
+     ],
+     "scale": 0.17566,
+     "rotation": 0.0
+    },
+    "soc": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      95.0,
+      79.34
+     ],
+     "scale": 0.19357,
+     "rotation": 0.13
+    },
+    "khoc": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      94.7,
+      75.2
+     ],
+     "scale": 0.1902,
+     "rotation": 1.28
+    },
+    "buon": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      92.15,
+      80.26
+     ],
+     "scale": 0.19212,
+     "rotation": -7.27
+    },
+    "cuoi": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      95.35,
+      67.32
+     ],
+     "scale": 0.18717,
+     "rotation": -0.26
+    },
+    "cuoi_deu": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      99.55,
+      75.4
+     ],
+     "scale": 0.16948,
+     "rotation": 2.88
+    },
+    "ngap": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      94.4,
+      77.08
+     ],
+     "scale": 0.19873,
+     "rotation": -1.23
+    },
+    "chu_moi": {
+     "anchor": [
+      193.5,
+      56.0
+     ],
+     "at": [
+      93.85,
+      75.96
+     ],
+     "scale": 0.18895,
+     "rotation": -1.55
+    }
+   }
+  }
+ ]
+}

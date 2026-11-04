@@ -1,0 +1,12 @@
+{
+  "name": "memestudio",
+  "private": true,
+  "description": "Panda meme cartoon episodes: auto-staging engine + HyperFrames renderer",
+  "dependencies": {
+    "gsap": "3.13.0",
+    "hyperframes": "0.9.10"
+  },
+  "overrides": {
+    "undici": "7.30.1"
+  }
+}

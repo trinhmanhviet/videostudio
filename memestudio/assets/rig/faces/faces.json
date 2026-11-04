@@ -1,0 +1,292 @@
+{
+ "version": 1,
+ "head": {
+  "file": "head_base.png",
+  "size": [
+   175,
+   155
+  ],
+  "interior": [
+   17,
+   11,
+   156,
+   139
+  ],
+  "chin": [
+   86.5,
+   143
+  ]
+ },
+ "faces": {
+  "noi": {
+   "file": "face_noi.png",
+   "file_nomouth": "face_noi_nomouth.png",
+   "mouth_file": "mouth_noi.png",
+   "source": "faces_fx/component_009.png",
+   "mouth_pivot": [
+    99.0,
+    86
+   ],
+   "eye_l": [
+    76.1,
+    53.9
+   ],
+   "eye_r": [
+    115.9,
+    55.0
+   ],
+   "eye_y": 54.5,
+   "nose_bottom": [
+    96.5,
+    83
+   ],
+   "mouth_top": 86,
+   "mouth_bottom": 113,
+   "mouth_x": 99.0,
+   "mouth_width": 32
+  },
+  "lo": {
+   "file": "face_lo.png",
+   "file_nomouth": "face_lo_nomouth.png",
+   "mouth_file": "mouth_lo.png",
+   "source": "faces_fx/component_010.png",
+   "mouth_pivot": [
+    103.0,
+    93
+   ],
+   "eye_l": [
+    73.6,
+    62.0
+   ],
+   "eye_r": [
+    118.6,
+    57.1
+   ],
+   "eye_y": 59.5,
+   "nose_bottom": [
+    98.5,
+    89
+   ],
+   "mouth_top": 93,
+   "mouth_bottom": 112,
+   "mouth_x": 103.0,
+   "mouth_width": 34
+  },
+  "gian": {
+   "file": "face_gian.png",
+   "file_nomouth": "face_gian_nomouth.png",
+   "mouth_file": "mouth_gian.png",
+   "source": "faces_fx/component_011.png",
+   "mouth_pivot": [
+    99.5,
+    87
+   ],
+   "eye_l": [
+    76.2,
+    58.0
+   ],
+   "eye_r": [
+    117.4,
+    58.0
+   ],
+   "eye_y": 58.0,
+   "nose_bottom": [
+    96.0,
+    85
+   ],
+   "mouth_top": 87,
+   "mouth_bottom": 115,
+   "mouth_x": 99.5,
+   "mouth_width": 33
+  },
+  "soc": {
+   "file": "face_soc.png",
+   "file_nomouth": "face_soc_nomouth.png",
+   "mouth_file": "mouth_soc.png",
+   "source": "faces_fx/component_012.png",
+   "mouth_pivot": [
+    99.0,
+    94
+   ],
+   "eye_l": [
+    72.3,
+    57.3
+   ],
+   "eye_r": [
+    117.7,
+    57.4
+   ],
+   "eye_y": 57.3,
+   "nose_bottom": [
+    98.5,
+    90
+   ],
+   "mouth_top": 94,
+   "mouth_bottom": 124,
+   "mouth_x": 99.0,
+   "mouth_width": 26
+  },
+  "khoc": {
+   "file": "face_khoc.png",
+   "file_nomouth": "face_khoc_nomouth.png",
+   "mouth_file": "mouth_khoc.png",
+   "source": "faces_fx/component_013.png",
+   "mouth_pivot": [
+    97.5,
+    87
+   ],
+   "eye_l": [
+    72.4,
+    57.0
+   ],
+   "eye_r": [
+    117.0,
+    58.0
+   ],
+   "eye_y": 57.5,
+   "nose_bottom": [
+    94.0,
+    85
+   ],
+   "mouth_top": 87,
+   "mouth_bottom": 117,
+   "mouth_x": 97.5,
+   "mouth_width": 33
+  },
+  "buon": {
+   "file": "face_buon.png",
+   "file_nomouth": "face_buon_nomouth.png",
+   "mouth_file": "mouth_buon.png",
+   "source": "faces_fx/component_014.png",
+   "mouth_pivot": [
+    99.5,
+    93
+   ],
+   "eye_l": [
+    69.8,
+    64.0
+   ],
+   "eye_r": [
+    114.5,
+    58.3
+   ],
+   "eye_y": 61.1,
+   "nose_bottom": [
+    95.0,
+    90
+   ],
+   "mouth_top": 93,
+   "mouth_bottom": 118,
+   "mouth_x": 99.5,
+   "mouth_width": 33
+  },
+  "cuoi": {
+   "file": "face_cuoi.png",
+   "file_nomouth": "face_cuoi_nomouth.png",
+   "mouth_file": "mouth_cuoi.png",
+   "source": "faces_fx/component_015.png",
+   "mouth_pivot": [
+    99.5,
+    79
+   ],
+   "eye_l": [
+    73.4,
+    49.9
+   ],
+   "eye_r": [
+    117.3,
+    49.7
+   ],
+   "eye_y": 49.8,
+   "nose_bottom": [
+    99.5,
+    76
+   ],
+   "mouth_top": 79,
+   "mouth_bottom": 117,
+   "mouth_x": 99.5,
+   "mouth_width": 47
+  },
+  "cuoi_deu": {
+   "file": "face_cuoi_deu.png",
+   "file_nomouth": "face_cuoi_deu_nomouth.png",
+   "mouth_file": "mouth_cuoi_deu.png",
+   "source": "faces_fx/component_016.png",
+   "mouth_pivot": [
+    97.0,
+    85
+   ],
+   "eye_l": [
+    79.7,
+    60.0
+   ],
+   "eye_r": [
+    119.4,
+    62.0
+   ],
+   "eye_y": 61.0,
+   "nose_bottom": [
+    95.0,
+    87
+   ],
+   "mouth_top": 85,
+   "mouth_bottom": 112,
+   "mouth_x": 97.0,
+   "mouth_width": 54
+  },
+  "ngap": {
+   "file": "face_ngap.png",
+   "file_nomouth": "face_ngap_nomouth.png",
+   "mouth_file": "mouth_ngap.png",
+   "source": "faces_fx/component_017.png",
+   "mouth_pivot": [
+    102.0,
+    90
+   ],
+   "eye_l": [
+    71.1,
+    58.2
+   ],
+   "eye_r": [
+    117.7,
+    57.2
+   ],
+   "eye_y": 57.7,
+   "nose_bottom": [
+    99.5,
+    88
+   ],
+   "mouth_top": 90,
+   "mouth_bottom": 120,
+   "mouth_x": 102.0,
+   "mouth_width": 26
+  },
+  "chu_moi": {
+   "file": "face_chu_moi.png",
+   "file_nomouth": "face_chu_moi_nomouth.png",
+   "mouth_file": "mouth_chu_moi.png",
+   "source": "faces_fx/component_018.png",
+   "mouth_pivot": [
+    103.0,
+    88
+   ],
+   "eye_l": [
+    71.7,
+    58.5
+   ],
+   "eye_r": [
+    116.0,
+    57.3
+   ],
+   "eye_y": 57.9,
+   "nose_bottom": [
+    99.0,
+    86
+   ],
+   "mouth_top": 88,
+   "mouth_bottom": 113,
+   "mouth_x": 103.0,
+   "mouth_width": 34
+  }
+ }
+}

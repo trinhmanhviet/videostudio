@@ -655,4 +655,106 @@ Lip sync đầu tiên có thể dùng closed/half/open theo năng lượng audio
 4. **Editor/workflow:** thêm lựa chọn engine/style và inspector motion/capability trên UI sẵn có, không xây lại editor. Preview và export dùng chung manifest/primitive. Chỉ thêm node/port sau khi compiler/pipeline thật hỗ trợ; UI cũ giữ mặc định.
 5. **Độ bền:** thử video hỗn hợp 30–100+ cảnh, cache reuse, bộ nhớ, hủy/resume, lỗi engine giữa chừng và fallback; chạy regression pipeline cũ. Runtime dùng tài nguyên theo cảnh/chunk, không giữ mọi asset full resolution hoặc mở browser mới cho từng layer.
 
+<a id="engine-spike"></a>
+### Kết quả engine spike HyperFrames (2026-11-04)
+
+> **Vị trí hiện tại:** bộ dựng hoạt hình gấu trúc đã chuyển vào `memestudio/` (engine, tools, asset rig/mặt/tủ đồ/nền/SFX,
+> các tập trong `memestudio/episodes/`, video trong `memestudio/out/`). Các mục dưới ghi đường dẫn cũ lúc thử nghiệm
+> (`tmp/hyperframes-spike/...`, `assets/Meme_Animation_Asset_Pack/rig/...`, `scripts/build_rig_faces.py`,
+> `scripts/import_rig_wardrobe.py`). Thư mục `tmp/hyperframes-spike` (các cảnh thử, ảnh chụp, video thử ngoài `ep1.mp4`)
+> đã xoá ngày 2026-11-04 theo yêu cầu người dùng. Hướng dẫn làm tập mới: [huong-dan-video-hoat-hinh.md](huong-dan-video-hoat-hinh.md).
+
+Thư mục thử `tmp/hyperframes-spike/` (git bỏ qua): `scene/index.html` là composition, `out/` là kết quả. Cài: `npm install --save-exact hyperframes@0.9.10 gsap@3.13.0`; dự án tạo bằng `npx hyperframes init scene --non-interactive --example blank --resolution portrait --skip-skills`. Mọi lệnh chạy với `HYPERFRAMES_NO_TELEMETRY=1` và `DO_NOT_TRACK=1` (CLI có gửi telemetry mặc định).
+
+Cảnh thử 8 giây, 4 shot, dùng bố cục 3 dải của `meme_render.py` (nhân 1,5 lên 1080×1920), nền `bg_90s_rural_yard`, sprite catalog `stand_talk`, `face_shock`, `run`, `facepalm`, FX `exclaim/smoke/sweat`, prop `table/phone`, 8 giây âm thanh lấy từ video meme thử số 3. Có: camera push, parallax nền/tiền cảnh, pop-in, nhún khi nói ~8 Hz, punch-in + rung camera theo keyframe cố định, flash, chạy ngang + khói, mồ hôi trượt, điện thoại rơi nảy, đổi phụ đề theo shot.
+
+| Kiểm tra | Kết quả đo |
+|---|---|
+| `hyperframes check` | 0 lỗi; cảnh báo cấu trúc (nên tách shot thành sub-composition) và chữ hiện dưới 1,5 giây |
+| MP4 | H.264 1080×1920, 30 fps, đúng 240 khung, 8,000 giây; AAC 48 kHz stereo, mức âm giữ nguyên (mean −21,5 dB, max −4,9 dB như file nguồn) |
+| Chữ tiếng Việt | Hiển thị đủ dấu với font Arial Bold nhúng bằng `@font-face` |
+| Tất định | Chuỗi PNG 1 worker (tua tuần tự) và 6 worker (tua nhảy vào giữa): 240/240 khung giống hệt từng pixel. Snapshot theo thứ tự xáo trộn và tăng dần: 7/7 giống hệt |
+| Tốc độ (12 nhân) | MP4 8 giây: 31 giây lần đầu, 19 giây lần sau (worker tự chọn); PNG 1 worker 70 giây, 6 worker 32 giây. Bộ dựng Pillow hiện tại: video 45,6 giây trong 21,9 giây. HyperFrames chậm hơn khoảng 8 lần trên mỗi giây video, chưa đo với video dài |
+
+Điều rút ra cho bước tiếp:
+- Cắt cảnh/đổi pose dùng clip có `data-start`/`data-duration`; chuyển động chỉ dùng `set/to/from/fromTo` trên một timeline gốc (không `call()`, không random, không đồng hồ). Đó là lý do tua ra cùng kết quả.
+- Catalog hiện chỉ có pose/mặt nguyên khối, **không có mắt/miệng tách lớp**: chớp mắt và miệng 3 trạng thái chưa làm được nếu chưa gắn nhãn bộ phận trong `Panda/auto_sliced/rig` hoặc vẽ thêm.
+- Phụ thuộc kéo theo: HyperFrames tự tải Chrome riêng vào `~/.cache/hyperframes` (~272 MB); `hyperframes@0.9.10` ghim `undici@7.25.0`, bị `npm audit` báo lỗ hổng mức high (proxy SOCKS5, Set-Cookie, cache, CRLF, WebSocket). HyperFrames chỉ dùng `undici` để tải media từ URL công khai; render từ file cục bộ không đi qua nó. Đã vá trong thư mục thử bằng `"overrides": {"undici": "7.30.1"}` trong `package.json`: `npm audit` còn 0 lỗ hổng, render lại 240/240 khung giống hệt bản trước khi vá. Không dùng `npm audit fix --force` (hạ HyperFrames xuống 0.8.214). Khi tích hợp: giữ override này, chỉ cho composition dùng file cục bộ, chạy `npm audit` mỗi lần nâng phiên bản.
+- Snapshot và render chụp theo hai đường khác nhau (chênh trung bình 0,26/255), nên kiểm tra tất định phải so trong cùng một đường chụp.
+
+#### Rig nhân vật có khớp đầu tiên (2026-11-04)
+
+Mục tiêu: kiểu hoạt hình cắt ghép (cut-out) như video mẫu người dùng gửi, nhân vật ghép từ bộ phận và cử động quanh khớp. Dự án thử `tmp/hyperframes-spike/rig/`, kết quả `tmp/hyperframes-spike/out/rig_v2.mp4` (bản đầu `rig.mp4` tay chân to, tay buông ngược).
+
+- Bộ phận lấy từ `Panda/auto_sliced/rig` (cắt từ `panda_rig_sprite_sheet.png`): thân trên kèm đầu #6, chân đứng #40, chân bước #41 (và bản lật), tay buông #17, tay chỉ #22, tay ngửa #25, bóng #55. Các số khác trên sheet: chân #39 chạy, #42 ngồi xổm, #44 quỳ, #46 xếp bằng; tay #20 chặn, #21 like, #24 nắm, #23 cầm; thân #38 dang tay, #36 vỗ tay, #35 chắp tay; góc nghiêng/sau #1, #2, #5; FX #47–#61.
+- Cách dựng: mỗi khớp là một khối 0×0 đặt đúng tại khớp, ảnh bên trong lệch để điểm khớp trùng gốc; đơn vị bên trong là pixel của sheet, phóng ×3,6. Hông = mép dưới thân (#6 y=141), vai trái/phải tại (±41, −63) so với hông, vai của #17 ở (19, 10), của #22 ở (114, 9), của #25 ở (103, 8), cạp quần #40/#41 ở (66,5, 8) và chồng lên thân 10 px. Tay nằm trong khối thân nên thân nhún/nghiêng thì tay theo. Tay phải và chân bước B dùng khối lật `scaleX(-1)`.
+- Tỉ lệ meme (người dùng chốt 2026-11-04): không cố đúng giải phẫu; đầu/thân to, tay chân nhỏ. Tay thu ×0,66, chân ×0,72 bằng khối scale tĩnh bên trong khớp (điểm khớp giữ nguyên); chân đẩy lên (cạp quần ở −40 thay vì −18 đơn vị chân) để phần quần nấp sau thân. Tay buông #17 vẽ sẵn là tay bên phải màn hình: dùng nguyên ở vai phải, lật ở vai trái (bản đầu bị ngược).
+- Động tác trong 8 giây: thở (co giãn thân từ hông), nói (đổi sang tay ngửa, vung tay, thân lắc), chỉ tay (đổi tay, bật lên với `back.out`), đi (đổi 3 khung chân mỗi 0,1 giây, thân nhún, hai tay vung ngược nhau, di chuyển ngang). Đổi bộ phận bằng `tl.set` opacity; có `tl.set` trạng thái gốc ở giây 0 cho mọi khớp.
+- Kiểm tra: `hyperframes check` 0 lỗi; MP4 1080×1920, 30 fps, 240 khung, render 16 giây. Render tuần tự và 6 worker: 211/240 khung giống hệt, 29 khung còn lại lệch tối đa 2/255 mỗi kênh (làm tròn khử răng cưa khi xoay, ở đoạn chỉ tay), không lệch tư thế.
+- Giới hạn: đầu dính liền thân nên chưa quay đầu hay đổi mặt riêng được; chưa có mắt/miệng tách lớp; chân chỉ có dáng nhìn thẳng nên đi ngang vẫn quay mặt ra trước; ảnh nguồn nhỏ (thân 118×147 px) nên phóng lên hơi mềm; có đường viền ở chỗ nối thân/quần. Muốn giống video mẫu cần thêm: đầu tách khỏi thân, bộ mặt biểu cảm, quần áo cho từng vai, ảnh nguồn độ phân giải cao hơn.
+
+#### Khớp cổ và đổi biểu cảm (2026-11-04)
+
+Dự án thử `tmp/hyperframes-spike/rig_head/` (sinh bằng script; asset và `assets/heads.json` trong đó), kết quả `tmp/hyperframes-spike/out/rig_head.mp4`.
+
+- Thân không đầu `torso.png`: thân #6 giữ nguyên khung ảnh, xóa mọi pixel phía trên y=85 (cằm đầu cũ ở y≈87, ngay dưới là cổ áo đen). Offset trong rig không đổi.
+- Đầu: 10 đầu biểu cảm trong `panda_expression_asset_sheet.png`, `Panda/auto_sliced/faces_fx` #9 nói, #10 lo, #11 giận, #12 sốc, #13 khóc, #14 buồn, #15 cười to, #16 cười đểu, #17 ngáp, #18 chu môi. Sheet còn 8 đầu trống #1–#8 (thẳng, nghiêng, sau, cúi), 12 cặp mắt và 10 miệng rời, FX và bàn tay.
+- Khớp cổ nằm trong khối thân tại (3, −52) so với hông, vẽ trên lớp tay. Mỗi đầu thu ×0,72 (đầu cũ cao ~81 px, đầu biểu cảm ~116 px) và đặt theo điểm cằm tính tự động: đáy vùng đặc, tâm x của 6 hàng dưới cùng (không lấy tai). Vai dời xuống (−36, −50) và (38, −50) để nằm trên thân đã cắt.
+- Đổi biểu cảm bằng `tl.set` opacity trên các đầu xếp chồng. Động tác thử: gật khi nói, lắc nhanh khi cười, bật lên + phóng to khi sốc (tay dang), lắc mạnh khi giận, gục nghiêng khi khóc, nghiêng chậm khi cười đểu, ngửa rồi gục khi ngáp. Xoay tới ±12° không lộ đầu cũ hay hở cổ.
+- Kiểm tra: `hyperframes check` 0 lỗi; MP4 1080×1920, 30 fps, 240 khung, render 14 giây.
+- Trang phục theo cách người dùng chốt: chỉ thay thân (thân mặc áo cùng khuôn `torso.png`), tay chân giữ nguyên; váy thì ẩn chân.
+
+#### Thân mới và tủ đồ nhân vật (2026-11-04)
+
+- **Thân mới `rig/base/torso_core.png`** (người dùng duyệt): hai mảng đen hai bên thân #6 thực ra là tay vẽ liền, nên đã cắt bỏ; chỉ giữ vùng bụng trắng + viền (lấy vùng sáng nối với tâm (58, 115), nới 3 px). Khung ảnh giữ nguyên 118×147, vai dời vào (−29, −52) và (31, −52). Tay vẽ **sau** thân/áo để tay áo che gốc tay.
+- **Tủ đồ** trong `assets/Meme_Animation_Asset_Pack/rig/`: `sheets/` là 8 bảng gốc vẽ bằng app ChatGPT (PNG nền trong suốt thật), `wardrobe/` là 54 món đã cắt: 30 trang phục (`costume/`, gồm 6 váy dài ẩn chân), 8 tóc (`hair/`), 8 mũ/đồ đội (`hat/`), 8 đồ đeo mặt (`face/`). `wardrobe/wardrobe.json` ghi cho từng món: file, điểm neo trong ảnh, vị trí trên rig, tỉ lệ, `hides_legs` cho váy. Ảnh duyệt: `preview_costume.jpg`, `preview_accessories.jpg`, `preview_characters.jpg` (12 nhân vật phối sẵn: bố, mẹ, học sinh, bác sĩ, đầu bếp, cô dâu, nông dân, vệ sĩ, công nhân, cầu thủ, cô gái váy đỏ, người mặc áo phao).
+- **Cắt và khớp**: `python scripts/import_rig_wardrobe.py`. Tách món theo khe trống giữa hàng/cột; nếu một món có nhiều mảnh rời (hai vết má hồng) thì gom theo ô lưới đều. Áo: một tỉ lệ chung = chiều cao thân (55 đơn vị) / trung vị chiều cao các áo, đỉnh giữa áo đặt tại đỉnh thân (1, −56). Váy được vẽ nhỏ hơn để đủ chỗ phần váy, nên tỉ lệ riêng theo bề rộng vai so với áo. Phụ kiện đặt theo toạ độ của đầu #9 (cằm (77, 122)) rồi gắn vào khớp cổ, nên đi theo mọi động tác đầu; điểm neo từng món ghi trong `HEAD_SHEETS` (nón lá và mũ bảo hiểm neo theo tỉ lệ chiều cao vì có quai thòng).
+- **Cách nhờ ChatGPT vẽ thêm** (đã dùng): đính kèm ảnh tham chiếu nhân vật + khuôn (`tmp/hyperframes-spike/costume/tham_chieu_than.png` cho áo, `tham_chieu_dau.png` cho đồ trên đầu), xin MỘT bảng lưới 3×2 (áo) hoặc 4×2 (phụ kiện) theo thứ tự đánh số, giữ đúng khuôn/cùng cỡ, nét đen dày như gấu, tô phẳng, không đầu/tay/chân/chữ/logo, các món không chạm nhau, nền trong suốt (hoặc #FF00FF); phụ kiện tóc để trống phần mặt. Các bảng sau gửi tiếp trong cùng chat để giữ nét. Tải bằng nút lưu trên ảnh → Download (không tạo link chia sẻ). Bảng mới: thêm tên file và danh sách id vào `COSTUMES`/`HEAD_SHEETS` rồi chạy lại script.
+- Giới hạn còn lại (tủ đồ): tóc dài vẽ đè lên đầu nên tai gấu vẫn lộ phía trên; nón lá hơi che mắt với một số mặt; áo ngắn để lộ một dải quần trắng phía dưới. Chưa lắp tủ đồ vào composition HyperFrames (mới ghép bằng Pillow để duyệt).
+
+#### Cảnh 3 vai từ tủ đồ (2026-11-04)
+
+Dự án thử `tmp/hyperframes-spike/scene3/`, sinh bằng `make_scene.py`, kết quả `tmp/hyperframes-spike/out/scene3.mp4` (11 giây, 1080×1920, 30 fps, 330 khung, render 20 giây, `hyperframes check` 0 lỗi, giải mã toàn bộ OK, chưa có âm thanh).
+
+- Thẻ nhân vật = trang phục + phụ kiện + đầu mặc định; script đọc `wardrobe.json` để đặt áo theo đỉnh thân và phụ kiện vào khớp cổ (phụ kiện nằm ngoài khối thu đầu ×0,72, toạ độ tính từ cổ). Váy tự bỏ chân. Thứ tự lớp: bóng → chân → tay → áo → đầu → phụ kiện, nên tay áo che gốc tay.
+- Vai: Mẹ (áo bà ba hoa, tóc xoăn) x=185, Bố (ba lỗ, hói tóc bạc, râu mép) x=540, Con (sơ mi học sinh, húi cua) x=895; rig ×2,45, hông ở y=1400; nền `bg_90s_living_room`. Phụ đề trong khung trắng viền đen, tên người nói tô màu.
+- Hành động là các hàm sinh lệnh GSAP an toàn khi tua: `walk` (đổi 3 khung chân, di chuyển, nhún, vung tay), `talk` (gật đầu + nhún), `gesture` (tay ngửa vung), `point_right`, `shock` (đầu bật + dang tay), `angry_shake`, `cry`, `face` (đổi đầu biểu cảm), thở lệch nhịp cho từng vai. Kịch bản thử: con đi vào khoe điểm 10 → mẹ hỏi → con "môn ngủ trưa" → bố sốc, mẹ lắc đầu giận → bố chỉ tay mắng → con khóc, mẹ cười đểu.
+- Bài học bố cục: vai phải đứng cách nhau đủ xa (~355 px ở ×2,45) và người bị chỉ phải đứng cạnh người chỉ, nếu không tay bị vai khác che (lớp vẽ sau đè lớp trước).
+- Chưa có: lời đọc/âm thanh và đồng bộ miệng theo tiếng, nhìn nghiêng/quay lưng, bước đi theo hướng, bộ tự dàn cảnh từ kịch bản.
+
+#### Tách mặt và mốc mặt (2026-11-04)
+
+Lý do: mỗi đầu biểu cảm #9–#18 là một hình vẽ riêng, mũi/miệng nằm lệch nhau và khuôn đầu cũng hơi khác nhau, nên râu đặt theo một toạ độ cố định bị lệch khi đổi mặt (người dùng phát hiện ở râu của Bố). Người dùng yêu cầu "dù làm meme nhưng cũng phải chuẩn".
+
+- `python scripts/build_rig_faces.py` → `assets/Meme_Animation_Asset_Pack/rig/faces/`: `head_base.png` (đầu trống #5, bỏ hai vạch cổ), `face_<tên>.png` cho 10 mặt (nói, lo, giận, sốc, khóc, buồn, cười, cười đểu, ngáp, chu môi), `faces.json`, `preview_landmarks.jpg`.
+- Tách mặt: vùng trong đầu = bao lồi của vùng trắng nối với trán (giữ được nước mắt chạm viền, bỏ tai); lớp mặt = nét tối trong vùng đó (co vào 3 px để bỏ viền), alpha theo độ tối. Mỗi mặt được căn về đầu trống theo bề rộng và tâm của vùng trong đầu.
+- Mốc mặt (mắt trái/phải, đáy mũi, mép trên/dưới miệng, tâm và bề rộng miệng) lấy từ các mảng nét đã đánh số; mảng nào là mắt/mũi/miệng được chọn bằng mắt trên ảnh đánh số và ghi trong `FEATURES` (đo tự động bằng chiếu hàng/cột sai ở mặt sốc, cười vì mũi dính miệng). Mày dính mắt thì lấy đáy mảng; mặt cười có mũi dính nếp má thì đáy mũi = mép trên miệng − 3.
+- Rig mới: đầu = `head_base` ×0,6372 (cùng cỡ đầu cũ), cằm (86,5, 143) đặt tại khớp cổ. Mỗi biểu cảm là một nhóm "lớp mặt + đồ đeo mặt đặt theo mốc của chính mặt đó"; đổi biểu cảm = bật/tắt nhóm. Tóc và mũ đặt một chỗ trên đầu trống nên khớp với mọi mặt.
+- `wardrobe.json` lên version 2: tóc/mũ có `at` (toạ độ đầu), `anchor`, `scale`; đồ đeo mặt có `per_face` cho 10 mặt (kính ở giữa hai mắt, rộng 2,1–2,15 lần khoảng cách mắt, nghiêng theo mắt; râu mép giữa đáy mũi và mép trên miệng, rộng 0,95 lần miệng; râu dê dưới mép dưới miệng; khẩu trang từ trên đáy mũi tới dưới miệng; má hồng dưới mắt). Ảnh duyệt `preview_face_items.jpg`: mọi đồ đeo mặt trên đủ 10 mặt.
+- Cảnh 3 vai dựng lại theo rig mới: `tmp/hyperframes-spike/out/scene3_v2.mp4` (11 giây, 330 khung, render 16 giây, check 0 lỗi, giải mã OK). Râu của Bố nằm đúng giữa mũi và miệng qua các mặt nói/sốc/giận/lo.
+
+#### Lời đọc cho cảnh 3 vai (2026-11-04)
+
+- `tmp/hyperframes-spike/scene3/make_voice.py` tạo từng câu thoại bằng `videostudio.speech_worker` (VieNeu, Python và cache của StoryForge như pipeline), giọng tra bằng lớp `Voices` như pipeline (API HTTP không trả đường dẫn mẫu clone). Ghi `assets/voice/<n>_<vai>.wav` + `voice.json` (độ dài đo bằng ffprobe); chạy lại bỏ qua câu không đổi chữ/giọng. 5 câu mất khoảng 39 giây trên GPU.
+- Giọng: Bố = Thiện Minh (nam, Bắc, kể chuyện; giọng người dùng hay dùng), Mẹ = clone "Vương Bờm - nữ", Con = clone "Gấu hài hước - nữ cao". Số "10" đọc thành "mười" trong lời, phụ đề vẫn ghi "10". Mức âm từng câu: trung bình −18 đến −19 dB, đỉnh −2 đến −5 dB.
+- `make_scene.py` dựng timeline từ `voice.json`: con đi vào im lặng 1,1 giây, mỗi câu cách nhau 0,35 giây, khoảng lặng 1,2 giây cho phản ứng sốc, giữ 1,2 giây cuối; phụ đề và hành động (nói/gật, tay, đổi mặt, chỉ tay, khóc) bám đúng đầu/cuối từng câu. Mỗi câu là một `<audio>` có `data-start`.
+- Kết quả `tmp/hyperframes-spike/out/scene3_voice.mp4`: 14,3 giây, 1080×1920, 30 fps, 429 khung, AAC 48 kHz stereo, render 24 giây, giải mã OK. `silencedetect` cho thấy tiếng bắt đầu ở 1,16 / 3,59 / 6,00 / 8,97 / 11,12 giây, lệch phụ đề dưới 0,1 giây (khoảng lặng đầu câu của TTS); mean −20,9 dB, max −2,0 dB.
+- Chưa có: nhạc nền và tiếng động (miệng nhép: xem mục dưới).
+
+#### Miệng nhép theo tiếng (2026-11-04)
+
+- `scripts/build_rig_faces.py` tách thêm miệng của mỗi mặt: lấy đúng các mảng "miệng" trong `FEATURES`, nới 3 px để lấy cả viền môi mờ → `mouth_<tên>.png` và `face_<tên>_nomouth.png` (cùng khung với `head_base`); `faces.json` có `file_nomouth`, `mouth_file`, `mouth_pivot` = (tâm miệng, mép trên miệng).
+- Rig: trong mỗi nhóm mặt, miệng là một khối 0×0 đặt tại `mouth_pivot`; nhép = co giãn theo chiều dọc quanh mép trên (môi trên đứng yên, môi dưới đóng/mở), nên giữ đúng kiểu miệng của biểu cảm. Ba mức: khép 0,35 (nhỏ hơn thì miệng thành sợi chỉ), nửa 0,65, mở 1,0; không nói thì về 1,0 (miệng tự nhiên của biểu cảm).
+- Độ mở lấy từ âm lượng từng khung hình (30 lần/giây) của chính câu thoại: RMS → dB, làm mượt 2 khung, so với mức 95% của câu (dưới 24 dB coi là im); < 0,3 khép, < 0,7 nửa, còn lại mở; mỗi hình giữ tối thiểu 2 khung để không giật; khung cuối luôn khép. Đổi hình bằng `tl.set` (an toàn khi tua). Thống kê lưu ở `scene3/lipsync.json` (mỗi câu khoảng 1/3 mở, 1/3 nửa, 1/3 khép).
+- Kết quả `tmp/hyperframes-spike/out/scene3_lipsync.mp4` (14,3 giây, 429 khung, render 24 giây, check 0 lỗi, giải mã OK); `lipsync_frames.jpg` đặt miệng của Con cạnh cột âm lượng từng khung để soát.
+- Đây là nhép theo năng lượng âm thanh, không khớp từng âm vị (a/o/m...). Muốn khớp âm vị cần căn chỉnh lời–tiếng (forced alignment), chưa làm.
+
+#### SFX cho cảnh 3 vai (2026-11-04)
+
+- Nhạc nền không dùng theo yêu cầu của người dùng; chỉ có hiệu ứng âm thanh.
+- Thư viện: `data/editor-sfx/` (do `ensure_sfx_library` của VideoStudio tạo; 4 file tổng hợp bằng toán, giấy phép CC0, không lấy mẫu thu âm): `whoosh`, `click`, `impact`, `chime`. Thư mục `data/` nằm ngoài git.
+- `make_scene.py` ghi `sfx.json` theo mốc lời đọc và hành động: whoosh lúc con đi vào; click đầu mỗi câu thoại (5 lần); impact khi bố sốc; whoosh khi bố chỉ tay; chime khi con khóc và mẹ cười đểu.
+- `make_sfx.py` trộn thành `assets/sfx.wav`: đặt mỗi hiệu ứng đúng thời điểm (adelay), gain riêng từng loại, track nhân 1,4, amix không chuẩn hoá, giới hạn đỉnh 0,89 để không clip. `<audio id="sfx">` trong composition phát track này.
+- Kiểm tra: đo mức âm 0,12 giây tại mỗi điểm đặt đều có tiếng và đoạn trước đó im (chime trùng đuôi click cách 0,3 giây). File `tmp/hyperframes-spike/out/scene3_sfx.mp4`: 14,3 giây, 429 khung, render 24 giây, giải mã OK; mức âm trung bình −20,4 dB, đỉnh −1,6 dB.
+
 Tiêu chí cuối là video tự chạy hết, giữ nguồn/checkpoint và không cần can thiệp khi chỉ thiếu motion tùy chọn. Có demo đẹp hoặc unit test không đủ để mặc định thay renderer cho mọi video. Các mục triển khai tương ứng vẫn để chưa hoàn thành trong TODO.

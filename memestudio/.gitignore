@@ -1,0 +1,15 @@
+# installed by `npm install` (HyperFrames + its Chrome download live outside the repo)
+node_modules/
+# rendered videos and frame checks
+out/
+snap*/
+# generated per episode: run engine/make_voice.py, make_episode.py, make_sfx.py again to rebuild
+episodes/*/assets/
+episodes/*/index.html
+episodes/*/voice.json
+episodes/*/sfx.json
+episodes/*/staging.json
+episodes/*/hyperframes.json
+episodes/*/meta.json
+episodes/*/.hyperframes/
+__pycache__/

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "id": "sfx-whoosh",
+      "kind": "audio",
+      "name": "Whoosh",
+      "path": "D:\\Projects\\videostudio\\data\\editor-sfx\\whoosh.wav",
+      "duration": 0.65,
+      "sha256": "8f2cd34d3f38cf5481dcdebaa55fd6daff564ff4c5878671cc4bd208c6c69954",
+      "source": "videostudio-procedural-synthesis-v1",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Original mathematical synthesis by VideoStudio; no sampled recordings."
+    },
+    {
+      "id": "sfx-impact",
+      "kind": "audio",
+      "name": "Impact",
+      "path": "D:\\Projects\\videostudio\\data\\editor-sfx\\impact.wav",
+      "duration": 0.55,
+      "sha256": "f31c8ce48b00c7b3b0ca72d413efaee1c88d3191a0f19310018feb02933d9d2a",
+      "source": "videostudio-procedural-synthesis-v1",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Original mathematical synthesis by VideoStudio; no sampled recordings."
+    },
+    {
+      "id": "sfx-chime",
+      "kind": "audio",
+      "name": "Chime",
+      "path": "D:\\Projects\\videostudio\\data\\editor-sfx\\chime.wav",
+      "duration": 0.9,
+      "sha256": "5b5eabfa8ee8cc8e8c856c08c6d413a38a6d42c0fb261b491ad458f769c30cdb",
+      "source": "videostudio-procedural-synthesis-v1",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Original mathematical synthesis by VideoStudio; no sampled recordings."
+    },
+    {
+      "id": "sfx-click",
+      "kind": "audio",
+      "name": "Click",
+      "path": "D:\\Projects\\videostudio\\data\\editor-sfx\\click.wav",
+      "duration": 0.12,
+      "sha256": "4b5857a3685ca688bcaa431172b17b812ac95e48656159f709a5b05274902258",
+      "source": "videostudio-procedural-synthesis-v1",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Original mathematical synthesis by VideoStudio; no sampled recordings."
+    }
+  ]
+}
