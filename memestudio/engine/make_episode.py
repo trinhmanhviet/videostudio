@@ -21,6 +21,7 @@ import shutil
 import sys
 import wave
 from pathlib import Path
+from html import escape
 
 import numpy as np
 
@@ -188,7 +189,9 @@ SCENE_ORDER, _seen = [], {}
 for b in BEATS:
     if not SCENE_ORDER or SCENE_ORDER[-1]['scene'] != b['scene']:
         _seen[b['scene']] = _seen.get(b['scene'], 0) + 1
-        sid = b['scene'] if _seen[b['scene']] == 1 else f"{b['scene']}_{_seen[b['scene']]}"
+        # Instance ids must not collide with a real scene named e.g. room_2
+        # when the story returns to room for a second time.
+        sid = f'block_{len(SCENE_ORDER):04}'
         SCENE_ORDER.append({'id': sid, 'scene': b['scene'], 'start': 0.0 if not SCENE_ORDER else b['start'] - 0.15, 'beats': []})
     SCENE_ORDER[-1]['beats'].append(b)
 for n, sc in enumerate(SCENE_ORDER):
@@ -543,13 +546,24 @@ caps, audio = [], []
 for b in BEATS:
     end = (b['react'][1] if b.get('react') else b['end'] + GAP)
     caps.append(f'<div id="cap{b["i"]}" class="cap clip" data-start="{b["start"]:.3f}" data-duration="{end - b["start"]:.3f}">'
-                f'<span>{b.get("caption", b["text"])}</span></div>')
+                  f'<span>{escape(b.get("caption", b["text"]))}</span></div>')
     audio.append(f'<audio id="v{b["i"]}" src="{b["file"]}" data-start="{b["start"]:.3f}" data-duration="{b["dur"]:.3f}" data-volume="1"></audio>')
-audio.append(f'<audio id="sfx" src="assets/sfx.wav" data-start="0" data-duration="{D}" data-volume="1"></audio>')
+if SCRIPT.get('sfx_enabled', True):
+    audio.append(f'<audio id="sfx" src="assets/sfx.wav" data-start="0" data-duration="{D}" data-volume="1"></audio>')
+if not SCRIPT.get('captions_enabled', True):
+    caps = []
+def _band_font_size(lines, base=92, target_chars=14, min_size=48):
+    m = max((len(str(l)) for l in lines), default=1)
+    if m <= target_chars:
+        return base
+    return max(min_size, int(base * target_chars / m))
+
 shutil.copyfile(MS / 'node_modules' / 'gsap' / 'dist' / 'gsap.min.js', A / 'gsap.min.js')   # gsap 3.13.0, local
 shutil.copyfile(Path('C:/Windows/Fonts/arialbd.ttf'), A / 'arialbd.ttf')                              # Vietnamese glyphs
-t1, t2 = SCRIPT['title']
-p1, p2 = SCRIPT['payoff']
+t1, t2 = map(escape, SCRIPT['title'])
+p1, p2 = map(escape, SCRIPT['payoff'])
+t_size = _band_font_size(SCRIPT['title'])
+p_size = _band_font_size(SCRIPT['payoff'])
 html = f'''<!doctype html>
 <html lang="vi" data-resolution="portrait">
   <head>
@@ -562,8 +576,8 @@ html = f'''<!doctype html>
       html, body {{ width: 1080px; height: 1920px; overflow: hidden; background: #f3ead6; }}
       #root {{ position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: "Bold", Arial, sans-serif; background: #f3ead6; }}
       .deco {{ position: absolute; }}
-      .band {{ position: absolute; left: 0; width: 1080px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 5; }}
-      .band b {{ display: block; font-size: 92px; line-height: 1.12; color: #2b1a0e; letter-spacing: 1px;
+      .band {{ position: absolute; left: 40px; width: 1000px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 5; overflow: hidden; }}
+      .band b {{ display: block; line-height: 1.12; color: #2b1a0e; letter-spacing: 1px; word-break: break-word;
                  text-shadow: -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 4px 4px 0 #fff, 0 7px 0 #e9b44c; }}
       #win {{ position: absolute; left: {WIN_X}px; top: {WIN_Y}px; width: {WIN_W}px; height: {WIN_H}px; overflow: hidden; background: #ddd; z-index: 2;
               border-top: 8px solid #2b1a0e; border-bottom: 8px solid #2b1a0e; }}
@@ -594,8 +608,8 @@ html = f'''<!doctype html>
         <div style="position:absolute;left:-80px;top:420px;width:520px;height:160px;background:#e98a3a;transform:rotate(14deg)"></div>
         <div style="position:absolute;right:-90px;top:80px;width:260px;height:260px;background:#3fbf9f;transform:rotate(-24deg)"></div>
       </div>
-      <div id="title" class="band clip" data-start="0" data-duration="{D}" style="top:60px;height:400px"><b>{t1}</b><b>{t2}</b></div>
-      <div id="payoff" class="band clip" data-start="0" data-duration="{D}" style="top:1290px;height:420px"><b>{p1}</b><b>{p2}</b></div>
+      <div id="title" class="band clip" data-start="0" data-duration="{D}" style="top:60px;height:400px;font-size:{t_size}px"><b style="font-size:{t_size}px">{t1}</b><b style="font-size:{t_size}px">{t2}</b></div>
+      <div id="payoff" class="band clip" data-start="0" data-duration="{D}" style="top:1290px;height:420px;font-size:{p_size}px"><b style="font-size:{p_size}px">{p1}</b><b style="font-size:{p_size}px">{p2}</b></div>
       <div id="win" class="clip" data-start="0" data-duration="{D}">{''.join(sets)}
       </div>
       {''.join(caps)}
@@ -620,5 +634,5 @@ for name, body in (('hyperframes.json', {'paths': {'assets': 'assets'}}), ('meta
     {'asset': a, 't': round(t, 3), 'gain': g} for a, t, g in sorted(sfx, key=lambda e: e[1])]}, indent=1), encoding='utf-8')
 (HERE / 'staging.json').write_text(json.dumps({'duration': D, 'scenes': [
     {'id': s['id'], 'start': round(s['start'], 2), 'end': round(s['end'], 2), 'marks': s['x']} for s in SCENE_ORDER],
-    'camera': CAM}, ensure_ascii=False, indent=1), encoding='utf-8')
+    'camera': CAM, 'beats': [{'index': b['i'], 'start': b['start'], 'end': b['end'], 'duration': b['dur']} for b in BEATS]}, ensure_ascii=False, indent=1), encoding='utf-8')
 print(f'{len(BEATS)} beats, {len(SCENE_ORDER)} scenes, {D:.1f} s, {len(CAM)} shots, {len(sfx)} sfx, {len(js)} timeline calls')

@@ -1014,6 +1014,8 @@ class Pipeline:
                 all_new_scenes.append(s)
         return {'narration':' '.join(s['narration'] for s in all_new_scenes),'source_paths':previous.get('source_paths',[]),'scenes':all_new_scenes,'chapters':chapters}
     def speech(self,j,check):
+        from . import meme_animation
+        if meme_animation.enabled(j):return meme_animation.speech(self,j,check)
         # Requested seconds guide script planning; natural speech sets the timeline.
         check();script=j['checkpoints']['script']
         revision=Path(j['output'])/'narration-attempt-00'
@@ -1591,6 +1593,8 @@ class Pipeline:
         result=write_captions(j['checkpoints']['speech']['utterances'],p)
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
+        from . import meme_animation
+        if meme_animation.enabled(j):return meme_animation.music(self,j,check)
         """Music parts reuse the same Stable Audio models; unload once after the last part."""
         if j.get('request',{}).get('workflow_mode')=='meme':
             from . import meme_pipeline;j=meme_pipeline.music_job(j)

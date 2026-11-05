@@ -1,0 +1,30 @@
+{
+  "speed": 1.15,
+  "start": 0.15,
+  "gap": 0.12,
+  "react": 0.45,
+  "tail": 0.6,
+  "title": ["BẠN TÔI VIẾT SÁCH", "AI MỚI LÀ TÁC GIẢ"],
+  "payoff": ["TƯỞNG ĐÂU THIÊN TÀI", "HÓA RA NHỜ VỢ"],
+  "narrator_voice": "fixture:selected",
+  "cast": {
+    "toi": {"name": "Tôi", "costume": "ao_phong_xanh", "acc": ["toc_hui_cua"], "face": "noi", "voice": "fixture:selected"},
+    "ban": {"name": "Bạn", "costume": "so_mi_caro", "acc": ["toc_dung_nguoc", "kinh_can"], "face": "noi", "voice": "fixture:selected"},
+    "vo": {"name": "Vợ", "costume": "ao_ba_ba_hoa", "acc": ["toc_bui_cao"], "face": "gian", "voice": "fixture:selected"}
+  },
+  "scenes": {
+    "quan_cafe": {"bg": "bg_coffee_shop", "cast": ["toi", "ban"]},
+    "o_nha": {"bg": "bg_kitchen", "cast": ["ban", "vo"]}
+  },
+  "beats": [
+    {"scene": "quan_cafe", "who": "N", "focus": "toi", "text": "Bạn tôi bảo vừa viết xong một cuốn sách.", "emo": {"toi": "noi", "ban": "cuoi_deu"}, "act": [["gesture", "toi"]]},
+    {"scene": "quan_cafe", "who": "ban", "focus": "ban", "text": "Từng câu từng chữ đều là công sức của tôi.", "emo": {"toi": "soc", "ban": "noi"}, "act": [["point", "ban", "toi"]]},
+    {"scene": "quan_cafe", "who": "N", "focus": "toi", "text": "Tôi hỏi bí quyết sáng tác là thức khuya sao.", "emo": {"toi": "lo", "ban": "cuoi"}, "act": [["lean", "toi", "ban"]]},
+    {"scene": "quan_cafe", "who": "ban", "focus": "ban", "text": "Không đâu, chỉ cần cưới đúng người là được.", "emo": {"toi": "soc", "ban": "cuoi_deu"}, "punch": {"who": "toi", "face": "soc"}},
+    {"scene": "o_nha", "who": "N", "focus": "ban", "text": "Về nhà nó ngồi trước máy tính rất nghiêm túc.", "emo": {"ban": "noi", "vo": "gian"}, "act": [["press", "ban"]]},
+    {"scene": "o_nha", "who": "vo", "focus": "vo", "text": "Anh chép xong chương em đọc tối qua chưa.", "emo": {"ban": "lo", "vo": "gian"}, "act": [["angry", "vo"]]},
+    {"scene": "o_nha", "who": "N", "focus": "ban", "text": "Nó gật đầu rồi sửa ngay tên tác giả.", "emo": {"ban": "lo", "vo": "cuoi"}, "act": [["ding", 1]]},
+    {"scene": "o_nha", "who": "ban", "focus": "ban", "text": "Vợ tôi viết sách, còn tôi chỉ viết tên mình.", "emo": {"ban": "cuoi_deu", "vo": "gian"}, "punch": {"who": "vo", "face": "gian"}}
+  ],
+  "adaptation_note": "Synthetic self-contained engine contract fixture."
+}

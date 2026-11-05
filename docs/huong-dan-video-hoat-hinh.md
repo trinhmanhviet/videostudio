@@ -3,6 +3,13 @@
 Tài liệu này để giao cho một AI agent tự tạo video hoạt hình meme gấu trúc tiếng Việt trên máy Windows của người dùng.
 Mọi thứ nằm trong **`D:\Projects\videostudio\memestudio`**. Đọc hết trước khi làm. Mọi lệnh đã được chạy thử ngày 2026-11-04.
 
+Từ 2026-11-05, engine này cũng có luồng **tự động trong VideoStudio**: chọn Video meme Gấu trúc →
+Hoạt hình HyperFrames, nhập truyện và chọn giọng. CLI, checkpoint và phục hồi được mô tả ở
+[meme-video.md](meme-video.md#hoạt-hình-tự-động-hyperframes-2026-11-05).
+Hướng dẫn bên dưới dành cho dựng từng tập thủ công; không chạy `make_voice.py` trên job tự động.
+Pipeline tự động tạo WAV tại stage speech và render chỉ dùng lại chúng. Job tự động nằm trong thư mục
+data của dự án video, tách khỏi `memestudio/episodes`.
+
 Tập mẫu làm theo đúng quy trình này: `memestudio\out\ep1.mp4` (60,7 giây, "Bố tôi lần đầu đi thang máy").
 Kịch bản của nó: `memestudio\episodes\ep1\script.json`, đọc kỹ để làm theo.
 

@@ -90,7 +90,7 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','flow_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','flow_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
 
     if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
@@ -113,6 +113,9 @@ def validate_request(data):
     if 'workflow_mode' in data and mode not in ('research','provided_narration','meme'):raise ValueError('workflow_mode must be research, provided_narration or meme')
 
     if mode=='meme' and not 15<=d<=600:raise ValueError('Video meme dài 15–600 giây')
+
+    if 'meme_engine' in data and (mode!='meme' or not isinstance(data['meme_engine'],str) or data['meme_engine'] not in ('pillow','hyperframes')):
+        raise ValueError('meme_engine requires meme mode and must be pillow or hyperframes')
 
     if mode=='provided_narration' and not any(line.strip() for line in data['idea'].splitlines()):raise ValueError('Provide at least one non-empty narration line')
 

@@ -179,6 +179,20 @@ class Exchanges:
         with self.store.db() as c:r=c.execute('SELECT id FROM connector_scopes WHERE job=?',(job,)).fetchone()
         if not r:raise PermanentError('Job lacks real-click connector scope')
         return r['id']
+    def restart_cancelled_script_scope(self,c,job):
+        """Explicitly resume writing in a fresh session, preserving old real receipts.
+
+        Called inside the retry transaction only after a cancelled script is
+        quiescent. Detaching the old session removes its unanswered request from
+        bridge_pending without fabricating an AI response or deleting history.
+        """
+        row=c.execute('SELECT s.id,m.bridge FROM connector_scopes s LEFT JOIN connector_bridge_memberships m ON m.scope=s.id WHERE s.job=?',(job,)).fetchone()
+        if row is None:return
+        replacement=str(uuid.uuid4());bridge=row['bridge'] or row['id']
+        c.execute('UPDATE connector_scopes SET job=NULL WHERE id=?',(row['id'],))
+        c.execute('INSERT INTO connector_scopes(id,job,created) VALUES(?,?,?)',(replacement,job,time.time()))
+        c.execute('INSERT INTO connector_bridge_memberships VALUES(?,?)',(replacement,bridge))
+        self.store.event(c,job,'script','connector_session_replaced',json.dumps({'previous':row['id'],'scope':replacement}))
     def pending(self,scope):
         with self.store.db() as c:
             known=c.execute('SELECT id FROM connector_scopes WHERE id=?',(scope,)).fetchone()

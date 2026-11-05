@@ -32,6 +32,9 @@ def _save(path, value):
 
 
 def plan(pipeline, job, check):
+    from . import meme_animation
+    if meme_animation.enabled(job):
+        return meme_animation.plan(pipeline, job, check)
     from .meme_script import MUSIC_PROMPT
     _log(pipeline, job, 'plan', 'Chế độ video meme Gấu trúc: kiểm tra điều kiện chạy...')
     import os
@@ -59,6 +62,9 @@ def research(pipeline, job, check):
 
 
 def script(pipeline, job, check):
+    from . import meme_animation
+    if meme_animation.enabled(job):
+        return meme_animation.script(pipeline, job, check)
     from .media import asset
     from .meme_catalog import load_catalog
     from .meme_script import MemeScriptError, build_prompt, to_checkpoint, validate
@@ -121,6 +127,9 @@ def script(pipeline, job, check):
 
 
 def images(pipeline, job, check):
+    from . import meme_animation
+    if meme_animation.enabled(job):
+        return meme_animation.images(pipeline, job, check)
     """No image generation: confirm every asset the script uses still exists and record what is used."""
     from .meme_catalog import load_catalog
     check()
@@ -147,6 +156,9 @@ def music_job(job):
 
 
 def render(pipeline, job, check):
+    from . import meme_animation
+    if meme_animation.enabled(job):
+        return meme_animation.render(pipeline, job, check)
     from .meme_catalog import load_catalog
     from .meme_render import render_meme
     from .output_layout import publish_video
@@ -157,6 +169,9 @@ def render(pipeline, job, check):
 
 
 def verify(pipeline, job, check):
+    from . import meme_animation
+    if meme_animation.enabled(job):
+        return meme_animation.verify(pipeline, job, check)
     from .media import run, verify as verify_media
     from .meme_render import ensure_clean_audio
     _log(pipeline, job, 'verify', 'Đang kiểm tra video meme thành phẩm...')

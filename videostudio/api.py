@@ -216,7 +216,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         except KeyError:raise HTTPException(404,'Job not found')
         resume_cancelled=(data or {}).get('resume_cancelled') is True
         resumable_stages=('speech','images','subtitles','music','render','verify')
-        if j['state']!='failed' and not (j['state']=='cancelled' and resume_cancelled and j['stage'] in resumable_stages and 'script' in j['checkpoints']):
+        from .meme_animation import enabled as animated_meme
+        resume_script=(j['stage']=='script' and animated_meme(j) and all(s in j['checkpoints'] for s in ('plan','research')))
+        if j['state']!='failed' and not (j['state']=='cancelled' and resume_cancelled and ((j['stage'] in resumable_stages and 'script' in j['checkpoints']) or resume_script)):
             raise HTTPException(400,'Chỉ thử lại job lỗi hoặc chủ động tiếp tục job đã hủy sau bước kịch bản')
         stage=j['stage']
         new_idea=(data or {}).get('idea')
@@ -224,7 +226,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             c.execute('BEGIN IMMEDIATE')
             current=c.execute('SELECT state,cancel,stage FROM jobs WHERE id=?',(job_id,)).fetchone()
             if current['state'] not in ('failed','cancelled'):raise HTTPException(400,'Trạng thái job đã thay đổi; hãy làm mới trang')
-            if current['state']=='cancelled' and (not resume_cancelled or current['stage'] not in resumable_stages):raise HTTPException(400,'Cần chủ động chọn tiếp tục job đã hủy')
+            if current['state']=='cancelled' and (not resume_cancelled or (current['stage'] not in resumable_stages and not resume_script)):raise HTTPException(400,'Cần chủ động chọn tiếp tục job đã hủy')
             if c.execute("SELECT 1 FROM flow_account_changes WHERE job=? AND json_extract(data,'$.needs_quiescence')=1",(job_id,)).fetchone():raise HTTPException(409,'Flow chưa xác nhận dừng thao tác cũ; hãy chuẩn bị lại kết nối Flow trước')
             try:reject_retired_job(c,job_id)
             except ValueError as error:raise HTTPException(409,str(error))
@@ -233,6 +235,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 c.execute('UPDATE jobs SET request=? WHERE id=?',(json.dumps(req,ensure_ascii=False),job_id))
             if stage:
                 c.execute('DELETE FROM attempts WHERE job=? AND stage=?',(job_id,stage))
+            if current['state']=='cancelled' and resume_script:
+                exchanges.restart_cancelled_script_scope(c,job_id)
             c.execute("UPDATE jobs SET state='queued',cancel=0,error=NULL,next_at=0,updated=? WHERE id=?",(time.time(),job_id))
             store.event(c,job_id,stage,'retried','Người dùng yêu cầu thử lại bước '+str(stage))
         return public_job(store.get(job_id))
@@ -274,8 +278,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             except Exception:pass
         return {'events':events,'comfy_log':comfy_log}
     @app.get('/api/preflight')
-    def preflight(scope:str|None=None):
+    def preflight(scope:str|None=None,workflow_mode:str|None=None,meme_engine:str|None=None):
         result=pipeline.preflight(scope) if isinstance(pipeline,Pipeline) else pipeline.preflight()
+        from .meme_animation import preflight_for_request
+        result=preflight_for_request(result,{'workflow_mode':workflow_mode,'meme_engine':meme_engine})
         result['checks']=[{**c,'message':c.get('message',c.get('detail',''))} for c in result['checks']]
         return result
     def browser_endpoint():
@@ -600,6 +606,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 except KeyError:raise HTTPException(422,'Unknown connector bridge root')
                 if not compatible:raise HTTPException(409,'Reload VideoStudio extension 0.3.0, refresh this Studio tab and start the bridge before creating another video')
             pf=pipeline.preflight(request.headers.get('x-connector-scope')) if isinstance(pipeline,Pipeline) else pipeline.preflight()
+            from .meme_animation import preflight_for_request
+            pf=preflight_for_request(pf,normalized)
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
         if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp') in ('chrome','extension') and not scope:

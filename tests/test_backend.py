@@ -207,9 +207,9 @@ class ApiTests(unittest.TestCase):
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const html=fs.readFileSync(process.argv[1],'utf8'),start=html.indexOf('let availableFlowBatchSizes=[1];'),stop=html.indexOf('refreshFlowBatchChoices();',start)+'refreshFlowBatchChoices();'.length;
 assert(start>0 && stop>start);
-const provider={value:'flow'},selector={value:'1',disabled:false,options:[1,3,5,10].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''};
+const workflow={value:'research'},provider={value:'flow'},selector={value:'1',disabled:false,options:[1,3,5,10].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''},providerNote={textContent:''};
 let response={flow_batch_sizes:[1]},fail=false;
-const context=vm.createContext({$:id=>({'#imageProvider':provider,'#flowBatchSize':selector,'#flowBatchNote':note,'#imageProviderNote':{textContent:''}}[id]),api:async()=>{if(fail)throw Error('offline');return response},console});
+const context=vm.createContext({$:id=>({'#workflowMode':workflow,'#imageProvider':provider,'#flowBatchSize':selector,'#flowBatchNote':note,'#imageProviderNote':providerNote}[id]),api:async()=>{if(fail)throw Error('offline');return response},console});
 vm.runInContext(html.slice(start,stop),context);
 (async()=>{
  response={flow_batch_sizes:[1,10]};await vm.runInContext('refreshFlowBatchChoices()',context);
@@ -217,6 +217,9 @@ vm.runInContext(html.slice(start,stop),context);
  vm.runInContext('flowBatchChoiceInitialized=false',context);await vm.runInContext('refreshFlowBatchChoices()',context);
  assert.equal(selector.value,'10');
  selector.value='1';selector.onchange();await vm.runInContext('refreshFlowBatchChoices()',context);assert.equal(selector.value,'1');
+ workflow.value='meme';selector.value='10';vm.runInContext('updateFlowBatchChoices()',context);
+ assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
+ workflow.value='research';vm.runInContext('updateFlowBatchChoices()',context);assert.equal(selector.disabled,false);
  selector.value='10';provider.value='chatgpt';vm.runInContext('updateFlowBatchChoices()',context);
  assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
  provider.value='flow';fail=true;await vm.runInContext('refreshFlowBatchChoices()',context);

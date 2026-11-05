@@ -11,3 +11,9 @@ dist/
 FlowAPI/flow_profile/
 FlowAPI/cookie*.txt
 FlowAPI/*.har
+
+# Generated output and API resume receipts (never store story text).
+out/
+*.auto-meme.json
+*.auto-meme.json.*.tmp
+*.mp4.*.part

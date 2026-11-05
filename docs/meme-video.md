@@ -8,10 +8,54 @@ Trong VideoStudio chọn **Cách chuẩn bị nội dung → Video meme Gấu tr
 (ví dụ "Lần đầu tôi dạy bố dùng điện thoại thông minh"), chọn giọng, đặt 45–90 giây rồi bấm tạo.
 Lựa chọn "Ảnh cảnh tạo bằng" không dùng trong chế độ này.
 
+### Hoạt hình tự động HyperFrames (2026-11-05)
+
+Trong chế độ meme, **Bộ dựng → Hoạt hình HyperFrames** là lựa chọn mặc định cho video mới.
+Đây là engine đã dùng cho các tập mẫu `ep2–ep5`, được nối vào hàng đợi và checkpoint của VideoStudio.
+Dán câu chuyện hoặc nhập ý tưởng, chọn giọng rồi bấm tạo. Tool tự chọn trang phục/phụ kiện khác nhau,
+biểu cảm từng câu, hành động, toàn/trung/cận cảnh, phản ứng và nhép miệng theo WAV ở 30fps.
+Giọng đã chọn áp dụng cho cả lời kể và nhân vật; tốc độ mặc định **1,15×**, pitch theo thanh chỉnh.
+Một job tạo một MP4, một mạch truyện có câu chốt; thời lượng nhập là mục tiêu viết, thời lượng thực đo từ lời đọc.
+Chưa có tính năng tự xuất nhiều tập từ một lần nhập.
+
+Kịch bản dài hơn khoảng 90 giây được viết theo **dàn ý chung + các phần tối đa 20 câu mục tiêu/lượt**
+(ví dụ 7 phút: 9 phần, tổng mục tiêu 168 câu). Mỗi phản hồi nhỏ được kiểm tra và lưu trong
+`data/<job-id>/animation-parts/`; nhân vật, quần áo và danh sách cảnh dùng chung suốt video.
+Ngắt kết nối giữa chừng thì tiếp tục từ phần còn thiếu, không viết lại các phần đã hoàn tất và không tự rút ngắn video.
+Các phần viết được ghép thành một kịch bản trước khi tạo giọng; không phải nhiều video riêng.
+Nếu chủ động hủy ở bước kịch bản hoạt hình, có nút **Tiếp tục job đã hủy**. Tool giữ job/checkpoint,
+tách phiên ChatGPT cũ đang kẹt khỏi hàng chờ và mở phiên mới cho cùng job; lịch sử phản hồi thật vẫn được giữ.
+
+- HyperFrames dùng rig/tủ đồ/nền trong `memestudio/assets`, GSAP và SFX cục bộ, **không gọi Flow/Comfy để tạo ảnh hoặc nhạc**.
+  Bản tích hợp này có lời đọc + SFX; không tạo nhạc nền. Có thể tắt phụ đề hoặc SFX qua các cờ API hiện có.
+- Cần Node.js 22+, FFmpeg/FFprobe, Python có NumPy/Pillow và `npm ci` trong `memestudio`.
+  VieNeu và bridge ChatGPT dùng cấu hình hiện có của VideoStudio. Không dùng trình duyệt Flow để render.
+- Mỗi job có thư mục riêng: `E:\Videos\<dự án>\data\<job-id>\episode`; không ghi vào các tập mẫu.
+  File thành phẩm vẫn ở `E:\Videos\<dự án>\video-<job-id>.mp4`.
+- Speech tạo/cache từng câu, áp dụng tempo/pitch rồi dựng timeline đo thật gồm khoảng nghỉ và phản ứng.
+  Images xác nhận bản sao tạo hình riêng; music ghi checkpoint im lặng có chủ đích; render chỉ ghép nội dung đã chuẩn bị.
+  Retry render không gọi AI/TTS. Receipt giữ đường dẫn/hash MP4 đã xuất để retry không xuất trùng.
+- Chọn **Pillow** để dùng bộ dựng cũ. Request/job cũ không có `meme_engine` vẫn dùng Pillow, không đổi checkpoint.
+
+CLI gọi cùng API, không tạo pipeline riêng (chạy server và bridge trước):
+
+```powershell
+python auto_meme.py --input story.txt --out out/video.mp4
+python auto_meme.py --idea "Bố lần đầu dùng điện thoại thông minh" --seconds 60 --voice "clone:<id>" --out out/video2.mp4
+```
+
+Mặc định giọng Vương Bờm của máy hiện tại; máy khác dùng `--voice` với ID trong danh sách giọng.
+CLI tự tìm bridge sẵn sàng; có thể chỉ định `--scope` và `--server` localhost.
+Receipt `<output>.auto-meme.json` lưu khóa idempotency/job, không lưu nguyên câu chuyện. Chạy lại cùng lệnh sẽ
+theo dõi cùng job; nếu job failed thì mở Studio và retry từ bước lỗi. Không ghi đè file MP4 đã tồn tại.
+
+Mã tích hợp: `meme_animation_script.py` (hợp đồng AI + danh mục thật), `meme_animation.py` (các stage),
+`auto_meme.py` (CLI). Thêm đồ/mặt cho engine xem [hướng dẫn hoạt hình](huong-dan-video-hoat-hinh.md).
+
 Muốn AI chọn nền 90s hoặc thôn quê, ghi rõ bối cảnh trong ý tưởng ("thập niên 90, ở quê"). Tag nền trong
 prompt là tên file bỏ `bg_`, dấu `_` đổi thành khoảng trắng (ví dụ `bg_90s_rural_pond` → "90s rural pond").
 
-## Luồng chạy
+## Luồng chạy của bộ dựng Pillow cũ
 | Bước | Chế độ meme làm gì |
 |---|---|
 | plan | Kiểm tra điều kiện chạy; nạp asset mới trong `new/` nếu có |
