@@ -3,7 +3,8 @@ node_modules/
 # rendered videos and frame checks
 out/
 snap*/
-# generated per episode: run engine/make_voice.py, make_episode.py, make_sfx.py again to rebuild
+# episode scripts & generated per episode (keep local only)
+episodes/*/script.json
 episodes/*/assets/
 episodes/*/index.html
 episodes/*/voice.json
