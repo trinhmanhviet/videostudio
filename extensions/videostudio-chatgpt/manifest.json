@@ -1,16 +1,51 @@
 {
   "manifest_version": 3,
   "name": "VideoStudio ChatGPT Bridge",
-  "version": "0.3.16",
+  "version": "0.3.21",
   "description": "VideoStudio ChatGPT bridge with an optional signed-in Flow request bridge.",
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["http://localhost:8877/*", "https://chatgpt.com/*"],
-  "optional_permissions": ["scripting"],
-  "optional_host_permissions": ["https://flow.google.com/*", "http://localhost:8878/*", "http://127.0.0.1:8877/*", "http://127.0.0.1:8878/*"],
-  "background": {"service_worker": "background.js", "type": "module"},
-  "action": {"default_title": "VideoStudio · Flow request", "default_popup": "flow/popup.html"},
+  "permissions": [
+    "storage",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:8877/*",
+    "https://chatgpt.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://flow.google.com/*",
+    "http://localhost:8878/*",
+    "http://127.0.0.1:8877/*",
+    "http://127.0.0.1:8878/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "VideoStudio · Flow request",
+    "default_popup": "flow/popup.html"
+  },
   "content_scripts": [
-    {"matches": ["http://localhost:8877/*"], "js": ["studio.js"], "run_at": "document_idle"},
-    {"matches": ["https://chatgpt.com/*"], "js": ["send-button.js", "logical-text.js", "chatgpt.js"], "run_at": "document_idle"}
+    {
+      "matches": [
+        "http://localhost:8877/*"
+      ],
+      "js": [
+        "studio.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "send-button.js",
+        "logical-text.js",
+        "chatgpt.js"
+      ],
+      "run_at": "document_idle"
+    }
   ]
 }

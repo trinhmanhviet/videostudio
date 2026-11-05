@@ -36,6 +36,27 @@ def _safe_relative_output_folder(value):
     if any(part in ('','.', '..') for part in parts):raise PermanentError('Unsafe Comfy output folder')
     return '/'.join(parts)
 
+def _comfy_restarted_since(timestamp):
+    """True only when Comfy is listening and every Comfy process started after `timestamp` (crash + relaunch)."""
+    import subprocess
+    try:
+        probe_run=subprocess.run(['powershell','-NoProfile','-File',str(ROOT/'scripts'/'comfy_host_state.ps1')],
+            capture_output=True,text=True,timeout=20,check=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        state=json.loads(probe_run.stdout)
+    except (OSError,ValueError,subprocess.SubprocessError):
+        return False
+    starts=state.get('comfy_started_unix')
+    if isinstance(starts,(int,float)):starts=[starts]
+    return bool(state.get('listening')) and isinstance(starts,list) and bool(starts) and min(float(s) for s in starts)>timestamp+1
+
+def _archive_lost_receipt(receipt,pid):
+    """Move a receipt whose prompt died with Comfy into receipts/; allowed once per receipt file."""
+    archive=receipt.parent/'receipts'
+    if archive.is_dir() and any(archive.glob(receipt.stem+'-lost-*.json')):return False
+    archive.mkdir(exist_ok=True)
+    shutil.move(str(receipt),str(archive/f'{receipt.stem}-lost-{pid}.json'))
+    return True
+
 def music_graph(prompt,seconds,seed,prefix):
     return {'1':node('CheckpointLoaderSimple',ckpt_name='stable_audio_3_medium_base.safetensors'),
     '2':node('CLIPLoader',clip_name='t5gemma_b_b_ul2.safetensors',type='stable_audio',device='default'),
@@ -420,7 +441,16 @@ class Pipeline:
                     running=[x[1] for x in queue.get('queue_running',[])]
                     pending=[x[1] for x in queue.get('queue_pending',[])]
                     if pid not in running and pid not in pending:
-                        raise PermanentError('Comfy receipt is absent from history and queue; refusing duplicate '+('scene-image ' if strict_resume else '')+'submission')
+                        # Comfy keeps history/queue only in memory. If every Comfy process started after this
+                        # receipt was written, the old prompt died with the crashed process: resubmit once.
+                        if _comfy_restarted_since(receipt.stat().st_mtime) and _archive_lost_receipt(receipt,pid):
+                            if getattr(self,'store',None):
+                                stage='music' if 'music' in kind else 'images'
+                                try:self.store.log(j['id'],stage,'Comfy đã khởi động lại sau khi nhận yêu cầu cũ; yêu cầu cũ đã mất, gửi lại một lần.')
+                                except Exception:pass
+                            pid=None
+                        else:
+                            raise PermanentError('Comfy receipt is absent from history and queue; refusing duplicate '+('scene-image ' if strict_resume else '')+'submission')
             if not receipt.exists() or pid is None:
                 check()
                 if not idle_queue():
@@ -450,7 +480,13 @@ class Pipeline:
                 record_owned(self.gpu_ownership,pid)
             deadline=time.monotonic()+900
             while time.monotonic()<deadline:
-                check();r=c.get('history/'+pid);r.raise_for_status();h=r.json().get(pid)
+                check()
+                try:r=c.get('history/'+pid)
+                except httpx.TransportError as error:
+                    # Comfy died or hung mid-generation: retry later; the retry relaunches Comfy if it is gone
+                    # and resubmits once when the new process started after the receipt.
+                    raise RuntimeError('Comfy mất kết nối khi đang tạo ('+type(error).__name__+'); sẽ kiểm tra, mở lại Comfy và thử lại') from error
+                r.raise_for_status();h=r.json().get(pid)
                 if h:
                     if h.get('status',{}).get('status_str')=='error':raise PermanentError('Comfy generation failed')
                     prefix=graph['8']['inputs']['filename_prefix']

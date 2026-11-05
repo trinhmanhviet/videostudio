@@ -547,7 +547,9 @@ function renderJobCard(j){
   return n;
 }
 
+function supportsImageEditing(j){return j.request?.workflow_mode!=='meme'&&j.checkpoints?.images?.image_provider!=='meme_assets';}
 function appendJobActionButtons(n,j){
+  if(!supportsImageEditing(j))return;
   if(j.checkpoints?.speech&&['failed','completed','succeeded','awaiting_visual_review'].includes(j.status)&&!n.querySelector('.job-reset-images')){
     const b=text('button','🔄 Tạo lại bộ ảnh','secondary job-reset-images');
     b.type='button';
@@ -611,6 +613,8 @@ function updateHeroCompletedVideo(filtered){
   let optionalEdit=$('#heroOptionalEditBtn');
   if(!optionalEdit){optionalEdit=text('button','Bàn dựng mới (tùy chọn)','secondary');optionalEdit.id='heroOptionalEditBtn';optionalEdit.type='button';editBtn.after(optionalEdit);}
   optionalEdit.onclick=()=>openOptionalWorkspace(latestCompleted.id);
+  const imageEditing=supportsImageEditing(latestCompleted);
+  for(const button of [editBtn,resetBtn,optionalEdit])button.hidden=!imageEditing;
   const btnChange=$('#heroChangeVoiceBtn');
   btnChange.onclick=async()=>{
     const newVoice=$('#heroChangeVoiceSelect').value;

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .core import PermanentError
+from .core import PermanentError, digest
 
 MODE = 'meme'
 SCRIPT_ATTEMPTS = 3
@@ -66,13 +66,28 @@ def script(pipeline, job, check):
     folder = Path(job['output'])
     folder.mkdir(parents=True, exist_ok=True)
     feedback = []
-    last = None
+    last_path = None
     for attempt in range(SCRIPT_ATTEMPTS):
         check()
-        _log(pipeline, job, 'script', f'Đang viết kịch bản meme và danh sách cảnh (lượt {attempt + 1}/{SCRIPT_ATTEMPTS})...')
         path = folder / f'meme-script-attempt-{attempt:02}.json'
+        rejected = path.with_suffix('.rejected.json')
+        if path.is_file() and rejected.is_file():
+            try:
+                rejection = json.loads(rejected.read_text(encoding='utf8'))
+                if rejection.get('sha256') == digest(path):
+                    feedback = [rejection['error']]
+                    last_path = path
+                    continue  # Known bad reply: advance the repair budget without parsing it again.
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        _log(pipeline, job, 'script', f'Đang viết kịch bản meme và danh sách cảnh (lượt {attempt + 1}/{SCRIPT_ATTEMPTS})...')
         if path.is_file():
-            raw = json.loads(path.read_text(encoding='utf8'))
+            try:
+                raw = json.loads(path.read_text(encoding='utf8'))
+            except ValueError as error:
+                feedback = ['Saved reply is not valid JSON: ' + str(error)[:300]]
+                _save(rejected, {'sha256': digest(path), 'error': feedback[0]})
+                continue
         else:
             try:
                 raw = pipeline.llm_json(build_prompt(job['request'], catalog, feedback), check)
@@ -80,18 +95,22 @@ def script(pipeline, job, check):
                 feedback = [str(error)[:300]]
                 continue
             _save(path, raw)
-        last = raw
+        last_path = path
         try:
             normalized = validate(raw, catalog, job['request'])
             break
         except MemeScriptError as error:
             feedback = [str(error)]
+            _save(rejected, {'sha256': digest(path), 'error': feedback[0]})
             _log(pipeline, job, 'script', 'Kịch bản chưa đúng danh mục asset, nhờ viết lại: ' + str(error)[:300])
     else:
-        if last is None:
+        if last_path is None:
             raise PermanentError('Không nhận được kịch bản meme hợp lệ: ' + '; '.join(feedback)[:500])
-        # Last resort: keep the story, coerce unknown asset ids to safe defaults instead of failing the video.
-        normalized = validate(last, catalog, job['request'], lenient=True)
+        # One final local coercion after the bounded repair attempts; preserve raw receipts.
+        try:
+            normalized = validate(json.loads(last_path.read_text(encoding='utf8')), catalog, job['request'], lenient=True)
+        except (ValueError, TypeError) as error:
+            raise PermanentError('Không có đủ nội dung meme để phục hồi: ' + str(error)[:500]) from error
         _log(pipeline, job, 'script', 'Dùng bản kịch bản cuối, tự thay các asset không có trong danh mục bằng mặc định.')
     result = to_checkpoint(normalized, catalog.fingerprint())
     final = folder / 'meme-script.json'

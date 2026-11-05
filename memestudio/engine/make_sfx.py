@@ -32,6 +32,14 @@ def main():
     plan = json.loads((HERE / 'sfx.json').read_text(encoding='utf-8'))
     duration = float(plan['duration'])
     events = plan['events']
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    if not events:
+        # amix has no zero-input form; emit a real, correctly timed PCM track.
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i',
+                        'anullsrc=r=48000:cl=stereo', '-t', f'{duration:.3f}',
+                        '-c:a', 'pcm_s16le', str(OUT)], check=True)
+        print('sfx track:', OUT, 0, 'events,', round(duration, 2), 's')
+        return
     manifest = json.loads((LIB / 'manifest.json').read_text(encoding='utf-8'))
     known = {a['id'].replace('sfx-', ''): a for a in manifest['assets']}
     cmd = ['ffmpeg', '-v', 'error', '-y']

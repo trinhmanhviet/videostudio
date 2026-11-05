@@ -396,3 +396,20 @@ test('dismissing a root video without a control slot removes only its local sess
   const snapshot=await w.send({kind:'snapshot'});assert.equal(snapshot.active,true);assert.equal(snapshot.sessions.length,0);assert.equal(snapshot.job,null);
   assert.equal((await w.send({kind:'connection'})).active,true);
 });
+
+test('an explicitly unsent owned composer can resume once on the same tab and attempt',async()=>{
+ const w=worker();await w.send({kind:'start',scope:root});await w.claim(a);const tab=w.created[0].id;
+ await w.send({kind:'uncertain',id:'same',attempt:1,reason:'Composer unavailable or occupied',send_attempted:false},w.chat(tab));
+ w.seen({ok:true,visibleUser:null,visibleReply:null,unsentOwnPrompt:true});
+ const result=await w.send({kind:'reconcile',scope:a});assert.equal(result.status,'resumed-unsent');assert.equal(w.created.length,1);
+ const slot=(await w.send({kind:'snapshot'})).sessions[0];assert.equal(slot.job.attempt,1);assert.equal(slot.job.phase,'dispatching');
+ assert.equal(w.messages.filter(m=>m.kind==='deliver').length,2);
+ await w.send({kind:'uncertain',id:'same',attempt:1,reason:'Composer unavailable or occupied',send_attempted:false},w.chat(tab));
+ await w.send({kind:'reconcile',scope:a});assert.equal(w.messages.filter(m=>m.kind==='deliver').length,2);assert.equal(w.created.length,1);
+});
+
+test('an empty owned tab with stale Studio draft resumes only with explicit no-Send evidence',async()=>{
+ const w=worker();await w.send({kind:'start',scope:root});await w.claim(a);const tab=w.created[0].id;
+ await w.send({kind:'uncertain',id:'same',attempt:1,reason:'Composer unavailable or occupied',send_attempted:false},w.chat(tab));w.seen({ok:true,visibleUser:null,visibleReply:null,unsentOwnPrompt:false,staleToolDraft:true});
+ assert.equal((await w.send({kind:'reconcile',scope:a})).status,'resumed-unsent');assert.equal(w.created.length,1);
+});

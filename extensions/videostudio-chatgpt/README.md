@@ -100,3 +100,9 @@ Reload the extension in `chrome://extensions`, then reload the Studio page once.
 Run `node scripts/test_extension_background.cjs` for a headed Chrome renderer check with a separate fresh test profile and intercepted pages. The test avoids Playwright's automatic focus emulation and background-throttling overrides; its test-only CDP connection never touches the owner's browser. It verifies `visibilityState === 'hidden'`, `hasFocus() === false`, one Send, received/recoverable reply, and unchanged foreground input/focus. Evidence is written to `data/extension-background/verification.json`. This short fixture check does not establish live ChatGPT compatibility, long-idle timer behavior, or operation while Chrome/the computer is closed/asleep.
 
 Run `node --test extensions/videostudio-chatgpt/tests/*.test.mjs` from the repository root for unit/runtime-fixture tests.
+
+
+## Tự gắn lại content script (0.3.21)
+
+- Worker tự gắn lại content script sau reload/update extension, không reload trang hay làm mất bản nháp form. Quyền `scripting` chỉ dùng trên các host đã khai báo; không thêm host/cookie/debugger permission.
+- Kết nối ChatGPT không tự bật khi mở tool: bấm **Start** trong float như trước, rồi **Test chữ** nếu cần.

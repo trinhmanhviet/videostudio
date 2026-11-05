@@ -90,7 +90,7 @@ test('idle alarm reconciles each exact pending slot read-only and throttles unre
   assert.equal(w.values.videostudio_bridge_v2.sessions[0].job.phase,'uncertain');assert.equal(w.values.videostudio_bridge_v2.sessions[1].job.text,'child answer');
   assert.ok(w.values.videostudio_bridge_v2.sessions.every(s=>s.job.attempt===1));
   await w.fire();assert.equal(w.messages.length,2);
-  w.advance(26000);await w.fire();assert.equal(w.messages.length,3);assert.equal(w.messages.at(-1).tab,20);
+  w.advance(26000);await w.fire();assert.equal(w.messages.length,4);assert.deepEqual(w.messages.slice(-2).map(m=>m.tab),[20,21]); // Unaccepted replies are refreshed read-only too.
 });
 
 test('a forbidden or offline receipt cannot block another slot or bridge heartbeat',async()=>{
@@ -133,4 +133,10 @@ test('sent and dispatching requests recover from exact accepted receipts even if
   await w.fire();
   const slots=w.values.videostudio_bridge_v2.sessions;assert.equal(slots[0].job.text,'root receipt');assert.equal(slots[1].job.text,'child receipt');assert.ok(slots.every(s=>s.job.phase==='reply'&&s.job.attempt===1));
   assert.equal(w.requests.filter(r=>r.method==='POST').length,1);assert.ok(w.messages.every(m=>m.kind==='inspect'));
+});
+
+test('reply cached during a UI load error can refresh read-only before server acceptance',async()=>{
+ const initial=pendingBridge();initial.sessions[0].job.phase='reply';initial.sessions[0].job.text='This response could not load';initial.sessions[1].active=false;
+ const w=worker(initial);await w.flush();w.seen(()=>({visibleUser:'YÊU CẦU STUDIO same\nhello',visibleReply:'{"connection_test":"videostudio","ok":true}'}));await w.fire();
+ assert.equal(w.values.videostudio_bridge_v2.sessions[0].job.text,'{"connection_test":"videostudio","ok":true}');assert.ok(w.messages.every(m=>m.kind==='inspect'));
 });

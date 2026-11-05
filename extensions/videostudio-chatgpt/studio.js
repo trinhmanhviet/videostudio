@@ -1,6 +1,10 @@
 (()=>{
   const scope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1];
   if(location.origin!=='http://localhost:8877'||(!scope&&location.pathname!=='/'))return;
+  const STUDIO_BUILD='0.3.21';
+  if(globalThis.__VideoStudioStudioBuild===STUDIO_BUILD&&document.querySelector('[data-videostudio-manager]'))return;
+  for(const stale of document.querySelectorAll('[data-videostudio-manager]'))stale.remove();
+  globalThis.__VideoStudioStudioBuild=STUDIO_BUILD;
   const root=document.createElement('aside');root.dataset.videostudioManager='';
   root.style.cssText='position:fixed;right:12px;bottom:12px;z-index:2147483647;font:13px system-ui;max-width:calc(100vw - 24px)';
   const shadow=root.attachShadow({mode:'closed'});
@@ -342,7 +346,7 @@
     if(retired)return;retired=true;active=false;render();for(const timer of intervals)clearInterval(timer);
     for(const [node,type,handler,capture] of listeners)node.removeEventListener(type,handler,capture);
     try{chrome.runtime.onMessage.removeListener(onReply);}catch{}
-    status.textContent='Tiện ích đã tải lại. Tải lại trang Studio một lần.';$('#badge').title=status.textContent;
+    status.textContent='Tiện ích đang nối lại; kết nối sẽ tự phục hồi.';$('#badge').title=status.textContent;
   }
   const invalid=error=>/Extension context invalidated|Receiving end does not exist|Cannot access a chrome\.runtime/i.test(String(error?.message??error));
   const send=async message=>{
@@ -350,7 +354,7 @@
     try{const response=await chrome.runtime.sendMessage(message);if(response?.transient){const error=Error(response.error);error.transient=true;throw error;}return response;}
     catch(error){if(invalid(error)){retire();return {ok:false,error:'Extension context invalidated'};}throw error;}
   };
-  const requireReply=async message=>{const response=await send(message);if(!response?.ok)throw Error(response?.error||'Extension did not respond');return response;};
+  const requireReply=async message=>{const response=await send(message);if(!response?.ok){if(response?.error==='Not owner'){active=false;render();}throw Error(response?.error||'Extension did not respond');}return response;};
   const api=async(path,options)=>{
     let response;try{response=await fetch(path,{credentials:'same-origin',signal:AbortSignal.timeout(path.startsWith('/api/browser/profile')?45000:15000),...options});}catch(error){error.transient=true;throw error;}
     if(!response.ok){let detail;try{const body=await response.json();detail=typeof body.detail==='string'?body.detail:typeof body.error==='string'?body.error:null;}catch{}const error=Error(`Studio HTTP ${response.status}${detail?': '+detail:''}`);error.transient=response.status>=500||[408,429].includes(response.status);throw error;}
@@ -491,28 +495,27 @@
       errors.delete(target);
     }catch(error){showError(error,target);}finally{working.delete(target);render();}
   }
-  listen(startButton,'click',async event=>{
-    if(!event.isTrusted||active||retired||starting)return;
+  async function startBridge(){
+    if(retired||starting||stopping||active)return;
     starting=true;render();
     try{
       const saved=await requireReply({kind:'connection'});
       let target=saved.scope||scope;
       if(saved.scope){
         if(!/^[0-9a-f-]{36}$/i.test(saved.scope)||saved.url!==`/story-video/projects/${saved.scope}/production`)throw Error('Invalid saved bridge');
-        // Attest the saved root still exists before handing the owner tab over.
         await api(`/api/connector/bridges/${encodeURIComponent(saved.scope)}/sessions`);
       }
       if(!target){const session=await api('/api/connector/sessions',{method:'POST'});if(session.project_id!==session.run_id||session.url!==`/story-video/projects/${session.project_id}/production`)throw Error('Invalid connector scope');target=session.project_id;}
       await requireReply({kind:'start',scope:target,...(saved.scope?{reconnect:true}:{})});
       if(target!==scope){
-        // The old page must not emit a heartbeat for its unrelated scope.
         active=false;generation++;setStatus('Đang nối lại kết nối đã lưu…');
         location.assign(`/story-video/projects/${target}/production`);return;
       }
       active=true;render();setStatus('Đã kết nối');await heartbeat();await tick();
     }catch(error){if(!retired)setStatus(`Không thể Start: ${error.message}`);}
     finally{starting=false;render();}
-  });
+  }
+  listen(startButton,'click',event=>{if(event.isTrusted&&!active)void startBridge();});
   listen(smokeButton,'click',async event=>{if(!event.isTrusted||!active||!scope||retired)return;try{await api('/api/connector/smoke/'+scope,{method:'POST'});setStatus('Test chữ đã xếp hàng.');await tick();}catch(error){showError(error);}});
   listen(stopButton,'click',async event=>{
     if(!event.isTrusted||retired||stopping)return;
@@ -521,7 +524,7 @@
     catch(error){showError(error);}
     finally{stopping=false;render();}
   });
-  function onReply(message,_sender,reply){if(message?.kind!=='reply'||retired)return;if(active)void tick().catch(()=>{});reply({ok:true});}
+  function onReply(message,_sender,reply){if(message?.kind==='connection_ping'){reply({ok:!retired,version:STUDIO_BUILD,active});return;}if(message?.kind!=='reply'||retired)return;if(active)void tick().catch(()=>{});reply({ok:true});}
   chrome.runtime.onMessage.addListener(onReply);
   for(const mode of ['clean','debug','stop'])listen($('#browser-'+mode),'click',event=>{if(event.isTrusted)void controlBrowser(mode);});
   listen($('#browser-refresh'),'click',event=>{if(event.isTrusted)void refreshBrowser();});
@@ -554,4 +557,5 @@
   listen(document,'visibilitychange',()=>{if(document.visibilityState==='visible'&&active&&!retired)void heartbeat().then(()=>tick()).catch(()=>{});});
   render();void refreshBrowser();
   if(scope)void requireReply({kind:'snapshot'}).then(async state=>{if(retired)return;hydrate(state);setStatus(active?'Đã kết nối':'Đã dừng');if(active){await heartbeat();void tick();}else await loadSessions();}).catch(error=>showError(error));
+
 })();

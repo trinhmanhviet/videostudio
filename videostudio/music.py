@@ -9,9 +9,10 @@ def normalize_music_levels(source,folder,check,ffmpeg='ffmpeg'):
     from .core import digest
     import json
     source=Path(source);identity=digest(source);out=Path(folder)/('music-normalized-'+identity[:12]+'.wav')
-    # Sparse floating/MP3 reconstruction overshoot can be attenuated. Silence,
-    # nonfinite samples or widespread full-scale saturation are still rejected.
-    raw=audio_report(source,check,ffmpeg,peak_limit=4.0)
+    # Float/MP3 reconstruction may exceed full scale before gain is applied.
+    # Analyze the finite, audible source without treating those peaks as a final
+    # mix. The normalized PCM below must still pass the strict clipping check.
+    raw=audio_report(source,check,ffmpeg,peak_limit=4.0,clipped_fraction_limit=1.0)
     if not out.is_file():
         partial=out.with_suffix('.part.wav')
         run([ffmpeg,'-v','error','-y','-i',source,'-af','loudnorm=I=-20:TP=-2:LRA=7,alimiter=limit=0.89:level=false','-ar','48000','-ac','2','-c:a','pcm_s24le',partial],check)

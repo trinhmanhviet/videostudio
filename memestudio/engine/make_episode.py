@@ -15,6 +15,7 @@ Run from memestudio/:  python engine/make_voice.py episodes/<tập>  ;  python e
                        python engine/make_sfx.py episodes/<tập>    ;  node node_modules/hyperframes/bin/hyperframes.mjs render episodes/<tập> ...
 Check a script only:   python engine/make_episode.py episodes/<tập> --check
 """
+import hashlib
 import json
 import shutil
 import sys
@@ -116,8 +117,39 @@ SCRIPT = json.loads((HERE / 'script.json').read_text(encoding='utf-8'))
 _problems = validate(SCRIPT)
 if _problems:
     fail('script.json lỗi:\n' + '\n'.join(_problems))
-VOICE = json.loads((HERE / 'voice.json').read_text(encoding='utf-8'))
-if len(VOICE) != len(SCRIPT['beats']) or any(v['who'] != b['who'] for v, b in zip(VOICE, SCRIPT['beats'])):
+
+def voices_match(script, rows):
+    """Verify the requested source and measured WAV without loading the speech runtime."""
+    if not isinstance(rows, list) or len(rows) != len(script['beats']):
+        return False
+    try:
+        speed = float(script.get('speed', 1.0))
+        for n, (row, beat) in enumerate(zip(rows, script['beats'])):
+            who = beat['who']
+            vid = script['narrator_voice'] if who == 'N' else script['cast'][who]['voice']
+            if (row['n'] != n or row['who'] != who or row['text'] != beat['text']
+                    or row['voice'] != vid or row['resolved_voice']['id'] != vid
+                    or row['file'] != f'assets/voice/{n:02}_{who}.wav'):
+                return False
+            payload = {'t': beat['text'], 'v': row['resolved_voice']}
+            if speed != 1.0:
+                payload['s'] = speed
+            ident = hashlib.sha256(json.dumps(payload,
+                                               sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            wav = HERE / row['file']
+            if (row['source_id'] != ident or wav.with_suffix('.id').read_text() != ident
+                    or hashlib.sha256(wav.read_bytes()).hexdigest() != row['wav_sha256']):
+                return False
+    except (KeyError, TypeError, OSError):
+        return False
+    return True
+
+
+try:
+    VOICE = json.loads((HERE / 'voice.json').read_text(encoding='utf-8'))
+except (OSError, ValueError):
+    fail('voice.json thiếu hoặc lỗi: chạy lại engine/make_voice.py')
+if not voices_match(SCRIPT, VOICE):
     fail('voice.json không khớp script.json: chạy lại engine/make_voice.py')
 HEAD_SCALE, HEAD_CHIN, HEADS = 0.6372, FACES['head']['chin'], list(FACES['faces'])
 NECK, SHOULDER_L, SHOULDER_R = (3, -52), (-29, -52), (31, -52)
@@ -130,7 +162,11 @@ S = 2.6                                     # rig units -> stage px
 HIP_Y = 760                                 # hip line on stage
 MARKS = {1: [800], 2: [560, 1040], 3: [430, 800, 1170]}
 SHOTS = {'wide': (None, 1.0), 'medium': (-150, 1.9), 'close': (-250, 3.0)}   # (aim above hip, zoom)
-START, GAP, REACT, TAIL, FPS = 0.3, 0.3, 0.8, 1.0, 30
+START = float(SCRIPT.get('start', 0.15 if SCRIPT.get('speed', 1.0) != 1.0 else 0.3))
+GAP = float(SCRIPT.get('gap', 0.12 if SCRIPT.get('speed', 1.0) != 1.0 else 0.3))
+REACT = float(SCRIPT.get('react', 0.45 if SCRIPT.get('speed', 1.0) != 1.0 else 0.8))
+TAIL = float(SCRIPT.get('tail', 0.6 if SCRIPT.get('speed', 1.0) != 1.0 else 1.0))
+FPS = 30
 
 
 def copy(src, name):
@@ -195,7 +231,7 @@ def character(sc, cid):
     p = {n: copy(PARTS / f'component_{n:03}.png', f'p{n:03}.png') for n in (17, 22, 25, 40, 41, 55)}
     chin = f'left:{-HEAD_CHIN[0]}px; top:{-HEAD_CHIN[1]}px'
     heads = [f'<img src="{copy(PACK / "rig" / "faces" / "head_base.png", "head_base.png")}" alt="" style="{chin}" />']
-    face_items = [CATALOG[a] for a in card['acc'] if CATALOG[a]['kind'] == 'face']
+    face_items = [CATALOG[a] for a in card.get('acc', []) if CATALOG[a]['kind'] == 'face']
     for name in HEADS:
         fd = FACES['faces'][name]
         src = copy(PACK / 'rig' / 'faces' / fd['file_nomouth'], f'face_{name}_nomouth.png')
@@ -209,7 +245,7 @@ def character(sc, cid):
                          f'style="{head_box(item["per_face"][name], item["size"])}" />')
         heads.append(f'<div id="{I}_h_{name}" class="joint" style="opacity:{1 if name == card["face"] else 0}">'
                      + ''.join(inner) + '</div>')
-    for a in card['acc']:
+    for a in card.get('acc', []):
         item = CATALOG[a]
         if item['kind'] != 'face':
             heads.append(f'<img src="{copy(WARD / item["file"], "w_" + a + ".png")}" alt="" style="{head_box(item, item["size"])}" />')

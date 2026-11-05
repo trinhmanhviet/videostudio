@@ -96,21 +96,23 @@ def validate(data, catalog, request, lenient=False):
             if lenient:
                 continue
         shot = raw.get('shot') if raw.get('shot') in SHOTS else None
-        pose = raw.get('pose') if raw.get('pose') in poses else None
-        face = raw.get('face') if raw.get('face') in faces else None
-        prop = raw.get('prop') if raw.get('prop') in props else None
-        partner = raw.get('partner') if raw.get('partner') in poses else None
-        bg = raw.get('bg') if raw.get('bg') in backgrounds else None
-        for field, value, allowed in (('pose', raw.get('pose'), poses), ('face', raw.get('face'), faces),
-                                      ('prop', raw.get('prop'), props), ('partner', raw.get('partner'), poses),
-                                      ('bg', raw.get('bg'), backgrounds)):
-            if value not in (None, '') and value not in allowed:
+        chosen = {}
+        for field, allowed in (('pose', poses), ('face', faces), ('prop', props), ('partner', poses), ('bg', backgrounds)):
+            value = raw.get(field)
+            chosen[field] = value if isinstance(value, str) and value in allowed else None
+            if value not in (None, '') and (not isinstance(value, str) or value not in allowed):
                 problems.append(f'{where}: unknown {field} "{value}"')
-        fx = raw.get('fx') if isinstance(raw.get('fx'), list) else []
-        bad_fx = [f for f in fx if f not in fxs]
+        pose, face, prop, partner, bg = (chosen[k] for k in ('pose', 'face', 'prop', 'partner', 'bg'))
+        fx = raw.get('fx')
+        if fx is None:
+            fx = []
+        elif not isinstance(fx, list):
+            problems.append(f'{where}: fx must be a list of asset IDs')
+            fx = []
+        bad_fx = [f for f in fx if not isinstance(f, str) or f not in fxs]
         if bad_fx:
             problems.append(f'{where}: unknown fx {bad_fx}')
-        fx = [f for f in fx if f in fxs][:2]
+        fx = [f for f in fx if isinstance(f, str) and f in fxs][:2]
         if shot is None:
             problems.append(f'{where}: invalid shot "{raw.get("shot")}"')
             shot = 'close' if face and not pose else 'insert' if prop and not pose and not face else 'wide'

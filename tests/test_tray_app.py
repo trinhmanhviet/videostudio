@@ -1,5 +1,6 @@
 """Tray launcher logic (platform independent; the ctypes window itself is Windows-only)."""
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import sys
@@ -159,7 +160,7 @@ class JobWatcherTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db = Path(self.temp.name) / 'jobs.sqlite3'
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute('CREATE TABLE jobs(id TEXT, state TEXT, stage TEXT, output TEXT, request TEXT)')
             c.execute("INSERT INTO jobs VALUES('old','completed','verify','E:/Videos/a/data/old','{}')")
             c.execute("INSERT INTO jobs VALUES('j1','running','images','E:/Videos/phong-xa/data/j1',?)",
@@ -170,7 +171,7 @@ class JobWatcherTests(unittest.TestCase):
         self.temp.cleanup()
 
     def set_state(self, ident, state):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute('UPDATE jobs SET state=? WHERE id=?', (state, ident))
 
     def test_first_poll_is_silent_then_reports_finished_and_failed_jobs(self):

@@ -34,7 +34,7 @@ def probe(path,ffprobe='ffprobe'):
 
 def asset(path):return {'path':str(Path(path).resolve()),'sha256':digest(path)}
 
-def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05):
+def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05,clipped_fraction_limit=.001):
     import array,math
     raw=run([ffmpeg,'-v','error','-i',path,'-ar','16000','-ac','1','-f','f32le','-'],check)
     if not raw or len(raw)>100000000:raise PermanentError('Empty/oversized audio analysis')
@@ -42,7 +42,7 @@ def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05):
     if not all(math.isfinite(x) for x in values):raise PermanentError('Nonfinite audio samples')
     rms=math.sqrt(sum(x*x for x in values)/len(values));peak=max(abs(x) for x in values)
     clipped=sum(abs(x)>=.999 for x in values)/len(values)
-    if rms<.001 or peak>peak_limit or clipped>.001:raise PermanentError('Silent or clipped audio')
+    if rms<.001 or peak>peak_limit or clipped>clipped_fraction_limit:raise PermanentError('Silent or clipped audio')
     return {'full_decode_ok':True,'finite_samples':True,'rms':rms,'peak':peak,'clipped_fraction':clipped,'semantic_completeness_verified':False}
 
 def visual_track(scenes,output,check,ffmpeg='ffmpeg'):

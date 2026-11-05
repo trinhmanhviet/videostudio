@@ -1,3 +1,4 @@
+import {ensureStudioScripts,ensureChatScript} from './content-recovery.mjs';
 import {start,claim,beginAttempt,retryAttempt,result,studioScope,acknowledge,receiptPath,archivePrevious,migrateBridge,syncBridge,sessionSlot,callbackSlot,bridgeSnapshot,allSlots,receiptMatches} from './protocol.mjs';
 import './flow/background.mjs';
 const KEY='videostudio_bridge_v2';
@@ -18,7 +19,15 @@ async function inspect(tab,id,prompt,matchOnly=false){
   try{const seen=await Promise.race([
     chrome.tabs.sendMessage(tab,{kind:'inspect',id,prompt,...(matchOnly?{match_only:true}:{})}),
     new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('ChatGPT inspection timed out')),3000);}),
-  ]);return seen&&typeof seen==='object'&&'visibleUser' in seen?seen:{visibleUser:null,visibleReply:null,unavailable:true};}catch{return {visibleUser:null,visibleReply:null,unavailable:true};}
+  ]);return seen&&typeof seen==='object'&&'visibleUser' in seen?seen:{visibleUser:null,visibleReply:null,unavailable:true};}catch(error){
+    if(chrome.scripting?.executeScript&&/Receiving end does not exist|Could not establish connection|Extension context invalidated/i.test(String(error?.message??error))){
+      try{if(await ensureChatScript(chrome,tab)){
+        const seen=await chrome.tabs.sendMessage(tab,{kind:'inspect',id,prompt,...(matchOnly?{match_only:true}:{})});
+        if(seen&&typeof seen==='object'&&'visibleUser' in seen)return seen;
+      }}catch{}
+    }
+    return {visibleUser:null,visibleReply:null,unavailable:true};
+  }
   finally{clearTimeout(timer);}
 }
 async function replacementTab(state,slot){
@@ -186,6 +195,11 @@ async function reconcile(state,slot,inspectOnly=false){
   if(slot.job.phase==='dispatching'&&Date.now()-(slot.job.startedAt??Date.now())<30000)return 'pending';
   if(inspectOnly)return 'unresolved';
   if(slot.job.send_attempted===true)return 'awaiting-replacement';
+  if(slot.job.send_attempted===false&&slot.job.reason==='Composer unavailable or occupied'&&(seen.unsentOwnPrompt===true||seen.staleToolDraft===true)){
+    if(slot.job.unsent_resumed)return 'unresolved';
+    slot.job.unsent_resumed=true;slot.job.phase='dispatching';slot.job.reason=null;slot.job.startedAt=Date.now();
+    await put(state);await dispatch(state,slot);return 'resumed-unsent';
+  }
   if(slot.job.attempt>=2)return 'exhausted';
   const priorTab=slot.job.chatTab;
   const tab=await chrome.tabs.create({url:'https://chatgpt.com/',active:false});
@@ -222,6 +236,7 @@ async function heartbeat(state){
   if(!response.ok)throw Error('Bridge heartbeat unavailable');
 }
 async function pulse(){
+  if(chrome.scripting?.executeScript&&chrome.tabs?.query)await ensureStudioScripts(chrome);
   const state=await get();
   if(state?.active!==true||!Number.isInteger(state.studioTab))return;
   let owner;try{owner=await chrome.tabs.get(state.studioTab);}catch{return;}
@@ -230,7 +245,7 @@ async function pulse(){
   // interrupt bridge renewal or another video's exact request recovery.
   try{await heartbeat(state);}catch{}
   const pending=allSlots(state).filter(slot=>slot.active&&!slot.cancelled&&
-    ['sent','uncertain','dispatching'].includes(slot.job?.phase)&&Number.isInteger(slot.job.chatTab)&&slot.ownedTabs?.includes(slot.job.chatTab));
+    ['sent','uncertain','dispatching','reply'].includes(slot.job?.phase)&&Number.isInteger(slot.job.chatTab)&&slot.ownedTabs?.includes(slot.job.chatTab));
   const keys=new Set();
   for(const slot of pending){
     const key=JSON.stringify([slot.scope,slot.job.id,slot.job.version,slot.job.attempt,slot.job.chatTab]);keys.add(key);
@@ -272,7 +287,9 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
     if(message?.kind==='connection'){
       if(!studioPage(sender))throw Error('Studio page required');
       const saved=await get();
-      return {ok:true,scope:saved?.scope??null,url:saved?`/story-video/projects/${saved.scope}/production`:null,active:saved?.active===true};
+      let ownerOpen=false;
+      if(saved)try{const tab=await chrome.tabs.get(saved.studioTab);ownerOpen=tab.url===`http://localhost:8877/story-video/projects/${saved.scope}/production`;}catch{}
+      return {ok:true,scope:saved?.scope??null,url:saved?`/story-video/projects/${saved.scope}/production`:null,active:saved?.active===true,owner:saved?.studioTab===sender.tab.id,owner_open:ownerOpen};
     }
     if(message?.kind==='start'){
       const old=await get();
@@ -420,3 +437,9 @@ if(chrome.alarms?.onAlarm){
   chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===HEARTBEAT_ALARM)void serialize(pulse).catch(()=>{});});
   void serialize(ensureHeartbeatAlarm).catch(()=>{});
 }
+
+// Extension update/restart invalidates old isolated worlds, not the Studio DOM.
+const recoverContent=()=>{if(chrome.scripting?.executeScript&&chrome.tabs?.query)void serialize(()=>ensureStudioScripts(chrome)).catch(()=>{});};
+chrome.runtime.onInstalled?.addListener(recoverContent);
+chrome.runtime.onStartup?.addListener(recoverContent);
+recoverContent();

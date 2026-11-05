@@ -7,6 +7,8 @@ available, so a video never depends on assets that have not been drawn yet.
 """
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import math
 import re
@@ -45,6 +47,8 @@ class CatalogError(ValueError):
 
 
 class Catalog:
+    """Immutable asset snapshot; create a new Catalog after updating source files."""
+
     def __init__(self, pack: Path = PACK):
         self.pack = Path(pack)
         data = json.loads((self.pack / 'catalog' / 'panda.json').read_text(encoding='utf-8'))
@@ -76,6 +80,25 @@ class Catalog:
                 self.backgrounds[ident] = {'id': ident, 'kind': 'bg', 'source': 'file', 'path': path,
                                            'tags': ident[3:].replace('_', ' ')}
 
+        # Read/hash once per catalog, never per rendered frame. Retaining the bytes also
+        # keeps lazily decoded pixels consistent with this snapshot's render receipt.
+        self._contents = {}
+        self._decoded = {}
+        assets = []
+        for group in (self.items, self.backgrounds):
+            for ident, item in sorted(group.items()):
+                record = {key: value for key, value in item.items() if key != 'path'}
+                if 'path' in item:
+                    path = str(item['path'])
+                    if path not in self._contents:
+                        content = item['path'].read_bytes()
+                        self._contents[path] = (hashlib.sha256(content).hexdigest(), content)
+                    record['sha256'] = self._contents[path][0]
+                assets.append(record)
+        self._fingerprint = hashlib.sha256(json.dumps(
+            [CATALOG_VERSION, assets], sort_keys=True, ensure_ascii=False
+        ).encode('utf-8')).hexdigest()[:16]
+
     # ---- queries -------------------------------------------------------------------------
     def ids(self, *kinds):
         return [i for i, item in self.items.items() if item['kind'] in kinds]
@@ -97,26 +120,23 @@ class Catalog:
                 '\n\nBACKGROUNDS:\n' + backgrounds)
 
     def fingerprint(self):
-        """Changes whenever the usable asset set changes (render cache key)."""
-        parts = [str(CATALOG_VERSION)]
-        for ident in sorted(self.items):
-            parts.append(ident + ':' + str(self.items[ident]['size']))
-        for ident in sorted(self.backgrounds):
-            b = self.backgrounds[ident]
-            if b['source'] == 'file':
-                stat = Path(b['path']).stat()
-                parts.append(ident + ':' + str(stat.st_size) + ':' + str(int(stat.st_mtime)))
-            else:
-                parts.append(ident)
-        import hashlib
-        return hashlib.sha256('|'.join(parts).encode()).hexdigest()[:16]
+        """Identity of this snapshot's asset bytes and rendering metadata."""
+        return self._fingerprint
+
+    def _image(self, path, mode):
+        key = (str(path), mode)
+        if key not in self._decoded:
+            digest, content = self._contents[str(path)]
+            loader = _load_rgba if mode == 'RGBA' else _load_rgb
+            self._decoded[key] = loader(digest, content)
+        return self._decoded[key]
 
     # ---- images --------------------------------------------------------------------------
     def sprite(self, ident) -> Image.Image:
         item = self.items.get(ident)
         if not item:
             raise CatalogError('Unknown meme asset: ' + str(ident))
-        return _load_rgba(str(item['path']))
+        return self._image(item['path'], 'RGBA')
 
     def background(self, ident, size) -> Image.Image:
         info = self.backgrounds.get(ident)
@@ -124,19 +144,19 @@ class Catalog:
             raise CatalogError('Unknown meme background: ' + str(ident))
         width, height = size
         if info['source'] == 'file':
-            return _cover(_load_rgb(str(info['path'])), width, height)
+            return _cover(self._image(info['path'], 'RGB'), width, height)
         return procedural_background(ident, width, height)
 
 
 @lru_cache(maxsize=256)
-def _load_rgba(path):
-    with Image.open(path) as image:
+def _load_rgba(content_hash, content):
+    with Image.open(io.BytesIO(content)) as image:
         return image.convert('RGBA')
 
 
 @lru_cache(maxsize=64)
-def _load_rgb(path):
-    with Image.open(path) as image:
+def _load_rgb(content_hash, content):
+    with Image.open(io.BytesIO(content)) as image:
         return image.convert('RGB')
 
 
@@ -217,17 +237,28 @@ def procedural_background(ident, width, height):
 
 
 def refresh_library(pack: Path = PACK):
-    """Re-import prop_/fx_ drawings dropped into new/ when they are newer than the library index."""
+    """Re-import prop_/fx_ drawings when source names or content change."""
     new = Path(pack) / 'new'
     index = Path(pack) / 'catalog' / 'library.json'
     files = [*new.glob('prop_*.png'), *new.glob('fx_*.png')] if new.is_dir() else []
-    if not files or (index.is_file() and index.stat().st_mtime >= max(f.stat().st_mtime for f in files)):
+    sources = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(files)}
+    previous = {}
+    if index.is_file():
+        try:
+            previous = json.loads(index.read_text(encoding='utf-8'))
+        except (ValueError, OSError):
+            pass
+    if (not files and not previous.get('source_hashes')) or (
+            index.is_file() and previous.get('source_hashes') == sources):
         return False
     import importlib.util
     spec = importlib.util.spec_from_file_location('import_meme_library', ROOT / 'scripts' / 'import_meme_library.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.main(pack)
+    imported = json.loads(index.read_text(encoding='utf-8'))
+    imported['source_hashes'] = sources
+    index.write_text(json.dumps(imported, ensure_ascii=False, indent=1), encoding='utf-8')
     return True
 
 

@@ -1,0 +1,406 @@
+{
+  "speed": 1.15,
+  "title": [
+    "TRÙM ĐÒI NỢ THUÊ",
+    "THÀNH NHÀ VĂN"
+  ],
+  "payoff": [
+    "BÍ QUYẾT ĐỔI ĐỜI",
+    "NHỜ CƯỚI ĐƯỢC VỢ"
+  ],
+  "cast": {
+    "toi": {
+      "name": "Tôi",
+      "costume": "ao_phong_xanh",
+      "acc": [
+        "toc_hui_cua"
+      ],
+      "face": "noi",
+      "voice": "clone:18cad821-0d87-461f-a443-d45db92e36e9"
+    },
+    "ban": {
+      "name": "Dũng",
+      "costume": "so_mi_caro",
+      "acc": [
+        "toc_dung_nguoc",
+        "kinh_can"
+      ],
+      "face": "noi",
+      "voice": "clone:18cad821-0d87-461f-a443-d45db92e36e9"
+    },
+    "vo": {
+      "name": "Vợ",
+      "costume": "ao_ba_ba_hoa",
+      "acc": [
+        "toc_bui_cao"
+      ],
+      "face": "gian",
+      "voice": "clone:18cad821-0d87-461f-a443-d45db92e36e9"
+    }
+  },
+  "narrator_voice": "clone:18cad821-0d87-461f-a443-d45db92e36e9",
+  "scenes": {
+    "quan_cafe": {
+      "bg": "bg_coffee_shop",
+      "cast": [
+        "toi",
+        "ban"
+      ]
+    },
+    "nha_sach": {
+      "bg": "bg_store",
+      "cast": [
+        "toi",
+        "ban"
+      ]
+    },
+    "quan_cafe_2": {
+      "bg": "bg_coffee_shop",
+      "cast": [
+        "toi",
+        "ban"
+      ]
+    },
+    "o_nha": {
+      "bg": "bg_kitchen",
+      "cast": [
+        "vo",
+        "ban"
+      ]
+    },
+    "ban_viet": {
+      "bg": "bg_office",
+      "cast": [
+        "ban"
+      ]
+    },
+    "ket": {
+      "bg": "bg_coffee_shop",
+      "cast": [
+        "toi",
+        "ban"
+      ]
+    }
+  },
+  "beats": [
+    {
+      "scene": "quan_cafe",
+      "who": "N",
+      "focus": "toi",
+      "text": "Tôi có thằng bạn thân, xưa chuyên đi đòi nợ thuê.",
+      "emo": {
+        "toi": "noi",
+        "ban": "cuoi_deu"
+      },
+      "act": [
+        [
+          "gesture",
+          "toi"
+        ]
+      ]
+    },
+    {
+      "scene": "quan_cafe",
+      "who": "N",
+      "focus": "ban",
+      "text": "Mặt nó bặm trợn đến mức chó nhìn thấy cũng phải né.",
+      "emo": {
+        "ban": "gian"
+      }
+    },
+    {
+      "scene": "quan_cafe",
+      "who": "N",
+      "focus": "toi",
+      "text": "Môn Văn tốt nghiệp ngày xưa nó từng bị điểm liệt.",
+      "emo": {
+        "toi": "cuoi",
+        "ban": "lo"
+      },
+      "punch": {
+        "who": "ban",
+        "face": "lo"
+      }
+    },
+    {
+      "scene": "quan_cafe",
+      "who": "N",
+      "focus": "ban",
+      "text": "Vậy mà hôm nay gặp lại, nó tự xưng nhà văn nổi tiếng.",
+      "emo": {
+        "ban": "cuoi_deu",
+        "toi": "soc"
+      },
+      "act": [
+        [
+          "shock",
+          "toi"
+        ]
+      ]
+    },
+    {
+      "scene": "nha_sach",
+      "who": "N",
+      "focus": "ban",
+      "text": "Nó khoe sách nó bán chạy như tôm tươi ngoài chợ.",
+      "emo": {
+        "ban": "cuoi",
+        "toi": "lo"
+      },
+      "act": [
+        [
+          "gesture",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "nha_sach",
+      "who": "N",
+      "focus": "toi",
+      "text": "Độc giả chen nhau xếp hàng dài kín cả con phố.",
+      "emo": {
+        "toi": "soc"
+      }
+    },
+    {
+      "scene": "nha_sach",
+      "who": "N",
+      "focus": "ban",
+      "text": "Mua được một cuốn, ra cổng có người mua lại gấp mười lần.",
+      "emo": {
+        "ban": "cuoi_deu",
+        "toi": "soc"
+      },
+      "punch": {
+        "who": "toi",
+        "face": "soc"
+      }
+    },
+    {
+      "scene": "nha_sach",
+      "who": "toi",
+      "text": "Mày học viết văn ở đâu mà đỉnh cao thế?",
+      "emo": {
+        "toi": "noi",
+        "ban": "noi"
+      },
+      "act": [
+        [
+          "point",
+          "toi",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "quan_cafe_2",
+      "who": "ban",
+      "text": "Tao có học hành gì đâu, tất cả là nhờ mới lấy vợ!",
+      "emo": {
+        "ban": "noi",
+        "toi": "soc"
+      }
+    },
+    {
+      "scene": "quan_cafe_2",
+      "who": "toi",
+      "text": "Mày lấy vợ thì liên quan gì đến chuyện viết tiểu thuyết?",
+      "emo": {
+        "toi": "soc"
+      },
+      "punch": {
+        "who": "ban",
+        "face": "cuoi_deu"
+      }
+    },
+    {
+      "scene": "quan_cafe_2",
+      "who": "ban",
+      "text": "Văn chương là đỉnh cao của sự ấm ức và dồn nén.",
+      "emo": {
+        "ban": "noi",
+        "toi": "lo"
+      },
+      "act": [
+        [
+          "gesture",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "quan_cafe_2",
+      "who": "ban",
+      "text": "Ngày xưa ai làm tao bực là tao đấm luôn.",
+      "emo": {
+        "ban": "gian"
+      },
+      "act": [
+        [
+          "angry",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "o_nha",
+      "who": "N",
+      "focus": "vo",
+      "text": "Nhưng từ khi lấy vợ, bực đến mấy cũng phải nín.",
+      "emo": {
+        "vo": "gian",
+        "ban": "lo"
+      },
+      "act": [
+        [
+          "point",
+          "vo",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "o_nha",
+      "who": "vo",
+      "text": "Ông có im mồm đi rửa bát ngay cho tôi không?",
+      "emo": {
+        "vo": "gian",
+        "ban": "khoc"
+      },
+      "act": [
+        [
+          "angry",
+          "vo"
+        ]
+      ]
+    },
+    {
+      "scene": "o_nha",
+      "who": "N",
+      "focus": "ban",
+      "text": "Vợ quát một câu, nó chỉ biết gật đầu lia lịa.",
+      "emo": {
+        "ban": "khoc",
+        "vo": "gian"
+      },
+      "act": [
+        [
+          "tremble",
+          "ban"
+        ]
+      ],
+      "punch": {
+        "who": "ban",
+        "face": "khoc"
+      }
+    },
+    {
+      "scene": "ban_viet",
+      "who": "N",
+      "focus": "ban",
+      "text": "Không được cãi bằng mồm, uất ức nó dồn hết vào bàn phím.",
+      "emo": {
+        "ban": "gian"
+      },
+      "act": [
+        [
+          "press",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "ban_viet",
+      "who": "N",
+      "focus": "ban",
+      "text": "Cứ mỗi lần cãi thua vợ, nó lại viết thêm một chương.",
+      "emo": {
+        "ban": "noi"
+      }
+    },
+    {
+      "scene": "ban_viet",
+      "who": "N",
+      "focus": "ban",
+      "text": "Vợ nhắc rửa bát quét nhà, nó hoàn thành luôn bộ tiểu thuyết.",
+      "emo": {
+        "ban": "cuoi_deu"
+      },
+      "act": [
+        [
+          "gesture",
+          "ban"
+        ]
+      ],
+      "punch": {
+        "who": "ban",
+        "face": "cuoi_deu"
+      }
+    },
+    {
+      "scene": "ket",
+      "who": "toi",
+      "text": "Thế cuốn sách mới của mày tên là gì?",
+      "emo": {
+        "toi": "noi",
+        "ban": "buon"
+      },
+      "act": [
+        [
+          "point",
+          "toi",
+          "ban"
+        ]
+      ]
+    },
+    {
+      "scene": "ket",
+      "who": "ban",
+      "text": "Tên sách là Nghệ thuật im lặng để sống sót trong gia đình!",
+      "emo": {
+        "ban": "khoc",
+        "toi": "soc"
+      },
+      "act": [
+        [
+          "lean",
+          "ban",
+          "toi"
+        ]
+      ]
+    },
+    {
+      "scene": "ket",
+      "who": "ban",
+      "text": "Tao phải về đây, đến giờ nộp báo cáo cho vợ rồi.",
+      "emo": {
+        "ban": "lo"
+      },
+      "punch": {
+        "who": "toi",
+        "face": "soc"
+      }
+    },
+    {
+      "scene": "ket",
+      "who": "N",
+      "focus": "toi",
+      "text": "Nghe xong bí quyết, tôi quyết định độc thân suốt đời.",
+      "emo": {
+        "toi": "cuoi_deu",
+        "ban": "lo"
+      },
+      "act": [
+        [
+          "shock",
+          "toi"
+        ]
+      ],
+      "punch": {
+        "who": "toi",
+        "face": "cuoi_deu"
+      }
+    }
+  ]
+}

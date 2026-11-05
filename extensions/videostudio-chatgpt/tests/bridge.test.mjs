@@ -50,8 +50,8 @@ test('receipt URL encodes exact request and scope',()=>assert.equal(receiptPath(
 test('manifest has narrow hosts and no automation or cookie permissions',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../manifest.json',import.meta.url)));
   assert.deepEqual(manifest.host_permissions,['http://localhost:8877/*','https://chatgpt.com/*']);
-  assert.deepEqual(manifest.permissions,['storage','alarms']);
-  assert.deepEqual(manifest.optional_permissions,['scripting']);
+  assert.deepEqual(manifest.permissions,['storage','alarms','scripting']);
+  assert.equal(manifest.optional_permissions,undefined);
   assert.ok(manifest.optional_host_permissions.includes('https://flow.google.com/*'));
   assert.equal(manifest.action.default_popup,'flow/popup.html');
   assert.deepEqual(manifest.content_scripts[1].js,['send-button.js','logical-text.js','chatgpt.js']);

@@ -109,6 +109,9 @@ python -I engine\make_voice.py episodes\ep2
 
 In độ dài từng câu và `total speech`. Khoảng 4–5 giây máy cho mỗi câu. Chạy lại chỉ tạo những câu đã đổi chữ hoặc đổi giọng.
 **Mỗi lần sửa `text`, `who` hoặc thêm/bớt câu phải chạy lại bước này.**
+Bộ dựng kiểm tra cả chữ, thứ tự/người nói, giọng đã chọn và checksum WAV qua `voice.json`/file `.id`.
+Sau khi nâng phiên bản bộ dựng, metadata giọng cũ có thể cần chạy lại `make_voice.py`; WAV có cache stamp khớp được dùng lại, không bắt tạo lại mọi câu.
+
 
 ### Bước 5: dựng cảnh và trộn SFX
 
@@ -401,7 +404,7 @@ Viết id đúng từng dấu. Giọng `clone:...` khác không được dùng n
 - Chỉ có các hành động trong mục 4.3; chưa có chạy, ngã, ngồi, cầm đồ vật.
 - Tối đa 3 vai trong một cảnh.
 - Nhép miệng theo độ to của tiếng, không khớp từng âm.
-- SFX chỉ có 4 loại; chưa có nhạc nền (người dùng chưa cần nhạc).
+- SFX chỉ có 4 loại; chưa có nhạc nền (người dùng chưa cần nhạc). Tập không có SFX vẫn xuất track im lặng đúng thời lượng.
 - Chưa tích hợp vào giao diện VideoStudio; chạy bằng lệnh trong `memestudio`.
 
 Chi tiết kỹ thuật và lịch sử xây dựng: `docs\editor-workflow.md` (mục "Kết quả engine spike HyperFrames" và các mục con).

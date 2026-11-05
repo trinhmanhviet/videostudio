@@ -48,7 +48,7 @@ class Exchanges:
             parent=c.execute('SELECT bridge FROM connector_bridge_memberships WHERE scope=?',(scope,)).fetchone()
             bridge=parent['bridge'] if parent else scope
             status=c.execute('SELECT status,updated FROM connector_status WHERE scope=?',(bridge,)).fetchone()
-            smoke=c.execute('SELECT e.id,e.response FROM connector_smokes s JOIN connector_exchanges e ON e.id=s.exchange_id AND e.scope=s.scope WHERE s.scope=? ORDER BY s.created DESC,s.rowid DESC LIMIT 1',(bridge,)).fetchone()
+            smoke=c.execute('SELECT e.id,e.response,s.created FROM connector_smokes s JOIN connector_exchanges e ON e.id=s.exchange_id AND e.scope=s.scope WHERE s.scope=? ORDER BY s.created DESC,s.rowid DESC LIMIT 1',(bridge,)).fetchone()
         try:s=json.loads(status['status']) if status else {}
         except (ValueError,TypeError):s={}
         if not isinstance(s,dict):s={}
@@ -83,7 +83,7 @@ class Exchanges:
                 smoke_status='accepted' if valid else 'invalid'
                 smoke_reason='Bài kiểm tra kết nối mới nhất đã có phản hồi JSON hợp lệ, khớp request ID.' if valid else 'Phản hồi bài kiểm tra kết nối mới nhất không đúng JSON yêu cầu; cần kiểm tra kết nối lại.'
         return {'scope':scope,'bridge':bridge,'heartbeat':heartbeat,
-                'smoke':{'status':smoke_status,'exchange_id':smoke['id'] if smoke else None,'reason':smoke_reason},
+                'smoke':{'status':smoke_status,'exchange_id':smoke['id'] if smoke else None,'reason':smoke_reason,'age_seconds':max(0,time.time()-smoke['created']) if smoke else None},
                 'ready':heartbeat['ready'] and smoke_status=='accepted'}
     def bridge_root(self,bridge):
         with self.store.db() as c:

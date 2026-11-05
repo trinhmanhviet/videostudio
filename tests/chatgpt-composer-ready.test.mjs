@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../extensions/videostudio-chatgpt/chatgpt.js',import.meta.url),'utf8');
+function fixture(drafts){const start=source.indexOf('  async function readyComposer('),end=source.indexOf('  chrome.runtime.onMessage',start);assert.ok(start>=0&&end>start,'Composer readiness helper missing');let i=0;const c=vm.createContext({retired:false,clearStaleToolDraft:async input=>{input.value='';},editor:()=>drafts[Math.min(i,drafts.length-1)],logicalText:e=>e?.value??'',user:()=>null,assistants:()=>[],wait:async()=>i++});vm.runInContext(source.slice(start,end),c);return c;}
+test('re-rendering composer is awaited before insertion or Send',async()=>{const x=fixture([null,null,{value:''}]);const p=await x.readyComposer('req');assert.equal(p.alreadyOwned,false);});
+test('a restored exact owned draft can be sent without inserting a second copy',async()=>{const x=fixture([{value:'YÊU CẦU STUDIO req\nhello'}]);assert.equal((await x.readyComposer('req')).alreadyOwned,true);});
+test('an unrelated restored draft is never accepted as owned',async()=>{const x=fixture([{value:'YÊU CẦU STUDIO other\nhello'}]);await assert.rejects(x.readyComposer('req'),/Composer unavailable/);});
+
+test('an old Studio request draft restored by ChatGPT is cleared before the current prompt is inserted',async()=>{const x=fixture([{value:'YÊU CẦU STUDIO 123e4567-e89b-42d3-a456-426614174000\nold smoke'}]);const prepared=await x.readyComposer('new');assert.equal(prepared.alreadyOwned,false);assert.equal(prepared.input.value,'');});

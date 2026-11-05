@@ -1,5 +1,7 @@
 (()=>{
   if(location.origin!=='https://chatgpt.com'||window.top!==window)return;
+  if(globalThis.__VideoStudioChatBuild==='0.3.20')return;
+  globalThis.__VideoStudioChatBuild='0.3.20';
   const visible=n=>!!n?.getClientRects().length&&getComputedStyle(n).visibility!=='hidden';
   const editor=()=>[...document.querySelectorAll('#prompt-textarea,[contenteditable="true"][role="textbox"],textarea')].find(visible);
   const messages=role=>{
@@ -69,17 +71,45 @@
   }
   const isReceipt=(node,id,prompt)=>receiptMatches(userText(node),id,prompt);
   // The delivery and reload paths share one correlation/completion rule.
+  function responseReloadButton(){
+    const node=assistants().at(-1);if(!node)return null;
+    return [...node.querySelectorAll('button')].find(button=>visible(button)&&!button.disabled&&/^(reload response|tải lại phản hồi)$/i.test((button.getAttribute('aria-label')||text(button)).trim()))||null;
+  }
+  function reloadCurrentResponse(id,prompt){
+    if(!isReceipt(user(),id,prompt))return false;
+    const button=responseReloadButton();if(!button)return false;button.click();return true;
+  }
   const inspect=(id,prompt)=>{
     const users=messages('user'),turn=users.at(-1),matches=users.filter(n=>isReceipt(n,id,prompt));
-    const result={visibleUser:turn?userText(turn):null,visibleReply:null,conversationUrl:location.href};
+    const input=editor();const unsentOwnPrompt=!!input&&!users.length&&!assistants().length&&!generating()&&composerMode().mode==='chat'&&logicalText(input).trimStart().startsWith(`YÊU CẦU STUDIO ${id}\n`);
+    const result={visibleUser:turn?userText(turn):null,visibleReply:null,conversationUrl:location.href,unsentOwnPrompt,staleToolDraft:!!input&&!users.length&&!assistants().length&&!generating()&&composerMode().mode==='chat'&&/^YÊU CẦU STUDIO [0-9a-f-]{36}\n/i.test(logicalText(input).trimStart())};
     if(matches.length>1)return {...result,blocked:'Duplicate immutable request marker'};
     if(matches.length!==1||turn!==matches[0]||generating())return result;
     const replies=assistants().filter(node=>turn.compareDocumentPosition(node)&Node.DOCUMENT_POSITION_FOLLOWING);
     if(replies.length!==1)return result;
     const node=replies[0];
+    if(responseReloadButton())return {...result,responseUnavailable:true};
     if(completed(node))result.visibleReply=assistantText(node)||null;
     return result;
   };
+  async function clearStaleToolDraft(input){
+    input.focus();
+    const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);
+    document.execCommand('delete');await wait(150);
+  }
+  async function readyComposer(id){
+    let previous=null,cleared=false;
+    for(let i=0;i<120;i++){
+      if(retired)return null;
+      if(user()||assistants().length)throw Error('Dedicated tab is not an empty conversation');
+      const input=editor(),draft=input?logicalText(input).trimStart():'';
+      const own=draft.startsWith(`YÊU CẦU STUDIO ${id}\n`);
+      if(input&&!own&&!cleared&&/^YÊU CẦU STUDIO [0-9a-f-]{36}\n/i.test(draft)){cleared=true;await clearStaleToolDraft(input);previous=null;continue;}
+      if(input&&(!draft.trim()||own)&&input===previous)return {input,alreadyOwned:own};
+      previous=input;await wait(250);
+    }
+    throw Error('Composer unavailable or occupied');
+  }
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
     if(retired)return;
     if(message?.kind==='probe'){reply({ok:true});return;}
@@ -119,10 +149,9 @@
       // This is a fresh tool-owned tab. Select the visible Chat control once and
       // verify its real selection; never submit an unconfirmed Work request.
       await ensureChatMode();if(retired)return;
-      input=editor();
-      if(!input||logicalText(input).trim()||user()||assistants().length)throw Error('Composer unavailable or occupied');
-      input.focus();
-      if(!existing||!existing.includes(requestMarker(id))){
+      const prepared=await readyComposer(id);if(!prepared||retired)return;
+      input=prepared.input;input.focus();
+      if(!prepared.alreadyOwned){
       if(input.tagName==='TEXTAREA'){Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,prompt);input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:prompt}));}
       else {const selection=getSelection(),range=document.createRange();range.selectNodeContents(input);selection.removeAllRanges();selection.addRange(range);document.execCommand('insertText',false,prompt);}
       }
@@ -170,10 +199,11 @@
       if(retired)return;
       if(!confirmed)throw Error('Exact user-turn receipt missing');
       const sent=await runtime({kind:'sent',id,attempt});if(!sent){retired=true;return;}if(!sent.ok)throw Error('Background rejected send receipt');
-      let previous=null;
+      let previous=null,responseReloaded=false;
       for(let i=0;i<720;i++){
         await wait(500);if(retired)return;
         const seen=inspect(id,prompt);if(seen.blocked)throw Error(seen.blocked);
+        if(seen.responseUnavailable){if(!responseReloaded&&reloadCurrentResponse(id,prompt))responseReloaded=true;previous=null;continue;}
         const response=seen.visibleReply;
         if(!response){previous=null;continue;}
         if(response!==previous){previous=response;continue;}

@@ -4,6 +4,7 @@ Left click opens Studio (starting the system first when needed); right click sho
 Closing the tray never stops services or videos; Stop/Restart keep their active-job guards.
 """
 import json
+from contextlib import closing
 import os
 from pathlib import Path
 import sqlite3
@@ -62,7 +63,7 @@ class JobWatcher:
         if not self.database.is_file():
             return []
         try:
-            with sqlite3.connect('file:' + self.database.as_posix() + '?mode=ro', uri=True, timeout=2) as db:
+            with closing(sqlite3.connect('file:' + self.database.as_posix() + '?mode=ro', uri=True, timeout=2)) as db:
                 rows = db.execute('SELECT id,state,stage,output,request FROM jobs').fetchall()
         except sqlite3.Error:
             return []

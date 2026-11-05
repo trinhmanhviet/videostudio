@@ -21,8 +21,8 @@ class OptionalEditingIntegrationTests(unittest.TestCase):
         self.assertNotIn('editing_version',draft)
     def test_old_ui_music_does_not_dispatch_new_chapter_music(self):
         pipeline=Pipeline.__new__(Pipeline);pipeline.accepted_music=Mock(return_value=False)
-        with patch('videostudio.edit_audio.generate_chapter_music') as chapter:
-            with self.assertRaises(PermanentError):pipeline.music(self.job(),lambda:None)
+        with patch('videostudio.edit_audio.generate_chapter_music') as chapter,patch('videostudio.providers.timeline_duration',side_effect=RuntimeError('legacy handler reached')):
+            with self.assertRaisesRegex(RuntimeError,'legacy handler reached'):pipeline.music(self.job(),lambda:None)
             chapter.assert_not_called()
     def test_explicit_workflow_uses_chapter_music_including_intentional_mute(self):
         pipeline=Pipeline.__new__(Pipeline)

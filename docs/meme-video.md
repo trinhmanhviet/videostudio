@@ -75,5 +75,12 @@ nền thôn quê không có đồ hiện đại.
   xem quy trình ở `docs/meme-handoff.md`. ZIP tải về Downloads nhập bằng
   `python scripts/ingest_asset_zips.py` (thêm `--replace` để ZIP mới thay file cũ; bản cũ chuyển vào `new/_old_style/`).
 
+## Phục hồi và cập nhật asset
+
+- ID asset/FX sai kiểu dữ liệu đi qua vòng sửa kịch bản tối đa ba lượt; reply bị từ chối có receipt `meme-script-attempt-XX.rejected.json`. Resume bỏ qua lượt đã biết sai, giữ nguyên phản hồi gốc để xem lỗi; hết lượt dùng fallback cục bộ khi còn đủ nội dung.
+- Danh mục và cache ảnh dựa vào hash nội dung. Một Catalog là snapshot nhất quán; job mới nạp Catalog mới sẽ thấy ảnh thay thế cùng tên/kích thước, không cần restart để xóa cache ảnh. Bộ nhập library cũng phát hiện nguồn thay đổi dù giữ nguyên thời gian file.
+- Khi nhập nhiều ZIP có `--replace`, chọn nguồn mới nhất cho từng tên file trước khi ghi; giữ bản bị thay trong `_old_style/` và giữ thời gian nguồn để chạy lại không thay lặp.
+- Video meme chưa hỗ trợ editor ảnh/timeline của video thường. Các nút sửa/tạo lại ảnh được ẩn ở thẻ và hero; đổi giọng vẫn dùng được.
+
 ## Kiểm thử
 `python -m unittest tests.test_meme_mode` (15 test, pass sau khi nhập bộ asset mới).

@@ -1585,5 +1585,25 @@
    ],
    "scale": 0.581
   }
- ]
+ ],
+ "source_hashes": {
+  "fx_more.png": "ac83e10c5d62f8af290ddd9e96c72c5b3b5d6ff8ea6ba9ac9135745f46712fdb",
+  "fx_stickers.png": "edf310bb8afff6ad0ce01526a7b70f53f6f67cb54005b867e00d3f48febedb5a",
+  "prop_animals.png": "f86042a0392deaaf2b68aa5ecf3f8ef58f6db752ed08e2c39f35378a141fea84",
+  "prop_clothes.png": "b4520c8ec4b44a9eab8887cc44bac2ec490b83fdd812e2d32f03c7f6eeda5485",
+  "prop_daily.png": "d5314788bebb11a7b83e5089142012943f2107d524a2dadb635971a4d962217c",
+  "prop_food.png": "b32e839616ea3f0a8de6e0ce5005c32a019b55e7e033be2daa856381b5f56696",
+  "prop_furniture.png": "a16f143e78622868e6d14f93eb135f20ee218fa83b04ff5ab45e2540b7ff2559",
+  "prop_home.png": "1987c5ead08436f73c1fab60a5320d6fee15471566d41ff6a289ea8792cb0446",
+  "prop_kitchen_tech.png": "96b471c71fdb904b62d005e50d7bb16d316f017fa349f90b9adebd7db6195400",
+  "prop_medical.png": "0a5d11525a4fbe42a5a9d00729485803e284a606421b398a31deda6ba9fb9c64",
+  "prop_party.png": "20ab4095086ed4e1b95273a79baaba845a6a624c502735ec854b71011ee10d2c",
+  "prop_school.png": "159b2708f58223de0470d8e2ff7ac87b99891c802a4309c6d58e3a0164f1aa32",
+  "prop_shopping.png": "20f204c56746317ea354ec03aefd848a7f3db24dcbf754b7db009df590a093bb",
+  "prop_sports.png": "4d2914a3b9a16e97f196b07edf2872d4a72c19ad3fd17f154101a1d5ca5e55e0",
+  "prop_study_office.png": "5b058733e2ca1b6c3752408fc5347f7b9912566a0eb2af7e7450eacbc3b5ce68",
+  "prop_tet.png": "d67b8fcf2d7f83cd332231b20c62f7c193acac5aa951b595d89ff0dff8119561",
+  "prop_tools.png": "3e3a26713c4f18793d94741fe334ee07d40577372d0d1993f53a6846650f0f2a",
+  "prop_vehicles.png": "0cc9cd348f4f19209d8a4baf073259a9c25e37b31c1693a4396c9620aace9daa"
+ }
 }

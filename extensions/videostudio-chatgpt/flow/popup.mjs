@@ -12,7 +12,7 @@ async function action(kind){
     if(kind==='connect'){
       const origins=['https://flow.google.com/*'];
       if($('server').value!=='http://localhost:8877')origins.push($('server').value+'/*');
-      const granted=await chrome.permissions.request({permissions:['scripting'],origins});
+      const granted=await chrome.permissions.request({origins});
       if(!granted)throw Error('Cần cho phép VideoStudio truy cập Flow để gửi request.');
     }
     await send({kind:'flow:'+kind,...(kind==='connect'?{server:$('server').value,tab:Number($('tab').value),code:$('code').value.trim()}:{})});await status();
