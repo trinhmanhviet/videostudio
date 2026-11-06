@@ -6,12 +6,14 @@ No connector/browser implementation and no model downloads. LLM URL/model/key
 must be explicitly configured; only loopback OpenAI-compatible endpoints allowed.
 """
 import importlib.util, json, os, time, shutil, re, uuid, math
+from contextlib import ExitStack
 from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 from .core import PermanentError, Cancelled, digest, available_flow_batch_sizes
 from .cdp_flow import normalize_flow_prompt
 from .media import asset, probe, render, verify, run
+from .speech_worker import SpeechJob
 from .storyboard import (VISUAL_GROUPING_VERSION, VISUAL_GROUPING_RULES, grouping_enabled,
                          normalize_visual_scenes, group_supplied_scenes)
 
@@ -130,34 +132,17 @@ def split_caption_lines(text):
     """Split narration text into individual sentence clauses safe for wrap_caption without duplicating scenes."""
     import unicodedata
     import re
-    from .captions import wrap_caption
+    from .captions import split_caption_text
     text = unicodedata.normalize('NFC', text or '').strip()
     if not text:
         return []
     sentences = [s.strip() for s in re.split(r'(?<=[.!?…\n])\s+', text) if s.strip()]
     if not sentences:
         sentences = [text]
-
     chunks = []
     for sentence in sentences:
-        try:
-            wrap_caption(sentence)
-            chunks.append(sentence)
-        except ValueError:
-            sub_chunks = []
-            current = []
-            for word in sentence.split():
-                try:
-                    wrap_caption(' '.join(current + [word]))
-                except ValueError:
-                    if current:
-                        sub_chunks.append(' '.join(current))
-                        current = []
-                    wrap_caption(word)
-                current.append(word)
-            if current:
-                sub_chunks.append(' '.join(current))
-            chunks.extend(sub_chunks)
+        # Long sentences break at punctuation/connectors or a balanced point, never mid-phrase.
+        chunks.extend(split_caption_text(sentence))
     return chunks
 
 def validate_flow_character_manifest(script):
@@ -1039,39 +1024,43 @@ class Pipeline:
         total_scenes=len(scenes_input)
         total_lines=sum(len(s.get('narration_lines') or [s.get('narration','')]) for s in scenes_input)
         u_idx=0
-        for scene_idx,scene in enumerate(scenes_input):
-            lines=scene.get('narration_lines') or [scene.get('narration','')]
-            for line_idx,line in enumerate(lines):
-                check()
-                line_text=line.strip()
-                if not line_text:continue
-                if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {u_idx+1}/{total_lines} (cảnh {scene_idx+1}/{total_scenes})...')
-                part=out.with_name(f'speech-{u_idx:04}.wav');receipt=part.with_suffix('.json')
-                identity=hashlib.sha256(json.dumps({'narration':line_text,'voice':v},sort_keys=True).encode()).hexdigest()
-                saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
-                if not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part)):
-                    args=[self.speech_python,'-m','videostudio.speech_worker',json.dumps({'text':line_text,'voice':v,'cache':self.speech_cache,'output':str(part)},ensure_ascii=False)]
-                    run(args,check,timeout=900)
-                    receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
-                audio_data=probe(part,self.ffprobe)
-                duration=float(audio_data['format']['duration'])
-                if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in audio_data.get('streams',[])):
-                    raise PermanentError('Invalid utterance audio stream/duration')
-                from .media import audio_report
-                try:
-                    quality=audio_report(part,check,self.ffmpeg)
-                except PermanentError as e:
-                    if 'Silent or clipped audio' in str(e):
+        with ExitStack() as resources:
+            worker = None
+            for scene_idx,scene in enumerate(scenes_input):
+                lines=scene.get('narration_lines') or [scene.get('narration','')]
+                for line_idx,line in enumerate(lines):
+                    check()
+                    line_text=line.strip()
+                    if not line_text:continue
+                    if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {u_idx+1}/{total_lines} (cảnh {scene_idx+1}/{total_scenes})...')
+                    part=out.with_name(f'speech-{u_idx:04}.wav');receipt=part.with_suffix('.json')
+                    identity=hashlib.sha256(json.dumps({'narration':line_text,'voice':v},sort_keys=True).encode()).hexdigest()
+                    saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
+                    changed = not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part))
+                    if changed:
+                        if worker is None:
+                            worker = resources.enter_context(SpeechJob(self.speech_python, self.speech_cache, v, check))
+                        worker.write_line(line_text, part)
+                    audio_data=probe(part,self.ffprobe)
+                    duration=float(audio_data['format']['duration'])
+                    if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in audio_data.get('streams',[])):
+                        raise PermanentError('Invalid utterance audio stream/duration')
+                    from .media import audio_report
+                    try:
+                        quality=audio_report(part,check,self.ffmpeg)
+                    except PermanentError as e:
+                        if 'Silent or clipped audio' not in str(e):
+                            raise
                         tmp_part=part.with_suffix('.norm.wav')
                         run([self.ffmpeg,'-v','error','-y','-i',str(part),'-af','volume=0.95',str(tmp_part)],check)
                         tmp_part.replace(part)
-                        receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
                         quality=audio_report(part,check,self.ffmpeg)
-                    else:
-                        raise
-                utterances.append({**scene,'scene_index':scene_idx,'scene_id':scene.get('scene_id',f'scene-{scene_idx:04}'),'line_index':line_idx,'narration':line_text,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration,'audio_quality':quality})
-                cursor+=duration;assets.append(asset(part))
-                u_idx+=1
+                        changed = True
+                    if changed:
+                        receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
+                    utterances.append({**scene,'scene_index':scene_idx,'scene_id':scene.get('scene_id',f'scene-{scene_idx:04}'),'line_index':line_idx,'narration':line_text,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration,'audio_quality':quality})
+                    cursor+=duration;assets.append(asset(part))
+                    u_idx+=1
         listing=out.with_name('speech-concat.txt')
         listing.write_text('\n'.join("file '"+Path(u['path']).resolve().as_posix()+"'" for u in utterances))
         pitch=float(j['request'].get('pitch',0))
@@ -1596,8 +1585,6 @@ class Pipeline:
         from . import meme_animation
         if meme_animation.enabled(j):return meme_animation.music(self,j,check)
         """Music parts reuse the same Stable Audio models; unload once after the last part."""
-        if j.get('request',{}).get('workflow_mode')=='meme':
-            from . import meme_pipeline;j=meme_pipeline.music_job(j)
         return self._with_comfy_hold(j,'music',self._music,check)
     def _music(self,j,check):
         check()

@@ -1,4 +1,4 @@
-"""Regression tests for content-aware meme assets and newest ZIP selection."""
+"""Regression tests for newest ZIP selection when ingesting ChatGPT asset archives."""
 import json
 import os
 import tempfile
@@ -9,92 +9,6 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from scripts.ingest_asset_zips import main as ingest
-from videostudio.meme_catalog import Catalog, refresh_library
-
-
-class AssetUpdatesTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.pack = self.root / 'pack'
-        (self.pack / 'catalog').mkdir(parents=True)
-        (self.pack / 'new').mkdir()
-        self.sprite = self.pack / 'catalog' / 'sprite.png'
-        self.background = self.pack / 'new' / 'bg_test.png'
-        self.write_png(self.sprite, (255, 0, 0, 255))
-        self.write_png(self.background, (255, 0, 0, 255))
-        (self.pack / 'catalog' / 'panda.json').write_text(json.dumps({'version': 1, 'items': [
-            {'id': 'test', 'kind': 'pose', 'file': 'sprite.png', 'size': [32, 32], 'scale': 1, 'tags': 'test'}
-        ]}), encoding='utf-8')
-
-    @staticmethod
-    def write_png(path, color):
-        # Uncompressed PNG keeps file length identical across color changes.
-        Image.new('RGBA', (32, 32), color).save(path, compress_level=0)
-
-    def replace_preserving_metadata(self, path):
-        before = path.stat()
-        self.write_png(path, (0, 0, 255, 255))
-        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
-        self.assertEqual(path.stat().st_size, before.st_size)
-        self.assertEqual(path.stat().st_mtime_ns, before.st_mtime_ns)
-
-    def test_sprite_content_change_invalidates_new_catalog_and_keeps_snapshot_consistent(self):
-        original = Catalog(self.pack)
-        fingerprint = original.fingerprint()
-        self.assertEqual(original.sprite('test').getpixel((0, 0)), (255, 0, 0, 255))
-        self.replace_preserving_metadata(self.sprite)
-        updated = Catalog(self.pack)
-        self.assertEqual(updated.sprite('test').getpixel((0, 0)), (0, 0, 255, 255))
-        self.assertNotEqual(updated.fingerprint(), fingerprint)
-        self.assertEqual(original.sprite('test').getpixel((0, 0)), (255, 0, 0, 255))
-        self.assertEqual(original.fingerprint(), fingerprint)
-
-    def test_background_content_change_invalidates_new_catalog_and_keeps_snapshot_consistent(self):
-        original = Catalog(self.pack)
-        fingerprint = original.fingerprint()
-        self.assertEqual(original.background('bg_test', (16, 16)).getpixel((0, 0)), (255, 0, 0))
-        self.replace_preserving_metadata(self.background)
-        updated = Catalog(self.pack)
-        self.assertEqual(updated.background('bg_test', (16, 16)).getpixel((0, 0)), (0, 0, 255))
-        self.assertNotEqual(updated.fingerprint(), fingerprint)
-        self.assertEqual(original.background('bg_test', (16, 16)).getpixel((0, 0)), (255, 0, 0))
-        self.assertEqual(original.fingerprint(), fingerprint)
-
-    def test_lazy_images_belong_to_catalog_snapshot(self):
-        original = Catalog(self.pack)
-        self.replace_preserving_metadata(self.sprite)
-        self.replace_preserving_metadata(self.background)
-        self.assertEqual(original.sprite('test').getpixel((0, 0)), (255, 0, 0, 255))
-        self.assertEqual(original.background('bg_test', (16, 16)).getpixel((0, 0)), (255, 0, 0))
-
-    def test_unchanged_catalog_reuses_decoded_image_cache(self):
-        first, second = Catalog(self.pack), Catalog(self.pack)
-        self.assertEqual(first.fingerprint(), second.fingerprint())
-        self.assertIs(first.sprite('test'), second.sprite('test'))
-
-    def test_refresh_library_detects_same_metadata_changes_and_old_timestamp_additions(self):
-        source = self.pack / 'new' / 'prop_test.png'
-        image = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
-        ImageDraw.Draw(image).rectangle((8, 8, 55, 55), fill=(255, 0, 0, 255))
-        image.save(source, compress_level=0)
-        self.assertTrue(refresh_library(self.pack))
-        self.assertFalse(refresh_library(self.pack))
-        before = source.stat()
-        image = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
-        ImageDraw.Draw(image).rectangle((8, 8, 55, 55), fill=(0, 0, 255, 255))
-        image.save(source, compress_level=0)
-        os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
-        self.assertEqual(source.stat().st_size, before.st_size)
-        self.assertTrue(refresh_library(self.pack))
-        self.assertEqual(Catalog(self.pack).sprite('test_2').getpixel((10, 10)), (0, 0, 255, 255))
-        extra = self.pack / 'new' / 'prop_extra.png'
-        extra.write_bytes(source.read_bytes())
-        os.utime(extra, ns=(1_000_000_000, 1_000_000_000))
-        self.assertTrue(refresh_library(self.pack))
-        self.assertEqual(Catalog(self.pack).kind('extra'), 'prop')
-        self.assertFalse(refresh_library(self.pack))
 
 
 class ZipUpdatesTests(unittest.TestCase):

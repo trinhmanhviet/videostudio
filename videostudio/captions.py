@@ -19,6 +19,63 @@ def wrap_caption(text,max_columns=32,max_lines=3):
     if len(lines)>max_lines:raise ValueError('Utterance exceeds safe caption area; split narration upstream')
     return '\n'.join(lines)
 
+# Each chunk becomes one separately voiced utterance, so a break is also an audible pause.
+# Never cut greedily mid-phrase ("... đầy nghi" | "vấn."): prefer punctuation, then a connector word,
+# then the most balanced split, and never leave a fragment under MIN_CHUNK_WORDS words.
+_BREAK_AFTER = (',', ';', ':', '—', '–', '…')
+_CONNECTORS = {'và', 'nhưng', 'bởi', 'vì', 'khi', 'rồi', 'mà', 'thì', 'để', 'nên', 'hoặc', 'nếu', 'rằng',
+               'song', 'còn', 'tuy', 'dù', 'mặc', 'trong', 'sau', 'trước', 'cho', 'tại', 'do', 'với'}
+# Words that usually open a phrase and are rarely the second syllable of a compound word.
+_PHRASE_START = {'đã', 'đang', 'sẽ', 'bị', 'được', 'không', 'chưa', 'cũng', 'vẫn', 'đều', 'những', 'các', 'khiến',
+                 'theo', 'từ', 'ở', 'về', 'như', 'chỉ', 'lại', 'liền', 'bỗng', 'ngay', 'luôn'}
+MIN_CHUNK_WORDS = 4
+
+
+def _fits(words):
+    try:
+        wrap_caption(' '.join(words))
+        return True
+    except ValueError as error:
+        if str(error) != 'Utterance exceeds safe caption area; split narration upstream':
+            raise
+        return False
+
+
+def split_caption_text(text):
+    """Split one oversized sentence into caption-safe chunks at natural breaks (order-preserving)."""
+    words = unicodedata.normalize('NFC', text or '').split()
+    if not words:
+        return []
+    if _fits(words):
+        return [' '.join(words)]
+    total = len(' '.join(words))
+    best = None
+    for i in range(1, len(words)):
+        left, right = words[:i], words[i:]
+        if not _fits(left):
+            break                                   # the left part only grows from here
+        left_len = len(' '.join(left))
+        score = abs(left_len - (total - left_len - 1)) / total
+        head = right[0].lower().strip('"“‘(')
+        if left[-1].endswith(_BREAK_AFTER):
+            score += 0.0
+        elif head in _CONNECTORS:
+            score += 0.1
+        elif head in _PHRASE_START:
+            score += 0.15
+        else:
+            score += 0.6                            # plain break may split a compound word: last resort
+        if len(left) < MIN_CHUNK_WORDS or len(right) < MIN_CHUNK_WORDS:
+            score += 1.0
+        if best is None or score < best[0]:
+            best = (score, i)
+    if best is None:                                # even the first word is too wide
+        wrap_caption(words[0])
+        raise ValueError('Utterance exceeds safe caption area; split narration upstream')
+    i = best[1]
+    return [' '.join(words[:i])] + split_caption_text(' '.join(words[i:]))
+
+
 def stamp(seconds):
     ms=round(seconds*1000);h,ms=divmod(ms,3600000);m,ms=divmod(ms,60000);s,ms=divmod(ms,1000)
     return f'{h:02}:{m:02}:{s:02},{ms:03}'
@@ -27,15 +84,7 @@ def split_caption_scenes(scenes):
     """Split oversized narration locally, preserving words and visual metadata."""
     result=[]
     for scene in scenes:
-        chunks=[];current=[]
-        for word in scene.get('narration','').split():
-            try:wrap_caption(' '.join(current+[word]))
-            except ValueError as error:
-                if str(error)!='Utterance exceeds safe caption area; split narration upstream':raise
-                chunks.append(' '.join(current));current=[]
-                wrap_caption(word)
-            current.append(word)
-        if current:chunks.append(' '.join(current))
+        chunks=split_caption_text(scene.get('narration',''))
         if not chunks:wrap_caption('')
         for index,text in enumerate(chunks):
             item={**scene,'narration':text}

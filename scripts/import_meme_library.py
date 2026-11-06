@@ -3,7 +3,7 @@
     python scripts/import_meme_library.py
 
 - bg_<name>.png/jpg are used directly by the catalog (nothing to do here).
-- Known sticker sheets (prop_food.png, fx_stickers.png, ... as named by scripts/make_meme_assets.py)
+- Known sticker sheets (prop_food.png, fx_stickers.png, ... as named in scripts/meme_sheets.py)
   are cut into single objects and named in grid order (left->right, top->bottom).
 - Any other prop_<name>.png / fx_<name>.png holding exactly one object becomes item <name>.
 A magenta (#FF00FF) or plain white backdrop is keyed out when the PNG has no transparency.
@@ -47,11 +47,11 @@ TAGS = {
     'lightning': 'tia sét', 'water_splash': 'nước bắn',
 }
 def _extra_sheets():
-    """Sheets defined next to their prompts in make_meme_assets.py (single source of item order)."""
+    """Sheets defined in meme_sheets.py (single source of item order)."""
     import importlib.util
-    path = Path(__file__).resolve().parent / 'make_meme_assets.py'
+    path = Path(__file__).resolve().parent / 'meme_sheets.py'
     try:
-        spec = importlib.util.spec_from_file_location('make_meme_assets', path)
+        spec = importlib.util.spec_from_file_location('meme_sheets', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return getattr(module, 'SHEET_ITEMS', {})
@@ -164,11 +164,12 @@ def main(pack=PACK):
     pack = Path(pack)
     NEW, OUT = pack / 'new', pack / 'catalog' / 'library'
     OUT.mkdir(parents=True, exist_ok=True)
-    existing_ids = set()
-    panda = pack / 'catalog' / 'panda.json'
-    if panda.is_file():
-        existing_ids = {i['id'] for i in json.loads(panda.read_text(encoding='utf-8'))['items']}
-    items, report = [], []
+    index = OUT.parent / 'library.json'
+    previous = json.loads(index.read_text(encoding='utf-8')) if index.is_file() else {}
+    items = [item for item in previous.get('items', []) if item.get('pack_id') or item.get('uploaded') is True
+             or (item.get('kind') == 'prop' and 'label' in item and 'size' not in item and 'scale' not in item)]
+    existing_ids = {item['id'] for item in items}
+    report = []
     for path in sorted(list(NEW.glob('prop_*.png')) + list(NEW.glob('fx_*.png'))):
         stem = path.stem.lower()
         kind = 'fx' if stem.startswith('fx_') else 'prop'
@@ -198,7 +199,11 @@ def main(pack=PACK):
             report.append(f'{path.name}: found {len(boxes)} objects, expected {len(names)}; skipped (redraw or name single items)')
             continue
         for name, box in zip(names, ordered if ordered is not None else reading_order(boxes)):
-            ident = name if name not in existing_ids else name + '_2'
+            ident = name
+            suffix = 2
+            while ident in existing_ids:
+                ident = f'{name}_{suffix}'
+                suffix += 1
             piece = crop(image, box)
             file = OUT / f'{ident}.png'
             piece.save(file, optimize=True)
@@ -207,7 +212,7 @@ def main(pack=PACK):
                           'size': [piece.width, piece.height], 'scale': round(target / max(piece.width, piece.height), 4)})
             existing_ids.add(ident)
         report.append(f'{path.name}: {len(names)} objects imported')
-    (pack / 'catalog' / 'library.json').write_text(json.dumps({'version': 1, 'items': items}, ensure_ascii=False, indent=1), encoding='utf-8')
+    index.write_text(json.dumps({**previous, 'version': 1, 'items': items}, ensure_ascii=False, indent=1), encoding='utf-8')
     print('\n'.join(report) or 'no prop_/fx_ files in new/')
     print(len(items), 'library items')
     return 0

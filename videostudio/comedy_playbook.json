@@ -1,0 +1,589 @@
+{
+  "version": 1,
+  "language": "vi",
+  "selection": {
+    "mode": "story_driven",
+    "guidance": "Chọn ít kỹ thuật phục vụ động cơ, logic nhân quả và thời lượng. Không yêu cầu đủ kỹ thuật hay một kiểu kết cố định. Lịch sử gợi ý khác biệt, không cấm phương pháp phổ quát.",
+    "originality": "Tạo nhân vật, câu cửa miệng và chuỗi sự kiện mới; học cơ chế, không sao chép dấu hiệu nhận diện của tài liệu tham chiếu.",
+    "style": "Tôn trọng tông người dùng, kể cả hài chất thải, bạo lực hoạt hình hoặc châm biếm khi phù hợp câu chuyện. Không dùng bộ lọc phong cách cứng thay đổi truyện gốc."
+  },
+  "critic": {
+    "weights": {
+      "causal_logic": 20,
+      "setup_payoff": 25,
+      "novelty": 15,
+      "voice": 15,
+      "ending": 15,
+      "renderability": 10
+    },
+    "max_repairs": 2,
+    "severity": [
+      "blocking",
+      "major",
+      "minor"
+    ],
+    "repair_scope": "Sửa phần có vấn đề và kiểm tra callback/payoff phụ thuộc. Lưu lỗi sau giới hạn; không tự gắn nhãn đạt.",
+    "calibration": "Trọng số thử nghiệm. Điểm AI hỗ trợ cấu trúc, không chứng minh mức buồn cười; cần nhận xét người xem."
+  },
+  "techniques": [
+    {
+      "id": "t01",
+      "name": "Nghe nhầm âm thanh",
+      "mechanism": "Âm thanh thiếu hoặc nhiễu được giải mã thành thông tin khác.",
+      "when": "Nhân vật nghe thiếu và có kỳ vọng riêng.",
+      "setup": "Gieo câu gốc, tiếng nhiễu và lý do không hỏi lại.",
+      "escalation": "Quyết định theo tin sai tăng dần chi phí.",
+      "payoff": "Âm gốc trở lại khi khó rút lui.",
+      "combines_with": [
+        "t11",
+        "t18",
+        "t30"
+      ],
+      "mistakes": "Từ không gần âm; mọi người vô cớ nghe sai.",
+      "avoid_when": "Không có động cơ hành động theo điều nghe được."
+    },
+    {
+      "id": "t02",
+      "name": "Hiểu nghĩa đen",
+      "mechanism": "Khái niệm trừu tượng trở thành nhiệm vụ vật lý.",
+      "when": "Ngôn ngữ có nhiều nghĩa gặp mong muốn đơn giản.",
+      "setup": "Nêu nghĩa thường và giới hạn hiểu biết.",
+      "escalation": "Giữ cách hiểu ấy qua các trở ngại mới.",
+      "payoff": "Hành động đúng chữ nhưng sai ý.",
+      "combines_with": [
+        "t03",
+        "t10",
+        "t21"
+      ],
+      "mistakes": "Biến nhân vật thành ngu toàn diện.",
+      "avoid_when": "Không chỉ ra được từ bị hiểu theo nghĩa đen."
+    },
+    {
+      "id": "t03",
+      "name": "Ngụy biện bắc cầu",
+      "mechanism": "Giống một thuộc tính bị coi là tương đương mọi mặt.",
+      "when": "Nhân vật muốn tin kết luận thuận tiện.",
+      "setup": "Gieo tiền đề có vẻ đúng và lợi ích muốn đạt.",
+      "escalation": "Bằng chứng trái chiều bị kéo vào cùng hệ suy luận.",
+      "payoff": "Kết quả tự chứng minh lỗ hổng.",
+      "combines_with": [
+        "t02",
+        "t05",
+        "t16"
+      ],
+      "mistakes": "Suy luận ngẫu nhiên không có cầu nối.",
+      "avoid_when": "Kết luận chỉ nhằm ép một tai nạn."
+    },
+    {
+      "id": "t04",
+      "name": "Tin thật lời đùa",
+      "mechanism": "Lời trêu bị tiếp nhận như sự thật.",
+      "when": "Hai phía có mức hiểu biết khác nhau.",
+      "setup": "Cho khán giả biết lời đùa và lý do người nghe tin.",
+      "escalation": "Đầu tư công sức để bảo vệ niềm tin.",
+      "payoff": "Bằng chứng trớ trêu trả lại lời đùa.",
+      "combines_with": [
+        "t11",
+        "t18",
+        "t27"
+      ],
+      "mistakes": "Kéo dài sau chứng cứ quá rõ.",
+      "avoid_when": "Lời đùa không liên quan mong muốn hay quan hệ."
+    },
+    {
+      "id": "t05",
+      "name": "Áp dụng sai kiến thức",
+      "mechanism": "Quy tắc đúng bị áp sang lĩnh vực khác.",
+      "when": "Nhân vật biết nửa vời và muốn thể hiện.",
+      "setup": "Gieo quy tắc và điều kiện bị bỏ qua.",
+      "escalation": "Mỗi lần sửa bổ sung quy tắc sai phạm vi.",
+      "payoff": "Kết quả làm rõ điều kiện còn thiếu.",
+      "combines_with": [
+        "t03",
+        "t10",
+        "t25"
+      ],
+      "mistakes": "Tạo tri thức giả để gọi là kiến thức.",
+      "avoid_when": "Cần chuyên gia hành xử chuyên nghiệp nhất quán."
+    },
+    {
+      "id": "t06",
+      "name": "Nhầm danh tính hoặc hoàn cảnh",
+      "mechanism": "Một dấu hiệu được gắn với hai vai trò.",
+      "when": "Vai trò hay không gian có bề ngoài tương tự.",
+      "setup": "Gieo dấu nhận dạng và lý do chấp nhận.",
+      "escalation": "Mỗi bên đọc lời bên kia theo khung riêng.",
+      "payoff": "Một yêu cầu không tương thích làm lộ nhầm lẫn.",
+      "combines_with": [
+        "t11",
+        "t18",
+        "t23"
+      ],
+      "mistakes": "Đổi danh tính tùy tiện.",
+      "avoid_when": "Nhân vật đã biết nhau rõ mà không che giấu."
+    },
+    {
+      "id": "t07",
+      "name": "Đạo cụ được gieo sớm",
+      "mechanism": "Thuộc tính vật cụ thể trở thành nguyên nhân payoff.",
+      "when": "Hành động cuối cần công cụ dựng được.",
+      "setup": "Cho thấy vật, người giữ, vị trí và thuộc tính.",
+      "escalation": "Đổi cách dùng hoặc quyền kiểm soát.",
+      "payoff": "Kích hoạt thuộc tính đã thấy ở bối cảnh mới.",
+      "combines_with": [
+        "t08",
+        "t09",
+        "t20"
+      ],
+      "mistakes": "Đạo cụ có phép mới; quên người giữ.",
+      "avoid_when": "Payoff không dùng vật đã gieo."
+    },
+    {
+      "id": "t08",
+      "name": "Đánh tráo đồ vật",
+      "mechanism": "Hai vật giống hình bị đổi trong khi khác công dụng.",
+      "when": "Muốn giấu, lấy hoặc mượn vật.",
+      "setup": "Nêu hai vật, dấu phân biệt và cơ hội tráo.",
+      "escalation": "Hoàn nguyên bị cản bởi lựa chọn có nguyên nhân.",
+      "payoff": "Vật sai xuất hiện trước đúng người.",
+      "combines_with": [
+        "t07",
+        "t18",
+        "t20"
+      ],
+      "mistakes": "Mất dấu hai vật; tráo tiếp để tiện kết.",
+      "avoid_when": "Không có khác biệt gây hậu quả."
+    },
+    {
+      "id": "t09",
+      "name": "Chi tiết nguy hiểm bị quên",
+      "mechanism": "Rủi ro bị bỏ quên sau gián đoạn.",
+      "when": "Khán giả nhớ điều nhân vật quên.",
+      "setup": "Gieo rủi ro, gián đoạn và điều kiện kích hoạt.",
+      "escalation": "Càng yên tâm càng tiến gần điều kiện ấy.",
+      "payoff": "Chi tiết trở lại bằng hệ quả truy nguyên được.",
+      "combines_with": [
+        "t07",
+        "t11",
+        "t20"
+      ],
+      "mistakes": "Rủi ro chưa từng xuất hiện.",
+      "avoid_when": "Cốt truyện cần nhân vật nhớ chính xác chi tiết."
+    },
+    {
+      "id": "t10",
+      "name": "Sửa sai làm tệ hơn",
+      "mechanism": "Xử lý triệu chứng khuếch đại nguyên nhân.",
+      "when": "Muốn giữ thể diện hoặc tiết kiệm công.",
+      "setup": "Nêu vấn đề gốc và cách sửa có vẻ hợp lý.",
+      "escalation": "Mỗi lần sửa khóa đường lui hoặc sinh nợ.",
+      "payoff": "Cách sửa cuối tạo trở ngại lớn nhất.",
+      "combines_with": [
+        "t05",
+        "t12",
+        "t19"
+      ],
+      "mistakes": "Các lần sửa giống nhau, thiếu liên hệ.",
+      "avoid_when": "Giải quyết ngay không mất gì."
+    },
+    {
+      "id": "t11",
+      "name": "Thông tin bất đối xứng",
+      "mechanism": "Hai phía hợp lý theo dữ kiện không trùng nhau.",
+      "when": "Khán giả thấy được hai góc nhìn.",
+      "setup": "Ghi rõ ai biết gì và kênh liên lạc giới hạn.",
+      "escalation": "Hành động bên này thành tín hiệu sai bên kia.",
+      "payoff": "Hai bộ dữ kiện gặp nhau hoặc lệch rõ ràng.",
+      "combines_with": [
+        "t06",
+        "t09",
+        "t23"
+      ],
+      "mistakes": "Biết điều chưa được báo.",
+      "avoid_when": "Khán giả thiếu dữ kiện để hiểu độ lệch."
+    },
+    {
+      "id": "t12",
+      "name": "Một sai lầm nhiều hậu quả",
+      "mechanism": "Một quyết định tạo nhiều nhánh hệ quả.",
+      "when": "Nguồn gây rối cụ thể có nhiều đường tác động.",
+      "setup": "Gieo nguyên nhân chung và các đường truyền.",
+      "escalation": "Các nhánh va vào mục tiêu và nguồn lực khác nhau.",
+      "payoff": "Nhánh hội tụ làm lộ nguồn gốc chung.",
+      "combines_with": [
+        "t10",
+        "t14",
+        "t22"
+      ],
+      "mistakes": "Thêm tai nạn không từ sai lầm đầu.",
+      "avoid_when": "Không đủ thời lượng theo các nhánh."
+    },
+    {
+      "id": "t13",
+      "name": "Quy tắc ba nhịp",
+      "mechanism": "Hai lần lập quy luật; lần ba đổi quy luật.",
+      "when": "Hành động rõ để khán giả dự đoán.",
+      "setup": "Hai lần đầu có điểm chung và biến đổi nhỏ.",
+      "escalation": "Tăng giá hoặc độ lệch; lần ba thay ý nghĩa.",
+      "payoff": "Lần ba vừa nhận ra được vừa trái dự đoán.",
+      "combines_with": [
+        "t15",
+        "t24",
+        "t32"
+      ],
+      "mistakes": "Lặp nguyên; ép mọi miếng đủ ba.",
+      "avoid_when": "Một hoặc hai nhịp đã đủ cho câu chuyện."
+    },
+    {
+      "id": "t14",
+      "name": "Leo thang hai tầng",
+      "mechanism": "Hậu quả đầu kích hoạt mầm rắc rối thứ hai.",
+      "when": "Kế hoạch hay nguồn lực có hai phần.",
+      "setup": "Gieo cả hai mầm trước khi giải quyết mầm đầu.",
+      "escalation": "Tầng hai dùng bài học sai hoặc cảm giác an toàn.",
+      "payoff": "Nối lại cả hai setup ở hậu quả sau.",
+      "combines_with": [
+        "t07",
+        "t12",
+        "t20"
+      ],
+      "mistakes": "Lặp tai nạn chỉ tăng âm lượng.",
+      "avoid_when": "Tầng hai không thêm lựa chọn hoặc ý nghĩa."
+    },
+    {
+      "id": "t15",
+      "name": "Callback",
+      "mechanism": "Chi tiết trở lại ở ngữ cảnh đổi nên mang nghĩa khác.",
+      "when": "Chi tiết đã đủ cụ thể để nhớ.",
+      "setup": "Gieo câu, vật hoặc hành động có dấu ấn.",
+      "escalation": "Trở lại có biến hóa và khoảng cách phù hợp.",
+      "payoff": "Hoàn tất quan hệ hoặc đảo ý ban đầu.",
+      "combines_with": [
+        "t07",
+        "t13",
+        "t20"
+      ],
+      "mistakes": "Lặp câu cửa miệng nguyên văn không biến đổi.",
+      "avoid_when": "Chưa thấy chi tiết hoặc đã nhắc quá nhiều."
+    },
+    {
+      "id": "t16",
+      "name": "Gậy ông đập lưng ông",
+      "mechanism": "Cơ chế trục lợi tác động chính người tạo ra nó.",
+      "when": "Lựa chọn đầu có tự tin hoặc ích kỷ.",
+      "setup": "Gieo kế hoạch và quy tắc không phân biệt người.",
+      "escalation": "Càng né càng duy trì cơ chế.",
+      "payoff": "Hậu quả đến theo đường đã thiết lập.",
+      "combines_with": [
+        "t03",
+        "t08",
+        "t18"
+      ],
+      "mistakes": "Trừng phạt ngoài thay hệ quả kế hoạch.",
+      "avoid_when": "Chuyện không liên quan trách nhiệm nhân vật."
+    },
+    {
+      "id": "t17",
+      "name": "Kẻ săn thành con mồi",
+      "mechanism": "Quyền chủ động đổi bên qua hành động có nguyên nhân.",
+      "when": "Hai phía cạnh tranh hoặc áp đặt.",
+      "setup": "Làm rõ ai kiểm soát nguồn lực.",
+      "escalation": "Kẻ mạnh bỏ giới hạn hoặc trao lợi thế.",
+      "payoff": "Đảo đúng quan hệ quyền lực đã gieo.",
+      "combines_with": [
+        "t16",
+        "t21",
+        "t32"
+      ],
+      "mistakes": "Nhân vật mới xuất hiện cứu.",
+      "avoid_when": "Không thấy vị thế đầu đủ rõ."
+    },
+    {
+      "id": "t18",
+      "name": "Bí mật lộ lúc tệ nhất",
+      "mechanism": "Chi tiết bị giấu lộ khi cần hình tượng nhất.",
+      "when": "Có điều cần bảo vệ trước một người cụ thể.",
+      "setup": "Gieo bí mật, dấu vết và dịp công khai.",
+      "escalation": "Che giấu tăng dấu vết hoặc người chứng kiến.",
+      "payoff": "Bằng chứng đã gieo tự lộ.",
+      "combines_with": [
+        "t08",
+        "t11",
+        "t26"
+      ],
+      "mistakes": "Bằng chứng cuối chưa từng có.",
+      "avoid_when": "Không hiểu bí mật gây mất gì."
+    },
+    {
+      "id": "t19",
+      "name": "Thành công tệ hơn thất bại",
+      "mechanism": "Đạt mục tiêu đồng thời tăng gánh nặng.",
+      "when": "Mong muốn bỏ qua một cái giá.",
+      "setup": "Nêu mục tiêu và giá có thể bị xem nhẹ.",
+      "escalation": "Mục tiêu gần hơn và nghĩa vụ lớn hơn.",
+      "payoff": "Xác nhận thành công rồi cho thấy giá phải trả.",
+      "combines_with": [
+        "t10",
+        "t16",
+        "t27"
+      ],
+      "mistakes": "Thất bại thuần túy gọi là thành công.",
+      "avoid_when": "Giá không đến từ lựa chọn hay thỏa thuận."
+    },
+    {
+      "id": "t20",
+      "name": "Payoff trì hoãn",
+      "mechanism": "Setup tồn tại qua nhiều nhịp rồi trở lại bất ngờ.",
+      "when": "Chi tiết có đường tác động lâu hơn.",
+      "setup": "Gieo khả năng chi tiết còn tồn tại.",
+      "escalation": "Duy trì dấu vết không nhắc quá mức.",
+      "payoff": "Trở lại đúng câu hỏi hoặc thời điểm mới.",
+      "combines_with": [
+        "t07",
+        "t09",
+        "t15"
+      ],
+      "mistakes": "Trì hoãn đến quên hoàn toàn.",
+      "avoid_when": "Trì hoãn làm hỏng nhịp chuyện ngắn."
+    },
+    {
+      "id": "t21",
+      "name": "Một câu đảo tình huống",
+      "mechanism": "Dữ kiện cuối đổi cách đọc chuỗi sự kiện.",
+      "when": "Một giả định chung có thể đảo.",
+      "setup": "Gieo giả định và dấu nhỏ của nghĩa thứ hai.",
+      "escalation": "Tăng niềm tin nhưng giữ công bằng dữ kiện.",
+      "payoff": "Câu ngắn tiết lộ điều kiện thiếu.",
+      "combines_with": [
+        "t11",
+        "t17",
+        "t32"
+      ],
+      "mistakes": "Thông tin vô cớ hoặc giải thích dài.",
+      "avoid_when": "Twist xóa động cơ và sự kiện trước."
+    },
+    {
+      "id": "t22",
+      "name": "Thảm họa dây chuyền",
+      "mechanism": "Hệ quả hành động này thành đầu vào hành động sau.",
+      "when": "Có liên kết vật lý hay xã hội cụ thể.",
+      "setup": "Gieo mắt xích và giới hạn vận hành.",
+      "escalation": "Tăng phạm vi theo chuỗi theo dõi được.",
+      "payoff": "Mắt cuối trả về sai lầm hoặc mục tiêu đầu.",
+      "combines_with": [
+        "t07",
+        "t12",
+        "t23"
+      ],
+      "mistakes": "Chỉ tăng số người bị nạn; nổ vô cớ.",
+      "avoid_when": "Hệ quả nhỏ hoặc đối thoại hợp hơn."
+    },
+    {
+      "id": "t23",
+      "name": "Người ngoài hiểu nhầm",
+      "mechanism": "Người mới đọc một phần sự kiện theo khung riêng.",
+      "when": "Hình ảnh diễn giải được hai nghĩa.",
+      "setup": "Nêu lý do người ngoài đến và điều chưa biết.",
+      "escalation": "Can thiệp có ý tốt hay tư lợi làm lệch thêm.",
+      "payoff": "Can thiệp hoàn tất hệ quả hiểu nhầm đầu.",
+      "combines_with": [
+        "t06",
+        "t11",
+        "t22"
+      ],
+      "mistakes": "Người ngoài vô cớ phá rối.",
+      "avoid_when": "Người ngoài đã biết đủ thông tin."
+    },
+    {
+      "id": "t24",
+      "name": "Bẻ kỳ vọng cuối câu",
+      "mechanism": "Vế cuối thay động cơ hay kết quả do vế đầu gợi.",
+      "when": "Lời kể cần cú nhấn gọn.",
+      "setup": "Tạo kỳ vọng rõ trong ít từ.",
+      "escalation": "Giữ ngắn và đặt từ đảo ý ở cuối.",
+      "payoff": "Kết ở chi tiết cụ thể đổi nghĩa.",
+      "combines_with": [
+        "t25",
+        "t27",
+        "t32"
+      ],
+      "mistakes": "Mọi câu đều bẻ làm mất nhịp.",
+      "avoid_when": "Đoạn cần thông tin rõ hoặc cảm xúc lắng."
+    },
+    {
+      "id": "t25",
+      "name": "Trang trọng hóa chuyện thường",
+      "mechanism": "Từ nghi thức hoặc chuyên môn mô tả việc nhỏ.",
+      "when": "Nhân vật tự nâng tầm hoặc lời kể châm biếm.",
+      "setup": "Cho thấy thực tế sát lời ví von.",
+      "escalation": "Mượn quy tắc ngôn ngữ cao nhưng giữ việc nhỏ.",
+      "payoff": "Hình ảnh đơn giản làm lộ độ chênh.",
+      "combines_with": [
+        "t05",
+        "t24",
+        "t29"
+      ],
+      "mistakes": "Chất thuật ngữ không liên quan.",
+      "avoid_when": "Người nghe không hình dung được sự kiện."
+    },
+    {
+      "id": "t26",
+      "name": "Độc thoại bóc phốt",
+      "mechanism": "Người kể lộ động cơ trái hình tượng công khai.",
+      "when": "Người kể biết dữ kiện hoặc tự thú.",
+      "setup": "Gieo lời công khai và điều riêng trái nhau.",
+      "escalation": "Thanh minh càng đẹp, chi tiết thực dụng càng rõ.",
+      "payoff": "Quan sát cụ thể tự vạch trần chênh lệch.",
+      "combines_with": [
+        "t18",
+        "t24",
+        "t27"
+      ],
+      "mistakes": "Người kể biết ý nghĩ không được phép biết.",
+      "avoid_when": "Lặp điều hình ảnh đã nói hết."
+    },
+    {
+      "id": "t27",
+      "name": "Châm biếm tỉnh bơ",
+      "mechanism": "Giọng bình thản cạnh nghịch lý dễ thấy.",
+      "when": "Chuẩn đời thường lệch thực tế.",
+      "setup": "Gieo chuẩn bằng hành vi, không bài giảng.",
+      "escalation": "Giữ giọng khi phi lý tăng.",
+      "payoff": "Câu thực dụng làm lộ nghịch lý.",
+      "combines_with": [
+        "t19",
+        "t25",
+        "t31"
+      ],
+      "mistakes": "Giải thích phải cười; diễn thuyết.",
+      "avoid_when": "Giọng kể xóa cảm xúc cốt lõi."
+    },
+    {
+      "id": "t28",
+      "name": "Phóng đại con số",
+      "mechanism": "Chênh số lượng lộ ưu tiên hay nhận thức phi lý.",
+      "when": "Có thước đo khán giả hiểu.",
+      "setup": "Cho điểm neo gần thực tế.",
+      "escalation": "Tăng hoặc hạ bậc số theo một lợi ích.",
+      "payoff": "Số cuối bất ngờ nhưng hợp thái độ.",
+      "combines_with": [
+        "t13",
+        "t24",
+        "t27"
+      ],
+      "mistakes": "Lặp số thương hiệu; số gây nhiễu.",
+      "avoid_when": "Cần số chính xác để giữ sự kiện gốc."
+    },
+    {
+      "id": "t29",
+      "name": "Biệt danh và ẩn dụ tình huống",
+      "mechanism": "Tên mới cho hành vi nén một nghịch lý.",
+      "when": "Hành vi hay quan hệ đã xuất hiện rõ.",
+      "setup": "Gieo hành vi trước khi gán tên.",
+      "escalation": "Tên đổi sắc thái khi vai trò đổi.",
+      "payoff": "Biệt danh trở lại với nghĩa trái lúc đặt.",
+      "combines_with": [
+        "t15",
+        "t25",
+        "t31"
+      ],
+      "mistakes": "Sao chép tên nhận diện; tên vô căn cứ.",
+      "avoid_when": "Nhiều tên mới làm rối danh tính."
+    },
+    {
+      "id": "t30",
+      "name": "Chơi chữ",
+      "mechanism": "Một âm hoặc chữ mang hai nghĩa trong tình huống.",
+      "when": "Hai nghĩa tự nhiên trong tiếng Việt.",
+      "setup": "Ngữ cảnh gợi nghĩa thứ nhất.",
+      "escalation": "Hành động chuyển sang nghĩa thứ hai.",
+      "payoff": "Từ cuối hay hình ảnh xác nhận hai nghĩa.",
+      "combines_with": [
+        "t01",
+        "t02",
+        "t24"
+      ],
+      "mistakes": "Chỉ đúng khi viết, không nghe được qua TTS.",
+      "avoid_when": "Cần giảng từ nguyên dài mới hiểu."
+    },
+    {
+      "id": "t31",
+      "name": "Lời bình trái hình ảnh",
+      "mechanism": "Lời kể nói thành công khi hành động cho thấy ngược.",
+      "when": "Storyboard thể hiện đối lập rõ.",
+      "setup": "Gieo hình ảnh độc lập đủ hiểu.",
+      "escalation": "Khoảng cách lời và thực tế tăng.",
+      "payoff": "Chi tiết hình ảnh kết luận trong giọng bình thản.",
+      "combines_with": [
+        "t25",
+        "t27",
+        "t29"
+      ],
+      "mistakes": "Mâu thuẫn vô cớ với sự kiện nguồn.",
+      "avoid_when": "Chỉ có âm thanh không thấy đối lập."
+    },
+    {
+      "id": "t32",
+      "name": "Câu chốt ngắn",
+      "mechanism": "Phản ứng ít từ nén hệ quả và kết ở điểm mạnh.",
+      "when": "Hành động đã cung cấp đủ dữ kiện.",
+      "setup": "Chuẩn bị người có thái độ phù hợp nói cuối.",
+      "escalation": "Cắt giải thích, dồn một nhận thức mới.",
+      "payoff": "Kết sau câu có động cơ và nghĩa mới.",
+      "combines_with": [
+        "t15",
+        "t21",
+        "t27"
+      ],
+      "mistakes": "Kéo dài giải thích hoặc chen lời kêu gọi.",
+      "avoid_when": "Phải kể thêm tình tiết mới mới hiểu câu chốt."
+    }
+  ],
+  "endings": [
+    {
+      "id": "chain_reaction",
+      "name": "Thảm họa dây chuyền",
+      "payoff": "Các mắt xích đã gieo lần lượt kích hoạt theo đường nhân quả."
+    },
+    {
+      "id": "boomerang",
+      "name": "Gậy ông đập lưng ông",
+      "payoff": "Cơ chế trục lợi quay về chính người tạo ra."
+    },
+    {
+      "id": "costly_success",
+      "name": "Thành công còn tệ hơn thất bại",
+      "payoff": "Đạt mục tiêu và trả cái giá đã gợi trước."
+    },
+    {
+      "id": "status_reversal",
+      "name": "Đảo ngược vị thế",
+      "payoff": "Đổi bên chủ động qua lựa chọn hoặc dữ kiện đã gieo."
+    },
+    {
+      "id": "secret_reveal",
+      "name": "Bí mật bại lộ",
+      "payoff": "Dấu vết lộ đúng lúc cần bảo vệ hình tượng."
+    },
+    {
+      "id": "dialogue_reframe",
+      "name": "Cao trào đối thoại",
+      "payoff": "Một câu ngắn đổi cách hiểu chuỗi sự kiện."
+    },
+    {
+      "id": "delayed_karma",
+      "name": "Báo ứng trì hoãn",
+      "payoff": "Chi tiết tưởng đã qua trở lại gây hệ quả."
+    },
+    {
+      "id": "unresolved_misunderstanding",
+      "name": "Hiểu lầm còn tiếp diễn",
+      "payoff": "Khán giả thấy sự thật, nhân vật giữ niềm tin sai có logic."
+    },
+    {
+      "id": "circular",
+      "name": "Vòng tròn trớ trêu",
+      "payoff": "Trở lại đầu với nhận thức, cái giá hoặc vị thế khác."
+    }
+  ]
+}

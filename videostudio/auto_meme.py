@@ -77,7 +77,7 @@ def discover_scope(client, requested=None):
             if status.get('ready') is not True or status.get('bridge') != scope:
                 problems.append(f'{scope}: bridge is not ready'); continue
             preflight = client.json('/api/preflight?' + urlencode({
-                'scope': scope, 'workflow_mode': 'meme', 'meme_engine': 'hyperframes'}))
+                'scope': scope, 'workflow_mode': 'meme'}))
             if preflight.get('ready') is not True:
                 checks = [c.get('message') or c.get('name') for c in preflight.get('checks', []) if not c.get('ok')]
                 problems.append(f'{scope}: preflight blocked: {checks}'); continue
@@ -119,16 +119,18 @@ def run(args):
         raise ClientError('Provide 1–100000 characters of input, a voice, and --seconds between 15 and 600')
     if not math.isfinite(args.poll_seconds) or args.poll_seconds <= 0:
         raise ClientError('--poll-seconds must be positive')
-    payload = {'idea': idea, 'workflow_mode': 'meme', 'meme_engine': 'hyperframes',
+    payload = {'idea': idea, 'workflow_mode': 'meme',
                'voice_id': args.voice, 'duration_seconds': args.seconds, 'project': args.project,
                'text_provider': 'chatgpt', 'image_provider': 'comfy', 'flow_batch_size': 1,
                'music_volume': 0, 'quality_mode': 'quick'}
     request_hash = hashlib.sha256(json.dumps({'server': client.server, 'request': payload},
                                             sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    legacy_hash = hashlib.sha256(json.dumps({'server': client.server, 'request': {**payload,'meme_engine':'hyperframes'}},
+                                           sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     receipt_file = receipt_path(output)
     receipt = json.loads(receipt_file.read_text(encoding='utf-8')) if receipt_file.exists() else None
     if receipt is not None:
-        if (not isinstance(receipt, dict) or receipt.get('request_hash') != request_hash
+        if (not isinstance(receipt, dict) or receipt.get('request_hash') not in (request_hash,legacy_hash)
                 or receipt.get('server') != client.server or not receipt.get('idempotency_key')
                 or (args.scope and receipt.get('scope') != args.scope)):
             raise ClientError('Output receipt belongs to a different request; choose another --out')

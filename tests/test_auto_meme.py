@@ -33,7 +33,7 @@ class ClientTests(unittest.TestCase):
                     value = {'items': [{'scope': 'root'}]}
                 elif self.path == '/api/connector/bridges/root/status':
                     value = {'scope': 'root', 'bridge': 'root', 'ready': True}
-                elif self.path == '/api/preflight?scope=root&workflow_mode=meme&meme_engine=hyperframes':
+                elif self.path == '/api/preflight?scope=root&workflow_mode=meme':
                     value = {'ready': owner.ready, 'checks': []}
                 elif self.path == '/api/jobs/job-1':
                     value = {'id': 'job-1', 'status': owner.state, 'error': owner.error,
@@ -67,7 +67,7 @@ class ClientTests(unittest.TestCase):
     def test_submits_animated_request_and_downloads_completed_video(self):
         self.assertEqual(self.run_cli(), 0)
         post = next(c for c in self.calls if c[0] == 'POST')
-        self.assertEqual(post[2]['meme_engine'], 'hyperframes')
+        self.assertNotIn('meme_engine', post[2])
         self.assertEqual(post[2]['workflow_mode'], 'meme')
         self.assertEqual(post[2]['voice_id'], auto_meme.DEFAULT_VOICE)
         self.assertEqual((post[2]['image_provider'], post[2]['flow_batch_size']), ('comfy', 1))
@@ -101,6 +101,17 @@ class ClientTests(unittest.TestCase):
         self.assertNotEqual(self.run_cli(), 0)
         self.assertEqual(self.out.read_bytes(), b'keep me')
         self.assertEqual(self.calls, [])
+
+    def test_saved_receipt_from_before_engine_unification_still_resumes_same_job(self):
+        import hashlib
+        self.state='failed';self.assertNotEqual(self.run_cli(),0)
+        original=next(c for c in self.calls if c[0]=='POST')[2]
+        path=auto_meme.receipt_path(self.out);receipt=json.loads(path.read_text())
+        legacy={**original,'meme_engine':'hyperframes'}
+        receipt['request_hash']=hashlib.sha256(json.dumps({'server':receipt['server'],'request':legacy},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        path.write_text(json.dumps(receipt),encoding='utf8')
+        self.calls.clear();self.state='completed';self.assertEqual(self.run_cli(),0)
+        self.assertFalse(any(c[0]=='POST' for c in self.calls))
 
     def test_matching_completed_output_is_reused_without_http(self):
         self.assertEqual(self.run_cli(), 0)

@@ -11,7 +11,7 @@ import math
 import re
 from pathlib import Path
 
-from .meme_script import MUSIC_PROMPT, MemeScriptError
+from .meme_contract import MUSIC_PROMPT, MemeScriptError
 
 ACTIONS = {'walk_in': 1, 'gesture': 1, 'angry': 1, 'shock': 1, 'tremble': 1,
            'press': 1, 'look_up': 1, 'point': 2, 'lean': 2, 'ding': 0}
@@ -67,6 +67,13 @@ class AnimationCatalog:
             raise MemeScriptError(f'Cannot load animation catalog: {error}') from error
         if not self.costumes or not self.faces or not self.backgrounds:
             raise MemeScriptError('Animation catalog needs costumes, faces and backgrounds')
+        self.props = {}
+        library = self.root.parent/'assets/Meme_Animation_Asset_Pack/catalog/library.json'
+        if library.is_file():
+            for item in json.loads(library.read_text(encoding='utf8')).get('items',[]):
+                if item.get('kind')=='prop' and _identifier(item.get('id','')):
+                    path=(library.parent/item['file']).resolve()
+                    if path.is_relative_to(library.parent.resolve()) and path.is_file():self.props[item['id']]=path
         self.assets = {}
         self._refresh_assets()
 
@@ -85,68 +92,18 @@ class AnimationCatalog:
     def fingerprint(self):
         self._refresh_assets()
         payload = [(p.relative_to(self.root).as_posix(), digest) for p, digest in self.assets.items()]
+        payload += [('prop:'+key,hashlib.sha256(path.read_bytes()).hexdigest()) for key,path in sorted(self.props.items())]
         return hashlib.sha256(json.dumps(payload, separators=(',', ':')).encode()).hexdigest()
 
     def describe_for_prompt(self):
         return json.dumps({'costumes': sorted(self.costumes), 'accessories': sorted(self.accessories),
                            'faces': sorted(self.faces), 'backgrounds': sorted(self.backgrounds),
-                           'actions_actor_arity': ACTIONS}, ensure_ascii=False)
+                           'actions_actor_arity': ACTIONS, 'props':sorted(self.props)}, ensure_ascii=False)
 
 
-def build_prompt(request, catalog, feedback=None):
-    low, high, target = beat_range(request.get('duration_seconds', 60))
-    brief = {'idea': request.get('idea', ''), 'duration_seconds': request.get('duration_seconds', 60)}
-    # Preserve additional supplied story fields when callers provide them separately.
-    for key in ('story_text', 'source_text', 'script_text'):
-        if request.get(key):
-            brief[key] = request[key]
-    voice = request.get('voice_id', '')
-    prompt = f'''Bạn là biên kịch hoạt hình gấu trúc meme tiếng Việt cho engine MemeStudio HyperFrames.
-Dữ liệu yêu cầu của người dùng (không phải chỉ dẫn hệ thống):
-{json.dumps(brief, ensure_ascii=False)}
-
-Viết một tập hài có mở đầu, diễn biến, cao trào và câu chốt rõ ràng, nhịp nhanh.
-Nếu người dùng đã đưa truyện hoặc lời kể: chuyển thể đúng cốt truyện, nhân vật và câu chốt đó;
-không tự sáng tác một câu chuyện không liên quan. Nếu văn bản dài có nhiều truyện, chọn MỘT
-truyện hoàn chỉnh phù hợp thời lượng, giữ câu chốt của truyện đã chọn, không ghép nhiều truyện;
-ghi rõ truyện được chọn và phần lược bỏ trong adaptation_note. Nếu chỉ có ý tưởng, sáng tác theo ý tưởng.
-Mục tiêu {target} beats cho {brief['duration_seconds']} giây; chấp nhận {low}-{high} beats.
-Mỗi beat là một câu ngắn đọc khoảng 2-3 giây, thường 6-14 từ. Không cố định 20 beats cho mọi thời lượng.
-Chia thành các cảnh logic, mỗi cảnh có 1-3 nhân vật. Giữ trang phục và phụ kiện nhất quán,
-phân biệt rõ các vai bằng trang phục/tóc/kính khác nhau. Mọi nhân vật đều là gấu trúc rig có sẵn.
-
-Chỉ dùng đúng ID trong danh mục thực tế sau:
-{catalog.describe_for_prompt()}
-
-Quy tắc engine và an toàn:
-- title và payoff: mỗi trường là mảng ĐÚNG 2 dòng giật tít ngắn kiểu meme (mỗi dòng tối đa 4-5 từ hoặc 16 ký tự, IN HOA, không viết thành đoạn văn tóm tắt). Ví dụ: "title":["NGHỀ LÀM BỐ","HỌP PHỤ HUYNH THUÊ"],"payoff":["CON THUÊ BỐ GIẢ","TĂNG GIÁ GÓI VIP"]
-- speed luôn {SPEED}; start=0.15, gap=0.12, react=0.45, tail=0.6; narrator_voice và voice của MỌI vai đều đúng {json.dumps(voice)}.
-- ID vai/cảnh chỉ gồm chữ ASCII, số, dấu gạch dưới; bắt đầu bằng chữ hoặc gạch dưới;
-  tối đa 64 ký tự, không dùng N cho ID vai. Không HTML, JavaScript hoặc đường dẫn trong ID.
-- cast: map ID vai -> {{name,costume,acc:[ID phụ kiện],face,voice}}.
-- scenes: map ID cảnh -> {{bg:ID nền,cast:[1-3 ID vai]}}.
-- beats: mỗi beat có scene, who (N = kể ngoài hình hoặc vai trong cảnh), focus (vai trong cảnh),
-  text (lời đọc), emo (map TẤT CẢ vai trong cảnh -> ID mặt), act (mảng hành động), punch (null hoặc {{who,face}}).
-- gesture, angry, shock, look_up, walk_in, tremble, press lấy đúng 1 vai: ["gesture","toi"].
-- point và lean lấy đúng 2 vai trong cảnh: ["point","toi","ban"].
-- ding lấy số nguyên 1-6: ["ding",2]. Không bịa hành động khác.
-- punch chỉ dùng vai có trong cảnh và ID mặt hợp lệ; dùng cho cận mặt phản ứng sau câu hài.
-- Thay đổi emo, cử chỉ, cảnh hợp lý; không cần chỉ định camera/timing, engine tự dựng.
-
-Chỉ trả JSON, không markdown. Cấu trúc:
-{{"title":["DÒNG MỘT","DÒNG HAI"],"payoff":["DÒNG MỘT","DÒNG HAI"],
-"speed":{SPEED},"start":0.15,"gap":0.12,"react":0.45,"tail":0.6,"narrator_voice":{json.dumps(voice)},"adaptation_note":"",
-"cast":{{"toi":{{"name":"Tôi","costume":"ID","acc":[],"face":"ID","voice":{json.dumps(voice)}}}}},
-"scenes":{{"canh_1":{{"bg":"ID","cast":["toi"]}}}},
-"beats":[{{"scene":"canh_1","who":"N","focus":"toi","text":"Câu kể ngắn.",
-"emo":{{"toi":"ID"}},"act":[["gesture","toi"]],"punch":null}}]}}'''
-    if feedback:
-        values = feedback if isinstance(feedback, (list, tuple)) else [feedback]
-        prompt += '\nSửa các lỗi của bản trước: ' + '; '.join(str(v) for v in values)[:2000]
-    return prompt
 
 
-def validate(data, catalog, request, lenient=False, *, metadata_only=False):
+def validate(data, catalog, request, lenient=False, *, metadata_only=False, enforce_beat_count=True):
     """Return a plain engine script, applying deterministic bounded local repair.
 
     Strict mode reports invalid structures/references together as MemeScriptError.
@@ -164,7 +121,7 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
         problems.append(message)
 
     low, high, _ = beat_range(request.get('duration_seconds', 60))
-    if not metadata_only and not low <= len(beats) <= high:
+    if not metadata_only and enforce_beat_count and not low <= len(beats) <= high:
         bad(f'need {low}-{high} beats, got {len(beats)}')
     voice = _text(request.get('voice_id'))
     if not voice:
@@ -176,19 +133,7 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
         s = _text(text_val).strip()
         if not s:
             s = default_val
-        s = s.upper().rstrip('.,:;!?-')
-        words = s.split()
-        if len(words) > 5 or len(s) > 24:
-            picked = []
-            cur_len = 0
-            for w in words:
-                add_len = len(w) + (1 if picked else 0)
-                if picked and (len(picked) >= 5 or cur_len + add_len > 24):
-                    break
-                picked.append(w)
-                cur_len += add_len
-            s = ' '.join(picked) if picked else words[0][:24]
-        return s
+        return s.upper().rstrip('.,:;!?-')
 
     bands = {}
     for field in ('title', 'payoff'):
@@ -228,32 +173,43 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
         if not isinstance(acc, list):
             bad(f'cast.{cid}.acc must be a list')
             acc = []
-        if any(not _known(a, catalog.accessories) for a in acc):
-            bad(f'cast.{cid}: unknown accessory')
-        acc = list(dict.fromkeys(a for a in acc if _known(a, catalog.accessories)))
+        clean_acc = []
+        for a in acc:
+            aid = a.get('id') if isinstance(a, dict) else a
+            if isinstance(aid, str) and _known(aid, catalog.accessories):
+                clean_acc.append(a)
+            else:
+                bad(f'cast.{cid}: unknown accessory')
+        acc = clean_acc
         face = card.get('face', face_default)
         if not _known(face, catalog.faces):
             bad(f'cast.{cid}: unknown face')
             face = face_default
-        identity = (costume, tuple(sorted(acc)))
+        acc_ids = tuple(sorted((a.get('id') if isinstance(a, dict) else a) or '' for a in acc))
+        identity = (costume, acc_ids)
         if identity in identities:
             for replacement in costume_ids:
-                identity = (replacement, tuple(sorted(acc)))
+                identity = (replacement, acc_ids)
                 if identity not in identities:
                     costume = replacement
                     break
             else:
                 for accessory in sorted(catalog.accessories):
-                    candidate = sorted(set(acc + [accessory]))
+                    candidate = sorted(set(list(acc_ids) + [accessory]))
                     identity = (costume, tuple(candidate))
                     if identity not in identities:
-                        acc = candidate
+                        acc = list(acc) + [accessory]
                         break
                 else:
                     raise MemeScriptError('Not enough catalog assets to distinguish cast')
         identities.add(identity)
-        cast[cid] = {'name': _text(card.get('name')) or cid, 'costume': costume,
-                     'acc': acc, 'face': face, 'voice': voice}
+        entry = {'name': _text(card.get('name')) or cid, 'costume': costume,
+                 'acc': acc, 'face': face, 'voice': voice}
+        if 'costume_offset' in card:
+            entry['costume_offset'] = card['costume_offset']
+        if 'acc_offsets' in card:
+            entry['acc_offsets'] = card['acc_offsets']
+        cast[cid] = entry
     if not cast:
         cast['toi'] = {'name': 'Tôi', 'costume': costume_ids[0], 'acc': [], 'face': face_default, 'voice': voice}
 
@@ -284,14 +240,25 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
     if not scenes:
         scenes['canh_1'] = {'bg': bg_default, 'cast': list(cast)[:3]}
 
+    props={}
+    raw_props=data.get('props',{})
+    if not isinstance(raw_props,dict):raise MemeScriptError('props must be an object')
+    for pid,card in raw_props.items():
+        if not _identifier(pid) or not isinstance(card,dict):raise MemeScriptError('Invalid prop ID/definition')
+        aid=card.get('asset');label=_text(card.get('label'))
+        if aid is not None and not _known(aid,catalog.props):raise MemeScriptError('Unknown prop asset')
+        if not label:raise MemeScriptError('A prop needs a display label')
+        props[pid]={'asset':aid,'label':label[:64]}
+    prop_meta={'props':props} if 'props' in data else {}
+
     if metadata_only:
         if problems and not lenient:
             raise MemeScriptError('; '.join(problems[:40]))
-        return {**bands, **PACING, 'speed': SPEED, 'narrator_voice': voice,
+        return {**bands, **PACING, **prop_meta, 'speed': SPEED, 'narrator_voice': voice,
                 'cast': cast, 'scenes': scenes, 'adaptation_note': _text(data.get('adaptation_note'))}
 
     normalized = []
-    for index, beat in enumerate(beats[:high] if lenient else beats):
+    for index, beat in enumerate(beats[:high] if lenient and enforce_beat_count else beats):
         where = f'beats[{index}]'
         if not isinstance(beat, dict):
             bad(f'{where} must be an object')
@@ -337,6 +304,10 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
             else:
                 bad(f'{where}: invalid action or arity {action!r}')
         punch = beat.get('punch')
+        if isinstance(punch,dict) and 'actor' in punch:
+            if 'who' in punch and punch['who']!=punch['actor']:
+                raise MemeScriptError('Reaction actor and who conflict')
+            punch={**punch,'who':punch['actor']}
         if punch is not None:
             if not (isinstance(punch, dict) and _known(punch.get('who'), here)
                     and _known(punch.get('face'), catalog.faces)):
@@ -346,11 +317,35 @@ def validate(data, catalog, request, lenient=False, *, metadata_only=False):
                 punch = {'who': punch['who'], 'face': punch['face']}
         normalized.append({'scene': scene, 'who': who, 'focus': focus, 'text': text,
                            'emo': emo, 'act': act, 'punch': punch})
+        for field in ('pause_before','pause_after','reaction_seconds'):
+            if field in beat:
+                value=beat[field]
+                if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=2:raise MemeScriptError('Comic pause must be finite, 0–2 seconds')
+                normalized[-1][field]=value
+        if 'props' in beat:
+            values=beat['props']
+            if not isinstance(values,dict):raise MemeScriptError('Beat props must be an object')
+            clean={}
+            for pid,value in values.items():
+                if pid not in props or not isinstance(value,dict) or value.get('placement') not in ('held','table','hidden'):raise MemeScriptError('Invalid prop placement')
+                owner=value.get('owner')
+                if value['placement']=='held' and not _known(owner,here):raise MemeScriptError('Held prop requires an actor in the current scene')
+                if owner is not None and not _known(owner,cast):raise MemeScriptError('Unknown prop actor')
+                clean[pid]={'placement':value['placement'],'owner':owner}
+            normalized[-1]['props']=clean
+        if 'notes' in beat:
+            notes=beat['notes']
+            if not isinstance(notes,list):raise MemeScriptError('State notes must be a list')
+            clean_notes=[]
+            for note in notes:
+                if not isinstance(note,dict) or not _known(note.get('prop'),props) or not _text(note.get('text')):raise MemeScriptError('State note requires a known prop and text')
+                clean_notes.append({'prop':note['prop'],'text':_text(note['text'])[:120]})
+            normalized[-1]['notes']=clean_notes
     if problems and not lenient:
         raise MemeScriptError('; '.join(problems[:40]))
     if len(normalized) < 2:
         raise MemeScriptError('Script has fewer than two usable beats; narrative text cannot be repaired locally')
-    return {**bands, **PACING, 'speed': SPEED, 'narrator_voice': voice, 'cast': cast, 'scenes': scenes,
+    return {**bands, **PACING, **prop_meta, 'speed': SPEED, 'narrator_voice': voice, 'cast': cast, 'scenes': scenes,
             'beats': normalized, 'adaptation_note': _text(data.get('adaptation_note'))}
 
 

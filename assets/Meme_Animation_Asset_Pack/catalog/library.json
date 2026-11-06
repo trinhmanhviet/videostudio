@@ -389,13 +389,23 @@
   {
    "id": "wallet",
    "kind": "prop",
-   "tags": "ví",
+   "pack_id": "vs01",
    "file": "library/wallet.png",
+   "label": "Ví",
+   "label_vi": "Ví",
+   "label_en": "Wallet",
+   "tags": "ví vi vi tien vi da vi cam tay wallet purse billfold brown wallet",
    "size": [
-    227,
-    207
+    512,
+    512
    ],
-   "scale": 0.4185
+   "handheld_layout": {
+    "scale": 0.72,
+    "grip_x": 0.1277,
+    "grip_y": 0.75
+   },
+   "display_length_ratio_character_height": 0.21,
+   "needs_review": true
   },
   {
    "id": "handbag",
@@ -752,13 +762,23 @@
   {
    "id": "smartphone",
    "kind": "prop",
-   "tags": "điện thoại",
+   "pack_id": "vs01",
    "file": "library/smartphone.png",
+   "label": "Điện thoại",
+   "label_vi": "Điện thoại",
+   "label_en": "Smartphone",
+   "tags": "điện thoại dien thoai dien thoai di dong smartphone cam dien thoai man hinh trong phone smartphone mobile phone blank screen handheld",
    "size": [
-    139,
-    213
+    512,
+    512
    ],
-   "scale": 0.446
+   "handheld_layout": {
+    "scale": 0.69,
+    "grip_x": 0.7247,
+    "grip_y": 0.7842
+   },
+   "display_length_ratio_character_height": 0.23,
+   "needs_review": true
   },
   {
    "id": "laptop_open",
@@ -1500,13 +1520,23 @@
   {
    "id": "screwdriver",
    "kind": "prop",
-   "tags": "tua vít",
+   "pack_id": "vs01",
    "file": "library/screwdriver.png",
+   "label": "Tuốc nơ vít",
+   "label_vi": "Tuốc nơ vít",
+   "label_en": "Screwdriver",
+   "tags": "tua vít tuoc no vit tua vit vit tay dung cu sua chua screwdriver tool hand tool flathead screwdriver",
    "size": [
-    266,
-    173
+    512,
+    512
    ],
-   "scale": 0.3571
+   "handheld_layout": {
+    "scale": 1.05,
+    "grip_x": 0.2915,
+    "grip_y": 0.6935
+   },
+   "display_length_ratio_character_height": 0.35,
+   "needs_review": true
   },
   {
    "id": "flashlight",
@@ -1584,6 +1614,117 @@
     240
    ],
    "scale": 0.581
+  },
+  {
+   "id": "can_cau",
+   "kind": "prop",
+   "pack_id": "vs01",
+   "file": "library/can_cau.png",
+   "label": "Cần câu",
+   "label_vi": "Cần câu",
+   "label_en": "Fishing rod",
+   "tags": "can cau can cau ca cau ca tay cam may cau fishing rod fishing pole reel fishing handle",
+   "size": [
+    512,
+    512
+   ],
+   "handheld_layout": {
+    "scale": 2.49,
+    "grip_x": 0.2176,
+    "grip_y": 0.8481
+   },
+   "display_length_ratio_character_height": 0.83,
+   "needs_review": true
+  },
+  {
+   "id": "cuoc",
+   "kind": "prop",
+   "file": "library/cuoc.png",
+   "label": "Cuốc làm vườn"
+  },
+  {
+   "id": "chia_khoa",
+   "kind": "prop",
+   "pack_id": "vs01",
+   "file": "library/chia_khoa.png",
+   "label": "Chìa khóa",
+   "label_vi": "Chìa khóa",
+   "label_en": "Keyring with key",
+   "tags": "chia khoa chum chia khoa moc khoa khoa xe key keyring keys car key fob",
+   "size": [
+    512,
+    512
+   ],
+   "handheld_layout": {
+    "scale": 0.57,
+    "grip_x": 0.5461,
+    "grip_y": 0.1038
+   },
+   "display_length_ratio_character_height": 0.19,
+   "needs_review": true
+  },
+  {
+   "id": "hoa_don",
+   "kind": "prop",
+   "pack_id": "vs01",
+   "file": "library/hoa_don.png",
+   "label": "Tờ hóa đơn",
+   "label_vi": "Tờ hóa đơn",
+   "label_en": "Receipt",
+   "tags": "hoa don to hoa don bien lai giay tinh tien receipt bill payment slip paper receipt",
+   "size": [
+    512,
+    512
+   ],
+   "handheld_layout": {
+    "scale": 0.72,
+    "grip_x": 0.804,
+    "grip_y": 0.1503
+   },
+   "display_length_ratio_character_height": 0.24,
+   "needs_review": true
+  },
+  {
+   "id": "coc_co_quai",
+   "kind": "prop",
+   "pack_id": "vs01",
+   "file": "library/coc_co_quai.png",
+   "label": "Cốc có quai",
+   "label_vi": "Cốc có quai",
+   "label_en": "Handled mug",
+   "tags": "coc coc co quai ly ly ca phe coc su mug cup handled mug coffee cup",
+   "size": [
+    512,
+    512
+   ],
+   "handheld_layout": {
+    "scale": 0.8571,
+    "grip_x": 0.8717,
+    "grip_y": 0.4599
+   },
+   "display_length_ratio_character_height": 0.25,
+   "needs_review": true
+  },
+  {
+   "id": "o_gap",
+   "kind": "prop",
+   "pack_id": "vs01",
+   "file": "library/o_gap.png",
+   "label": "Ô gấp",
+   "label_vi": "Ô gấp",
+   "label_en": "Folded umbrella",
+   "tags": "o gap du gap o cam tay o xep folded umbrella compact umbrella umbrella closed umbrella",
+   "size": [
+    512,
+    512
+   ],
+   "handheld_layout": {
+    "scale": 0.99,
+    "grip_x": 0.2789,
+    "grip_y": 0.8301
+   },
+   "display_length_ratio_character_height": 0.33,
+   "needs_review": true
   }
  ],
  "source_hashes": {

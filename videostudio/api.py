@@ -696,6 +696,266 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if candidate not in allowed or not candidate.is_file():raise HTTPException(404,'File not checkpointed')
         if name=='video.mp4' and j['state']!='completed':raise HTTPException(409,'Video not verified')
         return FileResponse(candidate)
+    meme_assets = ROOT / 'memestudio' / 'assets'
+    if meme_assets.is_dir():
+        app.mount('/meme-assets', StaticFiles(directory=meme_assets), name='meme_assets')
+
+    @app.get('/characters')
+    def characters_page():
+        return FileResponse(ROOT / 'static' / 'characters.html')
+
+    @app.get('/api/characters')
+    def get_characters():
+        from .character_store import load_roster
+        wardrobe_path = ROOT / 'memestudio' / 'assets' / 'rig' / 'wardrobe' / 'wardrobe.json'
+        wardrobe_data = json.loads(wardrobe_path.read_text(encoding='utf-8')) if wardrobe_path.is_file() else {'items': []}
+        faces_path = ROOT / 'memestudio' / 'assets' / 'rig' / 'faces' / 'faces.json'
+        faces_data = json.loads(faces_path.read_text(encoding='utf-8')) if faces_path.is_file() else {}
+        return {
+            'characters': load_roster(),
+            'catalog': {
+                'costumes': [item for item in wardrobe_data.get('items', []) if item.get('kind') == 'costume'],
+                'accessories': [item for item in wardrobe_data.get('items', []) if item.get('kind') != 'costume'],
+                'faces': faces_data.get('faces', {}),
+                'face_names': sorted(faces_data.get('faces', {}).keys()),
+                'head': faces_data.get('head', {}),
+                'rig': wardrobe_data.get('rig', {}),
+                'voices': voices.catalog().get('voices', []) if hasattr(voices, 'catalog') else []
+            }
+        }
+
+    @app.post('/api/characters')
+    async def save_character(request: Request):
+        import re
+        from .character_store import edit_roster,validate_roster
+        same_origin(request)
+        try:body=await request.json()
+        except ValueError as error:raise HTTPException(422,'Invalid character JSON') from error
+        if not isinstance(body,dict):raise HTTPException(422,'Character must be an object')
+        cid = str(body.get('id', '')).strip().lower()
+        if not re.fullmatch(r'[a-z_][a-z0-9_]{0,63}',cid):
+            raise HTTPException(400, 'Invalid character ID (must be lowercase alphanumeric and underscores)')
+        if not isinstance(body.get('aliases',[]),list):raise HTTPException(422,'aliases must be a list')
+        char_data = {
+            'id': cid,
+            'name': str(body.get('name', cid)).strip(),
+            'aliases': [str(a).strip() for a in body.get('aliases', []) if str(a).strip()],
+            'costume': str(body.get('costume', 'ao_phong_xanh')),
+            'costume_offset': body.get('costume_offset', {'dx': 0, 'dy': 0, 'scale': 1.0}),
+            'acc': body.get('acc', []),
+            'acc_offsets': body.get('acc_offsets', {}),
+            'default_face': str(body.get('default_face', 'noi')),
+            'voice': str(body.get('voice', '')),
+            'description': str(body.get('description', ''))
+        }
+        try:
+            validate_roster([char_data])
+            from .meme_animation_script import AnimationCatalog,validate as validate_appearance
+            catalog=AnimationCatalog()
+            validate_appearance({'title':['A','B'],'payoff':['A','B'],'cast':{cid:{**char_data,'face':char_data['default_face']}},
+                                 'scenes':{'check':{'bg':next(iter(catalog.backgrounds)),'cast':[cid]}}},
+                                catalog,{'voice_id':'validation','duration_seconds':15},metadata_only=True)
+            def change(rows):
+                idx=next((i for i,c in enumerate(rows) if c['id']==cid),None)
+                if idx is None:rows.append(char_data)
+                else:rows[idx]={**rows[idx],**char_data}
+                return rows
+            roster=edit_roster(change)
+        except ValueError as error:raise HTTPException(422,str(error)) from error
+        return {'ok': True, 'character': char_data, 'characters': roster}
+
+    @app.delete('/api/characters/{char_id}')
+    def delete_character(char_id: str,request:Request):
+        from .character_store import edit_roster
+        same_origin(request)
+        cid = char_id.strip().lower()
+        def change(rows):
+            kept=[c for c in rows if c['id'].lower()!=cid]
+            if len(kept)==len(rows):raise HTTPException(404,'Character not found')
+            return kept
+        try:new_roster=edit_roster(change)
+        except ValueError as error:raise HTTPException(409,str(error)) from error
+        return {'ok': True, 'characters': new_roster}
+
+    # ---- Dynamic Meme Episode Editor & Prop Ingestion Routes ----
+    prop_assets_dir = ROOT / 'assets' / 'Meme_Animation_Asset_Pack' / 'catalog' / 'library'
+    if prop_assets_dir.is_dir():
+        app.mount('/prop-assets', StaticFiles(directory=prop_assets_dir), name='prop_assets')
+
+    @app.get('/meme-editor')
+    def meme_editor_page():
+        return FileResponse(ROOT / 'static' / 'meme-editor.html')
+
+    @app.get('/api/meme/catalog')
+    def get_meme_catalog():
+        from .meme_editor import load_prop_library
+        from .meme_animation_script import AnimationCatalog
+        catalog = AnimationCatalog()
+        props = load_prop_library()
+        wardrobe_path = ROOT / 'memestudio' / 'assets' / 'rig' / 'wardrobe' / 'wardrobe.json'
+        wardrobe_data = json.loads(wardrobe_path.read_text(encoding='utf-8')) if wardrobe_path.is_file() else {'items': []}
+        faces_path = ROOT / 'memestudio' / 'assets' / 'rig' / 'faces' / 'faces.json'
+        faces_data = json.loads(faces_path.read_text(encoding='utf-8')) if faces_path.is_file() else {}
+        return {
+            'props': list(props.values()),
+            'backgrounds': sorted(list(catalog.backgrounds)),
+            'face_names': sorted(faces_data.get('faces', {}).keys()),
+            'costumes': [item for item in wardrobe_data.get('items', []) if item.get('kind') == 'costume'],
+            'accessories': [item for item in wardrobe_data.get('items', []) if item.get('kind') != 'costume']
+        }
+
+    @app.get('/api/meme/jobs/{job_id}/editor')
+    def get_meme_job_editor_data(job_id: str):
+        from .meme_editor import detect_missing_props, load_prop_library
+        try:
+            j = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+        
+        ep_dir = Path(j['output']) / 'episode'
+        script_file = ep_dir / 'script.json'
+        if not script_file.is_file():
+            script_file = Path(j['output']) / 'animation-script.json'
+            if not script_file.is_file():
+                raise HTTPException(404, 'Episode script not found for this job')
+        
+        script = json.loads(script_file.read_text(encoding='utf-8'))
+        props_status = detect_missing_props(script)
+
+        # Video URL if rendered
+        from .output_layout import final_video_path
+        vid_path = final_video_path(j)
+        video_url = f'/api/jobs/{job_id}/files/video.mp4' if vid_path.is_file() else None
+
+        return {
+            'job_id': job_id,
+            'job': public_job(j),
+            'script': script,
+            'props_status': props_status,
+            'video_url': video_url
+        }
+
+    @app.post('/api/meme/jobs/{job_id}/props/{prop_id}/upload')
+    async def upload_meme_prop_asset(job_id: str, prop_id: str, request: Request, label: str | None = None):
+        same_origin(request)
+        from .meme_editor import _LIB_LOCK, save_prop_asset, update_job_prop_asset, detect_missing_props
+        try:
+            j = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+
+        image_bytes = await request.body()
+        if not image_bytes or len(image_bytes) < 32:
+            raise HTTPException(422, 'Empty or invalid image file')
+        if len(image_bytes) > 20 * 1024 * 1024:
+            raise HTTPException(413, 'Image exceeds 20 MB limit')
+
+        try:
+            with _LIB_LOCK:
+                saved = save_prop_asset(prop_id, image_bytes, label)
+                updated_script = update_job_prop_asset(j['output'], prop_id, saved['prop_id'])
+                props_status = detect_missing_props(updated_script)
+            return {
+                'ok': True,
+                'prop_id': prop_id,
+                'asset': saved['prop_id'],
+                'file': saved['file'],
+                'props_status': props_status
+            }
+        except ValueError as err:
+            raise HTTPException(422, str(err))
+
+    @app.post('/api/meme/jobs/{job_id}/props/{prop_id}/assign')
+    async def assign_meme_prop_asset(job_id: str, prop_id: str, request: Request):
+        same_origin(request)
+        from .meme_editor import _LIB_LOCK, load_prop_library, update_job_prop_asset, detect_missing_props
+        try:
+            j = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+
+        body = await request.json()
+        asset_id = body.get('asset_id')
+        if asset_id is not None and not isinstance(asset_id, str):
+            raise HTTPException(422, 'asset_id must be string or null')
+
+        with _LIB_LOCK:
+            if asset_id is not None and not load_prop_library().get(asset_id, {}).get('exists'):
+                raise HTTPException(404, 'Ảnh này không còn trong kho.')
+            updated_script = update_job_prop_asset(j['output'], prop_id, asset_id)
+            props_status = detect_missing_props(updated_script)
+        return {'ok': True, 'props_status': props_status}
+
+    @app.delete('/api/meme/jobs/{job_id}/prop-uploads/{asset_id}')
+    def delete_meme_prop_upload(job_id: str, asset_id: str, request: Request):
+        same_origin(request)
+        from .meme_editor import remove_prop_upload, detect_missing_props
+        try:
+            job = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+        if job['request'].get('workflow_mode') != 'meme':
+            raise HTTPException(422, 'Chỉ dùng được trong tập hoạt hình.')
+        try:
+            script = remove_prop_upload(store, job, asset_id)
+        except (ValueError, FileNotFoundError) as error:
+            raise HTTPException(409, str(error)) from error
+        return {'ok': True, 'props_status': detect_missing_props(script)}
+
+    @app.post('/api/meme/jobs/{job_id}/update-script')
+    async def update_meme_script(job_id: str, request: Request):
+        same_origin(request)
+        from .meme_editor import _LIB_LOCK, update_episode_script, detect_missing_props
+        try:
+            j = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, 'Request body must be an object')
+
+        try:
+            with _LIB_LOCK:
+                updated_script = update_episode_script(j['output'], body)
+                props_status = detect_missing_props(updated_script)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+        return {'ok': True, 'script': updated_script, 'props_status': props_status}
+
+    @app.post('/api/meme/jobs/{job_id}/re-render')
+    def re_render_meme_job(job_id: str, request: Request):
+        same_origin(request)
+        from .meme_editor import _EDITOR_RENDERS, _LIB_LOCK, re_render_job
+        try:
+            j = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Job not found')
+
+        with _LIB_LOCK:
+            if job_id in _EDITOR_RENDERS:
+                raise HTTPException(409, 'Tập này đang xuất video.')
+            _EDITOR_RENDERS.add(job_id)
+        try:
+            result = re_render_job(j, store=store)
+            return {'ok': True, 'result': result}
+        except Exception as e:
+            raise HTTPException(500, f'Re-rendering failed: {e}')
+        finally:
+            with _LIB_LOCK:
+                _EDITOR_RENDERS.discard(job_id)
+
+    @app.post('/api/meme/props/prompt')
+    async def get_prop_prompt(request: Request):
+        same_origin(request)
+        from .meme_editor import build_prop_prompt
+        body = await request.json()
+        label = str(body.get('label', '')).strip()
+        prop_id = str(body.get('prop_id', '')).strip()
+        if not label and not prop_id:
+            raise HTTPException(422, 'label or prop_id required')
+        return build_prop_prompt(label, prop_id)
+
     static=ROOT/'static'
     if static.is_dir():
         @app.get('/story-video/projects/{project_id}/production')

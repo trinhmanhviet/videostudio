@@ -2,11 +2,11 @@
 
 Ứng dụng local trên Windows để tạo và quản lý video theo dự án. Server và worker chạy trên máy người dùng; ảnh Flow dùng Chrome riêng; ChatGPT text dùng extension trên Chrome thường; file xuất mặc định lưu ở `E:\Videos`.
 
-**Video meme hoạt hình tự động:** chọn Video meme Gấu trúc → Hoạt hình HyperFrames, nhập truyện/ý tưởng và chọn giọng.
-Tool tự chọn trang phục, biểu cảm, chuyển động, camera, nhép miệng và SFX; dùng lại lời đọc khi retry render.
+**Video hài tự động:** chọn Video meme / hoạt hình nhân vật, nhập truyện/ý tưởng và chọn giọng.
+Một pipeline tự phát triển truyện, viết, phản biện, giữ nhân vật/đạo cụ/callback rồi dựng HyperFrames; dùng lại lời đọc khi retry render.
 Cài engine bằng `npm ci` trong `memestudio` (Node.js 22+, Python NumPy/Pillow, FFmpeg).
 CLI: `python auto_meme.py --input story.txt --out out/video.mp4`.
-Chi tiết cài đặt, checkpoint và khác biệt với Pillow: [docs/meme-video.md](docs/meme-video.md).
+Chi tiết cài đặt, checkpoint, chuyển đổi job cũ và giới hạn nghiệm thu: [docs/meme-video.md](docs/meme-video.md).
 
 ## Cài trên máy Windows mới
 

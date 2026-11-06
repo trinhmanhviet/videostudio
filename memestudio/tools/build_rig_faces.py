@@ -1,7 +1,7 @@
 """Split the panda expression heads into ONE blank head + separate face layers with measured landmarks.
 
-Source: memestudio/assets/rig/source/faces_fx  (#5 blank front head, #9-#18 expressions; copied from
-        assets/Meme_Animation_Asset_Pack/Panda/auto_sliced/faces_fx).
+Source: memestudio/assets/rig/source/faces_fx  (#5 blank front head, #9-#18 expressions; originally copied from
+        the old Meme_Animation_Asset_Pack/Panda pack, removed 2026-11-06; this folder is now the only source).
 Output: memestudio/assets/rig/faces/
   head_base.png         blank head #5 without the little neck stubs
   face_<name>.png       face features only (eyes, brows, nose, mouth, tears), same canvas as head_base

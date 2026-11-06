@@ -28,7 +28,7 @@ VERSION = 'meme-hyperframes-v1'
 
 def enabled(job):
     r = job.get('request', {})
-    return r.get('workflow_mode') == 'meme' and r.get('meme_engine') == 'hyperframes'
+    return r.get('workflow_mode') == 'meme'
 
 
 def preflight_for_request(status, request):
@@ -107,41 +107,17 @@ def plan(pipeline, job, check):
 
 
 def script(pipeline, job, check):
-    from .meme_animation_script import AnimationCatalog, MemeScriptError, build_prompt, validate, to_checkpoint
-    catalog = AnimationCatalog(); folder = Path(job['output']); folder.mkdir(parents=True, exist_ok=True)
-    from .meme_animation_long import needs_parts, write_parts
-    if needs_parts(job['request']):
-        return write_parts(pipeline, job, check, catalog)
-    feedback = []; last = None
-    for attempt in range(3):
-        check(); path = folder / f'animation-script-attempt-{attempt:02}.json'
-        rejected = path.with_suffix('.rejected.json')
-        rejection = _load(rejected)
-        if path.is_file() and rejection.get('sha256') == digest(path):
-            last = path; feedback = [rejection['error']]; continue
-        _log(pipeline, job, 'script', f'Viết hoạt hình theo tủ đồ, giọng đã chọn và biểu cảm (lượt {attempt+1}/3)...')
-        try:
-            if path.is_file():
-                raw = json.loads(path.read_text(encoding='utf8'))
-            else:
-                raw = pipeline.llm_json(build_prompt(job['request'], catalog, feedback), check)
-                _save(path, raw)
-            last = path
-            normalized = validate(raw, catalog, job['request']); break
-        except (MemeScriptError, ValueError) as error:
-            feedback = [str(error)[:1000]]
-            if path.is_file():
-                _save(rejected, {'sha256': digest(path), 'error': feedback[0]})
-    else:
-        try:
-            normalized = validate(json.loads(last.read_text(encoding='utf8')), catalog, job['request'], lenient=True)
-        except (AttributeError, OSError, ValueError, TypeError) as error:
-            raise PermanentError('Không đủ nội dung để dựng hoạt hình: ' + str(error)[:500]) from error
-    result = to_checkpoint(normalized, catalog.fingerprint())
-    final = folder / 'animation-script.json'; _save(final, normalized)
-    result['assets'] = [asset(final)]
-    _log(pipeline, job, 'script', f"Sẵn sàng {len(normalized['beats'])} lượt thoại, {len(normalized['cast'])} nhân vật có tạo hình riêng.")
-    return result
+    from .comedy_story import write_story
+    from .meme_animation_script import AnimationCatalog
+    from .meme_migration import saved_script, legacy_prefix
+    catalog = AnimationCatalog()
+    saved = saved_script(job, catalog)
+    if saved is not None:
+        return saved
+    prefix = legacy_prefix(job, catalog)
+    if prefix:
+        return write_story(pipeline, job, check, legacy_prefix=prefix)
+    return write_story(pipeline, job, check)
 
 
 def _silence(writer, frames):
@@ -161,7 +137,14 @@ def speech(pipeline, job, check):
     _save(ep / 'script.json', data)
     rawjob = copy.deepcopy(job); rawjob['request']['pitch'] = 0
     revision = ep / 'raw-voice'; revision.mkdir(exist_ok=True)
-    raw = pipeline._speech_attempt(rawjob, check, revision)
+    migration = job['checkpoints']['script'].get('migration',{})
+    raw = migration.get('speech') if migration.get('voice_id')==job['request']['voice_id'] else None
+    if raw is None:
+        from .meme_migration import reuse_legacy_voice
+        reuse_legacy_voice(job,revision)
+        raw = pipeline._speech_attempt(rawjob, check, revision)
+    elif not _valid_assets(raw.get('assets',[])):
+        raise PermanentError('Saved legacy speech asset missing or changed; restore the original WAV files before continuing.')
     if len(raw['utterances']) != len(data['beats']):
         raise PermanentError('Animation voice count differs from script')
     voice = pipeline.voices.selected(job['request']['voice_id'])
@@ -188,7 +171,7 @@ def speech(pipeline, job, check):
     _save(ep / 'voice.json', rows)
     command([sys.executable, '-I', MS / 'engine/make_episode.py', ep], check, ep / 'build.log')
     staging = _load(ep / 'staging.json'); seconds = float(staging['duration']); utterances = []
-    path = Path(job['output']) / 'speech.wav'; part = path.with_suffix('.part.wav')
+    path = Path(job['output']) / ('speech-hyperframes.wav' if migration else 'speech.wav'); part = path.with_suffix('.part.wav')
     with wave.open(str(part), 'wb') as output:
         output.setparams((2, 2, 48000, 0, 'NONE', 'not compressed')); cursor = 0
         for n, (timing, row) in enumerate(zip(staging['beats'], rows)):
@@ -226,8 +209,28 @@ def music(pipeline, job, check):
             'reason': 'HyperFrames episode mixes voice and procedural SFX', 'assets': [asset(path)]}
 
 
+def mix_legacy_music(pipeline, job, target, seconds, check):
+    """Reuse an attested saved soundtrack at quiet volume after HF composition."""
+    request = job['request']; cp = job['checkpoints']
+    music = cp.get('music',{}); volume = float(request.get('music_volume',.35))
+    if not cp['script'].get('migration') or music.get('intentional_mute') or not request.get('music_enabled',True) or volume<=0:
+        return {'reused':False}
+    path = Path(music.get('path',''))
+    attested = any(Path(a['path'])==path and path.is_file() and digest(path)==a['sha256'] for a in music.get('assets',[]))
+    if not attested:
+        raise PermanentError('Saved legacy soundtrack is missing or changed; restore its attested music file or explicitly disable music before continuing. Originals retained.')
+    mixed = Path(target).with_name('video.music.part.mp4')
+    gain = min(.25,max(0,volume)*.5)
+    filters = f'[1:a]volume={gain:.3f},aresample=48000[m];[0:a][m]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.89:level=false[a]'
+    run([pipeline.ffmpeg,'-v','error','-y','-i',target,'-stream_loop','-1','-i',path,
+         '-filter_complex',filters,'-map','0:v:0','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k',
+         '-t',str(seconds),'-movflags','+faststart',mixed],check)
+    mixed.replace(target)
+    return {'reused':True,'source':str(path),'sha256':digest(path),'gain':gain}
+
+
 def render(pipeline, job, check):
-    from .meme_render import ensure_clean_audio
+    from .media import ensure_clean_audio
     from .output_layout import publish_video
     ep = episode(job); seconds = float(job['checkpoints']['speech']['duration_seconds'])
     sources = [a for name in ('script', 'speech', 'images', 'music') for a in job['checkpoints'][name].get('assets', [])]
@@ -235,7 +238,9 @@ def render(pipeline, job, check):
         raise PermanentError('Animation source checkpoint changed; retry from the affected stage')
     engine = [MS / 'engine/make_sfx.py', MS / 'package-lock.json']
     sfx = sorted((MS / 'assets/sfx').glob('*'))
-    identity = _identity({'version': VERSION, 'sources': sources, 'engine': [asset(p) for p in engine+sfx if p.is_file()]})
+    identity = _identity({'version': VERSION, 'sources': sources, 'engine': [asset(p) for p in engine+sfx if p.is_file()],
+                          'legacy_music_volume':job['request'].get('music_volume',.35),
+                          'music_enabled':job['request'].get('music_enabled',True),'legacy_music_mix':'quiet-v1'})
     receipt = ep / 'render-receipt.json'; saved = _load(receipt)
     if saved.get('identity') == identity and _valid_assets(saved.get('result', {}).get('assets', [])):
         return saved['result']
@@ -246,11 +251,12 @@ def render(pipeline, job, check):
     command([shutil.which('node') or 'node', MS / 'node_modules/hyperframes/bin/hyperframes.mjs',
              'render', ep, '--quiet', '--fps', '30', '-o', target], check, ep / 'render.log',
             timeout=max(180, seconds*12+120), progress=lambda: _log(pipeline, job, 'render', 'HyperFrames đang dựng; không gửi lại kịch bản hoặc tạo lại lời đọc.'))
+    soundtrack = mix_legacy_music(pipeline,job,target,seconds,check)
     audio = ensure_clean_audio(str(target), check, pipeline.ffmpeg)
     verify_media(str(target), seconds, pipeline.ffprobe)
     result = publish_video(job, {'video': str(target), 'assets': [asset(target)], 'renderer': VERSION,
                                 'beats': len(job['checkpoints']['speech']['utterances']), 'duration_seconds': seconds,
-                                'audio_quality': audio})
+                                'audio_quality': audio,'legacy_music':soundtrack})
     _save(receipt, {'identity': identity, 'result': result})
     return result
 
@@ -262,4 +268,8 @@ def verify(pipeline, job, check):
     result.update(audio_quality=audio_report(path, check, pipeline.ffmpeg), full_video_decode_ok=True,
                   semantic_viewing_performed=False, renderer=VERSION,
                   visual_quality={'status': 'not_applicable', 'reason': 'pre-approved animation rig assets'})
+    if result.get('verified') is True and job['checkpoints']['script'].get('comedy'):
+        from .comedy_memory import record
+        comedy = job['checkpoints']['script']['comedy']
+        record(pipeline.store,job,{**comedy.get('story',{}),'critic':comedy.get('critic',{})},'rendered')
     return result

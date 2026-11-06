@@ -6,10 +6,20 @@ from videostudio.core import validate_request,digest
 from videostudio.media import asset,probe
 ROOT=Path(__file__).resolve().parents[1]
 class AnimationPipelineTests(unittest.TestCase):
- def test_engine_is_explicit_and_legacy_request_stays_legacy(self):
+ @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
+ def test_migrated_speech_preserves_original_aggregate_audio(self):
+  from videostudio import meme_animation as m
+  with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as folder:
+   pipeline,job=self.fixture(folder)
+   old=Path(job['output'])/'speech.wav';old.write_bytes(b'original aggregate audio')
+   job['checkpoints']['script']['migration']={'version':'test'}
+   result=m.speech(pipeline,job,lambda:None)
+   self.assertEqual(old.read_bytes(),b'original aggregate audio')
+   self.assertNotEqual(result['path'],str(old))
+ def test_all_meme_requests_use_hyperframes(self):
   from videostudio.meme_animation import enabled
   base={'idea':'test','voice_id':'test','duration_seconds':45,'workflow_mode':'meme'}
-  self.assertFalse(enabled({'request':validate_request(base),'checkpoints':{}}))
+  self.assertTrue(enabled({'request':validate_request(base),'checkpoints':{}}))
   self.assertTrue(enabled({'request':validate_request({**base,'meme_engine':'hyperframes'}),'checkpoints':{}}))
   for mode in ['unknown',True,[]]:
    with self.assertRaises(ValueError):validate_request({**base,'meme_engine':mode})
@@ -54,7 +64,8 @@ class AnimationPipelineTests(unittest.TestCase):
   r={'workflow_mode':'meme','meme_engine':'hyperframes'}
   result=m.preflight_for_request(status,r)
   self.assertFalse(result['ready']);self.assertEqual([c['ok'] for c in result['checks']],[True,True,False])
-  self.assertIs(m.preflight_for_request(status,{'workflow_mode':'meme'}),status)
+  self.assertEqual(m.preflight_for_request(status,{'workflow_mode':'meme'}),result)
+  self.assertIs(m.preflight_for_request(status,{'workflow_mode':'research'}),status)
  @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
  def test_derived_voice_flags_and_render_cache_preserve_published_file(self):
   from videostudio import meme_animation as m
@@ -71,22 +82,12 @@ class AnimationPipelineTests(unittest.TestCase):
    self.assertEqual(stored['narrator_voice'],'test')
    self.assertEqual(job['checkpoints']['script']['animation_script']['narrator_voice'],'old')
    def fake_render(args,*a,**kw):Path(args[-1]).write_bytes(b'encoded test video')
-   with patch.object(m,'command',side_effect=fake_render) as renderer,patch.object(m,'verify_media'),patch('videostudio.meme_render.ensure_clean_audio',return_value={'ok':True}):
+   with patch.object(m,'command',side_effect=fake_render) as renderer,patch.object(m,'verify_media'),patch('videostudio.media.ensure_clean_audio',return_value={'ok':True}):
     first=m.render(pipeline,job,lambda:None);again=m.render(pipeline,job,lambda:None)
     self.assertEqual(first,again);self.assertEqual(renderer.call_count,1)
     self.assertTrue(Path(first['video']).is_file());self.assertFalse((Path(job['output'])/'video.part.mp4').exists())
     (ep/'index.html').write_text('changed',encoding='utf8')
     with self.assertRaises(PermanentError):m.render(pipeline,job,lambda:None)
- def test_script_repair_skips_known_bad_reply_and_reuses_valid_reply(self):
-  from videostudio import meme_animation as m
-  with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as folder:
-   pipeline,job=self.fixture(folder);job['request']['duration_seconds']=20
-   valid=json.loads((ROOT/'tests/fixtures/meme-animation-script.json').read_text(encoding='utf8'))
-   bad=copy.deepcopy(valid);bad['cast']['toi']['costume']=[]
-   pipeline.llm_json=Mock(side_effect=[bad,valid])
-   first=m.script(pipeline,job,lambda:None);again=m.script(pipeline,job,lambda:None)
-   self.assertEqual(first,again);self.assertEqual(pipeline.llm_json.call_count,2)
-   self.assertTrue((Path(job['output'])/'animation-script-attempt-00.rejected.json').is_file())
  @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
  def test_returning_to_a_scene_cannot_duplicate_internal_dom_ids(self):
   from videostudio import meme_animation as m

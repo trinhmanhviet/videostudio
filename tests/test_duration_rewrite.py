@@ -36,20 +36,22 @@ class NaturalDurationTests(unittest.TestCase):
                     job = {'id': 'test-job', 'output': tmp, 'request': request, 'checkpoints': {'script': script, 'research': {'sources': []}}}
                     commands = []
 
-                    def synth_or_run(args, check, timeout=900):
+                    def record_command(args, check, timeout=900):
                         commands.append([str(arg) for arg in args])
-                        if '-m' not in args:
-                            return real_run(args, check, timeout)
-                        payload = json.loads(args[-1])
-                        self.assertEqual(payload['voice']['id'], 'unchanged-clone')
+                        return real_run(args, check, timeout)
+
+                    def synthesize(text, output):
                         samples = b''.join(struct.pack('<h', int(2000 * math.sin(2 * math.pi * 250 * i / 8000))) for i in range(8000))
-                        with wave.open(payload['output'], 'wb') as wav:
+                        with wave.open(str(output), 'wb') as wav:
                             wav.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
                             wav.writeframes((samples * math.ceil(measured / 2))[:int(measured / 2 * 8000) * 2])
-                        return b''
-
-                    with patch('videostudio.providers.run', side_effect=synth_or_run):
+                    with patch('videostudio.providers.run', side_effect=record_command), patch('videostudio.providers.SpeechJob') as speech_job:
+                        worker = speech_job.return_value.__enter__.return_value
+                        worker.write_line.side_effect = synthesize
                         result = pipeline.speech(job, lambda: None)
+                        speech_job.assert_called_once()
+                        self.assertEqual(speech_job.call_args.args[2]['id'], 'unchanged-clone')
+                        self.assertEqual(worker.write_line.call_count, 2)
                     self.assertAlmostEqual(result['duration_seconds'], measured, places=3)
                     self.assertEqual(result['duration_attempts'], 1)
                     self.assertEqual(result['final_narration'], script['narration'])

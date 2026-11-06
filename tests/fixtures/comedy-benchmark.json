@@ -1,0 +1,614 @@
+{
+  "version": 1,
+  "language": "vi",
+  "purpose": "Offline inputs and review rubrics; fixtures are not proof of improved humor.",
+  "evaluation": {
+    "objective": "Kiểm tra dữ kiện, schema, continuity, setup/payoff và thời lượng bằng công cụ phù hợp. Không coi rubric chủ quan là assert tự động.",
+    "subjective": "Người xem chấm 1..5 hoặc để null; nhận xét tách khỏi điểm Critic. Không cần chạy AI khi kiểm tra cấu trúc fixture."
+  },
+  "cases": [
+    {
+      "id": "benchmark_01_family",
+      "category": "Hài gia đình",
+      "input": "Mẹ thuê robot nhắc cả nhà tắt đèn; bố bí mật dùng nó để nhắc mọi người tránh ghế của mình.",
+      "constraints": [
+        "Giữ robot, ghế và động cơ tiết kiệm điện.",
+        "Kết từ mâu thuẫn quyền sử dụng ghế.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Robot đổi người được ưu tiên theo quy tắc đã gieo.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_02_school",
+      "category": "Hài học đường",
+      "input": "Linh làm thủ thư lớp, yêu cầu mỗi lần mượn bút phải trả bằng một lời khen; đến giờ kiểm tra ai cũng cần bút.",
+      "constraints": [
+        "Linh giữ vai thủ thư.",
+        "Không thay kiểm tra thành sự kiện khác.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Lời khen trở thành món nợ khó trả.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_03_friends",
+      "category": "Hài bạn bè",
+      "input": "Ba người bạn thi xem ai có thể giữ im lặng lâu nhất trong lúc cùng chuyển một tủ kêu cót két.",
+      "constraints": [
+        "Giữ ba người và chiếc tủ.",
+        "Cho mỗi người một lý do muốn thắng.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Sự phối hợp không lời tự phá luật thi.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_04_workplace",
+      "category": "Hài nghề nghiệp",
+      "input": "Nhân viên đóng gói chuẩn bị hộp quà cho chính giải thưởng nhân viên tiết kiệm hộp của mình.",
+      "constraints": [
+        "Gieo tiêu chí giải thưởng.",
+        "Giữ vai nhân viên đóng gói.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Mỗi lần giảm hộp gây thêm một yêu cầu đóng gói.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_05_phonetic",
+      "category": "Hiểu nhầm từ ngữ",
+      "input": "Bảo nghe cuộc gọi rè bảo mang bảng điểm nhưng lại chuẩn bị bảng điện cho buổi họp câu lạc bộ.",
+      "constraints": [
+        "Phải có lý do tiếng nghe không rõ.",
+        "Không đổi tên Bảo.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Hai vật được phân biệt trước payoff.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_06_gross_out",
+      "category": "Hài chất thải",
+      "input": "Tổ hậu cần hội chợ giao Nam giữ túi phân bón mẫu; Nam tưởng quà thơm nên đặt vào máy quay thưởng.",
+      "constraints": [
+        "Giữ chất thải làm yếu tố trung tâm theo tông đầu vào.",
+        "Không tự thay bằng bùn sạch để né phong cách.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Khán giả theo được đường đi túi mẫu và hậu quả ngượng ngùng.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_07_cartoon_slapstick",
+      "category": "Hài bạo lực hoạt hình",
+      "input": "Hai đầu bếp hoạt hình dùng chảo cao su thi giành quyền đặt tên món bánh mới.",
+      "constraints": [
+        "Giữ vật lý hoạt hình đã nêu.",
+        "Không đổi cạnh tranh thành bài giảng đạo đức.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Cú nảy chảo trở thành quy tắc đảo vị thế.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_08_prop",
+      "category": "Hài đạo cụ",
+      "input": "Chiếc ghế gấp có tiếng kèn mỗi lần mở được mượn cho buổi ký hợp đồng yêu cầu tuyệt đối yên tĩnh.",
+      "constraints": [
+        "Theo dấu người giữ ghế.",
+        "Không tự thêm nút tắt tiếng cuối tập.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Thuộc tính tiếng kèn được gieo và dùng lại.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_09_everyday_satire",
+      "category": "Hài châm biếm đời thường",
+      "input": "Khu chung cư tổ chức họp để rút ngắn các cuộc họp; mỗi hộ phải trình bày mười slide.",
+      "constraints": [
+        "Giữ mục tiêu rút thời gian.",
+        "Hậu quả đến từ quy tắc họp.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Quy trình tiết kiệm tự tăng thời gian.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_10_status_reversal",
+      "category": "Hài đảo ngược thân phận",
+      "input": "Người chuyên chấm sao các quán ăn mở bữa thử món và phát hiện khách mời đều mang sổ chấm mình.",
+      "constraints": [
+        "Gieo cách chấm sao ban đầu.",
+        "Đảo vị thế bằng hành động có nguyên nhân.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Cùng tiêu chí được áp ngược lại.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_11_self_inflicted",
+      "category": "Hài nhân vật tự chuốc họa",
+      "input": "Thợ đồng hồ chỉnh mọi đồng hồ nhanh để luôn được khen đúng giờ; lễ trao giải hẹn theo đồng hồ nhà mình.",
+      "constraints": [
+        "Không dùng tai nạn bên ngoài để kết.",
+        "Giữ cơ chế chỉnh nhanh.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Kế hoạch ban đầu tự tạo giá phải trả.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_12_converging_threads",
+      "category": "Hài hai tuyến sự kiện hội tụ",
+      "input": "An tập công bố kết quả xổ số giả cho tiết mục sân khấu; Vy chỉnh loa cửa hàng đang khuyến mãi cùng tần số.",
+      "constraints": [
+        "Giữ tên An và Vy.",
+        "Gieo loa và đường truyền trước hội tụ.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Hai tuyến tự chạy rồi cùng một thời điểm kích hoạt.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_13_bad_solution",
+      "category": "Hài giải pháp sai lầm",
+      "input": "Quán mì muốn giảm tiếng khách gọi món nên đặt chuông riêng cho từng bàn; khách bắt đầu gọi cả nhạc.",
+      "constraints": [
+        "Ít nhất hai cách sửa khác nhau.",
+        "Mỗi cách sửa phải xử lý triệu chứng của cách trước.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Giải pháp tăng đúng vấn đề muốn giảm.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_14_hidden_secret",
+      "category": "Hài nhân vật cố che giấu bí mật",
+      "input": "Trưởng nhóm giấu việc chưa biết đi xe đạp khi dẫn chuyến đạp xe từ thiện quanh sân vận động.",
+      "constraints": [
+        "Không đổi bí mật sang tiền bạc.",
+        "Gieo dấu vết từ cách giữ xe.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Lộ bí mật qua dấu vết đã thấy vào lúc cần hình tượng nhất.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_15_recurring_incident",
+      "category": "Hài sự cố lặp lại",
+      "input": "Mỗi khi Mai nói cuộc họp đã xong, máy in lại nhả một trang biên bản sửa tên người chủ trì.",
+      "constraints": [
+        "Không lặp nguyên văn cả đoạn.",
+        "Mỗi lần lặp đổi một hệ quả.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Lần cuối biến ý nghĩa câu nói thay vì chỉ thêm giấy.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_16_misread_speech",
+      "category": "Hài lời nói bị hiểu sai",
+      "input": "Giáo viên bảo lớp giữ thể diện cho đội; học sinh mang một khung ảnh chân dung thật lớn tới trận bóng.",
+      "constraints": [
+        "Làm rõ lời gốc và cách học sinh hiểu.",
+        "Giữ mục tiêu thi đấu.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Vật hóa từ ngữ tham gia vào quyết định trận đấu.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_17_costly_success",
+      "category": "Hài thành công nhưng kết quả tệ",
+      "input": "Hà thi làm bánh nhỏ nhất để tiết kiệm nguyên liệu rồi thắng đơn hàng nghìn chiếc bánh cá nhân.",
+      "constraints": [
+        "Phải đạt mục tiêu dự thi.",
+        "Cái giá đơn hàng cần được gợi trong luật thi.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Thành công gây nghĩa vụ còn tệ hơn thất bại.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_18_surprise_tag",
+      "category": "Hài câu kết bất ngờ",
+      "input": "Một cửa hàng treo biển bảo hành trọn đời chiếc ô; người mua đến khiếu nại và người bán hỏi tuổi chiếc ô.",
+      "constraints": [
+        "Gieo hai cách hiểu trọn đời.",
+        "Kết bằng một câu ngắn.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Câu cuối đổi giả định mà không thêm luật từ hư không.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_19_full_adaptation",
+      "category": "Chuyển thể truyện hoàn chỉnh",
+      "input": "Sáng thứ bảy, Hạnh mượn máy dán nhãn của Phúc để đánh dấu hộp trà. Máy hết mực nên Hạnh dán nhãn trắng. Phúc tưởng nhãn trắng nghĩa là quà bí mật, mang hộp đến câu lạc bộ. Hạnh đuổi theo, mở hộp trước mọi người và chỉ thấy toàn nhãn trắng: Phúc đã đem trà pha mời khách trong lúc chờ. Hạnh được khen tặng bộ nhãn viết điều ước.",
+      "constraints": [
+        "Giữ toàn bộ sự kiện và thứ tự nhân quả.",
+        "Giữ Hạnh, Phúc, máy dán nhãn và hộp trà.",
+        "Phát triển miếng hài nhưng không thay kết truyện.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Không mất sự kiện gốc khi thêm setup và lời kể.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    },
+    {
+      "id": "benchmark_20_long_serial",
+      "category": "Truyện dài cần chia nhiều phần",
+      "input": "Duyên tổ chức hội thi đồ tái chế ba ngày. Ngày đầu mượn bảng điện tử của Kiên, vô tình lưu lịch cũ. Ngày hai từng đội sửa lịch bằng giấy dán, mỗi màu theo một quy ước riêng. Ngày ba giám khảo dùng bảng gốc còn khán giả dùng bản giấy; Duyên phải công bố ai thắng trong lúc tất cả tưởng mình đã thắng từ hôm qua.",
+      "constraints": [
+        "Chia tối thiểu ba phần nội dung.",
+        "Giữ Duyên, Kiên, bảng điện tử và các màu giấy.",
+        "Mang setup lịch cũ qua ranh giới phần.",
+        "Không kể lại nguyên đoạn hoặc reset trạng thái khi ghép.",
+        "Lời kể tiếng Việt; chọn kỹ thuật và kết theo truyện thay vì bắt buộc thảm họa."
+      ],
+      "rubric": {
+        "objective": [
+          "Payoff ngày ba giải quyết đúng thông tin từ ngày đầu.",
+          "Tên nhân vật nhất quán; không mất đạo cụ hoặc sự kiện được yêu cầu.",
+          "Mỗi payoff bắt buộc có setup và đường nhân quả có thể chỉ ra.",
+          "JSON storyboard hợp schema đích; thời lượng nằm trong giới hạn yêu cầu đầu vào.",
+          "Không lặp nguyên đoạn và không mất trạng thái tại ranh giới phần."
+        ],
+        "subjective": [
+          "Mức buồn cười và bất ngờ có hợp tông đầu vào không?",
+          "Lời kể tự nhiên, giọng nhân vật phân biệt và nhịp kết có hiệu quả không?",
+          "Cách triển khai có khác cốt truyện cụ thể đã dùng trước không?"
+        ]
+      },
+      "human_feedback": {
+        "rating": null,
+        "note": "",
+        "reviewer": null,
+        "reviewed_at": null
+      }
+    }
+  ]
+}

@@ -1,65 +1,47 @@
-import copy
+"""Old multipart receipts are imported by the one current writer."""
 import json
-import re
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
-
+from unittest.mock import patch
+from videostudio.core import digest, PermanentError
 from videostudio import meme_animation
+from videostudio.meme_migration import legacy_prefix
+from videostudio.meme_animation_script import AnimationCatalog
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class LongAnimationTests(unittest.TestCase):
-    def setup_job(self, folder):
-        example = json.loads((ROOT / 'tests/fixtures/meme-animation-script.json').read_text(encoding='utf8'))
-        request = {'idea': 'Kể trọn câu chuyện gia đình từ mở đầu tới câu chốt, không cắt ngắn.',
-                   'duration_seconds': 420, 'voice_id': 'selected', 'workflow_mode': 'meme', 'meme_engine': 'hyperframes'}
-        job = {'id': 'test', 'output': folder, 'request': request, 'checkpoints': {}}
-        calls = []
-        def reply(prompt, check):
-            calls.append(prompt)
-            if '[MEME_OUTLINE]' in prompt:
-                result = copy.deepcopy(example); result.pop('beats')
-                result['parts'] = [{'summary': f'Diễn biến phần {i+1}', 'ending': f'Nối phần {i+2}'} for i in range(9)]
-                return result
-            match = re.search(r'\[MEME_PART (\d+)/9; target=(\d+)\]', prompt)
-            self.assertIsNotNone(match, 'A long script must never request all beats at once')
-            number, target = map(int, match.groups())
-            return {'part': number, 'beats': [dict(copy.deepcopy(example['beats'][i % 8]), text=f'Phần {number} câu {i+1}.') for i in range(target)]}
-        pipeline = SimpleNamespace(store=Mock(), llm_json=Mock(side_effect=reply))
-        return pipeline, job, calls, reply
+class SavedPartTests(unittest.TestCase):
+    def save(self,path,value):
+        path.write_text(json.dumps(value),encoding='utf8')
+        path.with_suffix('.receipt.json').write_text(json.dumps({'sha256':digest(path),'identity':'original'}),encoding='utf8')
 
-    def test_seven_minutes_is_written_in_bounded_parts_with_one_fixed_cast(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
-            pipeline, job, calls, _ = self.setup_job(folder)
-            result = meme_animation.script(pipeline, job, lambda: None)
-            self.assertEqual(len(result['animation_script']['beats']), 168)
-            self.assertEqual(len(calls), 10)
-            self.assertTrue(all('126-210' not in p and '126–210' not in p for p in calls))
-            self.assertTrue(all(c['voice'] == 'selected' for c in result['animation_script']['cast'].values()))
-            self.assertTrue(all(int(n) <= 20 for p in calls for n in re.findall(r'target=(\d+)', p)))
-            self.assertIn('Phần 9 câu', result['narration'])
-
-    def test_resume_keeps_finished_parts_after_transport_timeout(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
-            pipeline, job, calls, reply = self.setup_job(folder)
-            failed = False
-            def flaky(prompt, check):
-                nonlocal failed
-                if '[MEME_PART 2/' in prompt and not failed:
-                    failed = True
-                    raise TimeoutError('Browser temporarily unavailable')
-                return reply(prompt, check)
-            pipeline.llm_json.side_effect = flaky
-            with self.assertRaises(TimeoutError):meme_animation.script(pipeline, job, lambda: None)
-            result = meme_animation.script(pipeline, job, lambda: None)
-            self.assertEqual(len(result['animation_script']['beats']), 168)
-            self.assertEqual(sum('[MEME_OUTLINE]' in p for p in calls), 1)
-            self.assertEqual(sum('[MEME_PART 1/' in p for p in calls), 1)
-            # A completed script is a durable checkpoint even before the worker commits it.
-            count = pipeline.llm_json.call_count
-            self.assertEqual(result, meme_animation.script(pipeline, job, lambda: None))
-            self.assertEqual(pipeline.llm_json.call_count, count)
+    def test_saved_prefix_is_passed_to_current_writer_with_original_text(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as folder:
+            data = json.loads((ROOT/'tests/fixtures/meme-animation-script.json').read_text(encoding='utf8'))
+            request={'idea':'Saved story','voice_id':'test','duration_seconds':420,'workflow_mode':'meme','meme_engine':'hyperframes'}
+            job={'output':folder,'request':request,'checkpoints':{}}
+            parts=Path(folder)/'animation-parts';parts.mkdir()
+            outline={k:v for k,v in data.items() if k!='beats'}
+            outline['parts']=[{'summary':'Already narrated.','ending':'Continue.'},{'summary':'Finish story.','ending':'Original ending.'}]
+            self.save(parts/'outline.json',outline)
+            self.save(parts/'part-01.json',{'part':1,'beats':data['beats']})
+            before={p.name:p.read_bytes() for p in parts.iterdir()}
+            with patch('videostudio.comedy_story.write_story',return_value={'ok':True}) as writer:
+                self.assertEqual(meme_animation.script(SimpleNamespace(),job,lambda:None),{'ok':True})
+            prefix=writer.call_args.kwargs['legacy_prefix']
+            self.assertEqual([b['text'] for b in prefix['parts'][0]['beats']],[b['text'] for b in data['beats']])
+            self.assertEqual(prefix['total_parts'],2)
+            self.assertEqual(before,{p.name:p.read_bytes() for p in parts.iterdir()})
+            # An interruption after receiving valid JSON but before the final
+            # receipt must not resend the same completed part to the model.
+            raw_path=parts/'part-02-originalidentity-attempt-00.json'
+            raw_path.write_text(json.dumps({'part':2,'beats':data['beats']}),encoding='utf8')
+            recovered=legacy_prefix(job,AnimationCatalog())
+            self.assertEqual(len(recovered['parts']),2)
+            self.assertEqual(recovered['parts'][1]['beats'],prefix['parts'][0]['beats'])
+            (parts/'part-01.json').write_text('{}',encoding='utf8')
+            with self.assertRaisesRegex(PermanentError,'receipt'):
+                legacy_prefix(job,AnimationCatalog())

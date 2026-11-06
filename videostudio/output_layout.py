@@ -26,23 +26,34 @@ def allocate_output(store, connection, request, job_id):
     return output
 
 
+def _base_video_path(job):
+    output = Path(job['output'])
+    if output.name == job['id'] and output.parent.name == 'data':
+        return output.parent.parent / f"video-{job['id']}.mp4"
+    return output / 'video.mp4'
+
+
+def _matches_video_name(path, base):
+    # Earlier exports sometimes accumulated suffixes such as -4-2.
+    return re.fullmatch(re.escape(base.stem) + r'(?:-[0-9]+)*\.mp4', path.name) is not None
+
+
 def final_video_path(job):
-    output=Path(job['output'])
-    if output.name==job['id'] and output.parent.name=='data':
-        root=output.parent.parent
-        recorded=job.get('checkpoints',{}).get('render',{}).get('video')
-        if recorded:
-            path=Path(recorded)
-            if path.resolve().parent==root.resolve() and re.fullmatch('video-'+re.escape(job['id'])+r'(?:-\d+)?\.mp4',path.name):return path
-        return root/('video-'+job['id']+'.mp4')
-    return output/'video.mp4'
+    base = _base_video_path(job)
+    recorded = job.get('checkpoints', {}).get('render', {}).get('video')
+    if recorded:
+        path = Path(recorded)
+        if path.resolve().parent == base.parent.resolve() and _matches_video_name(path, base):
+            return path
+    return base
 
 
 def publish_video(job, result):
     from .media import asset
-    source=Path(result['video']);destination=final_video_path(job)
-    if source.resolve()!=destination.resolve():
-        base=destination;index=2
+    source = Path(result['video'])
+    if source.resolve() != final_video_path(job).resolve():
+        base = destination = _base_video_path(job)
+        index = 2
         while destination.exists():
             destination=base.with_name(base.stem+'-'+str(index)+base.suffix);index+=1
         source.replace(destination)
@@ -54,5 +65,5 @@ def publish_video(job, result):
 def job_video_files(job):
     final=final_video_path(job);output=Path(job['output'])
     if output.name!=job['id'] or output.parent.name!='data':return [final]
-    pattern='video-'+re.escape(job['id'])+r'(?:-\d+)?\.mp4'
-    return [p for p in final.parent.glob('video-'+job['id']+'*.mp4') if re.fullmatch(pattern,p.name)] or [final]
+    base = _base_video_path(job)
+    return [p for p in base.parent.glob(base.stem+'*.mp4') if _matches_video_name(p, base)] or [final]

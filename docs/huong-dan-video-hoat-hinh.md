@@ -3,9 +3,9 @@
 Tài liệu này để giao cho một AI agent tự tạo video hoạt hình meme gấu trúc tiếng Việt trên máy Windows của người dùng.
 Mọi thứ nằm trong **`D:\Projects\videostudio\memestudio`**. Đọc hết trước khi làm. Mọi lệnh đã được chạy thử ngày 2026-11-04.
 
-Từ 2026-11-05, engine này cũng có luồng **tự động trong VideoStudio**: chọn Video meme Gấu trúc →
-Hoạt hình HyperFrames, nhập truyện và chọn giọng. CLI, checkpoint và phục hồi được mô tả ở
-[meme-video.md](meme-video.md#hoạt-hình-tự-động-hyperframes-2026-11-05).
+Từ 2026-11-06, đây là engine duy nhất của pipeline hài tự động trong VideoStudio: chọn
+Video meme / hoạt hình nhân vật, nhập truyện và chọn giọng. Architect, writer, critic và continuity tự chạy bên trong.
+CLI, checkpoint, migration và các giới hạn được mô tả ở [meme-video.md](meme-video.md).
 Hướng dẫn bên dưới dành cho dựng từng tập thủ công; không chạy `make_voice.py` trên job tự động.
 Pipeline tự động tạo WAV tại stage speech và render chỉ dùng lại chúng. Job tự động nằm trong thư mục
 data của dự án video, tách khỏi `memestudio/episodes`.
@@ -48,7 +48,7 @@ memestudio\
 │   ├── rig\faces\          head_base.png, face_*.png, mouth_*.png, faces.json
 │   ├── rig\wardrobe\       30 trang phục, 8 tóc, 8 mũ, 8 đồ đeo mặt, wardrobe.json, ảnh preview_*.jpg
 │   ├── rig\sheets\         8 bảng gốc ChatGPT vẽ; rig\base\torso_core.png (khuôn thân)
-│   ├── backgrounds\        72 nền bg_*.png (bản sao; chế độ meme cũ của VideoStudio vẫn dùng bản trong assets\Meme_Animation_Asset_Pack\new)
+│   ├── backgrounds\        72 nền bg_*.png (nơi DUY NHẤT chứa nền; `scripts\ingest_asset_zips.py` đưa nền mới vào thẳng đây)
 │   └── sfx\                whoosh, click, impact, chime (CC0, VideoStudio tự tổng hợp)
 ├── episodes\<tập>\script.json   kịch bản từng tập (agent viết); các file khác trong thư mục tập là file sinh ra
 ├── out\                    MP4 đã render
@@ -380,6 +380,8 @@ Viết id đúng từng dấu. Giọng `clone:...` khác không được dùng n
 ## 8. Thêm asset (chỉ khi người dùng yêu cầu)
 
 - **Nền mới**: thêm `bg_<tên>.png` (dọc 720×1280, cùng phong cách) vào `memestudio\assets\backgrounds`, dùng ngay bằng `"bg": "bg_<tên>"`.
+- **Đồ vật (prop) mới**: danh sách sheet trong `scripts\meme_sheets.py` (chạy nó để in prompt cho app ChatGPT). ZIP tải về chạy
+  `python scripts\ingest_asset_zips.py` rồi `python scripts\import_meme_library.py` → `assets\Meme_Animation_Asset_Pack\catalog\library.json`.
 - **Trang phục / phụ kiện mới**: nhờ app ChatGPT vẽ một bảng lưới (áo 3×2, phụ kiện 4×2), nền trong suốt, theo đúng khuôn
   (cách viết prompt và ảnh tham chiếu: `docs\editor-workflow.md`, mục "Thân mới và tủ đồ nhân vật"). Lưu bảng vào
   `memestudio\assets\rig\sheets\`, thêm tên file + danh sách id vào `COSTUMES` hoặc `HEAD_SHEETS` trong

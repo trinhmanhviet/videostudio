@@ -1,5 +1,5 @@
-"""Import ChatGPT asset ZIPs (R<n>_backgrounds.zip, *sheet*.zip) from Downloads into
-assets/Meme_Animation_Asset_Pack/new/.
+"""Import ChatGPT asset ZIPs (R<n>_backgrounds.zip, *sheet*.zip) from Downloads:
+bg_*.png -> memestudio/assets/backgrounds/ (used by HyperFrames), prop_*/fx_* sheets -> assets/Meme_Animation_Asset_Pack/new/.
 
   python scripts/ingest_asset_zips.py            # add files that do not exist yet
   python scripts/ingest_asset_zips.py --replace  # a newer ZIP replaces an existing file;
@@ -19,17 +19,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'assets' / 'Meme_Animation_Asset_Pack' / 'new'
+BG_DEST = ROOT / 'memestudio' / 'assets' / 'backgrounds'
 PREFIXES = ('bg_', 'prop_', 'fx_')
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--src', type=Path, default=Path.home() / 'Downloads')
-    parser.add_argument('--dest', type=Path, default=DEST)
+    parser.add_argument('--dest', type=Path, default=None, help='folder for sheets (and backgrounds when --bg-dest is not given)')
+    parser.add_argument('--bg-dest', type=Path, default=None)
     parser.add_argument('--replace', action='store_true')
     args = parser.parse_args(argv)
-    dest, old_dir = args.dest, args.dest / '_old_style'
+    dest = args.dest or DEST
+    bg_dest = args.bg_dest or args.dest or BG_DEST
     dest.mkdir(parents=True, exist_ok=True)
+    bg_dest.mkdir(parents=True, exist_ok=True)
     zips = {p for pattern in ('*_backgrounds*.zip', '*sheet*.zip') for p in args.src.glob(pattern)}
     # Choose all winners before extracting: extraction time must never decide
     # which archive wins. Equal archive timestamps use filename order; within an
@@ -48,7 +52,7 @@ def main(argv=None):
             print(f'bad zip {archive.name}: {exc}')
     done = []
     for base, (archive, member, archive_mtime) in sorted(selected.items()):
-        target = dest / base
+        target = (bg_dest if base.startswith('bg_') else dest) / base
         if target.exists() and (not args.replace or target.stat().st_mtime_ns >= archive_mtime):
             continue
         with zipfile.ZipFile(archive) as bundle:
@@ -56,6 +60,7 @@ def main(argv=None):
         if target.exists():
             if target.read_bytes() == content:
                 continue
+            old_dir = target.parent / '_old_style'
             old_dir.mkdir(exist_ok=True)
             backup = old_dir / base
             while backup.exists():

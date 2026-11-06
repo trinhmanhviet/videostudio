@@ -55,14 +55,12 @@ class AnimationScriptTests(unittest.TestCase):
             asset.write_bytes(original + b'changed')
             self.assertNotEqual(before, cat.fingerprint())
 
-    def test_prompt_uses_catalog_and_preserves_provided_story(self):
-        request = dict(REQUEST, idea='Chuyện A có câu chốt CHỐT_A. Chuyện B có câu chốt CHỐT_B.')
-        prompt = self.api.build_prompt(request, self.catalog, feedback=['fix face'])
-        for value in ('ao_phong_xanh', 'bg_office', 'noi', 'walk_in', 'look_up', 'ding', '1.15', '24',
-                      'adaptation_note', 'CHỐT_A', 'CHỐT_B', 'fix face'):
-            self.assertIn(value, prompt)
-        shorter = self.api.build_prompt(dict(request, duration_seconds=20), self.catalog)
-        self.assertNotEqual(prompt, shorter)
+    def test_catalog_exposes_renderer_capabilities_without_a_second_writer(self):
+        self.assertFalse(hasattr(self.api,'build_prompt'))
+        description=json.loads(self.catalog.describe_for_prompt())
+        self.assertIn('ao_phong_xanh',description['costumes'])
+        self.assertIn('bg_office',description['backgrounds'])
+        self.assertIn('walk_in',description['actions_actor_arity'])
 
     def test_bad_json_types_are_validation_errors_and_repair_locally(self):
         for field, value in [('cast', []), ('scenes', []), ('title', {}), ('payoff', 4)]:

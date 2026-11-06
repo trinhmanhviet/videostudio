@@ -1,0 +1,1338 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kho Nhân Vật & Phòng Thử Đồ - VideoStudio</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101412;
+      --card: #18201b;
+      --card-alt: #131a15;
+      --line: #2c3a31;
+      --line-active: #53755c;
+      --text: #eef4ec;
+      --muted: #99ab9e;
+      --accent: #b9eb83;
+      --accent-dim: rgba(185, 235, 131, 0.15);
+      --bad: #ff8e85;
+      --warn: #fcd34d;
+      --blue: #7dd3fc;
+      --stage-bg: #222b25;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--card);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-title h1 { margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .header-title small { color: var(--muted); font-size: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    button, .btn {
+      background: var(--accent);
+      color: #101a0e;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font: 600 13px system-ui;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, opacity 0.15s, transform 0.05s;
+    }
+    button:active, .btn:active { transform: scale(0.98); }
+    button.secondary, .btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    button.secondary:hover, .btn.secondary:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    button.danger {
+      background: rgba(255, 142, 133, 0.15);
+      color: var(--bad);
+      border: 1px solid rgba(255, 142, 133, 0.4);
+    }
+    button.danger:hover {
+      background: var(--bad);
+      color: #2b0000;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Main 3-column layout */
+    .studio-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr 380px;
+      height: calc(100vh - 65px);
+      overflow: hidden;
+    }
+    @media (max-width: 1100px) {
+      .studio-layout {
+        grid-template-columns: 240px 1fr 340px;
+      }
+    }
+    @media (max-width: 860px) {
+      .studio-layout {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+      }
+    }
+
+    /* Left panel: Roster */
+    .roster-panel {
+      border-right: 1px solid var(--line);
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .panel-header h2 { margin: 0; font-size: 15px; font-weight: 700; }
+    .roster-search {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .roster-search input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .roster-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .roster-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--card-alt);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .roster-item:hover {
+      border-color: var(--line-active);
+      background: rgba(185, 235, 131, 0.05);
+    }
+    .roster-item.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .roster-avatar {
+      width: 44px;
+      height: 44px;
+      background: #0b0e0c;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      font-size: 20px;
+    }
+    .roster-avatar img { width: 100%; height: 100%; object-fit: contain; }
+    .roster-info { flex: 1; min-width: 0; }
+    .roster-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .roster-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Center panel: Stage */
+    .stage-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--stage-bg);
+      position: relative;
+      overflow: hidden;
+    }
+    .stage-toolbar {
+      padding: 10px 16px;
+      background: rgba(16, 20, 18, 0.85);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .stage-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      background-image:
+        radial-gradient(circle at center, rgba(185, 235, 131, 0.04) 0%, transparent 70%),
+        linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 30px 30px, 30px 30px;
+      cursor: default;
+    }
+    .stage-footer {
+      padding: 10px 16px;
+      background: rgba(16, 20, 18, 0.85);
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      z-index: 10;
+    }
+    .face-chip {
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .face-chip:hover { border-color: var(--accent); color: var(--text); }
+    .face-chip.active { background: var(--accent); color: #101a0e; border-color: var(--accent); }
+
+    /* Puppet rig styling (Identical to make_episode.py) */
+    #stagePuppetAnchor {
+      position: absolute;
+      transform-origin: 0 0;
+      transition: transform 0.05s ease-out;
+    }
+    .joint { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+    .joint > img, .flip > img, .limb > img { position: absolute; display: block; user-select: none; }
+    .flip { position: absolute; left: 0; top: 0; width: 0; height: 0; transform: scaleX(-1); transform-origin: 0 0; }
+    .limb { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+    .unit { transform: scale(2.6); transform-origin: 0 0; }
+    .legsize { transform: scale(0.72); }
+    .armsize { transform: scale(0.66); }
+    .headsize { transform: scale(0.6372); }
+
+    /* Interactive item highlight on stage */
+    .selectable-item {
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .item-selected-highlight {
+      outline: 2px dashed #b9eb83 !important;
+      outline-offset: 4px;
+      filter: drop-shadow(0 0 6px rgba(185, 235, 131, 0.6));
+    }
+
+    /* Right panel: Controls & Wardrobe */
+    .controls-panel {
+      border-left: 1px solid var(--line);
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .ctrl-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      background: var(--card-alt);
+    }
+    .ctrl-tab-btn {
+      flex: 1;
+      padding: 10px 6px;
+      background: transparent;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 0;
+      text-align: center;
+      justify-content: center;
+    }
+    .ctrl-tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(185, 235, 131, 0.05);
+    }
+    .ctrl-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .section-box {
+      background: var(--card-alt);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    input[type=text], select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Slider rows with value badge */
+    .slider-row {
+      display: grid;
+      grid-template-columns: 85px 1fr 55px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .slider-row span { font-size: 12px; color: var(--muted); }
+    .slider-row input[type=range] {
+      width: 100%;
+      height: 5px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .slider-row .val-box {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-align: right;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Accessory Stack Items */
+    .acc-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .acc-card {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      transition: border-color 0.15s;
+    }
+    .acc-card.selected {
+      border-color: var(--accent);
+      background: rgba(185, 235, 131, 0.04);
+    }
+    .acc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .acc-title {
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .acc-actions { display: flex; align-items: center; gap: 4px; }
+    .acc-btn-mini {
+      padding: 3px 6px;
+      font-size: 11px;
+      border-radius: 4px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .acc-btn-mini:hover { border-color: var(--accent); color: var(--text); }
+    .acc-body {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    /* Modal for catalog selection */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      padding: 16px;
+    }
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+      padding: 8px 4px;
+    }
+    .catalog-item {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .catalog-item:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      background: rgba(185, 235, 131, 0.05);
+    }
+    .catalog-thumb {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+    }
+    .catalog-name {
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #18201b;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s ease;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-left">
+      <a href="/" class="btn secondary" style="padding:6px 12px; font-size:12.5px;">← VideoStudio</a>
+      <div class="header-title">
+        <h1>🎭 Kho Nhân Vật &amp; Phòng Thử Đồ</h1>
+        <small>Thiết kế quần áo, tóc tai, phụ kiện chuẩn pixel &bull; Đồng bộ xuyên suốt các tập phim</small>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="secondary" id="btnNewChar">+ Tạo nhân vật mới</button>
+      <button type="button" id="btnSaveChar" style="font-weight:700">💾 LƯU NHÂN VẬT</button>
+    </div>
+  </header>
+
+  <div class="studio-layout">
+    <!-- 1. Left Column: Roster list -->
+    <aside class="roster-panel">
+      <div class="panel-header">
+        <h2>Nhân vật đã lưu (<span id="charCount">0</span>)</h2>
+        <button type="button" class="btn secondary" id="btnRefreshRoster" style="padding:4px 8px;font-size:11.5px;">🔄</button>
+      </div>
+      <div class="roster-search">
+        <input type="text" id="rosterSearchInput" placeholder="Tìm theo tên, ID, vai trò...">
+      </div>
+      <div class="roster-list" id="rosterContainer">
+        <div class="muted" style="text-align:center;padding:20px;">Đang tải danh sách...</div>
+      </div>
+    </aside>
+
+    <!-- 2. Center Column: Interactive Stage -->
+    <main class="stage-panel">
+      <div class="stage-toolbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <strong id="stageCharTitle">Bố</strong>
+          <span id="stageCharIdBadge" style="font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--line);padding:2px 6px;border-radius:4px;">bo</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button type="button" class="secondary" id="btnToggleTalk" style="font-size:12px;padding:5px 10px;">💬 Thử nói chuyện</button>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--muted);">Thu phóng:</span>
+            <input type="range" id="stageZoomRange" min="0.6" max="2.0" step="0.05" value="1.0" style="width:80px;accent-color:var(--accent);">
+            <button type="button" class="secondary" id="btnResetZoom" style="padding:3px 7px;font-size:11px;">100%</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-viewport" id="stageViewport">
+        <!-- Center Puppet Container scaled by S=2.6 -->
+        <div id="stagePuppetAnchor" style="left:50%; top:60%;">
+          <div class="joint unit" id="stagePuppetUnit">
+            <!-- Puppet content injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer: Expression bar -->
+      <div class="stage-footer" id="expressionBar">
+        <span style="font-size:12px;color:var(--muted);margin-right:4px;">Thử biểu cảm:</span>
+        <!-- Expressions injected dynamically -->
+      </div>
+    </main>
+
+    <!-- 3. Right Column: Wardrobe Controls & Inspector -->
+    <aside class="controls-panel">
+      <div class="ctrl-tabs">
+        <button type="button" class="ctrl-tab-btn active" data-tab="tab-wardrobe">Trang phục &amp; Phụ kiện</button>
+        <button type="button" class="ctrl-tab-btn" data-tab="tab-identity">Thông tin &amp; Giọng</button>
+      </div>
+
+      <div class="ctrl-content" id="tab-wardrobe">
+        <!-- Costume section -->
+        <div class="section-box">
+          <div class="section-title">
+            <span>👕 Trang Phục (Costume)</span>
+            <button type="button" class="btn secondary" id="btnChangeCostume" style="padding:3px 8px;font-size:11px;">Đổi bộ khác</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <img id="costumeThumb" src="" alt="" style="width:50px;height:50px;object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px;">
+            <div style="flex:1;min-width:0;">
+              <strong id="costumeName" style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</strong>
+              <small id="costumeId" class="muted" style="font-size:11px;">-</small>
+            </div>
+          </div>
+
+          <label>Tinh chỉnh vị trí áo:</label>
+          <div class="slider-row">
+            <span>Dịch ngang X</span>
+            <input type="range" id="costumeDx" min="-80" max="80" step="0.5" value="0">
+            <span class="val-box" id="costumeDxVal">0 px</span>
+          </div>
+          <div class="slider-row">
+            <span>Dịch dọc Y</span>
+            <input type="range" id="costumeDy" min="-80" max="80" step="0.5" value="0">
+            <span class="val-box" id="costumeDyVal">0 px</span>
+          </div>
+          <div class="slider-row">
+            <span>Kích cỡ (Scale)</span>
+            <input type="range" id="costumeScale" min="0.5" max="1.8" step="0.01" value="1.0">
+            <span class="val-box" id="costumeScaleVal">1.00x</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button type="button" class="btn secondary" id="btnResetCostumeOffset" style="padding:3px 8px;font-size:11px;">Về chuẩn (0,0)</button>
+          </div>
+        </div>
+
+        <!-- Accessories stack section -->
+        <div class="section-box">
+          <div class="section-title">
+            <span>👒 Tóc &amp; Phụ Kiện (<span id="accCount">0</span>)</span>
+            <button type="button" class="btn" id="btnAddAcc" style="padding:4px 10px;font-size:11.5px;">+ Thêm món</button>
+          </div>
+          <p class="muted" style="font-size:11.5px;margin:0 0 10px;">Lắp thêm tóc, mũ, kính, râu tùy thích. Điều chỉnh vị trí chính xác từng pixel.</p>
+
+          <div class="acc-stack" id="accStackContainer">
+            <!-- Accessory cards rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-content" id="tab-identity" hidden>
+        <div class="section-box">
+          <div class="section-title">
+            <span>👤 Định danh nhân vật</span>
+            <button type="button" class="btn danger" id="btnDeleteChar" style="padding:3px 8px;font-size:11px;">Xóa nhân vật</button>
+          </div>
+          <label for="charIdInput">Mã định danh (ID không dấu, viết liền):</label>
+          <input type="text" id="charIdInput" placeholder="Ví dụ: bo, toi, me, chu_tu..." required>
+
+          <label for="charNameInput">Tên nhân vật hiển thị:</label>
+          <input type="text" id="charNameInput" placeholder="Ví dụ: Bố, Chú Tư..." required>
+
+          <label for="charAliasesInput">Biệt danh nhận diện kịch bản (cách nhau bằng dấu phẩy):</label>
+          <textarea id="charAliasesInput" rows="2" placeholder="Ví dụ: bố, ba, cha, tía, dad..."></textarea>
+          <small class="muted" style="display:block;margin-top:2px;">AI viết kịch bản sẽ tự động gán nhân vật này khi phát hiện các từ khóa trên.</small>
+
+          <label for="charDescInput">Mô tả đặc điểm / tính cách:</label>
+          <textarea id="charDescInput" rows="2" placeholder="Ví dụ: Người bố khó tính, thích yên tĩnh..."></textarea>
+
+          <p class="muted">Giọng đọc được chọn ở màn hình tạo video và dùng chung cho các vai.</p>
+          <select id="charVoiceSelect" hidden disabled aria-hidden="true">
+            <option value="">-- Mặc định theo kịch bản --</option>
+          </select>
+
+          <label for="charDefaultFaceSelect">Biểu cảm mặc định ban đầu:</label>
+          <select id="charDefaultFaceSelect"></select>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Modal Catalog Picker -->
+  <div id="catalogModal" class="modal-backdrop" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="catalogModalTitle" style="margin:0;font-size:16px;">Chọn món đồ</h3>
+        <button type="button" class="btn secondary" id="btnCloseCatalogModal" style="padding:4px 8px;font-size:12px;">✕</button>
+      </div>
+      <div style="margin-bottom:10px;">
+        <input type="text" id="catalogSearchInput" placeholder="Lọc theo tên..." style="width:100%;padding:6px 10px;font-size:13px;">
+      </div>
+      <div class="catalog-grid" id="catalogItemsGrid">
+        <!-- Catalog items injected -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">Thông báo</div>
+
+  <script>
+    'use strict';
+
+    // State
+    let characters = [];
+    let catalog = { costumes: [], accessories: [], faces: {}, face_names: [], head: {}, rig: {}, voices: [] };
+    let currentChar = null;
+    let selectedAccIndex = null;
+    let currentPreviewFace = 'noi';
+    let isTalking = false;
+    let talkInterval = null;
+    let stageZoom = 1.0;
+
+    // Constants identical to make_episode.py
+    const HEAD_SCALE = 0.6372;
+    const HEAD_CHIN = [86.5, 143];
+    const S = 2.6;
+    const NECK = [3, -52];
+    const SHOULDER_L = [-29, -52];
+    const SHOULDER_R = [31, -52];
+
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+
+    function showToast(msg, isBad=false) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.style.borderColor = isBad ? 'var(--bad)' : 'var(--accent)';
+      t.style.color = isBad ? 'var(--bad)' : 'var(--accent)';
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/characters');
+        if (!res.ok) throw new Error('Không thể tải dữ liệu nhân vật');
+        const data = await res.json();
+        characters = data.characters || [];
+        catalog = data.catalog || {};
+
+        renderRoster();
+        initFaceChips();
+        initVoiceSelect();
+
+        // Select first character or create placeholder
+        if (characters.length > 0) {
+          selectCharacter(characters[0].id);
+        }
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function initFaceChips() {
+      const bar = $('#expressionBar');
+      bar.innerHTML = '<span style="font-size:12px;color:var(--muted);margin-right:4px;">Thử biểu cảm:</span>';
+      (catalog.face_names || ['noi', 'lo', 'gian', 'soc', 'khoc', 'buon', 'cuoi', 'cuoi_deu', 'ngap', 'chu_moi']).forEach(f => {
+        const chip = document.createElement('div');
+        chip.className = 'face-chip' + (f === currentPreviewFace ? ' active' : '');
+        chip.textContent = f;
+        chip.onclick = () => {
+          currentPreviewFace = f;
+          $$('.face-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          renderPuppet();
+        };
+        bar.appendChild(chip);
+      });
+
+      // Default face select in identity tab
+      const sel = $('#charDefaultFaceSelect');
+      sel.innerHTML = '';
+      (catalog.face_names || []).forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        sel.appendChild(opt);
+      });
+    }
+
+    function initVoiceSelect() {
+      const sel = $('#charVoiceSelect');
+      sel.innerHTML = '<option value="">-- Mặc định theo kịch bản --</option>';
+      (catalog.voices || []).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.id || v.name;
+        opt.textContent = `${v.name} (${v.gender || ''} · ${v.region || ''} · ${v.kind || ''})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function renderRoster(filter='') {
+      const cont = $('#rosterContainer');
+      cont.innerHTML = '';
+      $('#charCount').textContent = characters.length;
+
+      const q = filter.trim().toLowerCase();
+      const filtered = characters.filter(c => {
+        if (!q) return true;
+        return (c.name || '').toLowerCase().includes(q) ||
+               (c.id || '').toLowerCase().includes(q) ||
+               (c.description || '').toLowerCase().includes(q) ||
+               (c.aliases || []).some(a => a.toLowerCase().includes(q));
+      });
+
+      if (filtered.length === 0) {
+        cont.innerHTML = '<div class="muted" style="text-align:center;padding:20px;">Không tìm thấy nhân vật nào.</div>';
+        return;
+      }
+
+      filtered.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'roster-item' + (currentChar && currentChar.id === c.id ? ' active' : '');
+        item.onclick = () => selectCharacter(c.id);
+
+        const costumeItem = catalog.costumes.find(x => x.id === c.costume);
+        const thumbSrc = costumeItem ? `/meme-assets/rig/wardrobe/${costumeItem.file}` : '/meme-assets/rig/faces/head_base.png';
+
+        item.innerHTML = `
+          <div class="roster-avatar">
+            <img src="${thumbSrc}" alt="${c.name}">
+          </div>
+          <div class="roster-info">
+            <div class="roster-name">${escapeHtml(c.name || c.id)}</div>
+            <div class="roster-sub">${c.id} &bull; ${(c.acc || []).length} phụ kiện</div>
+          </div>
+        `;
+        cont.appendChild(item);
+      });
+    }
+
+    function selectCharacter(cid) {
+      const char = characters.find(c => c.id === cid);
+      if (!char) return;
+      currentChar = JSON.parse(JSON.stringify(char)); // deep copy for editing
+      if (!currentChar.costume_offset) currentChar.costume_offset = { dx: 0, dy: 0, scale: 1.0 };
+      if (!Array.isArray(currentChar.acc)) currentChar.acc = [];
+
+      selectedAccIndex = currentChar.acc.length > 0 ? 0 : null;
+      currentPreviewFace = currentChar.default_face || 'noi';
+
+      // Update UI fields
+      $('#stageCharTitle').textContent = currentChar.name || currentChar.id;
+      $('#stageCharIdBadge').textContent = currentChar.id;
+      $('#charIdInput').value = currentChar.id;
+      $('#charNameInput').value = currentChar.name || '';
+      $('#charAliasesInput').value = (currentChar.aliases || []).join(', ');
+      $('#charDescInput').value = currentChar.description || '';
+      $('#charVoiceSelect').value = currentChar.voice || '';
+      $('#charDefaultFaceSelect').value = currentChar.default_face || 'noi';
+
+      updateCostumeUI();
+      renderAccStack();
+      renderPuppet();
+      renderRoster($('#rosterSearchInput').value);
+    }
+
+    function updateCostumeUI() {
+      const costumeItem = catalog.costumes.find(x => x.id === currentChar.costume);
+      if (costumeItem) {
+        $('#costumeThumb').src = `/meme-assets/rig/wardrobe/${costumeItem.file}`;
+        $('#costumeName').textContent = costumeItem.id;
+        $('#costumeId').textContent = costumeItem.file;
+      } else {
+        $('#costumeThumb').src = '';
+        $('#costumeName').textContent = currentChar.costume || 'Chưa chọn';
+        $('#costumeId').textContent = '';
+      }
+
+      const off = currentChar.costume_offset || { dx: 0, dy: 0, scale: 1.0 };
+      $('#costumeDx').value = off.dx || 0;
+      $('#costumeDxVal').textContent = `${off.dx || 0} px`;
+      $('#costumeDy').value = off.dy || 0;
+      $('#costumeDyVal').textContent = `${off.dy || 0} px`;
+      $('#costumeScale').value = off.scale || 1.0;
+      $('#costumeScaleVal').textContent = `${parseFloat(off.scale || 1.0).toFixed(2)}x`;
+    }
+
+    function renderAccStack() {
+      const cont = $('#accStackContainer');
+      cont.innerHTML = '';
+      $('#accCount').textContent = currentChar.acc.length;
+
+      if (currentChar.acc.length === 0) {
+        cont.innerHTML = '<div class="muted" style="text-align:center;padding:12px;font-size:12px;">Chưa gắn phụ kiện nào. Bấm <b>+ Thêm món</b> để lắp tóc, mũ, kính...</div>';
+        return;
+      }
+
+      currentChar.acc.forEach((acc, idx) => {
+        const aid = typeof acc === 'string' ? acc : acc.id;
+        const item = catalog.accessories.find(x => x.id === aid);
+        const off = typeof acc === 'string' ? { dx: 0, dy: 0, scale: 1.0, rotation: 0 } : acc;
+        const isSelected = selectedAccIndex === idx;
+
+        const card = document.createElement('div');
+        card.className = 'acc-card' + (isSelected ? ' selected' : '');
+
+        card.innerHTML = `
+          <div class="acc-header" onclick="toggleAccSelect(${idx})">
+            <div class="acc-title">
+              <img src="/meme-assets/rig/wardrobe/${item ? item.file : ''}" style="width:24px;height:24px;object-fit:contain;">
+              <span>${aid}</span>
+            </div>
+            <div class="acc-actions" onclick="event.stopPropagation()">
+              <button type="button" class="acc-btn-mini" title="Đưa lên trên" onclick="moveAcc(${idx}, -1)">▲</button>
+              <button type="button" class="acc-btn-mini" title="Đưa xuống dưới" onclick="moveAcc(${idx}, 1)">▼</button>
+              <button type="button" class="acc-btn-mini" style="color:var(--bad);" title="Tháo bỏ" onclick="deleteAcc(${idx})">✕</button>
+            </div>
+          </div>
+          ${isSelected ? `
+            <div class="acc-body">
+              <div class="slider-row">
+                <span>Dịch X</span>
+                <input type="range" min="-150" max="150" step="0.5" value="${off.dx || 0}" oninput="updateAccOffset(${idx}, 'dx', this.value)">
+                <span class="val-box">${off.dx || 0} px</span>
+              </div>
+              <div class="slider-row">
+                <span>Dịch Y</span>
+                <input type="range" min="-150" max="150" step="0.5" value="${off.dy || 0}" oninput="updateAccOffset(${idx}, 'dy', this.value)">
+                <span class="val-box">${off.dy || 0} px</span>
+              </div>
+              <div class="slider-row">
+                <span>Phóng to</span>
+                <input type="range" min="0.3" max="2.5" step="0.01" value="${off.scale || 1.0}" oninput="updateAccOffset(${idx}, 'scale', this.value)">
+                <span class="val-box">${parseFloat(off.scale || 1.0).toFixed(2)}x</span>
+              </div>
+              <div class="slider-row">
+                <span>Góc xoay</span>
+                <input type="range" min="-180" max="180" step="1" value="${off.rotation || 0}" oninput="updateAccOffset(${idx}, 'rotation', this.value)">
+                <span class="val-box">${off.rotation || 0}&deg;</span>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+                <button type="button" class="acc-btn-mini" onclick="resetAccOffset(${idx})">Đặt lại chuẩn</button>
+              </div>
+            </div>
+          ` : ''}
+        `;
+        cont.appendChild(card);
+      });
+    }
+
+    window.toggleAccSelect = function(idx) {
+      selectedAccIndex = selectedAccIndex === idx ? null : idx;
+      renderAccStack();
+      renderPuppet();
+    };
+
+    window.moveAcc = function(idx, dir) {
+      const target = idx + dir;
+      if (target < 0 || target >= currentChar.acc.length) return;
+      const tmp = currentChar.acc[idx];
+      currentChar.acc[idx] = currentChar.acc[target];
+      currentChar.acc[target] = tmp;
+      selectedAccIndex = target;
+      renderAccStack();
+      renderPuppet();
+    };
+
+    window.deleteAcc = function(idx) {
+      currentChar.acc.splice(idx, 1);
+      if (selectedAccIndex === idx) selectedAccIndex = null;
+      else if (selectedAccIndex > idx) selectedAccIndex--;
+      renderAccStack();
+      renderPuppet();
+    };
+
+    window.updateAccOffset = function(idx, key, val) {
+      if (!currentChar.acc[idx]) return;
+      if (typeof currentChar.acc[idx] === 'string') {
+        currentChar.acc[idx] = { id: currentChar.acc[idx], dx: 0, dy: 0, scale: 1.0, rotation: 0 };
+      }
+      currentChar.acc[idx][key] = parseFloat(val);
+      renderAccStack();
+      renderPuppet();
+    };
+
+    window.resetAccOffset = function(idx) {
+      if (!currentChar.acc[idx]) return;
+      const aid = typeof currentChar.acc[idx] === 'string' ? currentChar.acc[idx] : currentChar.acc[idx].id;
+      currentChar.acc[idx] = { id: aid, dx: 0, dy: 0, scale: 1.0, rotation: 0 };
+      renderAccStack();
+      renderPuppet();
+    };
+
+    // Costume sliders
+    $('#costumeDx').oninput = function() {
+      currentChar.costume_offset.dx = parseFloat(this.value);
+      $('#costumeDxVal').textContent = `${this.value} px`;
+      renderPuppet();
+    };
+    $('#costumeDy').oninput = function() {
+      currentChar.costume_offset.dy = parseFloat(this.value);
+      $('#costumeDyVal').textContent = `${this.value} px`;
+      renderPuppet();
+    };
+    $('#costumeScale').oninput = function() {
+      currentChar.costume_offset.scale = parseFloat(this.value);
+      $('#costumeScaleVal').textContent = `${parseFloat(this.value).toFixed(2)}x`;
+      renderPuppet();
+    };
+    $('#btnResetCostumeOffset').onclick = function() {
+      currentChar.costume_offset = { dx: 0, dy: 0, scale: 1.0 };
+      updateCostumeUI();
+      renderPuppet();
+    };
+
+    // Stage Zoom
+    $('#stageZoomRange').oninput = function() {
+      stageZoom = parseFloat(this.value);
+      updateStageZoom();
+    };
+    $('#btnResetZoom').onclick = function() {
+      stageZoom = 1.0;
+      $('#stageZoomRange').value = '1.0';
+      updateStageZoom();
+    };
+    function updateStageZoom() {
+      $('#stagePuppetAnchor').style.transform = `scale(${stageZoom})`;
+    }
+
+    // Interactive Dragging on Stage
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let initialItemDx = 0, initialItemDy = 0;
+
+    const viewport = $('#stageViewport');
+    viewport.addEventListener('mousedown', (e) => {
+      if (selectedAccIndex === null) return;
+      const acc = currentChar.acc[selectedAccIndex];
+      if (!acc) return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      const off = typeof acc === 'string' ? { dx: 0, dy: 0 } : acc;
+      initialItemDx = off.dx || 0;
+      initialItemDy = off.dy || 0;
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging || selectedAccIndex === null) return;
+      const acc = currentChar.acc[selectedAccIndex];
+      if (!acc) return;
+      const deltaX = (e.clientX - dragStartX) / (S * stageZoom * HEAD_SCALE);
+      const deltaY = (e.clientY - dragStartY) / (S * stageZoom * HEAD_SCALE);
+      if (typeof currentChar.acc[selectedAccIndex] === 'string') {
+        currentChar.acc[selectedAccIndex] = { id: currentChar.acc[selectedAccIndex], dx: 0, dy: 0, scale: 1.0, rotation: 0 };
+      }
+      currentChar.acc[selectedAccIndex].dx = Math.round((initialItemDx + deltaX) * 2) / 2;
+      currentChar.acc[selectedAccIndex].dy = Math.round((initialItemDy + deltaY) * 2) / 2;
+      renderPuppet();
+      renderAccStack();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    // Mathematical rendering identical to make_episode.py
+    function headBoxStyle(p, size, offset, chin) {
+      offset = offset || {};
+      const dx = parseFloat(offset.dx || 0);
+      const dy = parseFloat(offset.dy || 0);
+      const scaleMul = parseFloat(offset.scale || 1.0);
+      const rotAdd = parseFloat(offset.rotation || 0);
+      const k = p.scale * scaleMul;
+      const w = size[0];
+      const h = size[1];
+      const ax = p.anchor[0] * k;
+      const ay = p.anchor[1] * k;
+      const left = p.at[0] + dx - chin[0] - ax;
+      const top = p.at[1] + dy - chin[1] - ay;
+      const rot = (p.rotation || 0) + rotAdd;
+      const turn = rot ? `; transform:rotate(${rot}deg); transform-origin:${ax.toFixed(2)}px ${ay.toFixed(2)}px` : '';
+      return `left:${left.toFixed(2)}px; top:${top.toFixed(2)}px; width:${(w * k).toFixed(2)}px; height:${(h * k).toFixed(2)}px${turn}`;
+    }
+
+    function placedStyle(item, offset) {
+      offset = offset || {};
+      const dx = parseFloat(offset.dx || 0);
+      const dy = parseFloat(offset.dy || 0);
+      const scaleMul = parseFloat(offset.scale || 1.0);
+      const k = item.scale * scaleMul;
+      const w = item.size[0];
+      const h = item.size[1];
+      const left = item.place[0] + dx - item.anchor[0] * k;
+      const top = item.place[1] + dy - item.anchor[1] * k;
+      return `left:${left.toFixed(2)}px; top:${top.toFixed(2)}px; width:${(w * k).toFixed(2)}px; height:${(h * k).toFixed(2)}px`;
+    }
+
+    function renderPuppet() {
+      const container = $('#stagePuppetUnit');
+      if (!currentChar) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const costume = catalog.costumes.find(x => x.id === currentChar.costume) || catalog.costumes[0];
+      const dress = costume ? costume.hides_legs : false;
+      const cOffset = currentChar.costume_offset || { dx: 0, dy: 0, scale: 1.0 };
+      const chin = HEAD_CHIN;
+
+      // Legs
+      const legs = dress ? '' : `
+        <div class="joint"><div class="limb legsize">
+          <img src="/meme-assets/rig/parts/component_040.png" alt="" style="left:-66.5px; top:-40px;" />
+        </div></div>
+      `;
+
+      // Heads & Accessories
+      const faceName = currentPreviewFace;
+      const faceData = catalog.faces[faceName] || { mouth_pivot: [99.0, 86] };
+      const px = faceData.mouth_pivot ? faceData.mouth_pivot[0] : 99.0;
+      const py = faceData.mouth_pivot ? faceData.mouth_pivot[1] : 86.0;
+
+      // Separate face items vs body/head items
+      const faceItems = [];
+      const bodyAccItems = [];
+      (currentChar.acc || []).forEach((a, idx) => {
+        const aid = typeof a === 'string' ? a : a.id;
+        const item = catalog.accessories.find(x => x.id === aid);
+        if (!item) return;
+        const off = typeof a === 'string' ? {} : a;
+        if (item.kind === 'face') {
+          faceItems.push({ item, off, aid, idx });
+        } else {
+          bodyAccItems.push({ item, off, aid, idx });
+        }
+      });
+
+      // Face accessory elements
+      const faceAccDom = faceItems.map(({ item, off, aid, idx }) => {
+        const p = (item.per_face && item.per_face[faceName]) ? item.per_face[faceName] : item;
+        const isSel = selectedAccIndex === idx;
+        const highlightClass = isSel ? ' item-selected-highlight' : '';
+        return `<img src="/meme-assets/rig/wardrobe/${item.file}" class="selectable-item${highlightClass}" onclick="toggleAccSelect(${idx})" style="${headBoxStyle(p, item.size, off, chin)}" />`;
+      }).join('');
+
+      // Body/Head accessory elements (hair, hats, bows)
+      const bodyAccDom = bodyAccItems.map(({ item, off, aid, idx }) => {
+        const isSel = selectedAccIndex === idx;
+        const highlightClass = isSel ? ' item-selected-highlight' : '';
+        return `<img src="/meme-assets/rig/wardrobe/${item.file}" class="selectable-item${highlightClass}" onclick="toggleAccSelect(${idx})" style="${headBoxStyle(item, item.size, off, chin)}" />`;
+      }).join('');
+
+      // Build full puppet
+      container.innerHTML = `
+        <!-- Shadow -->
+        <img src="/meme-assets/rig/parts/component_055.png" alt="" style="position:absolute; left:-60px; top:${dress ? 30 : 36}px; width:120px; height:31px; opacity:.35;" />
+        ${legs}
+        <div id="puppetBody" class="joint">
+          <!-- Arm Left -->
+          <div class="joint" style="left:${SHOULDER_L[0]}px; top:${SHOULDER_L[1]}px;"><div class="limb armsize">
+            <div class="flip"><img src="/meme-assets/rig/parts/component_017.png" alt="" style="left:-19px; top:-10px;" /></div>
+          </div></div>
+          <!-- Arm Right -->
+          <div class="joint" style="left:${SHOULDER_R[0]}px; top:${SHOULDER_R[1]}px;"><div class="limb armsize">
+            <img src="/meme-assets/rig/parts/component_017.png" alt="" style="left:-19px; top:-10px;" />
+          </div></div>
+          <!-- Costume -->
+          ${costume ? `<img src="/meme-assets/rig/wardrobe/${costume.file}" alt="" style="${placedStyle(costume, cOffset)}" />` : ''}
+          <!-- Neck & Head -->
+          <div id="puppetNeck" class="joint" style="left:${NECK[0]}px; top:${NECK[1]}px;">
+            <div class="limb headsize">
+              <!-- Earless head base -->
+              <img src="/meme-assets/rig/faces/head_base.png" alt="" style="left:${-chin[0]}px; top:${-chin[1]}px;" />
+              <!-- Face Base -->
+              <div class="joint">
+                <img src="/meme-assets/rig/faces/face_${faceName}_nomouth.png" alt="" style="left:${-chin[0]}px; top:${-chin[1]}px;" />
+                <div id="puppetMouth" class="joint" style="left:${(px - chin[0]).toFixed(2)}px; top:${(py - chin[1]).toFixed(2)}px;">
+                  <img src="/meme-assets/rig/faces/mouth_${faceName}.png" alt="" style="left:${(-px).toFixed(2)}px; top:${(-py).toFixed(2)}px;" />
+                </div>
+                ${faceAccDom}
+              </div>
+              <!-- Non-face accessories (Hair, Hats, Bows) -->
+              ${bodyAccDom}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Toggle Talking preview
+    $('#btnToggleTalk').onclick = function() {
+      isTalking = !isTalking;
+      this.classList.toggle('active', isTalking);
+      this.textContent = isTalking ? '⏹ Dừng thử nói' : '💬 Thử nói chuyện';
+
+      if (isTalking) {
+        let step = 0;
+        talkInterval = setInterval(() => {
+          step++;
+          const mouth = $('#puppetMouth');
+          const neck = $('#puppetNeck');
+          if (mouth) {
+            const scaleY = step % 2 === 0 ? 0.3 : 1.2;
+            mouth.style.transform = `scaleY(${scaleY})`;
+          }
+          if (neck) {
+            const rot = (step % 4 === 0) ? 3 : (step % 4 === 2) ? -2 : 0;
+            neck.style.transform = `rotate(${rot}deg)`;
+          }
+        }, 160);
+      } else {
+        clearInterval(talkInterval);
+        const mouth = $('#puppetMouth');
+        const neck = $('#puppetNeck');
+        if (mouth) mouth.style.transform = 'scaleY(1)';
+        if (neck) neck.style.transform = 'rotate(0deg)';
+      }
+    };
+
+    // Tab switching in right panel
+    $$('.ctrl-tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        $$('.ctrl-tab-btn').forEach(b => b.classList.remove('active'));
+        $$('.ctrl-content').forEach(c => c.hidden = true);
+        btn.classList.add('active');
+        $(`#${btn.dataset.tab}`).hidden = false;
+      };
+    });
+
+    // Modal Catalog for Costumes and Accessories
+    let catalogMode = 'costume'; // or 'accessory'
+    function openCatalog(mode) {
+      catalogMode = mode;
+      $('#catalogModalTitle').textContent = mode === 'costume' ? 'Chọn trang phục (Costume)' : 'Thêm phụ kiện (Tóc, Mũ, Kính, Râu...)';
+      $('#catalogSearchInput').value = '';
+      $('#catalogModal').hidden = false;
+      renderCatalogGrid('');
+    }
+
+    function renderCatalogGrid(filter='') {
+      const grid = $('#catalogItemsGrid');
+      grid.innerHTML = '';
+      const items = catalogMode === 'costume' ? catalog.costumes : catalog.accessories;
+      const q = filter.trim().toLowerCase();
+      const filtered = items.filter(x => !q || x.id.toLowerCase().includes(q) || (x.kind || '').toLowerCase().includes(q));
+
+      filtered.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'catalog-item';
+        el.innerHTML = `
+          <img src="/meme-assets/rig/wardrobe/${item.file}" class="catalog-thumb" alt="${item.id}">
+          <div class="catalog-name">${item.id}</div>
+          <span style="font-size:10px;color:var(--muted);">${item.kind || ''}</span>
+        `;
+        el.onclick = () => {
+          if (catalogMode === 'costume') {
+            currentChar.costume = item.id;
+            currentChar.costume_offset = { dx: 0, dy: 0, scale: 1.0 };
+            updateCostumeUI();
+          } else {
+            currentChar.acc.push({ id: item.id, dx: 0, dy: 0, scale: 1.0, rotation: 0 });
+            selectedAccIndex = currentChar.acc.length - 1;
+            renderAccStack();
+          }
+          renderPuppet();
+          $('#catalogModal').hidden = true;
+        };
+        grid.appendChild(el);
+      });
+    }
+
+    $('#btnChangeCostume').onclick = () => openCatalog('costume');
+    $('#btnAddAcc').onclick = () => openCatalog('accessory');
+    $('#btnCloseCatalogModal').onclick = () => $('#catalogModal').hidden = true;
+    $('#catalogSearchInput').oninput = function() { renderCatalogGrid(this.value); };
+
+    // Create New Character
+    $('#btnNewChar').onclick = function() {
+      const name = prompt('Nhập tên nhân vật mới (ví dụ: Bạn gái, Thầy giáo, Sếp):');
+      if (!name) return;
+      const id = prompt('Nhập ID nhân vật (chữ thường không dấu, ví dụ: ban_gai, thay_giao, sep):', name.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+      if (!id) return;
+
+      const newChar = {
+        id: id.toLowerCase().trim(),
+        name: name.trim(),
+        aliases: [name.trim().toLowerCase()],
+        costume: 'ao_phong_xanh',
+        costume_offset: { dx: 0, dy: 0, scale: 1.0 },
+        acc: [],
+        default_face: 'noi',
+        voice: '',
+        description: ''
+      };
+      characters.push(newChar);
+      selectCharacter(newChar.id);
+      showToast(`Đã tạo nhân vật "${newChar.name}". Hãy chọn đồ và bấm LƯU!`);
+    };
+
+    // Delete Character
+    $('#btnDeleteChar').onclick = async function() {
+      if (!currentChar) return;
+      if (!confirm(`Bạn có chắc chắn muốn xóa nhân vật "${currentChar.name}" (${currentChar.id})?`)) return;
+
+      try {
+        const res = await fetch(`/api/characters/${currentChar.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Không thể xóa nhân vật');
+        const data = await res.json();
+        characters = data.characters;
+        showToast('Đã xóa nhân vật thành công');
+        if (characters.length > 0) {
+          selectCharacter(characters[0].id);
+        } else {
+          currentChar = null;
+          renderPuppet();
+          renderRoster();
+        }
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+
+    // Save Character
+    $('#btnSaveChar').onclick = async function() {
+      if (!currentChar) return;
+
+      // Sync form values
+      currentChar.id = $('#charIdInput').value.trim().toLowerCase();
+      currentChar.name = $('#charNameInput').value.trim() || currentChar.id;
+      currentChar.aliases = $('#charAliasesInput').value.split(',').map(s => s.trim()).filter(Boolean);
+      currentChar.description = $('#charDescInput').value.trim();
+      currentChar.default_face = $('#charDefaultFaceSelect').value || 'noi';
+
+      try {
+        const res = await fetch('/api/characters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentChar)
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Lỗi khi lưu nhân vật');
+        }
+        const data = await res.json();
+        characters = data.characters;
+        showToast(`Đã lưu nhân vật "${currentChar.name}"! Tất cả video sẽ dùng đúng tạo hình này.`);
+        selectCharacter(currentChar.id);
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+
+    // Search roster
+    $('#rosterSearchInput').oninput = function() { renderRoster(this.value); };
+    $('#btnRefreshRoster').onclick = () => loadData();
+
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[m]));
+    }
+
+    // Initialize
+    loadData();
+  </script>
+</body>
+</html>

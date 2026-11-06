@@ -27,10 +27,13 @@ class OutputLayoutTests(unittest.TestCase):
             store=Store(Path(folder)/'db',Path(folder)/'videos')
             job,_=store.create({'idea':'test','project':'vuan1','voice_id':'test','duration_seconds':8},'one')
             paths=[]
-            for content in (b'first',b'second'):
+            for content in (b'first',b'second',b'third'):
                 source=Path(job['output'])/'video.mp4';source.write_bytes(content)
-                paths.append(Path(publish_video(job,{'video':str(source),'assets':[]})['video']))
-            self.assertNotEqual(*paths)
+                result=publish_video(job,{'video':str(source),'assets':[]})
+                paths.append(Path(result['video']))
+                job['checkpoints']['render']=result
+            self.assertEqual(paths[2].name,f"video-{job['id']}-3.mp4")
+            self.assertEqual(final_video_path(job),paths[2])
             self.assertEqual(paths[0].read_bytes(),b'first')
             self.assertEqual(paths[1].read_bytes(),b'second')
 
@@ -54,11 +57,17 @@ class OutputLayoutTests(unittest.TestCase):
                 if job['id']==jobs[0]['id']:
                     source.write_bytes(b'another export')
                     publish_video(job,{'video':str(source),'assets':[]})
+                    from videostudio.media import asset
+                    legacy=Path(result['video']).with_name(f"video-{job['id']}-4-2.mp4")
+                    legacy.write_bytes(b'older naming convention')
+                    with store.db() as c:
+                        c.execute('UPDATE checkpoints SET value=? WHERE job=? AND stage=?',
+                                  (json.dumps({'video':str(legacy),'assets':[asset(legacy)]}),job['id'],'render'))
             app=create_app(store=store,worker_enabled=False)
             with TestClient(app) as client:
                 response=client.get('/api/jobs/'+jobs[0]['id']+'/files/video.mp4')
                 self.assertEqual(response.status_code,200)
-                self.assertEqual(response.content,b'video fixture')
+                self.assertEqual(response.content,b'older naming convention')
                 self.assertEqual(client.get('/api/jobs/'+jobs[0]['id']+'/files/other.mp4').status_code,404)
             with store.db() as c:
                 removal=OutputRemoval(store,c,[jobs[0]]);removal.stage()

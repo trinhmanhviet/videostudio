@@ -4,6 +4,21 @@ from pathlib import Path
 from .core import digest, PermanentError
 from .captions import SUBTITLE_BOTTOM_MARGIN
 
+def ensure_clean_audio(path, check, ffmpeg='ffmpeg'):
+    """Check release audio and repair peak clipping while copying video."""
+    for attempt in range(3):
+        try:
+            return audio_report(path, check, ffmpeg)
+        except PermanentError as error:
+            if 'clipped' not in str(error) or attempt == 2:
+                raise
+            path = Path(path)
+            fixed = path.with_name(path.stem + '.quiet.mp4')
+            run([ffmpeg, '-v', 'error', '-y', '-i', str(path), '-map', '0:v', '-map', '0:a', '-c:v', 'copy',
+                 '-af', 'volume=0.7,alimiter=limit=0.8:level=false', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', str(fixed)], check)
+            fixed.replace(path)
+
+
 def render_scenes(job):
     checkpoint=job['checkpoints']['images']
     provider=checkpoint.get('image_provider',job.get('request',{}).get('image_provider'))

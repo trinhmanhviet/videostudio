@@ -1,130 +1,132 @@
-# Video meme Gấu trúc
+# Video hài: pipeline thống nhất dùng HyperFrames
 
-Chế độ `workflow_mode: "meme"` tạo video hài dọc 9:16 kiểu "gấu trúc biaoqing": khung 3 dải
-(câu móc ở trên, cảnh ở giữa, câu chốt ở dưới), cắt cảnh nhanh theo từng câu kể.
+Chọn **Video meme / hoạt hình nhân vật**, nhập ý tưởng hoặc truyện, chọn giọng và thời lượng rồi tạo.
+Một job xuất một MP4; hiện nhận15–600 giây. Không có lựa chọn engine hoặc phiên bản biên kịch.
+Pipeline tài liệu giữ luồng hiện có.
 
-## Cách dùng
-Trong VideoStudio chọn **Cách chuẩn bị nội dung → Video meme Gấu trúc**, nhập ý tưởng truyện
-(ví dụ "Lần đầu tôi dạy bố dùng điện thoại thông minh"), chọn giọng, đặt 45–90 giây rồi bấm tạo.
-Lựa chọn "Ảnh cảnh tạo bằng" không dùng trong chế độ này.
+## Đường đi của nội dung
 
-### Hoạt hình tự động HyperFrames (2026-11-05)
+Ý tưởng/truyện → phân tích và phát triển cốt truyện → bố trí cảnh → viết → phản biện toàn truyện
+→ sửa cục bộ có giới hạn → JSON HyperFrames → TTS → hoạt hình/SFX → kiểm tra → MP4.
 
-Trong chế độ meme, **Bộ dựng → Hoạt hình HyperFrames** là lựa chọn mặc định cho video mới.
-Đây là engine đã dùng cho các tập mẫu `ep2–ep5`, được nối vào hàng đợi và checkpoint của VideoStudio.
-Dán câu chuyện hoặc nhập ý tưởng, chọn giọng rồi bấm tạo. Tool tự chọn trang phục/phụ kiện khác nhau,
-biểu cảm từng câu, hành động, toàn/trung/cận cảnh, phản ứng và nhép miệng theo WAV ở 30fps.
-Giọng đã chọn áp dụng cho cả lời kể và nhân vật; tốc độ mặc định **1,15×**, pitch theo thanh chỉnh.
-Một job tạo một MP4, một mạch truyện có câu chốt; thời lượng nhập là mục tiêu viết, thời lượng thực đo từ lời đọc.
-Chưa có tính năng tự xuất nhiều tập từ một lần nhập.
+Các bước sáng tác nằm trong stage script, gọi cùng Pipeline.llm_json/parser/bridge, không có service hay hàng đợi mới.
 
-Kịch bản dài hơn khoảng 90 giây được viết theo **dàn ý chung + các phần tối đa 20 câu mục tiêu/lượt**
-(ví dụ 7 phút: 9 phần, tổng mục tiêu 168 câu). Mỗi phản hồi nhỏ được kiểm tra và lưu trong
-`data/<job-id>/animation-parts/`; nhân vật, quần áo và danh sách cảnh dùng chung suốt video.
-Ngắt kết nối giữa chừng thì tiếp tục từ phần còn thiếu, không viết lại các phần đã hoàn tất và không tự rút ngắn video.
-Các phần viết được ghép thành một kịch bản trước khi tạo giọng; không phải nhiều video riêng.
-Nếu chủ động hủy ở bước kịch bản hoạt hình, có nút **Tiếp tục job đã hủy**. Tool giữ job/checkpoint,
-tách phiên ChatGPT cũ đang kẹt khỏi hàng chờ và mở phiên mới cho cùng job; lịch sử phản hồi thật vẫn được giữ.
+- **Playbook**: comedy_playbook.json có32 kỹ thuật với cơ chế, setup, leo thang, payoff, điều kiện dùng/tránh, lỗi thường gặp; chín kiểu kết. Chọn theo truyện, không ép mọi tập có thảm họa.
+- **Architect**: phân biệt ý tưởng mở và truyện hoàn chỉnh. Ý tưởng mở có tối đa ba hướng phát triển rồi chọn một. Truyện có sẵn giữ sự kiện và câu chốt qua source contract. Lập hồ sơ động cơ, điểm yếu, niềm tin, cách suy luận/đối thoại/phản ứng của các vai.
+- **Narrative event** là sự kiện kể chuyện, có thể có nhiều render beats. Writer chỉ viết các event được giao, kế thừa nhân vật, trạng thái sự kiện, đạo cụ, setup/payoff còn mở.
+- **Thời lượng**: ngân sách âm tiết dùng tốc độ đúng giọng trong WAV của job đã verified; chưa có mẫu thì ghi rõ chưa hiệu chuẩn. Chia phản hồi theo khoảng180 âm tiết mục tiêu. Số beat không phải bằng chứng đủ thời lượng; timeline cuối đo từ WAV.
+- **Đạo cụ**: tool giữ state trước; AI chỉ gửi cập nhật đích tại event/render beat cụ thể. Chuyển người cầm/vị trí trên hình cần update tương ứng. State bối cảnh như vườn rau có thể thể hiện bằng ghi chú minh họa, không ép thành đồ cầm tay.
+- **Callback**: có marker ở beat gieo và beat trả theo thứ tự thực tế, lưu lại event quan sát được; vị trí có thể khác nhãn gợi ý trong dàn ý. Thiếu setup trước payoff hoặc thiếu payoff bắt buộc vẫn bị chặn. Critic xem cả nội dung, không coi marker là chứng nhận hài hay.
+- **Critic**: xem toàn truyện và nguyên bản. Trọng số thử nghiệm: nhân quả20%, setup/payoff25%, mới15%, giọng kể15%, kết15%, khả năng dựng10%. Tối đa hai vòng sửa nội dung, tối đa ba lượt sửa JSON cho mỗi bước. Chỉ sửa câu/sự kiện liên quan và callback phụ thuộc; giữ phần tốt và quỹ đạo đạo cụ.
+- Trạng thái: approved, reviewed_with_warnings, rejected. Blocking còn lại thì stage không nhận kịch bản là đạt; major/minor còn lại được ghi rõ. Điểm AI không chứng minh mức độ buồn cười; human_quality_verified vẫn false.
 
-- HyperFrames dùng rig/tủ đồ/nền trong `memestudio/assets`, GSAP và SFX cục bộ, **không gọi Flow/Comfy để tạo ảnh hoặc nhạc**.
-  Bản tích hợp này có lời đọc + SFX; không tạo nhạc nền. Có thể tắt phụ đề hoặc SFX qua các cờ API hiện có.
-- Cần Node.js 22+, FFmpeg/FFprobe, Python có NumPy/Pillow và `npm ci` trong `memestudio`.
-  VieNeu và bridge ChatGPT dùng cấu hình hiện có của VideoStudio. Không dùng trình duyệt Flow để render.
-- Mỗi job có thư mục riêng: `E:\Videos\<dự án>\data\<job-id>\episode`; không ghi vào các tập mẫu.
-  File thành phẩm vẫn ở `E:\Videos\<dự án>\video-<job-id>.mp4`.
-- Speech tạo/cache từng câu, áp dụng tempo/pitch rồi dựng timeline đo thật gồm khoảng nghỉ và phản ứng.
-  Images xác nhận bản sao tạo hình riêng; music ghi checkpoint im lặng có chủ đích; render chỉ ghép nội dung đã chuẩn bị.
-  Retry render không gọi AI/TTS. Receipt giữ đường dẫn/hash MP4 đã xuất để retry không xuất trùng.
-- Chọn **Pillow** để dùng bộ dựng cũ. Request/job cũ không có `meme_engine` vẫn dùng Pillow, không đổi checkpoint.
+Ngôn ngữ thô, hài chất thải và bạo lực hoạt hình không bị loại khỏi công thức mặc định; cần có vai trò trong tình huống và tuân thủ giới hạn nội dung áp dụng.
+Không sao chép tên vai, câu cửa miệng hoặc cốt truyện nhận diện từ nguồn nghiên cứu.
 
-CLI gọi cùng API, không tạo pipeline riêng (chạy server và bridge trước):
+## Hình ảnh và timing
+
+Rig/tủ đồ/mặt/nền trong memestudio/assets; GSAP và SFX cục bộ; không gọi Flow tạo ảnh meme.
+Giọng được chọn dùng chung cho các vai; cá tính thể hiện bằng lời thoại, chưa có diễn xuất TTS riêng từng vai.
+Tốc độ mặc định1,15×, pitch theo thanh chỉnh. WAV từng câu được giữ riêng, đồng bộ ở30fps.
+
+Đạo cụ dùng PNG thư viện có sẵn; chưa có hình thì dùng thẻ tên minh họa, không giả vờ đã có hình thật.
+Schema bổ sung vào beat đầy đủ:
+
+```json
+{"props":{"book":{"asset":null,"label":"Cuốn sách"}},
+ "beats":[{"props":{"book":{"placement":"held","owner":"toi"}},
+           "pause_before":0.2,"pause_after":0.3,"reaction_seconds":0.6}]}
+```
+
+Vị trí: held/table/hidden. Dùng trạng thái trước/sau cùng cử chỉ để thể hiện chuyển/giấu/lộ.
+Đạo cụ đặt cố định được neo theo nền/bối cảnh, không tự đi theo nhân vật sang phòng khác.
+Compiler phân biệt câu chốt đã nằm trong lời đọc với dữ liệu camera; ghi chú trạng thái nằm trong notes, chỉ hiện trong beat liên quan.
+Không mô phỏng vật lý hay thao tác ngón tay. Khoảng nghỉ từng beat0–2 giây, cùng nằm trong staging đo thật của lời đọc.
+Video mới dùng lời đọc+SFX, không bắt tạo nhạc Stable Audio.
+Job chuyển đổi có checkpoint nhạc hợp lệ sẽ giữ và mix nhỏ track cũ sau HyperFrames nếu nhạc vẫn bật; file nhạc gốc được giữ.
+
+## Checkpoint và resume
+
+File trong E:/Videos/<dự án>/data/<job-id>/:
+- comedy/inputs.json: snapshot yêu cầu, Playbook, lịch sử và tốc độ giọng.
+- comedy/architect.json, outline.json, writer-NNN.json, critic-N.json, repair-N-M.json: kết quả chuẩn hóa và receipt prompt/hash; giữ phản hồi thô/lỗi riêng.
+- comedy/quality.json: trạng thái, critic, continuity, ánh xạ narrative/render và giới hạn kiểm chứng.
+- animation-script.json: script engine; episode/: HTML, assets riêng, WAV, staging, SFX, log render.
+- MP4 ở E:/Videos/<dự án>/video-<job-id>.mp4.
+
+Retry giữ các kết quả hợp lệ; mất mạng ở critic không viết lại writer; retry render không gọi lại TTS/AI.
+Chủ động hủy ở script hoạt hình có nút Tiếp tục job đã hủy; phiên ChatGPT bị kẹt được tách khỏi hàng chờ nhưng lịch sử thật được giữ.
+Không đổi nguyên bản giữa một bản thảo đã checkpoint; muốn truyện khác thì tạo job mới.
+
+## Dữ liệu cũ
+
+Pillow và hai prompt ngắn/dài cũ đã gỡ khỏi runtime. Giá trị engine cũ trong request chỉ là dữ liệu chuyển đổi.
+Job hoàn tất/MP4 gốc không viết lại. Job dở chuyển khi worker có lease hợp lệ; trước mutation có snapshot DB
+và bản sao file/hash trong comedy-migration-v1/. Chỉ worker có lease hiện hành mới thu hồi job running do tiến trình trước chết.
+Giữ narration, dùng lại WAV/receipt đã khớp chữ/giọng, nhạc và phần viết dài đã hợp lệ; dựng/timing cần thiết được tính lại.
+Không suy diễn vai từ sprite Pillow: khi thiếu thông tin dùng rig trung tính, giữ nguyên lời và bản sao gốc.
+Nguồn/hash không chứng minh được hoặc thiếu phần giữa thì báo rõ, giữ nguyên dữ liệu, không âm thầm gửi lại.
+
+## Bộ nhớ và đánh giá
+
+Bảng comedy_memory nằm trong SQLite hiện có, keyed theo job. Draft/reviewed/approved/rendered/published/rejected phân biệt.
+Verified mới ghi rendered; không suy ra published. Retry bước cũ không ghi đè nội dung cuối hoặc đánh giá người dùng.
+Lịch sử hữu hạn giúp tránh lặp cốt truyện/kiểu kết, không cấm tái sử dụng kỹ thuật phổ quát.
+
+tests/fixtures/comedy-benchmark.json có20 nhóm ý tưởng, input, ràng buộc, rubric cấu trúc và ô nhận xét con người.
+Unit test dùng fixture/mock, không gọi AI thật. Đánh giá thực tế cần xem video, nhận xét tự nhiên/bất ngờ/nhân quả/hành động/timing.
+API nội bộ comedy_memory.feedback(store,job_id,rating,note) nhận điểm1–5 hoặc nhận xét; không phải tùy chọn biên kịch trên UI.
+
+## Kho nhân vật
+
+Trang /characters lưu ngoại hình, phụ kiện và căn chỉnh trong data/characters.json. Mỗi job chụp snapshot roster khi bắt đầu,
+nên chỉnh kho không đổi bản thảo đang viết. Tên người trong truyện gốc được giữ, preset chỉ áp ngoại hình.
+File hỏng được báo lỗi và giữ nguyên, không tự ghi đè bằng mặc định. Các cập nhật được khóa đọc–sửa–ghi.
+Giọng đọc vẫn chọn ở màn hình tạo video; không có lựa chọn giọng riêng theo vai chưa hoạt động.
+
+## Cài đặt và CLI
+
+Node.js22+, FFmpeg/FFprobe, Python NumPy/Pillow; npm ci trong memestudio.
+Mở hệ thống và bridge như bình thường. CLI gọi cùng API:
 
 ```powershell
 python auto_meme.py --input story.txt --out out/video.mp4
-python auto_meme.py --idea "Bố lần đầu dùng điện thoại thông minh" --seconds 60 --voice "clone:<id>" --out out/video2.mp4
+python auto_meme.py --idea "Hai người bạn mở dịch vụ trả lời hộ câu hỏi khó" --seconds 60 --voice "clone:<id>" --out out/video2.mp4
 ```
 
-Mặc định giọng Vương Bờm của máy hiện tại; máy khác dùng `--voice` với ID trong danh sách giọng.
-CLI tự tìm bridge sẵn sàng; có thể chỉ định `--scope` và `--server` localhost.
-Receipt `<output>.auto-meme.json` lưu khóa idempotency/job, không lưu nguyên câu chuyện. Chạy lại cùng lệnh sẽ
-theo dõi cùng job; nếu job failed thì mở Studio và retry từ bước lỗi. Không ghi đè file MP4 đã tồn tại.
+Receipt <output>.auto-meme.json theo dõi cùng job khi chạy lại cùng lệnh, không ghi đè MP4.
+Thêm assets/engine thủ công: [huong-dan-video-hoat-hinh.md](huong-dan-video-hoat-hinh.md).
+Báo cáo triển khai/kiểm thử/giới hạn: [comedy-upgrade.md](comedy-upgrade.md).
 
-Mã tích hợp: `meme_animation_script.py` (hợp đồng AI + danh mục thật), `meme_animation.py` (các stage),
-`auto_meme.py` (CLI). Thêm đồ/mặt cho engine xem [hướng dẫn hoạt hình](huong-dan-video-hoat-hinh.md).
 
-Muốn AI chọn nền 90s hoặc thôn quê, ghi rõ bối cảnh trong ý tưởng ("thập niên 90, ở quê"). Tag nền trong
-prompt là tên file bỏ `bg_`, dấu `_` đổi thành khoảng trắng (ví dụ `bg_90s_rural_pond` → "90s rural pond").
-
-## Luồng chạy của bộ dựng Pillow cũ
-| Bước | Chế độ meme làm gì |
+## Asset HyperFrames dùng (kiểm tra ở đây)
+| Thành phần | Vị trí |
 |---|---|
-| plan | Kiểm tra điều kiện chạy; nạp asset mới trong `new/` nếu có |
-| research | Bỏ qua |
-| script | ChatGPT/Gemini viết truyện + danh sách cảnh, chỉ được dùng id trong danh mục; sai id thì viết lại tối đa 3 lượt, lượt cuối tự thay bằng mặc định |
-| speech, subtitles, music | Giữ nguyên như video thường (VieNeu, Stable Audio) |
-| images | Không tạo ảnh; chỉ kiểm tra asset còn đủ |
-| render | `videostudio/meme_render.py`: Pillow ghép khung + FFmpeg mã hoá 1080x1920 30fps, nhạc + SFX tổng hợp |
-| verify | Kiểm tra thời lượng, giải mã toàn bộ, âm thanh |
+| Đầu gấu (KHÔNG còn tai, xoá 2026-11-06) | `memestudio\assets\rig\faces\head_base.png` (bản gốc: `tmp\backup-rig-head-20261106\`) |
+| Nét mặt, miệng | `memestudio\assets\rig\faces\face_*.png`, `mouth_*.png` (không chứa tai) |
+| Thân | `memestudio\assets\rig\base\torso_core.png` |
+| Tủ đồ: tóc, mũ, áo, kính... | `memestudio\assets\rig\wardrobe\` + `wardrobe.json` |
+| Nền: 72 file `bg_*.png` 720x1280 | `memestudio\assets\backgrounds\` (nơi duy nhất) |
+| Đồ vật: 144 món | `assets\Meme_Animation_Asset_Pack\catalog\library.json` + `catalog\library\*.png`; chỉ mục `kind: prop` được nạp, `fx` thì không. Sheet gốc để cắt: `assets\Meme_Animation_Asset_Pack\new\prop_*.png`, `fx_*.png` |
+| SFX | `memestudio\assets\sfx\` |
 
-## Chọn độ dài video
-- Thời lượng nói = số âm tiết ÷ khoảng 3,5 (giọng tiếng Việt đọc 3–4 âm tiết/giây).
-- Trình viết kịch bản (`videostudio/meme_script.py`) **không đọc nguyên văn** ý tưởng. Ý tưởng chỉ là dữ liệu;
-  AI viết lại thành các beat, mỗi beat một câu 6–14 từ và một khung hình, `SECONDS_PER_BEAT = 2.4`.
-  Số beat mục tiêu = thời lượng ÷ 2,4 (cho phép 0,7×–1,35×): 60 giây ≈ 25 beat, 90 giây ≈ 38 beat.
-- Giới hạn nhập: 15–600 giây (`videostudio/core.py`); giao diện tự đưa về 60 giây nếu đặt quá 600. Nên dùng 45–90 giây.
-- Một truyện dài hơn thì nén vào 90 giây sẽ mất tiếng cười. Cách làm: mỗi video một mạch truyện có punchline riêng
-  (45–120 giây), truyện nhiều đoạn thì tách thành nhiều video.
-- Ví dụ truyện "bạn tôi lấy vợ" (1.589 âm tiết, 5 đoạn): đọc nguyên văn ≈ 7,5 phút. Từng đoạn nguyên văn:
-  nhà văn ≈ 1,5 phút, con bạc ≈ 1 phút, xe ôm + viên đá ≈ 2,7 phút, nhà thầu ≈ 2 phút, kết ≈ 0,5 phút.
-- Chưa có chế độ đọc nguyên văn bằng asset meme. Đề xuất ở `docs/meme-handoff.md`.
+Mỗi lần dựng một tập, `make_episode.py` chép asset từ `rig` vào `episodes\<tập>\assets`; sửa asset xong chỉ cần dựng lại.
 
-## Asset
-Danh mục nạp bởi `videostudio/meme_catalog.py` (`load_catalog()`): 224 sprite/đồ vật + 86 nền.
+## Thêm asset mới
+- **Đồ vật**: vẽ sheet bằng ChatGPT app (prompt ở `docs/meme-handoff.md`), ZIP về Downloads, rồi chạy
+  `python scripts/ingest_asset_zips.py` và `python scripts/import_meme_library.py` (HyperFrames KHÔNG tự nhập khi chạy job;
+  quên chạy thì món mới không xuất hiện). Tên và thứ tự món theo `SHEET_ITEMS` trong `scripts/meme_sheets.py`; `python scripts/meme_sheets.py` in prompt ra `tmp/prompt_chatgpt_sheets.txt`
+  (lưới 2x4 hoặc 3x3; sheet đếm sai số món sẽ bị bỏ qua và ghi lý do).
+- **Nền**: `ingest_asset_zips.py` đưa `bg_*.png` thẳng vào `memestudio\assets\backgrounds` (bản bị thay chuyển vào `_old_style\` trong đó).
+- **Trang phục, tóc, nét mặt**: xem `docs/huong-dan-video-hoat-hinh.md` và `memestudio/tools/`.
 
-- **Gấu trúc:** 80 sprite, `assets/Meme_Animation_Asset_Pack/catalog/panda.json` (+ ảnh trong `catalog/panda/`),
-  cắt từ 3 sheet gốc bằng `scripts/build_meme_catalog.py` (cần opencv, chỉ chạy lại khi sheet đổi).
-- **Thư viện đồ vật/hiệu ứng:** 144 món (126 prop + 18 fx), `catalog/library.json` + `catalog/library/*.png`,
-  cắt tự động từ 17 sheet trong `new/` bằng `scripts/import_meme_library.py` (xem "Thêm asset mới").
-  Sheet: `prop_animals, prop_clothes, prop_daily, prop_food, prop_furniture, prop_home, prop_kitchen_tech,
-  prop_medical, prop_party, prop_school, prop_shopping, prop_sports, prop_study_office, prop_tet, prop_tools,
-  prop_vehicles, fx_more, fx_stickers`.
-- **Nền: 86** = 14 vẽ bằng code (`plain_*`, `room_day/night`, `outdoor_day/night`, `rays_*`, `flashback`)
-  + 72 file `bg_*.png` 720x1280 trong `assets/Meme_Animation_Asset_Pack/new/`:
-  - 48 nền chung: airport, alley, apartment_corridor, bank_counter, bathroom, beach, bedroom, bedroom_night,
-    bus_interior, bus_stop, car_interior, cinema, classroom, clinic, coffee_shop, construction_site, countryside,
-    elevator, farm, forest, gym, hospital_corridor, karaoke_room, kitchen, library, living_room, market,
-    meeting_room, messy_room, mountains, office, office_night, park, rainy_street, restaurant, rooftop, school_yard,
-    space, stage, store, street, street_eatery, street_night, supermarket_checkout, swimming_pool, tet_house,
-    train_station, wedding_hall.
-  - 12 nền thành phố thập niên 90 (`bg_90s_*`): apartment_yard, bedroom, classroom, coffee_stall, game_shop,
-    kitchen, living_room, market, post_office, street, train_station, village_house.
-  - 12 nền thôn quê thập niên 90 (`bg_90s_rural_*`): rice_field, dirt_road, yard, pond, communal_house,
-    bamboo_gate, kitchen, house_inside, grocery, river_ferry, school, market.
-- **Bản cũ** bị thay thế được giữ ở `new/_old_style/` (xoá được nếu không cần).
-
-### Phong cách chuẩn (mọi asset phải giống nhau)
-Chốt theo video mẫu của người dùng: phẳng 2D rất đơn giản, MỌI vật thể có nét viền mảnh, sạch, một nét liền màu
-nâu đậm (không dày, không run); tô phẳng màu đất xỉn (be, kem, nâu nhạt, xanh rêu xỉn, xám xanh), bầu trời xanh
-xám nhạt phẳng; hơi xấu như meme vẽ vội, vài vệt ố trên tường; cảnh trống không có người; sàn/mặt đất chiếm 1/3
-dưới; không chữ. Không dùng: kiểu tranh sơn, đổ bóng, gradient, ánh sáng phát sáng/phản chiếu, neon, màu rực, 3D, hiện đại.
-Nền thập niên 90 thêm đồ cổ điển (ti vi CRT, quạt trần/quạt bàn, điện thoại bàn, xe đạp, xe Cub, mái ngói, cột điện gỗ);
-nền thôn quê không có đồ hiện đại.
-
-### Thêm asset mới
-- Nền: bỏ `bg_<tên>.png` (720x1280) vào `assets/Meme_Animation_Asset_Pack/new/` là dùng ngay.
-- Sheet đồ vật: đặt đúng tên như `scripts/make_meme_assets.py` (`prop_food.png`, `fx_stickers.png`, ...) → tự cắt
-  theo thứ tự lưới (2×3, 2×4 hoặc 3×3 khi vật bị tách mảnh) và đặt tên; một ảnh một vật thì đặt `prop_<tên>.png`.
-  Video meme kế tiếp tự nạp (`scripts/import_meme_library.py`); sheet đếm sai số vật sẽ bị bỏ qua và ghi lý do.
-- Vẽ bằng ChatGPT app (ảnh meme KHÔNG vẽ trong Chrome riêng của VideoStudio, chỗ đó chỉ để viết kịch bản):
-  xem quy trình ở `docs/meme-handoff.md`. ZIP tải về Downloads nhập bằng
-  `python scripts/ingest_asset_zips.py` (thêm `--replace` để ZIP mới thay file cũ; bản cũ chuyển vào `new/_old_style/`).
-
-## Phục hồi và cập nhật asset
-
-- ID asset/FX sai kiểu dữ liệu đi qua vòng sửa kịch bản tối đa ba lượt; reply bị từ chối có receipt `meme-script-attempt-XX.rejected.json`. Resume bỏ qua lượt đã biết sai, giữ nguyên phản hồi gốc để xem lỗi; hết lượt dùng fallback cục bộ khi còn đủ nội dung.
-- Danh mục và cache ảnh dựa vào hash nội dung. Một Catalog là snapshot nhất quán; job mới nạp Catalog mới sẽ thấy ảnh thay thế cùng tên/kích thước, không cần restart để xóa cache ảnh. Bộ nhập library cũng phát hiện nguồn thay đổi dù giữ nguyên thời gian file.
-- Khi nhập nhiều ZIP có `--replace`, chọn nguồn mới nhất cho từng tên file trước khi ghi; giữ bản bị thay trong `_old_style/` và giữ thời gian nguồn để chạy lại không thay lặp.
-- Video meme chưa hỗ trợ editor ảnh/timeline của video thường. Các nút sửa/tạo lại ảnh được ẩn ở thẻ và hero; đổi giọng vẫn dùng được.
+## Phong cách chuẩn (mọi asset vẽ thêm phải giống nhau)
+Phẳng 2D rất đơn giản, mọi vật thể có nét viền mảnh, sạch, một nét liền màu nâu đậm (không dày, không run); tô phẳng màu đất xỉn
+(be, kem, nâu nhạt, xanh rêu xỉn, xám xanh), bầu trời xanh xám nhạt phẳng; hơi xấu như meme vẽ vội; cảnh trống không có người;
+không chữ. Không dùng: tranh sơn, đổ bóng, gradient, phát sáng, neon, màu rực, 3D, hiện đại. Nền thập niên 90 thêm đồ cổ điển
+(ti vi CRT, quạt, điện thoại bàn, xe đạp, mái ngói); nền thôn quê không có đồ hiện đại.
 
 ## Kiểm thử
-`python -m unittest tests.test_meme_mode` (15 test, pass sau khi nhập bộ asset mới).
+`python -m unittest discover -s tests -p 'test_meme*.py'`.
+Các test dựng (`test_meme_animation_pipeline`, `test_memestudio_consistency`, `test_meme_migration`) cần máy Windows
+(font Arial, ghi file tạm); trong môi trường Linux hạn chế chúng lỗi vì lý do hạ tầng.

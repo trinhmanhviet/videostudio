@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chỉnh Sửa Tập Phim Meme - VideoStudio</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101412;
+      --card: #18201b;
+      --card-alt: #131a15;
+      --line: #2c3a31;
+      --line-active: #53755c;
+      --text: #eef4ec;
+      --muted: #99ab9e;
+      --accent: #b9eb83;
+      --accent-dim: rgba(185, 235, 131, 0.15);
+      --bad: #ff8e85;
+      --warn: #fcd34d;
+      --blue: #7dd3fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--card);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-title h1 { margin: 0; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .header-title small { color: var(--muted); font-size: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    button, .btn {
+      background: var(--accent);
+      color: #101a0e;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font: 600 13px system-ui;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, opacity 0.15s, transform 0.05s;
+    }
+    button:active, .btn:active { transform: scale(0.98); }
+    button.secondary, .btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    button.secondary:hover, .btn.secondary:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    button.warn {
+      background: rgba(252, 211, 77, 0.15);
+      color: var(--warn);
+      border: 1px solid rgba(252, 211, 77, 0.4);
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* 3-column Layout */
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr 420px;
+      height: calc(100vh - 65px);
+      overflow: hidden;
+    }
+    @media (max-width: 1200px) {
+      .editor-layout {
+        grid-template-columns: 300px 1fr 360px;
+      }
+    }
+    @media (max-width: 900px) {
+      .editor-layout {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+      }
+    }
+
+    .panel {
+      overflow-y: auto;
+      border-right: 1px solid var(--line);
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+    }
+    .panel:last-child { border-right: none; }
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-alt);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .panel-header h2 { margin: 0; font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .panel-content { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Video player container */
+    .video-box {
+      width: 100%;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      aspect-ratio: 9/16;
+      max-height: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .video-box video { width: 100%; height: 100%; object-fit: contain; }
+
+    /* Props cards */
+    .prop-card {
+      background: var(--card-alt);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s;
+    }
+    .prop-card.missing {
+      border-color: rgba(252, 211, 77, 0.4);
+      background: rgba(252, 211, 77, 0.03);
+    }
+    .prop-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .prop-title { font-weight: 700; font-size: 14px; }
+    .prop-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+    }
+    .prop-badge.badge-ok {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .prop-badge.badge-warn {
+      background: rgba(252, 211, 77, 0.15);
+      color: var(--warn);
+      border-color: var(--warn);
+    }
+    .prop-body {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .prop-thumb {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .prop-thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .prop-text-card-preview {
+      background: #fff5d5;
+      border: 2px solid #49352d;
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: 700 11px Arial, sans-serif;
+      color: #241b13;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .prop-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 11.5px;
+      border-radius: 6px;
+    }
+
+    /* Beats timeline list */
+    .beat-card {
+      background: var(--card-alt);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .beat-card:hover {
+      border-color: var(--line-active);
+    }
+    .beat-card.active {
+      border-color: var(--accent);
+      background: rgba(185, 235, 131, 0.04);
+    }
+    .beat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    .beat-text { font-size: 13px; font-weight: 500; line-height: 1.4; }
+    .beat-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    select, input[type=text] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: var(--text);
+      font-size: 12px;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      max-width: 680px;
+      width: 100%;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      padding: 20px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .prompt-box {
+      background: #090d0b;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: 12.5px/1.4 Consolas, monospace;
+      color: #b9eb83;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 8px 0 12px;
+      user-select: text;
+    }
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 400px;
+      padding: 6px 2px;
+    }
+    .catalog-item {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .catalog-item:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .catalog-thumb { width: 50px; height: 50px; object-fit: contain; }
+    .catalog-label { font-size: 11px; font-weight: 600; line-height: 1.2; word-break: break-word; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #18201b;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 2000;
+      opacity: 0;
+      transform: translateY(100px);
+      transition: all 0.25s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-left">
+      <a href="/" class="btn secondary" style="padding:6px 12px;font-size:12.5px;">← VideoStudio</a>
+      <div class="header-title">
+        <h1>🎬 Phòng Hậu Kỳ &amp; Chỉnh Sửa Tập Phim Meme</h1>
+        <small>Thay thế đạo cụ, bối cảnh, biểu cảm &bull; Xuất lại video tức thì (~20s)</small>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="jobIdBadge" style="font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);padding:4px 8px;border-radius:6px;">Job: -</span>
+      <button type="button" class="secondary" id="btnSaveScript">💾 Lưu kịch bản</button>
+      <button type="button" id="btnRerender" style="font-weight:700;font-size:13.5px;">🚀 XUẤT LẠI VIDEO MỚI</button>
+    </div>
+  </header>
+
+  <div class="editor-layout">
+    <!-- Panel 1: Video Preview & Scenes -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>📹 Video hiện tại</h2>
+        <a id="btnDownloadVideo" class="btn secondary btn-sm" href="" download hidden>Tải MP4</a>
+      </div>
+      <div class="panel-content">
+        <div class="video-box">
+          <video id="videoPlayer" controls preload="metadata"></video>
+        </div>
+        <div style="margin-top:10px">
+          <label for="episodeTitle1">Tiêu đề video</label>
+          <input id="episodeTitle1" type="text" maxlength="100" placeholder="Dòng 1" aria-label="Tiêu đề, dòng 1">
+          <input id="episodeTitle2" type="text" maxlength="100" placeholder="Dòng 2" aria-label="Tiêu đề, dòng 2">
+        </div>
+
+        <div style="margin-top:10px;">
+          <h3 style="font-size:13px;text-transform:uppercase;color:var(--accent);margin:0 0 8px;">🏞️ Bối cảnh các cảnh (Scenes)</h3>
+          <div id="scenesContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel 2: Props Inspector (Đạo cụ & Prompt) -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🎒 Quản lý Đạo Cụ (<span id="propCount">0</span>)</h2>
+        <button type="button" class="btn secondary btn-sm" id="btnReloadProps">🔄 Làm mới</button>
+      </div>
+      <div class="panel-content">
+        <div id="missingPropAlert" hidden style="background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.4);border-radius:8px;padding:10px 12px;font-size:12.5px;">
+          <strong style="color:var(--warn);display:block;margin-bottom:4px;">⚠️ Có đạo cụ chưa có ảnh vẽ thật:</strong>
+          Đạo cụ chưa có ảnh sẽ được ẩn khi xuất video. Bạn có thể chọn ảnh trong kho hoặc tải ảnh PNG lên.
+        </div>
+
+        <div id="propsList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+    </section>
+
+    <!-- Panel 3: Beats (Biểu cảm & Diễn xuất từng câu) -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🎭 Biểu cảm &amp; Trạng thái từng câu (<span id="beatCount">0</span>)</h2>
+        <button type="button" class="btn secondary btn-sm" id="btnApplyBeats">Áp dụng</button>
+      </div>
+      <div class="panel-content" style="padding:10px;">
+        <div id="beatsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Hidden File Input for Prop Image Upload -->
+  <input type="file" id="propFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+
+  <!-- Modal: Standard Design Prompt -->
+  <div id="promptModal" class="modal-backdrop" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 style="margin:0;font-size:16px;color:var(--accent);" id="promptModalTitle">📋 Prompt thiết kế chuẩn</h3>
+        <button type="button" class="btn secondary btn-sm" onclick="$('#promptModal').hidden=true">✕</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">
+        Copy prompt dưới đây dán vào <b>ChatGPT (app)</b>, <b>Midjourney</b> hoặc công cụ vẽ ảnh để tạo asset chuẩn xác kích thước và phong cách với dự án.
+      </p>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong>Tiếng Việt (Dành cho ChatGPT app / DALL-E):</strong>
+        <button type="button" class="btn secondary btn-sm" id="btnCopyPromptVi">📋 Sao chép</button>
+      </div>
+      <div class="prompt-box" id="promptViText"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+        <strong>English (For Midjourney / FLUX / SD):</strong>
+        <button type="button" class="btn secondary btn-sm" id="btnCopyPromptEn">📋 Sao chép</button>
+      </div>
+      <div class="prompt-box" id="promptEnText"></div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
+        <button type="button" class="btn secondary" onclick="$('#promptModal').hidden=true">Đóng</button>
+        <button type="button" id="btnPromptModalUpload" style="font-weight:700;">📁 Tôi đã có ảnh &bull; Tải lên ngay</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Prop Library Picker -->
+  <div id="libraryModal" class="modal-backdrop" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 style="margin:0;font-size:16px;">Chọn đạo cụ từ kho thư viện (<span id="libCount">0</span>)</h3>
+        <button type="button" class="btn secondary btn-sm" onclick="$('#libraryModal').hidden=true">✕</button>
+      </div>
+      <input type="search" id="libSearchInput" placeholder="Tìm đạo cụ bằng tiếng Việt hoặc tiếng Anh…" style="margin-bottom:10px;">
+      <div class="catalog-grid" id="libGrid"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Re-rendering overlay -->
+  <div id="renderModal" class="modal-backdrop" hidden>
+    <div class="modal-box" style="max-width:440px;text-align:center;padding:26px;">
+      <h3 style="margin:0 0 10px;font-size:18px;color:var(--accent);">🚀 Đang xuất video mới...</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">
+        HyperFrames đang tái dựng lại hoạt hình, ghép đạo cụ mới và đồng bộ nhép miệng. Vui lòng chờ khoảng <b>15 – 25 giây</b>.
+      </p>
+      <div style="width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line);">
+        <div id="renderProgressBar" style="width:30%;height:100%;background:var(--accent);transition:width 0.4s ease;"></div>
+      </div>
+      <small id="renderStatusText" style="color:var(--blue);font-size:12px;">Đang biên dịch HyperFrames...</small>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">Thông báo</div>
+
+  <script>
+    'use strict';
+    const $ = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+
+    let jobId = null;
+    let editorData = null;
+    let catalog = { props: [], backgrounds: [], face_names: [], costumes: [], accessories: [] };
+    let currentUploadPropId = null;
+    let currentLibraryTargetPropId = null;
+
+    function showToast(msg, isBad=false) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.style.borderColor = isBad ? 'var(--bad)' : 'var(--accent)';
+      t.style.color = isBad ? 'var(--bad)' : 'var(--accent)';
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    async function init() {
+      const params = new URLSearchParams(window.location.search);
+      jobId = params.get('job');
+      if (!jobId) {
+        showToast('Không tìm thấy mã Job (job ID)! Vui lòng quay lại danh sách.', true);
+        return;
+      }
+      $('#jobIdBadge').textContent = `Job: ${jobId.slice(0, 8)}...`;
+
+      await loadCatalog();
+      await loadJobData();
+    }
+
+    async function loadCatalog() {
+      try {
+        const res = await fetch('/api/meme/catalog');
+        if (res.ok) {
+          catalog = await res.json();
+        }
+      } catch (e) {
+        console.error('Failed to load catalog', e);
+      }
+    }
+
+    function syncPropStatus(status) {
+      editorData.props_status = status;
+      for (const prop of status.all) {
+        const card = editorData.script.props?.[prop.id];
+        if (card) {
+          if (card.asset !== prop.asset) {
+            delete card.layout;
+            delete card.layout_preset;
+          }
+          card.asset = prop.asset;
+        }
+      }
+      renderProps();
+    }
+
+    async function loadJobData() {
+      try {
+        const res = await fetch(`/api/meme/jobs/${jobId}/editor`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Không thể tải dữ liệu tập phim này');
+        }
+        editorData = await res.json();
+        $('#episodeTitle1').value = editorData.script.title?.[0] || '';
+        $('#episodeTitle2').value = editorData.script.title?.[1] || '';
+
+        // Update video
+        if (editorData.video_url) {
+          const v = $('#videoPlayer');
+          v.src = editorData.video_url + '?t=' + Date.now();
+          $('#btnDownloadVideo').href = editorData.video_url;
+          $('#btnDownloadVideo').hidden = false;
+        }
+
+        renderScenes();
+        renderProps();
+        renderBeats();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function renderScenes() {
+      const cont = $('#scenesContainer');
+      cont.innerHTML = '';
+      const scenes = editorData.script.scenes || {};
+
+      Object.entries(scenes).forEach(([sid, sc]) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'background:var(--card-alt);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:10px;';
+
+        const bgSrc = `/meme-assets/backgrounds/${sc.bg}.png`;
+        row.innerHTML = `
+          <img src="${bgSrc}" style="width:50px;height:70px;object-fit:cover;border-radius:4px;border:1px solid var(--line);" alt="${sc.bg}">
+          <div style="flex:1;min-width:0;">
+            <strong style="font-size:12px;display:block;">Cảnh: ${sid}</strong>
+            <label style="font-size:11px;color:var(--muted);margin:2px 0 4px;display:block;">Bối cảnh nền:</label>
+            <select onchange="updateSceneBg('${sid}', this.value)" style="padding:4px 6px;font-size:11.5px;">
+              ${(catalog.backgrounds || []).map(b => `<option value="${b}" ${b === sc.bg ? 'selected' : ''}>${b}</option>`).join('')}
+            </select>
+          </div>
+        `;
+        cont.appendChild(row);
+      });
+    }
+
+    window.updateSceneBg = function(sid, newBg) {
+      if (editorData.script.scenes[sid]) {
+        editorData.script.scenes[sid].bg = newBg;
+        renderScenes();
+      }
+    };
+
+    function renderProps() {
+      const cont = $('#propsList');
+      cont.innerHTML = '';
+      const propsStatus = editorData.props_status || { missing: [], available: [], all: [] };
+      const allProps = propsStatus.all || [];
+
+      $('#propCount').textContent = allProps.length;
+      $('#missingPropAlert').hidden = (propsStatus.missing || []).length === 0;
+
+      if (allProps.length === 0) {
+        cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;">Tập này không khai báo đạo cụ nào.</div>';
+        return;
+      }
+
+      allProps.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'prop-card' + (p.has_asset ? '' : ' missing');
+
+        const badgeHtml = p.has_asset
+          ? `<span class="prop-badge badge-ok">✓ Đã có ảnh (${p.asset})</span>`
+          : `<span class="prop-badge badge-warn">Chưa có ảnh</span>`;
+
+        const thumbHtml = p.has_asset
+          ? `<img src="/prop-assets/${p.asset}.png" alt="${p.label}" onerror="this.onerror=null;this.src='/meme-assets/props/${p.asset}.png';">`
+          : `<div class="prop-text-card-preview">${escapeHtml(p.label)}</div>`;
+
+        card.innerHTML = `
+          <div class="prop-header">
+            <span class="prop-title">${escapeHtml(p.label)} <small style="color:var(--muted);font-weight:400;">(${p.id})</small></span>
+            ${badgeHtml}
+          </div>
+          <div class="prop-body">
+            <div class="prop-thumb">${thumbHtml}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="prop-actions">
+                <button type="button" class="btn secondary btn-sm" onclick="openPromptModal('${p.id}')">📋 Lấy Prompt chuẩn</button>
+                <button type="button" class="btn btn-sm" onclick="triggerPropUpload('${p.id}')">📁 Tải ảnh PNG</button>
+                <button type="button" class="btn secondary btn-sm" onclick="openLibraryModal('${p.id}')">📚 Chọn từ kho</button>
+                ${p.asset ? `<button type="button" class="btn secondary btn-sm" style="color:var(--bad);" onclick="unassignProp('${p.id}')">✕ Bỏ ảnh khỏi tập</button>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        if (p.has_asset && editorData.script.props?.[p.id]) {
+          card.append(createPropLayoutControls(p));
+        }
+        cont.appendChild(card);
+      });
+    }
+
+    function createPropLayoutControls(prop) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'Căn kích thước và điểm cầm';
+      details.append(summary);
+
+      const card = editorData.script.props[prop.id];
+      const defaults = prop.default_layout || {scale: 1, grip_x: 0.5, grip_y: 0.72};
+      const useCustom = !prop.layout_preset || card.layout_preset === prop.layout_preset;
+      const layout = {...defaults, ...(useCustom ? card.layout : {})};
+      const fields = document.createElement('div');
+      fields.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:8px 0';
+      const inputs = {};
+      for (const [key, label, min, max] of [
+        ['scale', 'Kích thước (%)', 25, 500], ['grip_x', 'Điểm cầm ngang (%)', 0, 100], ['grip_y', 'Điểm cầm dọc (%)', 0, 100]
+      ]) {
+        const wrapper = document.createElement('label');
+        wrapper.textContent = label;
+        const input = document.createElement('input');
+        Object.assign(input, {type: 'number', min, max, step: 1, value: Math.round(layout[key] * 100)});
+        input.style.cssText = 'display:block;width:90px';
+        input.oninput = () => {
+          if (!input.value || !input.validity.valid) return;
+          layout[key] = Number(input.value) / 100;
+          commit();
+        };
+        inputs[key] = input;
+        wrapper.append(input);
+        fields.append(wrapper);
+      }
+      details.append(fields);
+
+      const hint = document.createElement('p');
+      hint.textContent = 'Bấm vào chỗ muốn bàn tay nắm trên ảnh. Tỷ lệ áp dụng trong tập này.';
+      details.append(hint);
+      const preview = document.createElement('div');
+      preview.style.cssText = 'position:relative;width:fit-content;cursor:crosshair';
+      const img = document.createElement('img');
+      img.alt = prop.label;
+      const filename = encodeURIComponent(prop.asset) + '.png';
+      img.src = '/prop-assets/' + filename;
+      img.onerror = () => { img.onerror = null; img.src = '/meme-assets/props/' + filename; };
+      img.style.cssText = 'display:block;max-width:210px;max-height:145px;width:auto;height:auto';
+      const dot = document.createElement('span');
+      dot.style.cssText = 'position:absolute;width:12px;height:12px;border:2px solid white;border-radius:50%;background:#dc2626;transform:translate(-50%,-50%);pointer-events:none';
+      function moveDot() {
+        dot.style.left = `${layout.grip_x * 100}%`;
+        dot.style.top = `${layout.grip_y * 100}%`;
+      }
+      function commit() {
+        card.layout = {...layout};
+        card.layout_preset = prop.layout_preset;
+        moveDot();
+      }
+      img.onclick = event => {
+        const rect = img.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        layout.grip_x = Math.round(Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) * 100) / 100;
+        layout.grip_y = Math.round(Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)) * 100) / 100;
+        inputs.grip_x.value = Math.round(layout.grip_x * 100);
+        inputs.grip_y.value = Math.round(layout.grip_y * 100);
+        commit();
+      };
+      preview.append(img, dot);
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'btn secondary btn-sm';
+      reset.textContent = 'Dùng mức mặc định';
+      reset.onclick = () => {
+        Object.assign(layout, defaults);
+        for (const key of Object.keys(inputs)) inputs[key].value = Math.round(layout[key] * 100);
+        commit();
+      };
+      moveDot();
+      details.append(preview, reset);
+      return details;
+    }
+
+    function renderBeats() {
+      const cont = $('#beatsList');
+      cont.innerHTML = '';
+      const beats = editorData.script.beats || [];
+      $('#beatCount').textContent = beats.length;
+
+      beats.forEach((b, idx) => {
+        const el = document.createElement('div');
+        el.className = 'beat-card';
+        el.onclick = () => seekVideo(b.start || 0);
+
+        // Find primary character in beat
+        const who = b.who || 'N';
+        const currentEmo = (b.emo && b.emo[who]) ? b.emo[who] : 'noi';
+
+        el.innerHTML = `
+          <div class="beat-top">
+            <strong>#${idx + 1} &bull; ${who} (${b.start ? b.start.toFixed(1) : 0}s)</strong>
+            <span style="font-size:11px;color:var(--muted);">${b.scene || ''}</span>
+          </div>
+          <div class="beat-text">${escapeHtml(b.text || '')}</div>
+          <div class="beat-controls" onclick="event.stopPropagation()">
+            <div>
+              <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:2px;">Biểu cảm (${who}):</label>
+              <select onchange="updateBeatEmo(${idx}, '${who}', this.value)">
+                ${(catalog.face_names || ['noi','lo','gian','soc','khoc','buon','cuoi','cuoi_deu','ngap','chu_moi']).map(f => `
+                  <option value="${f}" ${f === currentEmo ? 'selected' : ''}>${f}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:2px;">Ghi chú / Đạo cụ:</label>
+              <span style="font-size:11px;color:var(--muted);display:block;padding-top:4px;">
+                ${b.props ? Object.keys(b.props).join(', ') : 'Không'}
+              </span>
+            </div>
+          </div>
+        `;
+        cont.appendChild(el);
+      });
+    }
+
+    function seekVideo(time) {
+      const v = $('#videoPlayer');
+      v.currentTime = time;
+      v.play().catch(() => {});
+    }
+
+    window.updateBeatEmo = function(idx, who, emo) {
+      if (editorData.script.beats[idx]) {
+        if (!editorData.script.beats[idx].emo) editorData.script.beats[idx].emo = {};
+        editorData.script.beats[idx].emo[who] = emo;
+      }
+    };
+
+    // Prompt Modal
+    window.openPromptModal = function(propId) {
+      const p = (editorData.props_status.all || []).find(x => x.id === propId);
+      if (!p) return;
+      currentUploadPropId = propId;
+      $('#promptModalTitle').textContent = `📋 Prompt thiết kế cho: ${p.label}`;
+      $('#promptViText').textContent = p.prompts.prompt_vi;
+      $('#promptEnText').textContent = p.prompts.prompt_en;
+      $('#promptModal').hidden = false;
+    };
+
+    $('#btnCopyPromptVi').onclick = function() {
+      navigator.clipboard.writeText($('#promptViText').textContent);
+      showToast('Đã sao chép Prompt tiếng Việt vào clipboard!');
+    };
+    $('#btnCopyPromptEn').onclick = function() {
+      navigator.clipboard.writeText($('#promptEnText').textContent);
+      showToast('Đã sao chép Prompt tiếng Anh vào clipboard!');
+    };
+    $('#btnPromptModalUpload').onclick = function() {
+      $('#promptModal').hidden = true;
+      triggerPropUpload(currentUploadPropId);
+    };
+
+    // Prop Upload
+    window.triggerPropUpload = function(propId) {
+      currentUploadPropId = propId;
+      $('#propFileInput').value = '';
+      $('#propFileInput').click();
+    };
+
+    $('#propFileInput').onchange = async function() {
+      const file = this.files[0];
+      if (!file || !currentUploadPropId) return;
+
+      const propObj = (editorData.props_status.all || []).find(x => x.id === currentUploadPropId);
+      const label = propObj ? propObj.label : currentUploadPropId;
+
+      showToast(`Đang tải ảnh lên và đăng ký vào thư viện...`);
+      try {
+        const res = await fetch(`/api/meme/jobs/${jobId}/props/${currentUploadPropId}/upload?label=${encodeURIComponent(label)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: file
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Lỗi khi tải ảnh lên');
+        }
+        const data = await res.json();
+        syncPropStatus(data.props_status);
+        await loadCatalog();
+        showToast(`✓ Đã lưu "${label}" vào thư viện! Sẵn sàng xuất video mới.`);
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    };
+
+    // Assign existing library prop
+    window.openLibraryModal = function(propId) {
+      currentLibraryTargetPropId = propId;
+      $('#libSearchInput').value = '';
+      $('#libraryModal').hidden = false;
+      renderLibraryGrid('');
+    };
+
+    function renderLibraryGrid(query='') {
+      const grid = $('#libGrid');
+      grid.innerHTML = '';
+      const normalize = value => String(value ?? '').toLowerCase().normalize('NFD')
+        .replace(/\p{M}/gu, '').replace(/đ/g, 'd').replace(/[_-]+/g, ' ').trim();
+      const words = normalize(query).split(/\s+/).filter(Boolean);
+      const props = (catalog.props || []).filter(p => {
+        const terms = normalize([p.id, p.label, ...(p.search_terms || [])].join(' '));
+        return words.every(word => terms.includes(word));
+      });
+      $('#libCount').textContent = props.length;
+
+      props.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'catalog-item';
+        const choice = document.createElement('button');
+        choice.type = 'button';
+        choice.disabled = !p.exists;
+        choice.className = 'btn secondary';
+        choice.style.cssText = 'width:100%;background:transparent;border:0;padding:0;white-space:normal';
+        if (p.exists) {
+          const img = document.createElement('img');
+          img.src = p.source === 'memestudio' ? `/meme-assets/props/${encodeURIComponent(p.id)}.png` : `/prop-assets/${encodeURIComponent(p.id)}.png`;
+          img.className = 'catalog-thumb';
+          img.alt = '';
+          choice.append(img);
+        }
+        const label = document.createElement('span');
+        label.className = 'catalog-label';
+        label.textContent = p.label || p.id;
+        choice.append(label);
+        choice.onclick = async () => {
+          $('#libraryModal').hidden = true;
+          await assignProp(currentLibraryTargetPropId, p.id);
+        };
+        item.append(choice);
+        if (p.uploaded) {
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'btn secondary btn-sm';
+          remove.textContent = 'Xóa ảnh tải lên';
+          remove.onclick = () => deletePropUpload(p, remove);
+          item.append(remove);
+        }
+        grid.appendChild(item);
+      });
+      if (!props.length) grid.textContent = 'Không tìm thấy đạo cụ phù hợp.';
+    }
+
+    async function deletePropUpload(prop, button) {
+      if (!confirm(`Xóa ảnh tải lên “${prop.label || prop.id}” khỏi kho và bỏ liên kết ảnh trong tập này?`)) return;
+      button.disabled = true;
+      try {
+        const res = await fetch(`/api/meme/jobs/${encodeURIComponent(jobId)}/prop-uploads/${encodeURIComponent(prop.id)}`, {method: 'DELETE'});
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Không xóa được ảnh');
+        syncPropStatus(data.props_status);
+        catalog.props = catalog.props.filter(item => item.id !== prop.id);
+        renderLibraryGrid($('#libSearchInput').value);
+        showToast('Đã xóa ảnh khỏi kho và bỏ liên kết trong tập này.');
+      } catch (error) {
+        showToast(error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    $('#libSearchInput').oninput = function() { renderLibraryGrid(this.value); };
+
+    async function assignProp(propId, assetId) {
+      try {
+        const res = await fetch(`/api/meme/jobs/${jobId}/props/${propId}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: assetId })
+        });
+        if (!res.ok) throw new Error('Không thể gán đạo cụ');
+        const data = await res.json();
+        syncPropStatus(data.props_status);
+        showToast(assetId ? `Đã gán "${assetId}" cho ${propId}` : 'Đã bỏ ảnh khỏi tập.');
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    window.unassignProp = async function(propId) {
+      await assignProp(propId, null);
+    };
+
+    async function saveEpisodeScript() {
+      if (!editorData) throw new Error('Tập phim chưa tải xong.');
+      const title = [$('#episodeTitle1').value.trim(), $('#episodeTitle2').value.trim()];
+      if (title.some(line => !line)) throw new Error('Nhập đủ hai dòng tiêu đề.');
+      const res = await fetch(`/api/meme/jobs/${jobId}/update-script`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({...editorData.script, title})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Lỗi khi lưu kịch bản');
+      editorData.script = data.script;
+    }
+
+    $('#btnSaveScript').onclick = async function() {
+      try {
+        await saveEpisodeScript();
+        showToast('✓ Đã lưu các thay đổi vào kịch bản tập phim!');
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    };
+    $('#btnApplyBeats').onclick = () => $('#btnSaveScript').click();
+
+    // Re-render
+    $('#btnRerender').onclick = async function() {
+      try {
+        await saveEpisodeScript();
+      } catch (error) {
+        showToast(error.message, true);
+        return;
+      }
+
+      $('#renderModal').hidden = false;
+      const bar = $('#renderProgressBar');
+      const statusText = $('#renderStatusText');
+      bar.style.width = '20%';
+
+      let progress = 20;
+      const timer = setInterval(() => {
+        if (progress < 90) {
+          progress += 5;
+          bar.style.width = `${progress}%`;
+          if (progress > 50) statusText.textContent = 'Đang ghép khung hình HyperFrames & âm thanh...';
+        }
+      }, 1000);
+
+      try {
+        const res = await fetch(`/api/meme/jobs/${jobId}/re-render`, { method: 'POST' });
+        clearInterval(timer);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Quá trình dựng lại video thất bại');
+        }
+        bar.style.width = '100%';
+        statusText.textContent = 'Hoàn tất!';
+
+        setTimeout(async () => {
+          $('#renderModal').hidden = true;
+          showToast('🎉 Video mới đã xuất thành công!');
+          await loadJobData();
+        }, 800);
+      } catch (e) {
+        clearInterval(timer);
+        $('#renderModal').hidden = true;
+        showToast(e.message, true);
+      }
+    };
+
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[m]));
+    }
+
+    init();
+  </script>
+</body>
+</html>

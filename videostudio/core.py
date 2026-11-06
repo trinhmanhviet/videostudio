@@ -136,6 +136,7 @@ def validate_request(data):
     res=dict(data,idea=data['idea'].strip(),image_provider=provider,flow_batch_size=batch_size,text_provider=text_provider)
 
     if mode is not None:res['workflow_mode']=mode
+    if mode=='meme':res['meme_engine']='hyperframes'
 
     # Revalidation must preserve explicit scalar edits (derived voice jobs and
     # editor exports). Workflow compilation happens only at API submission.
@@ -265,6 +266,8 @@ class Store:
                 stored.setdefault('flow_batch_size',1)
 
                 stored.setdefault('text_provider','chatgpt')
+
+                if stored.get('workflow_mode')=='meme':stored['meme_engine']='hyperframes'
 
                 if stored!=data: raise ValueError('Idempotency key already used for a different request')
 
@@ -631,6 +634,11 @@ class Worker:
             attempt_started=False
 
             try:
+
+                from .meme_migration import migrate_job
+                j=migrate_job(s,jid,lease_owner=self.owner)
+                stage=next((x for x in STAGES if x not in j['checkpoints']),None)
+                allowed_attempts=s.attempt_limit(jid,stage,self.max_attempts)
 
                 s.active(jid)
 

@@ -36,6 +36,24 @@ class MultiSentenceSceneTests(unittest.TestCase):
             wrapped = wrap_caption(line)
             self.assertLessEqual(len(wrapped.split('\n')), 3)
 
+    def test_long_sentences_break_at_natural_points_not_mid_phrase(self):
+        # Real narration from job b2bfd1e9: the old greedy split voiced "vấn." / "mình." / "hiểu ..." alone.
+        cases = {
+            'Một ngày tưởng như bình thường tại ngôi làng nhỏ bất ngờ bị phá vỡ bởi một cái chết đầy nghi vấn.': 'nghi vấn',
+            'Theo thông tin được dẫn từ Tây An Vãn Báo, khoảng 12 giờ trưa hôm đó, cảnh sát nhận được tin báo về vụ việc.': 'tin báo',
+            'Cảnh tượng trước mắt khiến mọi người nghĩ đến khả năng người phụ nữ đã tự kết liễu cuộc đời mình.': 'khả năng',
+            'Với những vụ việc bất thường, điều quan trọng không chỉ là nhìn thấy gì, mà còn phải tìm hiểu vì sao mọi thứ lại xuất hiện ở đúng vị trí đó.': 'tìm hiểu',
+        }
+        for sentence, phrase in cases.items():
+            lines = split_caption_lines(sentence)
+            self.assertGreater(len(lines), 1, sentence)
+            self.assertEqual(' '.join(lines), sentence)
+            self.assertTrue(any(phrase in line for line in lines), lines)
+            for line in lines:
+                self.assertGreaterEqual(len(line.split()), 4, lines)
+                wrap_caption(line)
+        self.assertEqual(split_caption_lines(list(cases)[1])[0], 'Theo thông tin được dẫn từ Tây An Vãn Báo,')
+
     def test_speech_attempt_produces_scene_and_utterance_hierarchy(self):
         with tempfile.TemporaryDirectory() as t:
             out = Path(t)

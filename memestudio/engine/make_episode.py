@@ -21,7 +21,10 @@ import shutil
 import sys
 import wave
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from prop_layer import layer as prop_layer, validate as validate_props
 from html import escape
+from PIL import ImageFont
 
 import numpy as np
 
@@ -42,6 +45,20 @@ PACK = MS / 'assets'
 WARD = PACK / 'rig' / 'wardrobe'
 PARTS = PACK / 'rig' / 'parts'
 BACKGROUNDS = PACK / 'backgrounds'
+PROP_ROOT=ROOT/'assets/Meme_Animation_Asset_Pack/catalog'
+PROP_LIB={}
+PROP_LAYOUTS = {}
+if (PROP_ROOT/'library.json').is_file():
+    for item in json.loads((PROP_ROOT/'library.json').read_text(encoding='utf8')).get('items',[]):
+        path=(PROP_ROOT/item['file']).resolve()
+        if item.get('kind') == 'prop' and path.is_relative_to(PROP_ROOT.resolve()) and path.is_file():
+            PROP_LIB[item['id']] = path
+            if isinstance(item.get('handheld_layout'), dict):
+                PROP_LAYOUTS[item['id']] = item['handheld_layout']
+MS_PROPS = PACK / 'props'
+if MS_PROPS.is_dir():
+    for p in MS_PROPS.glob('*.png'):
+        if p.stem not in PROP_LIB:PROP_LIB[p.stem]=p.resolve()
 A = HERE / 'assets'
 A.mkdir(parents=True, exist_ok=True)
 
@@ -53,6 +70,7 @@ ACTIONS = {'walk_in': 1, 'gesture': 1, 'angry': 1, 'shock': 1, 'tremble': 1, 'pr
 
 def validate(script):
     """Every id must exist; returns a list of problems (empty = OK)."""
+    import math
     bad = []
     faces = set(FACES['faces'])
     for k in ('title', 'payoff'):
@@ -63,8 +81,9 @@ def validate(script):
         if not item or item['kind'] != 'costume':
             bad.append(f'cast.{cid}.costume không có: {c.get("costume")}')
         for a in c.get('acc', []):
-            if a not in CATALOG or CATALOG[a]['kind'] == 'costume':
-                bad.append(f'cast.{cid}.acc không có: {a}')
+            aid = a['id'] if isinstance(a, dict) else a
+            if aid not in CATALOG or CATALOG[aid]['kind'] == 'costume':
+                bad.append(f'cast.{cid}.acc không có: {aid}')
         if c.get('face') not in faces:
             bad.append(f'cast.{cid}.face không có: {c.get("face")}')
         if not c.get('voice'):
@@ -104,6 +123,11 @@ def validate(script):
         p = b.get('punch')
         if p and (p.get('who') not in here or p.get('face') not in faces):
             bad.append(f'{where}.punch sai: {p}')
+    if script.get('props') or any(isinstance(b,dict) and b.get('notes') for b in script.get('beats',[])):bad.extend(validate_props(script,PROP_LIB))
+    for beat in script.get('beats',[]):
+        for key in ('pause_before','pause_after','reaction_seconds'):
+            value=beat.get(key,0)
+            if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=2:bad.append('Invalid comic pause')
     return bad
 
 
@@ -154,15 +178,16 @@ if not voices_match(SCRIPT, VOICE):
     fail('voice.json không khớp script.json: chạy lại engine/make_voice.py')
 HEAD_SCALE, HEAD_CHIN, HEADS = 0.6372, FACES['head']['chin'], list(FACES['faces'])
 NECK, SHOULDER_L, SHOULDER_R = (3, -52), (-29, -52), (31, -52)
+RIGHT_HAND_GRIP = {'hang': (2, 49), 'palm': (42, 23), 'point': (43, 23)}
 
 # ---- layout (1080x1920): title band, story window, payoff band
-WIN_X, WIN_Y, WIN_W, WIN_H = 0, 500, 1080, 700
+WIN_X, WIN_Y, WIN_W, WIN_H = 0, 300, 1080, 960
 WORLD_W, WORLD_H = 1600, 1037               # stage coordinates; wide shot shows all of it
-K0 = WIN_W / WORLD_W
+K0 = max(WIN_W / WORLD_W, WIN_H / WORLD_H)
 S = 2.6                                     # rig units -> stage px
 HIP_Y = 760                                 # hip line on stage
 MARKS = {1: [800], 2: [560, 1040], 3: [430, 800, 1170]}
-SHOTS = {'wide': (None, 1.0), 'medium': (-150, 1.9), 'close': (-250, 3.0)}   # (aim above hip, zoom)
+SHOTS = {'wide': (None, 1.0), 'medium': (-150, 1.45), 'close': (-250, 2.2)}
 START = float(SCRIPT.get('start', 0.15 if SCRIPT.get('speed', 1.0) != 1.0 else 0.3))
 GAP = float(SCRIPT.get('gap', 0.12 if SCRIPT.get('speed', 1.0) != 1.0 else 0.3))
 REACT = float(SCRIPT.get('react', 0.45 if SCRIPT.get('speed', 1.0) != 1.0 else 0.8))
@@ -178,13 +203,34 @@ def copy(src, name):
 # ------------------------------------------------------------------ timing
 BEATS, cursor = [], START
 for i, (beat, v) in enumerate(zip(SCRIPT['beats'], VOICE)):
+    cursor+=float(beat.get('pause_before',0))
     b = {**beat, 'i': i, 'file': v['file'], 'dur': v['duration'], 'start': cursor, 'end': cursor + v['duration']}
-    cursor = b['end'] + GAP
+    cursor = b['end'] + GAP + float(beat.get('pause_after',0))
     if beat.get('punch'):
-        b['react'] = (b['end'] + 0.05, b['end'] + 0.05 + REACT)
-        cursor = b['react'][1] + 0.1
+        b['react'] = (b['end'] + 0.05, b['end'] + 0.05 + float(beat.get('reaction_seconds',REACT)))
+        cursor = b['react'][1] + 0.1 + float(beat.get('pause_after',0))
     BEATS.append(b)
-D = round(cursor + TAIL, 2)
+payoff_start = BEATS[-1]['end']
+D = round(max(cursor + TAIL, payoff_start + 1.4), 2)
+prop_states = {}
+previous_scene = None
+for i, beat in enumerate(BEATS):
+    if beat['scene'] != previous_scene:
+        prop_states = {pid: state for pid, state in prop_states.items() if state['placement'] == 'table'}
+        previous_scene = beat['scene']
+    for pid, value in beat.get('props', {}).items():
+        state = dict(value)
+        prop_states.pop(pid, None)
+        if state['placement'] == 'hidden':
+            continue
+        if state['placement'] == 'table':
+            state['_location'] = SCRIPT['scenes'][beat['scene']]['bg']
+        else:
+            prop_states = {key: old for key, old in prop_states.items()
+                           if old['placement'] != 'held' or old.get('owner') != state.get('owner')}
+        prop_states[pid] = state
+    beat['_prop_states'] = dict(prop_states)
+    beat['display_end'] = BEATS[i+1]['start'] if i+1 < len(BEATS) else D
 SCENE_ORDER, _seen = [], {}
 for b in BEATS:
     if not SCENE_ORDER or SCENE_ORDER[-1]['scene'] != b['scene']:
@@ -192,7 +238,7 @@ for b in BEATS:
         # Instance ids must not collide with a real scene named e.g. room_2
         # when the story returns to room for a second time.
         sid = f'block_{len(SCENE_ORDER):04}'
-        SCENE_ORDER.append({'id': sid, 'scene': b['scene'], 'start': 0.0 if not SCENE_ORDER else b['start'] - 0.15, 'beats': []})
+        SCENE_ORDER.append({'id': sid, 'scene': b['scene'], 'location':SCRIPT['scenes'][b['scene']]['bg'], 'start': 0.0 if not SCENE_ORDER else b['start'] - 0.15, 'beats': []})
     SCENE_ORDER[-1]['beats'].append(b)
 for n, sc in enumerate(SCENE_ORDER):
     sc['end'] = SCENE_ORDER[n + 1]['start'] if n + 1 < len(SCENE_ORDER) else D
@@ -209,32 +255,56 @@ def inst(sc, cid):
 
 
 # ------------------------------------------------------------------ character DOM
-def head_box(p, size):
-    k = p['scale']
+def head_box(p, size, offset=None):
+    offset = offset or {}
+    dx = float(offset.get('dx', 0))
+    dy = float(offset.get('dy', 0))
+    scale_mul = float(offset.get('scale', 1.0))
+    rot_add = float(offset.get('rotation', 0))
+    k = p['scale'] * scale_mul
     w, h = size
     ax, ay = p['anchor'][0] * k, p['anchor'][1] * k
-    left, top = p['at'][0] - HEAD_CHIN[0] - ax, p['at'][1] - HEAD_CHIN[1] - ay
-    rot = p.get('rotation', 0)
+    left, top = p['at'][0] + dx - HEAD_CHIN[0] - ax, p['at'][1] + dy - HEAD_CHIN[1] - ay
+    rot = p.get('rotation', 0) + rot_add
     turn = f'; transform:rotate({rot}deg); transform-origin:{ax:.2f}px {ay:.2f}px' if rot else ''
     return f'left:{left:.2f}px; top:{top:.2f}px; width:{w * k:.2f}px; height:{h * k:.2f}px{turn}'
 
 
-def placed(item):
-    k = item['scale']
+def placed(item, offset=None):
+    offset = offset or {}
+    dx = float(offset.get('dx', 0))
+    dy = float(offset.get('dy', 0))
+    scale_mul = float(offset.get('scale', 1.0))
+    k = item['scale'] * scale_mul
     w, h = item['size']
-    return (f"left:{item['place'][0] - item['anchor'][0] * k:.2f}px; top:{item['place'][1] - item['anchor'][1] * k:.2f}px; "
+    return (f"left:{item['place'][0] + dx - item['anchor'][0] * k:.2f}px; top:{item['place'][1] + dy - item['anchor'][1] * k:.2f}px; "
             f"width:{w * k:.2f}px; height:{h * k:.2f}px")
 
 
 def character(sc, cid):
     I = inst(sc, cid)
+    held_props = prop_layer(SCRIPT.get('props', {}), sc, PROP_LIB, copy, owner=cid, asset_layouts=PROP_LAYOUTS)
+    grip_x, grip_y = RIGHT_HAND_GRIP['hang']
     card = SCRIPT['cast'][cid]
     costume = CATALOG[card['costume']]
     dress = costume['hides_legs']
     p = {n: copy(PARTS / f'component_{n:03}.png', f'p{n:03}.png') for n in (17, 22, 25, 40, 41, 55)}
     chin = f'left:{-HEAD_CHIN[0]}px; top:{-HEAD_CHIN[1]}px'
     heads = [f'<img src="{copy(PACK / "rig" / "faces" / "head_base.png", "head_base.png")}" alt="" style="{chin}" />']
-    face_items = [CATALOG[a] for a in card.get('acc', []) if CATALOG[a]['kind'] == 'face']
+    c_offset = card.get('costume_offset', {})
+    acc_items = card.get('acc', [])
+    face_items = []
+    body_acc_items = []
+    for a in acc_items:
+        aid = a['id'] if isinstance(a, dict) else a
+        if aid not in CATALOG:
+            continue
+        item = CATALOG[aid]
+        off = a if isinstance(a, dict) else card.get('acc_offsets', {}).get(aid, {})
+        if item['kind'] == 'face':
+            face_items.append((item, off))
+        else:
+            body_acc_items.append((item, off, aid))
     for name in HEADS:
         fd = FACES['faces'][name]
         src = copy(PACK / 'rig' / 'faces' / fd['file_nomouth'], f'face_{name}_nomouth.png')
@@ -243,15 +313,13 @@ def character(sc, cid):
         inner = [f'<img src="{src}" alt="" style="{chin}" />',
                  f'<div id="{I}_m_{name}" class="joint" style="left:{px - HEAD_CHIN[0]:.2f}px; top:{py - HEAD_CHIN[1]:.2f}px">'
                  f'<img src="{msrc}" alt="" style="left:{-px:.2f}px; top:{-py:.2f}px" /></div>']
-        for item in face_items:
+        for item, off in face_items:
             inner.append(f'<img src="{copy(WARD / item["file"], "w_" + item["id"] + ".png")}" alt="" '
-                         f'style="{head_box(item["per_face"][name], item["size"])}" />')
+                         f'style="{head_box(item["per_face"][name], item["size"], off)}" />')
         heads.append(f'<div id="{I}_h_{name}" class="joint" style="opacity:{1 if name == card["face"] else 0}">'
                      + ''.join(inner) + '</div>')
-    for a in card.get('acc', []):
-        item = CATALOG[a]
-        if item['kind'] != 'face':
-            heads.append(f'<img src="{copy(WARD / item["file"], "w_" + a + ".png")}" alt="" style="{head_box(item, item["size"])}" />')
+    for item, off, aid in body_acc_items:
+        heads.append(f'<img src="{copy(WARD / item["file"], "w_" + aid + ".png")}" alt="" style="{head_box(item, item["size"], off)}" />')
     legs = '' if dress else (
         f'<div id="{I}_legs" class="joint"><div class="limb legsize">'
         f'<img id="{I}_leg0" src="{p[40]}" alt="" style="left:-66.5px; top:-40px" />'
@@ -268,8 +336,9 @@ def character(sc, cid):
               <div id="{I}_armR" class="joint" style="left:{SHOULDER_R[0]}px; top:{SHOULDER_R[1]}px"><div class="limb armsize">
                 <img id="{I}_armR_hang" src="{p[17]}" alt="" style="left:-19px; top:-10px" />
                 <div class="flip"><img id="{I}_armR_palm" src="{p[25]}" alt="" style="left:-103px; top:-8px; opacity:0" />
-                <img id="{I}_armR_point" src="{p[22]}" alt="" style="left:-114px; top:-9px; opacity:0" /></div></div></div>
-              <img src="{copy(WARD / costume['file'], 'w_' + card['costume'] + '.png')}" alt="" style="{placed(costume)}" />
+                <img id="{I}_armR_point" src="{p[22]}" alt="" style="left:-114px; top:-9px; opacity:0" /></div></div>
+                <div id="{I}_grip" class="joint" style="left:{grip_x}px;top:{grip_y}px">{held_props}</div></div>
+              <img src="{copy(WARD / costume['file'], 'w_' + card['costume'] + '.png')}" alt="" style="{placed(costume, c_offset)}" />
               <div id="{I}_neck" class="joint" style="left:{NECK[0]}px; top:{NECK[1]}px"><div class="limb headsize">
                 {''.join(heads)}
               </div></div>
@@ -295,6 +364,9 @@ def arm(I, side, variant, t):
     ids = ['hang', 'point'] if side == 'L' else ['hang', 'palm', 'point']
     js.append(f'tl.set({json.dumps(["#" + I + "_arm" + side + "_" + v for v in ids])}, {{ opacity: 0 }}, {t_(t)}); '
               f'tl.set("#{I}_arm{side}_{variant}", {{ opacity: 1 }}, {t_(t)});')
+    if side == 'R':
+        x, y = RIGHT_HAND_GRIP[variant]
+        js.append(f'tl.set("#{I}_grip", {{ left: {x}, top: {y} }}, {t_(t)});')
 
 
 def yoyo(sel, prop, a, b, period, t0, t1, ease='sine.inOut'):
@@ -430,10 +502,10 @@ def cam_values(sc, shot, subj, push=1.0):
         cx, cy = WORLD_W / 2, WORLD_H / 2
     else:
         cx, cy = sc['x'][subj], HIP_Y + aim
-    vw, vh = WORLD_W / zoom, WORLD_H / zoom
+    k = K0 * zoom
+    vw, vh = WIN_W / k, WIN_H / k
     cx = min(max(cx, vw / 2), WORLD_W - vw / 2)
     cy = min(max(cy, vh / 2), WORLD_H - vh / 2)
-    k = K0 * zoom
     return round(WIN_W / 2 - cx * k, 2), round(WIN_H / 2 - cy * k, 2), round(k, 5)
 
 
@@ -536,10 +608,11 @@ for sc in SCENE_ORDER:
     spec = SCRIPT['scenes'][sc['scene']]
     bg = copy(BACKGROUNDS / f"{spec['bg']}.png", f"{spec['bg']}.png")
     chars = ''.join(character(sc, cid) for cid in spec['cast'])
+    objects=prop_layer(SCRIPT.get('props',{}),sc,PROP_LIB,copy)
     sets.append(f'''
       <div id="{sc['id']}_set" class="set clip" data-start="{sc['start']:.3f}" data-duration="{sc['end'] - sc['start']:.3f}">
         <div id="{sc['id']}_shake" class="joint"><div id="{sc['id']}_world" class="world">
-          <img class="bg" src="{bg}" alt="" />{chars}
+          <img class="bg" src="{bg}" alt="" />{chars}{objects}
         </div></div>
       </div>''')
 caps, audio = [], []
@@ -552,11 +625,12 @@ if SCRIPT.get('sfx_enabled', True):
     audio.append(f'<audio id="sfx" src="assets/sfx.wav" data-start="0" data-duration="{D}" data-volume="1"></audio>')
 if not SCRIPT.get('captions_enabled', True):
     caps = []
-def _band_font_size(lines, base=92, target_chars=14, min_size=48):
-    m = max((len(str(l)) for l in lines), default=1)
-    if m <= target_chars:
-        return base
-    return max(min_size, int(base * target_chars / m))
+def _band_font_size(lines):
+    for size in range(76, 33, -2):
+        font = ImageFont.truetype(str(A / 'arialbd.ttf'), size)
+        if all(font.getlength(line) + len(line) <= 940 for line in lines):
+            return size
+    return 34
 
 shutil.copyfile(MS / 'node_modules' / 'gsap' / 'dist' / 'gsap.min.js', A / 'gsap.min.js')   # gsap 3.13.0, local
 shutil.copyfile(Path('C:/Windows/Fonts/arialbd.ttf'), A / 'arialbd.ttf')                              # Vietnamese glyphs
@@ -577,7 +651,7 @@ html = f'''<!doctype html>
       #root {{ position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: "Bold", Arial, sans-serif; background: #f3ead6; }}
       .deco {{ position: absolute; }}
       .band {{ position: absolute; left: 40px; width: 1000px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 5; overflow: hidden; }}
-      .band b {{ display: block; line-height: 1.12; color: #2b1a0e; letter-spacing: 1px; word-break: break-word;
+      .band b {{ display: block; max-width: 100%; padding: 0 12px; line-height: 1.16; color: #2b1a0e; letter-spacing: 1px; overflow-wrap: anywhere;
                  text-shadow: -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 4px 4px 0 #fff, 0 7px 0 #e9b44c; }}
       #win {{ position: absolute; left: {WIN_X}px; top: {WIN_Y}px; width: {WIN_W}px; height: {WIN_H}px; overflow: hidden; background: #ddd; z-index: 2;
               border-top: 8px solid #2b1a0e; border-bottom: 8px solid #2b1a0e; }}
@@ -600,16 +674,16 @@ html = f'''<!doctype html>
   </head>
   <body>
     <div id="root" data-composition-id="main" data-start="0" data-duration="{D}" data-width="1080" data-height="1920">
-      <div id="decoTop" class="deco clip" data-start="0" data-duration="{D}" style="left:0;top:0;width:1080px;height:500px">
-        <div style="position:absolute;left:-60px;top:330px;width:420px;height:120px;background:#e98a3a;transform:rotate(-12deg)"></div>
-        <div style="position:absolute;right:-70px;top:40px;width:300px;height:300px;background:#3fbf9f;transform:rotate(30deg)"></div>
+      <div id="decoTop" class="deco clip" data-start="0" data-duration="{D}" style="left:0;top:0;width:1080px;height:{WIN_Y}px">
+        <div style="position:absolute;left:-80px;top:225px;width:270px;height:66px;background:#e98a3a;transform:rotate(-12deg)"></div>
+        <div style="position:absolute;right:-85px;top:-55px;width:200px;height:200px;background:#3fbf9f;transform:rotate(30deg)"></div>
       </div>
-      <div id="decoBottom" class="deco clip" data-start="0" data-duration="{D}" style="left:0;top:1200px;width:1080px;height:720px">
+      <div id="decoBottom" class="deco clip" data-start="0" data-duration="{D}" style="left:0;top:{WIN_Y + WIN_H}px;width:1080px;height:{1920 - WIN_Y - WIN_H}px">
         <div style="position:absolute;left:-80px;top:420px;width:520px;height:160px;background:#e98a3a;transform:rotate(14deg)"></div>
         <div style="position:absolute;right:-90px;top:80px;width:260px;height:260px;background:#3fbf9f;transform:rotate(-24deg)"></div>
       </div>
-      <div id="title" class="band clip" data-start="0" data-duration="{D}" style="top:60px;height:400px;font-size:{t_size}px"><b style="font-size:{t_size}px">{t1}</b><b style="font-size:{t_size}px">{t2}</b></div>
-      <div id="payoff" class="band clip" data-start="0" data-duration="{D}" style="top:1290px;height:420px;font-size:{p_size}px"><b style="font-size:{p_size}px">{p1}</b><b style="font-size:{p_size}px">{p2}</b></div>
+      <div id="title" class="band clip" data-start="0" data-duration="{D}" style="top:32px;height:230px;font-size:{t_size}px"><b>{t1}</b><b>{t2}</b></div>
+      <div id="payoff" class="band clip" data-start="{payoff_start:.3f}" data-duration="{D - payoff_start:.3f}" style="top:1310px;height:285px;font-size:{p_size}px"><b>{p1}</b><b>{p2}</b></div>
       <div id="win" class="clip" data-start="0" data-duration="{D}">{''.join(sets)}
       </div>
       {''.join(caps)}
