@@ -5,6 +5,8 @@ out/
 snap*/
 # episode scripts & generated per episode (keep local only)
 episodes/*/script.json
+# ep1 is the sample episode the guide (docs/huong-dan-video-hoat-hinh.md) points to: keep it in git
+!episodes/ep1/script.json
 episodes/*/assets/
 episodes/*/index.html
 episodes/*/voice.json
