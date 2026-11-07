@@ -17,3 +17,5 @@ out/
 *.auto-meme.json
 *.auto-meme.json.*.tmp
 *.mp4.*.part
+*.db
+*.sqlite3

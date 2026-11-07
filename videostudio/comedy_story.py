@@ -126,6 +126,9 @@ def _step(pipeline, job, check, folder, name, prompt, normalize):
 def _architect(raw, request, playbook, part_count):
     if not isinstance(raw, dict):raise MemeScriptError('Story Architect must return an object')
     result = copy.deepcopy(raw)
+    expected_kind = {'script': 'story', 'idea': 'idea'}.get(request.get('meme_input_mode'))
+    if expected_kind and result.get('input_kind') != expected_kind:
+        raise MemeScriptError(f'User selected {request["meme_input_mode"]}; input_kind must be {expected_kind}')
     if result.get('input_kind') not in ('idea', 'story'):raise MemeScriptError('input_kind must be idea or story')
     for field in ('logline', 'theme', 'central_error', 'conflict', 'structure', 'climax_type', 'ending'):
         result[field] = _prose(result.get(field), field)
@@ -324,6 +327,8 @@ def write_story(pipeline, job, check, legacy_prefix=None):
 Playbook (chọn theo cơ chế truyện, không ép đủ kỹ thuật): {json.dumps(playbook, ensure_ascii=False)}
 Lịch sử để tránh lặp, không phải nội dung để chép: {json.dumps(frozen['memory'], ensure_ascii=False)}
 Trả JSON input_kind=idea|story; truyện hoàn chỉnh phải chuyển thể trung thành, giữ sự kiện và câu chốt.
+Nếu request.meme_input_mode=script: bắt buộc input_kind=story, giữ nội dung người dùng và có source_contract.
+Nếu request.meme_input_mode=idea: bắt buộc input_kind=idea, phát triển candidates. Thiếu trường này thì tự nhận biết.
 Ý tưởng mở: tạo tối đa 3 candidates KHÁC cơ chế/diễn biến, chọn selected_candidate (index0).
 Truyện đã hoàn chỉnh không cần candidates. Không thay tên để chép truyện tham chiếu/câu cửa miệng của kênh.
 Phải có logline, theme, central_error, conflict, structure, techniques:[ID Playbook], climax_type, ending.

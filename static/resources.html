@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kho tài nguyên · VideoStudio</title>
+  <link rel="stylesheet" href="/editor-workspace.css">
+</head>
+<body>
+  <div class="resource-shell">
+    <aside class="resource-nav">
+      <a href="/?view=projects" class="workspace-brand"><span class="brand-mark">▶</span>VideoStudio</a>
+      <nav aria-label="Điều hướng chính">
+        <a href="/?view=projects"><span aria-hidden="true">▱</span>Dự án</a>
+        <a href="/?view=queue"><span aria-hidden="true">☷</span>Hàng đợi</a>
+        <a href="/?view=videos"><span aria-hidden="true">▷</span>Kho video</a>
+        <a href="/?view=calendar"><span aria-hidden="true">▦</span>Lịch đăng</a>
+        <a href="/resources.html" aria-current="page"><span aria-hidden="true">▱</span>Kho tài nguyên</a>
+      </nav>
+      <div class="resource-nav-footer">Tài nguyên dùng chung<br>cho các tập phim của bạn.</div>
+    </aside>
+    <main class="resource-main">
+      <header class="resource-top">
+        <div><h1>Kho tài nguyên</h1><p>Một thư viện dùng chung cho mọi video</p></div>
+        <div class="resource-top-actions"><span id="resourceStatus" role="status" class="workspace-status">Đang tải thư viện…</span><button id="resourceImport" type="button">+ Nhập đạo cụ</button></div>
+      </header>
+      <div class="resource-tabs" role="tablist" aria-label="Loại tài nguyên">
+        <button type="button" role="tab" data-resource="characters" aria-selected="false">♙ Nhân vật</button>
+        <button type="button" role="tab" data-resource="props" aria-selected="true">◇ Đạo cụ</button>
+        <button type="button" role="tab" data-resource="backgrounds" aria-selected="false">△ Bối cảnh</button>
+        <button type="button" role="tab" data-resource="voices" aria-selected="false">♩ Giọng đọc</button>
+        <button type="button" role="tab" data-resource="sfx" aria-selected="false">♫ Nhạc &amp; SFX</button>
+      </div>
+      <section id="characterResource" class="character-resource" hidden aria-label="Quản lý nhân vật">
+        <div class="character-resource-top"><span>Chọn nhân vật, thử trang phục và lưu tạo hình dùng chung.</span><a class="btn secondary" href="/characters.html">Mở phòng nhân vật ↗</a></div>
+        <iframe id="characterFrame" title="Kho nhân vật và phòng thử đồ" loading="lazy"></iframe>
+      </section>
+      <div id="resourceBody" class="resource-body">
+        <section class="resource-collection" aria-label="Danh sách tài nguyên">
+          <div class="resource-filters"><input id="resourceSearch" type="search" aria-label="Tìm tài nguyên" placeholder="Tìm bằng tiếng Việt hoặc tiếng Anh…"><select id="resourceFilter" aria-label="Lọc nguồn đạo cụ"><option value="all">Tất cả đạo cụ</option><option value="uploaded">Ảnh đã tải lên</option><option value="ready">Đã có ảnh</option></select></div>
+          <div id="voiceNote" class="resource-voice-note" hidden>Nghe mẫu có sẵn hoặc <button type="button" id="openClone" class="secondary">+ Clone giọng từ bản thu</button></div>
+          <div id="resourceGrid" class="resource-grid" aria-live="polite"></div>
+          <p id="resourceCount" class="resource-count"></p>
+        </section>
+        <aside id="resourceInspector" class="resource-inspector" aria-label="Chi tiết tài nguyên"><div class="resource-empty">Chọn một tài nguyên để xem chi tiết.</div></aside>
+      </div>
+    </main>
+  </div>
+  <dialog id="importDialog" class="resource-dialog" aria-labelledby="importTitle">
+    <form id="importForm"><h2 id="importTitle">Nhập ảnh đạo cụ</h2><p class="resource-notice">Ảnh PNG trong suốt giúp đạo cụ ghép vào cảnh rõ hơn. Tối đa 20 MB.</p><label for="importLabel">Tên đạo cụ</label><input id="importLabel" maxlength="100" required placeholder="Ví dụ: Cần câu"><label for="importFile">Ảnh PNG, JPEG hoặc WebP</label><input id="importFile" type="file" accept="image/png,image/jpeg,image/webp" required><p id="importError" class="resource-error" role="alert"></p><div class="dialog-actions"><button class="secondary" type="button" id="closeImport">Hủy</button><button type="submit" id="importSubmit">Lưu vào kho</button></div></form>
+  </dialog>
+  <dialog id="cloneDialog" class="resource-dialog" aria-labelledby="cloneTitle">
+    <form id="resourceCloneForm"><h2 id="cloneTitle">Clone giọng đọc</h2><p class="resource-notice">Tạo giọng bằng VieNeu từ bản thu mẫu rõ lời, ít tạp âm.</p><label for="resourceCloneName">Tên giọng đọc</label><input id="resourceCloneName" required maxlength="100"><label for="resourceCloneFile">Bản thu mẫu (âm thanh)</label><input id="resourceCloneFile" type="file" accept="audio/*" required><label for="resourceCloneDuration">Độ dài mẫu: <span id="resourceCloneDurationLabel">15 giây</span></label><input id="resourceCloneDuration" type="range" min="5" max="60" step="5" value="15"><p id="cloneMessage" class="resource-notice" role="status"></p><p id="cloneError" class="resource-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" id="closeClone">Đóng</button><button type="submit" id="resourceCloneSubmit">Tạo giọng (GPU)</button></div></form>
+  </dialog>
+  <script src="/resources.js"></script>
+</body>
+</html>

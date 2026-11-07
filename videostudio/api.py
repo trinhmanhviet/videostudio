@@ -39,23 +39,38 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     project_lifecycle=ProjectLifecycle(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
+    factory=None;publisher=None
     def loop():
         while not stop.is_set():
             if flow_accounts.blocks_workers():stop.wait(.5);continue
             working.set()
-            try: did=image_jobs.step(worker.owner) or worker.step()
+            try:
+                if factory:
+                    try:factory.tick()
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception('Factory admission tick failed; existing jobs continue')
+                did=image_jobs.step(worker.owner) or worker.step()
             except Exception:did=False
             finally:working.clear()
             if not did:stop.wait(.5)
     def heartbeat():
         while not stop.wait(5):
             if working.is_set():store.lock(worker.owner)
+    def publishing_loop():
+        while not stop.is_set():
+            try:
+                if publisher:publisher.tick()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Publishing scheduler tick failed')
+            stop.wait(5)
     @asynccontextmanager
     async def lifespan(app):
         threads=[]
         if worker_enabled:
             flow_accounts.recover_after_restart()
-            for target in (loop,heartbeat):
+            for target in (loop,heartbeat,publishing_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
         yield
         stop.set()
@@ -704,6 +719,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def characters_page():
         return FileResponse(ROOT / 'static' / 'characters.html')
 
+    @app.get('/resources')
+    def resources_page():
+        return FileResponse(ROOT/'static'/'resources.html')
+
     @app.get('/api/characters')
     def get_characters():
         from .character_store import load_roster
@@ -827,12 +846,18 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         vid_path = final_video_path(j)
         video_url = f'/api/jobs/{job_id}/files/video.mp4' if vid_path.is_file() else None
 
+        timeline={}
+        staging_file=ep_dir/'staging.json'
+        if staging_file.is_file():
+            try:timeline=json.loads(staging_file.read_text(encoding='utf-8'))
+            except (OSError,ValueError):pass
         return {
             'job_id': job_id,
             'job': public_job(j),
             'script': script,
             'props_status': props_status,
-            'video_url': video_url
+            'video_url': video_url,
+            'timeline': timeline
         }
 
     @app.post('/api/meme/jobs/{job_id}/props/{prop_id}/upload')
@@ -937,7 +962,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 raise HTTPException(409, 'Tập này đang xuất video.')
             _EDITOR_RENDERS.add(job_id)
         try:
+            if factory:factory.remember_verified(job_id)
             result = re_render_job(j, store=store)
+            if factory:factory.remember_verified(job_id)
             return {'ok': True, 'result': result}
         except Exception as e:
             raise HTTPException(500, f'Re-rendering failed: {e}')
@@ -955,6 +982,79 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if not label and not prop_id:
             raise HTTPException(422, 'label or prop_id required')
         return build_prop_prompt(label, prop_id)
+
+    @app.get('/api/resources')
+    def resources():
+        usage={}
+        with store.db() as connection:
+            rows=connection.execute('SELECT output FROM jobs').fetchall()
+        for row in rows:
+            source=Path(row['output'])/'episode'/'script.json'
+            if not source.is_file():source=Path(row['output'])/'animation-script.json'
+            try:script=json.loads(source.read_text(encoding='utf-8'))
+            except (OSError,ValueError):continue
+            props=script.get('props',{})
+            if not isinstance(props,dict):continue
+            for identifier in {card.get('asset') for card in props.values() if isinstance(card,dict) and isinstance(card.get('asset'),str)}:
+                usage[identifier]=usage.get(identifier,0)+1
+        from .meme_editor import load_prop_library
+        library=load_prop_library()
+        layouts={key:card['handheld_layout'] for key,card in library.items() if card.get('handheld_layout')}
+        return {'sfx':list(resource_sfx().values()),'prop_usage':usage,'prop_layouts':layouts}
+
+    def resource_sfx():
+        source=ROOT/'memestudio'/'assets'/'sfx'/'manifest.json'
+        try:assets=json.loads(source.read_text(encoding='utf-8')).get('assets',[])
+        except (OSError,ValueError):assets=[]
+        allowed=[(ROOT/'data'/'editor-sfx').resolve(),(ROOT/'memestudio'/'assets'/'sfx').resolve()]
+        result={}
+        for item in assets:
+            path=Path(item.get('path','')).resolve()
+            if path.is_file() and any(path.is_relative_to(root) for root in allowed):
+                identifier=item.get('id')
+                if isinstance(identifier,str):result[identifier]={'id':identifier,'name':item.get('name',identifier),'url':'/api/resources/sfx/'+identifier,'duration':item.get('duration')}
+        return result
+
+    @app.get('/api/resources/sfx/{identifier}')
+    def resource_sound(identifier:str):
+        if identifier not in resource_sfx():raise HTTPException(404,'SFX not found')
+        assets=json.loads((ROOT/'memestudio'/'assets'/'sfx'/'manifest.json').read_text(encoding='utf-8'))['assets']
+        card=next(item for item in assets if item.get('id')==identifier)
+        return FileResponse(Path(card['path']),media_type='audio/wav')
+
+    @app.post('/api/resources/props/upload')
+    async def upload_resource_prop(request:Request,label:str='',prop_id:str=''):
+        same_origin(request)
+        from .meme_editor import save_prop_asset
+        import re,uuid
+        if len(label)>300 or (prop_id and not re.fullmatch(r'[a-z0-9_]{1,64}',prop_id)):
+            raise HTTPException(422,'Tên hoặc ID đạo cụ không hợp lệ')
+        body=bytearray()
+        async for block in request.stream():
+            body.extend(block)
+            if len(body)>20*1024*1024:raise HTTPException(413,'Ảnh tối đa 20 MB')
+        if not body:raise HTTPException(422,'Chọn tệp ảnh')
+        try:return save_prop_asset(prop_id or 'prop_'+uuid.uuid4().hex[:12],bytes(body),label or prop_id or 'Đạo cụ mới')
+        except ValueError as error:raise HTTPException(422,str(error))
+
+    from .content_factory_api import register_content_factory_routes
+    def factory_request(scope):
+        headers=[(b'host',b'127.0.0.1:8877')]
+        if scope:headers.append((b'x-connector-scope',scope.encode('ascii')))
+        return Request({'type':'http','method':'POST','path':'/api/jobs','headers':headers})
+    def validate_factory_request(data):
+        if os.getenv('VS_LLM_TRANSPORT','cdp')=='chrome':
+            raise ValueError('Hàng đợi tự động cần extension bridge hoặc CDP; chế độ chrome thử nghiệm cũ chỉ chạy từng phiên có giám sát')
+        normalized=validate_request(data)
+        voices.selected(normalized['voice_id'])
+        return normalized
+    factory=register_content_factory_routes(app,store,same_origin,public_job,
+        lambda data,key,scope:submit(data,factory_request(scope),idempotency_key=key),
+        validate_submission=validate_factory_request,
+        retry_job=lambda job_id,scope,resume_cancelled=False:retry_job(job_id,{'resume_cancelled':resume_cancelled},factory_request(scope)))
+    from .publishing_api import register_publishing_routes
+    publisher=register_publishing_routes(app,store,factory,same_origin,browser_request_local)
+    factory.channel_states=publisher.channel_states
 
     static=ROOT/'static'
     if static.is_dir():

@@ -15,8 +15,9 @@ function setup(){
   return {nodes,node,append:context.appendJobActionButtons,hero:context.updateHeroCompletedVideo};
 }
 const job=mode=>({id:'j',status:'completed',request:{workflow_mode:mode},output_url:'/video.mp4',checkpoints:{speech:{},images:{scenes:[],image_provider:mode==='meme'?'meme_assets':'flow'}}});
-test('meme cards hide unsupported image editors and image-reset actions',()=>{
-  const ui=setup(),card=ui.node();ui.append(card,job('meme'));assert.equal(card.children.length,0);
+test('meme cards retain their working episode editor and hide ordinary image actions',()=>{
+  const ui=setup(),card=ui.node();ui.append(card,job('meme'));assert.equal(card.children.length,1);
+  assert.equal(card.children[0].href,'/meme-editor?job=j');
   const ordinary=ui.node();ui.append(ordinary,job('research'));assert.equal(ordinary.children.length,3);
 });
 test('hero removes editor actions for meme then restores them for ordinary video',()=>{

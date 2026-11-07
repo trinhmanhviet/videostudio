@@ -51,7 +51,7 @@ def asset(path):return {'path':str(Path(path).resolve()),'sha256':digest(path)}
 
 def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05,clipped_fraction_limit=.001):
     import array,math
-    raw=run([ffmpeg,'-v','error','-i',path,'-ar','16000','-ac','1','-f','f32le','-'],check)
+    raw=run([ffmpeg,'-v','error','-i',path,'-ar','16000','-ac','1','-rematrix_maxval','1.0','-f','f32le','-'],check)
     if not raw or len(raw)>100000000:raise PermanentError('Empty/oversized audio analysis')
     values=array.array('f');values.frombytes(raw)
     if not all(math.isfinite(x) for x in values):raise PermanentError('Nonfinite audio samples')

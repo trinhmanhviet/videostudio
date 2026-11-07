@@ -455,9 +455,10 @@ async function loadProjects(){
   }
 }
 
-function enable(){ $('#submit').disabled=!ready||!$('#voice').value||submitting; }
-const extensionScope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1]||null;
+function enable(){ $('#submit').disabled=!ready||!$('#voice').value||submitting||$('#create')?.dataset?.submitting==='true'; }
+let extensionScope=location.pathname.match(/^\/story-video\/projects\/([0-9a-f-]{36})\/production$/i)?.[1]||null;
 let usesExtension=!!extensionScope;
+function selectStudioConnectorScope(scope){if(extensionScope||!(/^[0-9a-f-]{36}$/i).test(scope||''))return;extensionScope=scope;configureTextTransport('extension');preflight();}
 function configureTextTransport(transport){
   if(!extensionScope&&transport!=='extension')return;
   usesExtension=true;$('#browserStart').hidden=true;$('#browserProbe').hidden=true;
@@ -584,9 +585,8 @@ function renderJobCard(j){
 function supportsImageEditing(j){return j.request?.workflow_mode!=='meme'&&j.checkpoints?.images?.image_provider!=='meme_assets';}
 function appendJobActionButtons(n,j){
   if(j.request?.workflow_mode==='meme'&&['completed','succeeded','failed'].includes(j.status)&&!n.querySelector('.meme-editor-open')){
-    const mb=text('a','🎬 Chỉnh sửa tập phim / Đạo cụ','secondary meme-editor-open');
+    const mb=text('a','🎬 Chỉnh sửa tập phim / Đạo cụ','button secondary meme-editor-open');
     mb.href='/meme-editor?job='+j.id;
-    mb.style.textDecoration='none';
     n.append(mb);
   }
   if(!supportsImageEditing(j))return;
@@ -657,7 +657,7 @@ function updateHeroCompletedVideo(filtered){
   const imageEditing=supportsImageEditing(latestCompleted);
   for(const button of [editBtn,resetBtn,optionalEdit])button.hidden=!imageEditing;
   let memeEditBtn=$('#heroMemeEditBtn');
-  if(!memeEditBtn){memeEditBtn=text('a','🎬 Chỉnh sửa tập phim / Đạo cụ','button');memeEditBtn.id='heroMemeEditBtn';memeEditBtn.style.background='var(--blue)';memeEditBtn.style.color='#0a141c';memeEditBtn.style.textDecoration='none';heroDownloadBtn.after(memeEditBtn);}
+  if(!memeEditBtn){memeEditBtn=text('a','🎬 Chỉnh sửa tập phim / Đạo cụ','button hero-meme-editor');memeEditBtn.id='heroMemeEditBtn';heroDownloadBtn.after(memeEditBtn);}
   memeEditBtn.href='/meme-editor?job='+latestCompleted.id;
   memeEditBtn.hidden=(latestCompleted.request?.workflow_mode!=='meme');
   const btnChange=$('#heroChangeVoiceBtn');
@@ -758,4 +758,4 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){loadJobs();preflight();loadProjects();}
 });
-</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261030-recovery1"></script></body></html>
+</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261030-recovery1"></script><link rel="stylesheet" href="/studio-shell.css?v=20261107-1"><script src="/content-studio.js?v=20261107-1"></script></body></html>

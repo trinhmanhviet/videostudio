@@ -344,75 +344,71 @@
 
     [hidden] { display: none !important; }
   </style>
+  <link rel="stylesheet" href="/editor-workspace.css">
 </head>
-<body>
+<body class="editor-workspace">
 
   <!-- Header -->
-  <header>
+  <header class="workspace-header">
     <div class="header-left">
-      <a href="/" class="btn secondary" style="padding:6px 12px;font-size:12.5px;">← VideoStudio</a>
+      <a href="/?view=projects" class="btn secondary" style="padding:6px 12px;font-size:12.5px;">← Dự án</a>
       <div class="header-title">
-        <h1>🎬 Phòng Hậu Kỳ &amp; Chỉnh Sửa Tập Phim Meme</h1>
-        <small>Thay thế đạo cụ, bối cảnh, biểu cảm &bull; Xuất lại video tức thì (~20s)</small>
+        <h1 id="editorHeading">Chỉnh sửa tập phim</h1>
+        <small>VideoStudio · Phòng hậu kỳ</small>
       </div>
     </div>
     <div class="header-actions">
-      <span id="jobIdBadge" style="font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);padding:4px 8px;border-radius:6px;">Job: -</span>
-      <button type="button" class="secondary" id="btnSaveScript">💾 Lưu kịch bản</button>
-      <button type="button" id="btnRerender" style="font-weight:700;font-size:13.5px;">🚀 XUẤT LẠI VIDEO MỚI</button>
+      <span id="jobIdBadge" class="workspace-status">Job: -</span>
+      <span id="saveStatus" class="workspace-status" role="status">Đang tải tập phim…</span>
+      <button type="button" class="secondary" id="btnSaveScript" disabled>Lưu thay đổi</button>
+      <button type="button" id="btnRerender" disabled>↑ Xuất lại video</button>
     </div>
   </header>
 
   <div class="editor-layout">
-    <!-- Panel 1: Video Preview & Scenes -->
-    <section class="panel">
-      <div class="panel-header">
-        <h2>📹 Video hiện tại</h2>
-        <a id="btnDownloadVideo" class="btn secondary btn-sm" href="" download hidden>Tải MP4</a>
+    <nav class="editor-rail" aria-label="Công cụ tập phim">
+      <button type="button" data-inspector="scenes" aria-pressed="true"><span aria-hidden="true">▤</span>Cảnh</button>
+      <button type="button" data-inspector="props" aria-pressed="false"><span aria-hidden="true">◇</span>Đạo cụ</button>
+      <button type="button" data-inspector="beats" aria-pressed="false"><span aria-hidden="true">☷</span>Lời thoại</button>
+      <a href="/resources.html">Kho<br>tài nguyên ↗</a>
+    </nav>
+    <main class="editor-stage">
+      <section class="preview-stage" aria-label="Video đã xuất">
+        <div class="video-box"><video id="videoPlayer" controls preload="metadata"></video></div>
+        <p id="videoEmpty" class="preview-empty" hidden>Chưa có video đã xuất cho tập phim này.</p>
+        <p class="preview-caption">MP4 đã xuất · Lưu và xuất lại để xem thay đổi trong video.</p>
+      </section>
+      <section class="editor-timeline" aria-label="Danh sách cảnh và lời thoại">
+        <div class="timeline-heading"><h2>Cảnh trong tập</h2><span class="muted">Ảnh bối cảnh · chọn cảnh để chỉnh sửa</span><a id="btnDownloadVideo" class="btn secondary btn-sm" href="" download hidden>Tải MP4 ↓</a></div>
+        <div id="sceneFilmstrip" class="scene-filmstrip"></div>
+        <div id="timelineBeats" class="timeline-beats" aria-label="Thời gian lời thoại đã dựng"></div>
+      </section>
+    </main>
+    <aside class="editor-inspector" aria-label="Bảng chỉnh sửa">
+      <div class="inspector-heading"><span class="eyebrow">Đang chỉnh sửa</span><h2 id="selectedSceneLabel">Chọn cảnh</h2></div>
+      <div class="inspector-tabs" role="tablist" aria-label="Chỉnh sửa cảnh đã chọn">
+        <button type="button" id="inspectorTab-scenes" role="tab" data-inspector="scenes" aria-controls="inspector-scenes" aria-selected="true">Cảnh &amp; chữ</button>
+        <button type="button" id="inspectorTab-props" role="tab" data-inspector="props" aria-controls="inspector-props" aria-selected="false">Đạo cụ</button>
+        <button type="button" id="inspectorTab-beats" role="tab" data-inspector="beats" aria-controls="inspector-beats" aria-selected="false">Lời thoại</button>
       </div>
-      <div class="panel-content">
-        <div class="video-box">
-          <video id="videoPlayer" controls preload="metadata"></video>
-        </div>
-        <div style="margin-top:10px">
-          <label for="episodeTitle1">Tiêu đề video</label>
-          <input id="episodeTitle1" type="text" maxlength="100" placeholder="Dòng 1" aria-label="Tiêu đề, dòng 1">
-          <input id="episodeTitle2" type="text" maxlength="100" placeholder="Dòng 2" aria-label="Tiêu đề, dòng 2">
-        </div>
-
-        <div style="margin-top:10px;">
-          <h3 style="font-size:13px;text-transform:uppercase;color:var(--accent);margin:0 0 8px;">🏞️ Bối cảnh các cảnh (Scenes)</h3>
-          <div id="scenesContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Panel 2: Props Inspector (Đạo cụ & Prompt) -->
-    <section class="panel">
-      <div class="panel-header">
-        <h2>🎒 Quản lý Đạo Cụ (<span id="propCount">0</span>)</h2>
-        <button type="button" class="btn secondary btn-sm" id="btnReloadProps">🔄 Làm mới</button>
-      </div>
-      <div class="panel-content">
-        <div id="missingPropAlert" hidden style="background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.4);border-radius:8px;padding:10px 12px;font-size:12.5px;">
-          <strong style="color:var(--warn);display:block;margin-bottom:4px;">⚠️ Có đạo cụ chưa có ảnh vẽ thật:</strong>
-          Đạo cụ chưa có ảnh sẽ được ẩn khi xuất video. Bạn có thể chọn ảnh trong kho hoặc tải ảnh PNG lên.
-        </div>
-
-        <div id="propsList" style="display:flex;flex-direction:column;gap:10px;"></div>
-      </div>
-    </section>
-
-    <!-- Panel 3: Beats (Biểu cảm & Diễn xuất từng câu) -->
-    <section class="panel">
-      <div class="panel-header">
-        <h2>🎭 Biểu cảm &amp; Trạng thái từng câu (<span id="beatCount">0</span>)</h2>
-        <button type="button" class="btn secondary btn-sm" id="btnApplyBeats">Áp dụng</button>
-      </div>
-      <div class="panel-content" style="padding:10px;">
-        <div id="beatsList" style="display:flex;flex-direction:column;gap:8px;"></div>
-      </div>
-    </section>
+      <section class="inspector-panel" id="inspector-scenes" role="tabpanel" aria-labelledby="inspectorTab-scenes">
+        <div class="title-fields"><h3>Tiêu đề tập phim</h3><input id="episodeTitle1" type="text" maxlength="100" placeholder="Dòng 1" aria-label="Tiêu đề, dòng 1"><input id="episodeTitle2" type="text" maxlength="100" placeholder="Dòng 2" aria-label="Tiêu đề, dòng 2"></div>
+        <h3>Bối cảnh cảnh đã chọn</h3><div id="scenesContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <p class="workspace-note">Đổi bối cảnh cho cảnh này. Tiêu đề áp dụng cho toàn bộ tập phim.</p>
+      </section>
+      <section class="inspector-panel" id="inspector-props" role="tabpanel" aria-labelledby="inspectorTab-props" hidden>
+        <div class="panel-header"><h2>Đạo cụ (<span id="propCount">0</span>)</h2><button type="button" class="secondary btn-sm" id="btnReloadProps">↻ Làm mới</button></div>
+        <label for="propScopeSelect" class="eyebrow">Phạm vi hiển thị</label><select id="propScopeSelect" style="width:100%;margin:6px 0"><option value="scene">Đạo cụ trong cảnh đã chọn</option><option value="episode">Tất cả đạo cụ trong tập</option></select>
+        <p class="workspace-note" id="propScopeNote">Ảnh và điểm cầm áp dụng cho đạo cụ trong tập này.</p>
+        <div id="missingPropAlert" hidden style="background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.4);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;"><strong style="color:var(--warn);display:block;margin-bottom:4px;">Có đạo cụ chưa có ảnh</strong>Đạo cụ thiếu ảnh sẽ được ẩn khi xuất. Chọn ảnh từ kho hoặc tải ảnh lên.</div>
+        <div id="propsList" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </section>
+      <section class="inspector-panel" id="inspector-beats" role="tabpanel" aria-labelledby="inspectorTab-beats" hidden>
+        <div class="panel-header"><h2>Lời thoại (<span id="beatCount">0</span>)</h2><button type="button" class="secondary btn-sm" id="btnApplyBeats">Lưu biểu cảm</button></div>
+        <p class="workspace-note">Chọn lời thoại để nghe tại thời điểm đã dựng. Biểu cảm được cập nhật khi xuất lại.</p>
+        <div id="beatsList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </section>
+    </aside>
   </div>
 
   <!-- Hidden File Input for Prop Image Upload -->
@@ -465,10 +461,10 @@
     <div class="modal-box" style="max-width:440px;text-align:center;padding:26px;">
       <h3 style="margin:0 0 10px;font-size:18px;color:var(--accent);">🚀 Đang xuất video mới...</h3>
       <p style="font-size:13px;color:var(--muted);margin:0 0 16px;">
-        HyperFrames đang tái dựng lại hoạt hình, ghép đạo cụ mới và đồng bộ nhép miệng. Vui lòng chờ khoảng <b>15 – 25 giây</b>.
+        Đang dựng hoạt hình và đồng bộ âm thanh với các thay đổi đã lưu. Thời gian tùy theo độ dài tập phim.
       </p>
       <div style="width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line);">
-        <div id="renderProgressBar" style="width:30%;height:100%;background:var(--accent);transition:width 0.4s ease;"></div>
+        <div id="renderProgressBar" class="render-working"></div>
       </div>
       <small id="renderStatusText" style="color:var(--blue);font-size:12px;">Đang biên dịch HyperFrames...</small>
     </div>
@@ -487,6 +483,51 @@
     let catalog = { props: [], backgrounds: [], face_names: [], costumes: [], accessories: [] };
     let currentUploadPropId = null;
     let currentLibraryTargetPropId = null;
+    let selectedScene = null;
+    let renderBusy = false;
+
+    function setSaveStatus(message, state='') {
+      $('#saveStatus').textContent = message;
+      $('#saveStatus').dataset.state = state;
+    }
+    function markDirty() {
+      if (editorData) setSaveStatus('Có thay đổi chưa lưu');
+    }
+    function setEditorBusy(busy) {
+      renderBusy = busy;
+      $('#btnRerender').disabled = busy || !editorData;
+      $('#btnSaveScript').disabled = busy || !editorData;
+      $('#btnApplyBeats').disabled = busy || !editorData;
+    }
+    function selectInspector(name) {
+      for (const panel of ['scenes','props','beats']) {
+        $('#inspector-' + panel).hidden = panel !== name;
+        $('#inspectorTab-' + panel).setAttribute('aria-selected', String(panel === name));
+      }
+      $$('[data-inspector]').forEach(button => {
+        if (!button.hasAttribute('role')) button.setAttribute('aria-pressed', String(button.dataset.inspector === name));
+      });
+    }
+    function beatTiming(index) {
+      const beats = editorData?.timeline?.beats || [];
+      const timing = beats.find((beat, position) => (beat.index ?? position) === index);
+      return timing && Number.isFinite(timing.start) && Number.isFinite(timing.end) && timing.end >= timing.start ? timing : null;
+    }
+    function selectScene(id, seek=true) {
+      selectedScene = id;
+      renderScenes();
+      renderProps();
+      renderBeats();
+      if (seek) {
+        const index = (editorData.script.beats || []).findIndex(beat => beat.scene === id);
+        const timing = beatTiming(index);
+        if (timing) seekVideo(timing.start);
+      }
+    }
+    $$('[data-inspector]').forEach(button => button.onclick = () => selectInspector(button.dataset.inspector));
+    $('#episodeTitle1').oninput = markDirty;
+    $('#episodeTitle2').oninput = markDirty;
+    $('#propScopeSelect').onchange = () => renderProps();
 
     function showToast(msg, isBad=false) {
       const t = $('#toast');
@@ -502,6 +543,7 @@
       jobId = params.get('job');
       if (!jobId) {
         showToast('Không tìm thấy mã Job (job ID)! Vui lòng quay lại danh sách.', true);
+        setSaveStatus('Thiếu mã tập phim trong đường dẫn', 'error');
         return;
       }
       $('#jobIdBadge').textContent = `Job: ${jobId.slice(0, 8)}...`;
@@ -513,11 +555,11 @@
     async function loadCatalog() {
       try {
         const res = await fetch('/api/meme/catalog');
-        if (res.ok) {
-          catalog = await res.json();
-        }
+        if (!res.ok) throw new Error('Không tải được kho tài nguyên.');
+        catalog = await res.json();
       } catch (e) {
         console.error('Failed to load catalog', e);
+        showToast('Không tải được kho tài nguyên. Hãy thử làm mới đạo cụ.', true);
       }
     }
 
@@ -544,8 +586,12 @@
           throw new Error(err.detail || 'Không thể tải dữ liệu tập phim này');
         }
         editorData = await res.json();
+        const sceneIds = Object.keys(editorData.script.scenes || {});
+        if (!sceneIds.includes(selectedScene)) selectedScene = sceneIds[0] || null;
         $('#episodeTitle1').value = editorData.script.title?.[0] || '';
         $('#episodeTitle2').value = editorData.script.title?.[1] || '';
+        $('#editorHeading').textContent = (editorData.script.title || []).filter(Boolean).join(' · ') || 'Chỉnh sửa tập phim';
+        $('#videoEmpty').hidden = Boolean(editorData.video_url);
 
         // Update video
         if (editorData.video_url) {
@@ -558,38 +604,46 @@
         renderScenes();
         renderProps();
         renderBeats();
+        setEditorBusy(false);
+        setSaveStatus('✓ Đã tải tập phim', 'saved');
       } catch (err) {
         showToast(err.message, true);
+        setSaveStatus(err.message, 'error');
       }
     }
 
     function renderScenes() {
       const cont = $('#scenesContainer');
-      cont.innerHTML = '';
+      const strip = $('#sceneFilmstrip');
+      cont.replaceChildren();
+      strip.replaceChildren();
       const scenes = editorData.script.scenes || {};
-
-      Object.entries(scenes).forEach(([sid, sc]) => {
-        const row = document.createElement('div');
-        row.style.cssText = 'background:var(--card-alt);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:10px;';
-
-        const bgSrc = `/meme-assets/backgrounds/${sc.bg}.png`;
-        row.innerHTML = `
-          <img src="${bgSrc}" style="width:50px;height:70px;object-fit:cover;border-radius:4px;border:1px solid var(--line);" alt="${sc.bg}">
-          <div style="flex:1;min-width:0;">
-            <strong style="font-size:12px;display:block;">Cảnh: ${sid}</strong>
-            <label style="font-size:11px;color:var(--muted);margin:2px 0 4px;display:block;">Bối cảnh nền:</label>
-            <select onchange="updateSceneBg('${sid}', this.value)" style="padding:4px 6px;font-size:11.5px;">
-              ${(catalog.backgrounds || []).map(b => `<option value="${b}" ${b === sc.bg ? 'selected' : ''}>${b}</option>`).join('')}
-            </select>
-          </div>
-        `;
-        cont.appendChild(row);
+      $('#selectedSceneLabel').textContent = selectedScene ? `Cảnh ${selectedScene}` : 'Chưa có cảnh';
+      Object.entries(scenes).forEach(([sid, sc], position) => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'scene-thumb';
+        button.setAttribute('aria-pressed', String(sid === selectedScene));
+        const image = document.createElement('img');
+        image.src = `/meme-assets/backgrounds/${encodeURIComponent(sc.bg)}.png`; image.alt = '';
+        const caption = document.createElement('span'); caption.textContent = `${position + 1} · ${sid}`;
+        button.append(image, caption); button.onclick = () => selectScene(sid); strip.append(button);
+        if (sid !== selectedScene) return;
+        const preview = image.cloneNode(); preview.alt = sc.bg; preview.style.cssText = 'width:100%;height:180px;object-fit:cover;border:1px solid var(--line);border-radius:8px;margin-bottom:12px';
+        const label = document.createElement('label'); label.textContent = 'Bối cảnh nền'; label.htmlFor = 'selectedSceneBackground';
+        const select = document.createElement('select'); select.id = 'selectedSceneBackground';
+        const backgrounds = [...new Set([sc.bg, ...(catalog.backgrounds || [])])].filter(Boolean);
+        for (const background of backgrounds) {
+          const option = document.createElement('option'); option.value = background; option.textContent = background.replace(/_/g, ' '); option.selected = background === sc.bg; select.append(option);
+        }
+        select.onchange = () => window.updateSceneBg(sid, select.value);
+        cont.append(preview, label, select);
       });
     }
 
     window.updateSceneBg = function(sid, newBg) {
       if (editorData.script.scenes[sid]) {
         editorData.script.scenes[sid].bg = newBg;
+        markDirty();
         renderScenes();
       }
     };
@@ -598,13 +652,21 @@
       const cont = $('#propsList');
       cont.innerHTML = '';
       const propsStatus = editorData.props_status || { missing: [], available: [], all: [] };
-      const allProps = propsStatus.all || [];
+      const sceneProps = new Set();
+      (editorData.script.beats || []).forEach((beat, index) => {
+        if (beat.scene !== selectedScene) return;
+        for (const id of Object.keys(beat.props || {})) sceneProps.add(id);
+        for (const id of Object.keys(beatTiming(index)?._prop_states || {})) sceneProps.add(id);
+      });
+      const episodeScope = $('#propScopeSelect').value === 'episode';
+      const allProps = (propsStatus.all || []).filter(prop => episodeScope || !selectedScene || sceneProps.has(prop.id));
+      $('#propScopeNote').textContent = `${episodeScope ? 'Tất cả đạo cụ trong tập.' : 'Đạo cụ xuất hiện trong cảnh ' + (selectedScene || 'đã chọn') + '.'} Ảnh và điểm cầm áp dụng cho đạo cụ trong cả tập.`;
 
       $('#propCount').textContent = allProps.length;
       $('#missingPropAlert').hidden = (propsStatus.missing || []).length === 0;
 
       if (allProps.length === 0) {
-        cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;">Tập này không khai báo đạo cụ nào.</div>';
+        cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;">Cảnh này không khai báo đạo cụ nào.</div>';
         return;
       }
 
@@ -696,6 +758,7 @@
       function commit() {
         card.layout = {...layout};
         card.layout_preset = prop.layout_preset;
+        markDirty();
         moveDot();
       }
       img.onclick = event => {
@@ -724,14 +787,26 @@
 
     function renderBeats() {
       const cont = $('#beatsList');
-      cont.innerHTML = '';
+      const timeline = $('#timelineBeats');
+      cont.replaceChildren();
+      timeline.replaceChildren();
       const beats = editorData.script.beats || [];
-      $('#beatCount').textContent = beats.length;
+      $('#beatCount').textContent = beats.filter(beat => !selectedScene || beat.scene === selectedScene).length;
 
       beats.forEach((b, idx) => {
+        const timing = beatTiming(idx);
+        if (timing) {
+          const marker = document.createElement('button'); marker.type = 'button';
+          marker.textContent = `#${idx + 1} · ${timing.start.toFixed(1)}–${timing.end.toFixed(1)}s`;
+          marker.title = b.text || '';
+          marker.onclick = () => { selectScene(b.scene, false); selectInspector('beats'); seekVideo(timing.start); };
+          timeline.append(marker);
+        }
+        if (selectedScene && b.scene !== selectedScene) return;
         const el = document.createElement('div');
         el.className = 'beat-card';
-        el.onclick = () => seekVideo(b.start || 0);
+        if (timing) el.onclick = () => seekVideo(timing.start);
+        else el.style.cursor = 'default';
 
         // Find primary character in beat
         const who = b.who || 'N';
@@ -739,7 +814,7 @@
 
         el.innerHTML = `
           <div class="beat-top">
-            <strong>#${idx + 1} &bull; ${who} (${b.start ? b.start.toFixed(1) : 0}s)</strong>
+            <strong>#${idx + 1} &bull; ${escapeHtml(who)} (${timing ? timing.start.toFixed(1) + 's' : 'chưa có mốc dựng'})</strong>
             <span style="font-size:11px;color:var(--muted);">${b.scene || ''}</span>
           </div>
           <div class="beat-text">${escapeHtml(b.text || '')}</div>
@@ -762,6 +837,8 @@
         `;
         cont.appendChild(el);
       });
+      if (!timeline.children.length) timeline.textContent = 'Thời gian lời thoại xuất hiện sau khi tập phim được dựng.';
+      if (!cont.children.length) cont.textContent = 'Cảnh này chưa có lời thoại.';
     }
 
     function seekVideo(time) {
@@ -774,6 +851,7 @@
       if (editorData.script.beats[idx]) {
         if (!editorData.script.beats[idx].emo) editorData.script.beats[idx].emo = {};
         editorData.script.beats[idx].emo[who] = emo;
+        markDirty();
       }
     };
 
@@ -944,60 +1022,70 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Lỗi khi lưu kịch bản');
       editorData.script = data.script;
+      setSaveStatus('✓ Đã lưu thay đổi', 'saved');
     }
 
     $('#btnSaveScript').onclick = async function() {
+      if (renderBusy) return;
+      setEditorBusy(true);
       try {
         await saveEpisodeScript();
         showToast('✓ Đã lưu các thay đổi vào kịch bản tập phim!');
       } catch (e) {
         showToast(e.message, true);
+        setSaveStatus(e.message, 'error');
+      } finally {
+        setEditorBusy(false);
       }
     };
     $('#btnApplyBeats').onclick = () => $('#btnSaveScript').click();
+    $('#btnReloadProps').onclick = async function() {
+      this.disabled = true;
+      try {
+        await loadCatalog();
+        const response = await fetch(`/api/meme/jobs/${jobId}/editor`);
+        if (!response.ok) throw new Error('Không làm mới được đạo cụ.');
+        const data = await response.json();
+        syncPropStatus(data.props_status);
+        showToast('Đã làm mới kho đạo cụ.');
+      } catch (error) { showToast(error.message, true); }
+      finally { this.disabled = false; }
+    };
 
     // Re-render
     $('#btnRerender').onclick = async function() {
+      if (renderBusy) return;
+      setEditorBusy(true);
       try {
         await saveEpisodeScript();
       } catch (error) {
         showToast(error.message, true);
+        setSaveStatus(error.message, 'error');
+        setEditorBusy(false);
         return;
       }
 
       $('#renderModal').hidden = false;
-      const bar = $('#renderProgressBar');
       const statusText = $('#renderStatusText');
-      bar.style.width = '20%';
-
-      let progress = 20;
-      const timer = setInterval(() => {
-        if (progress < 90) {
-          progress += 5;
-          bar.style.width = `${progress}%`;
-          if (progress > 50) statusText.textContent = 'Đang ghép khung hình HyperFrames & âm thanh...';
-        }
-      }, 1000);
+      statusText.textContent = 'Đang dựng video và ghép âm thanh…';
+      setSaveStatus('Đang xuất lại video…');
 
       try {
         const res = await fetch(`/api/meme/jobs/${jobId}/re-render`, { method: 'POST' });
-        clearInterval(timer);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || 'Quá trình dựng lại video thất bại');
         }
-        bar.style.width = '100%';
         statusText.textContent = 'Hoàn tất!';
-
-        setTimeout(async () => {
-          $('#renderModal').hidden = true;
-          showToast('🎉 Video mới đã xuất thành công!');
-          await loadJobData();
-        }, 800);
+        await loadJobData();
+        showToast('Video mới đã xuất thành công!');
+        setSaveStatus('✓ Đã xuất video mới', 'saved');
       } catch (e) {
-        clearInterval(timer);
-        $('#renderModal').hidden = true;
         showToast(e.message, true);
+        setSaveStatus(e.message, 'error');
+      } finally {
+        $('#renderModal').hidden = true;
+        setEditorBusy(false);
       }
     };
 

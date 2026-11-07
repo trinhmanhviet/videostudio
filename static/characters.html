@@ -504,16 +504,17 @@
 
     [hidden] { display: none !important; }
   </style>
+  <link rel="stylesheet" href="/editor-workspace.css">
 </head>
-<body>
+<body class="character-workspace">
 
   <!-- Header -->
-  <header>
+  <header class="workspace-header">
     <div class="header-left">
-      <a href="/" class="btn secondary" style="padding:6px 12px; font-size:12.5px;">← VideoStudio</a>
+      <a href="/resources.html?tab=characters" class="btn secondary" style="padding:6px 12px; font-size:12.5px;" target="_top">← Kho tài nguyên</a>
       <div class="header-title">
-        <h1>🎭 Kho Nhân Vật &amp; Phòng Thử Đồ</h1>
-        <small>Thiết kế quần áo, tóc tai, phụ kiện chuẩn pixel &bull; Đồng bộ xuyên suốt các tập phim</small>
+        <h1>Nhân vật &amp; Phòng thử đồ</h1>
+        <small>Lưu tạo hình, trang phục và giọng đọc dùng chung cho các tập phim</small>
       </div>
     </div>
     <div class="header-actions">
@@ -679,6 +680,7 @@
 
   <script>
     'use strict';
+    if (new URLSearchParams(window.location.search).get('embedded') === '1') document.documentElement.classList.add('embedded-characters');
 
     // State
     let characters = [];
