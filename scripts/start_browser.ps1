@@ -34,5 +34,5 @@ if(-not $ready){throw 'Dedicated CDP daemon did not start. See data/cdp.err.log.
 if(-not $ServiceOnly){
  $result=Invoke-RestMethod 'http://127.0.0.1:8879/api/browser/start' -Method Post -ContentType 'application/json' -Headers @{'X-VS-Client'='videostudio'} -Body '{}' -TimeoutSec 35
  Write-Output ('Dedicated Chrome connected: '+$result.connected+'; authentication: '+$result.authentication)
- Write-Output 'Sign in to Google Flow in the dedicated window. ChatGPT text uses ordinary Chrome with the extension bridge.'
+ Write-Output 'Dedicated Chrome is ready. Sign in to Google Flow and ChatGPT in this window when needed.'
 }else{Write-Output 'Dedicated browser service ready. Health polling does not open Chrome.'}

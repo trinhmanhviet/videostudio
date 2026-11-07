@@ -97,7 +97,7 @@ class TrayAppTests(unittest.TestCase):
         self.assertTrue(running['Mở hệ thống'].get('grayed'))
         self.assertFalse(running['Dừng hệ thống'].get('grayed'))
         commands, _ = flatten_menu(self.app.menu())
-        self.assertEqual(len(commands), 11)
+        self.assertEqual(len(commands), 13)
 
     def test_click_when_stopped_starts_system_then_opens_studio_once(self):
         def start(root, action, emit):
@@ -130,6 +130,27 @@ class TrayAppTests(unittest.TestCase):
         self.app.busy = 'start'
         self.assertFalse(self.app.start_action('restart'))
         self.launcher.run_action.assert_not_called()
+
+    def test_text_transport_menu_shows_current_mode_and_switching_restarts_running_system(self):
+        menu = self.labels()
+        self.assertTrue(menu['Chrome thường (extension)'].get('checked'))   # default without a setting file
+        self.assertFalse(menu['Chrome riêng (CDP)'].get('checked'))
+        self.app.status = READY
+        self.assertTrue(self.app.set_text_transport('cdp'))
+        self.assertEqual((self.root / 'data' / 'text_transport.txt').read_text(encoding='utf-8'), 'cdp')
+        self.assertEqual(self.launcher.run_action.call_args.args[1], 'restart')
+        self.assertTrue(self.labels()['Chrome riêng (CDP)'].get('checked'))
+        self.launcher.run_action.reset_mock()
+        self.assertFalse(self.app.set_text_transport('cdp'))                # same mode: nothing to do
+        self.launcher.run_action.assert_not_called()
+
+    def test_text_transport_is_saved_without_restart_when_stopped_and_refused_during_a_video(self):
+        self.assertTrue(self.app.set_text_transport('cdp'))
+        self.launcher.run_action.assert_not_called()
+        self.app.jobs.active = 1
+        self.assertFalse(self.app.set_text_transport('extension'))
+        self.assertEqual(tray_app.read_text_transport(self.root), 'cdp')
+        self.assertTrue(self.app.tray.notes[-1][3])
 
     def test_settings_persist(self):
         self.app.toggle_notify()

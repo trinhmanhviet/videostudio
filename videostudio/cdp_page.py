@@ -45,8 +45,10 @@ def snapshot_expression(marker=''):
         }
       }
       const turns = [...document.querySelectorAll('[data-talvt-turn-state]')].map(turn => {
-        const userHeading=[...turn.querySelectorAll('h4')].find(h=>/^(You said:|B?n ?? n?i:|B?n n?i:)$/i.test(h.textContent.trim()));
-        const user=userHeading?.parentElement?.textContent || '';
+        // 2026-11 UI: the user bubble carries a ':user' unit key and the h4 reads "You said:You".
+        const userUnit=turn.querySelector('[data-chatgpt-search-unit-key$=":user"],[data-content-search-unit-key$=":user"],[data-user-message-bubble]');
+        const userHeading=[...turn.querySelectorAll('h4')].find(h=>/^(You said:|B?n ?? n?i:|B?n n?i:)/i.test(h.textContent.trim()));
+        const user=userUnit?.textContent || userHeading?.parentElement?.textContent || '';
         const assistant=turn.querySelector('[data-chatgpt-search-unit-key$=":assistant"]');
         let assistantText='';
         if(assistant) {
@@ -56,6 +58,7 @@ def snapshot_expression(marker=''):
             assistantText=assistant.textContent.trimStart();
             const heading=assistant.querySelector('h4')?.textContent || '';
             if(heading && assistantText.startsWith(heading)) assistantText=assistantText.slice(heading.length);
+            assistantText=assistantText.replace(/^ChatGPT said:\s*(ChatGPT)?/,'');
           }
         }
         return {user,assistant:assistantText.trim(),state:turn.getAttribute('data-talvt-turn-state'),id:assistant?.getAttribute('data-chatgpt-search-message-ids')||''};

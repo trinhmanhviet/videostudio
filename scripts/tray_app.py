@@ -17,6 +17,26 @@ from windows_tray import Tray, message_box, single_instance
 ACTIVE = ('queued', 'running', 'retrying')
 ACTION_LABELS = {'start': 'mở hệ thống', 'stop': 'dừng hệ thống', 'restart': 'khởi động lại'}
 DEFAULT_SETTINGS = {'setup_done': False, 'notify': True, 'autostart_services': True}
+# ChatGPT text channel; start_system.ps1 reads the same data/text_transport.txt.
+TEXT_TRANSPORTS = {'cdp': 'Chrome riêng (CDP)', 'extension': 'Chrome thường (extension)'}
+
+
+def read_text_transport(root):
+    try:
+        value = (Path(root) / 'data' / 'text_transport.txt').read_text(encoding='utf-8').strip().lower()
+    except OSError:
+        return 'extension'
+    return value if value in TEXT_TRANSPORTS else 'extension'
+
+
+def write_text_transport(root, value):
+    if value not in TEXT_TRANSPORTS:
+        raise ValueError(value)
+    path = Path(root) / 'data' / 'text_transport.txt'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(value, encoding='utf-8')
+    temporary.replace(path)
 
 
 def server_ready(status):
@@ -135,6 +155,7 @@ class TrayApp:
         busy = self.busy is not None
         startup = self.integration.startup_enabled()
         shortcuts = self.integration.shortcuts_installed()
+        transport = read_text_transport(self.root)
         return [
             ('item', 'Vào Studio', self.open_studio, {'default': True}),
             ('separator',),
@@ -144,6 +165,11 @@ class TrayApp:
             ('separator',),
             ('item', 'Bảng điều khiển && nhật ký', self.open_panel, {}),
             ('item', 'Mở thư mục video', self.open_output, {}),
+            ('submenu', 'Kết nối ChatGPT (tạo chữ)', [
+                ('item', label, lambda value=value: self.set_text_transport(value),
+                 {'checked': transport == value, 'grayed': busy})
+                for value, label in TEXT_TRANSPORTS.items()
+            ]),
             ('submenu', 'Cài đặt', [
                 ('item', 'Khởi động cùng Windows', self.toggle_startup, {'checked': bool(startup), 'grayed': startup is None}),
                 ('item', 'Tự mở hệ thống khi khởi động cùng Windows', self.toggle_autostart, {'checked': self.settings['autostart_services']}),
@@ -233,6 +259,23 @@ class TrayApp:
         on = not self.integration.startup_enabled()
         self.integration.set_startup(on)
         self.tray.notify('Khởi động cùng Windows', 'Đã bật.' if on else 'Đã tắt.')
+
+    def set_text_transport(self, value):
+        if value == read_text_transport(self.root):
+            return False
+        if self.busy:
+            self.tray.notify('VideoStudio', 'Đang ' + ACTION_LABELS[self.busy] + ', đổi kết nối sau.')
+            return False
+        if self.jobs.active:
+            self.tray.notify('Chưa đổi kết nối', 'Có video đang chạy. Đổi sau khi video xong.', warning=True)
+            return False
+        write_text_transport(self.root, value)
+        if server_ready(self.status):
+            self.tray.notify('Đổi kết nối ChatGPT', 'Đang khởi động lại để dùng ' + TEXT_TRANSPORTS[value] + '.')
+            self.start_action('restart')
+        else:
+            self.tray.notify('Đổi kết nối ChatGPT', 'Lần mở hệ thống tới sẽ dùng ' + TEXT_TRANSPORTS[value] + '.')
+        return True
 
     def toggle_autostart(self):
         self._save_settings(autostart_services=not self.settings['autostart_services'])

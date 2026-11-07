@@ -2,6 +2,9 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'start_system.ps1')
 function Assert-True($Value,$Message){if(-not $Value){throw $Message}}
 $script:calls=@();$script:mode='ready'
+# Tests must not depend on this machine's data	ext_transport.txt or reach the real daemon.
+function Get-StartupTextTransport{return 'extension'}
+function Confirm-StartupChatGPT{$script:calls+='probe-chatgpt'}
 function Get-StartupJson($Url){
  if($Url -like '*8877*'){
   if($script:mode -eq 'wrong-transport'){return @{service='videostudio';text_transport='cdp';status='ok'}}
@@ -32,6 +35,21 @@ $script:mode='wrong-transport';$blocked=$false
 try{Ensure-StartupServer}catch{$blocked=$true}
 Assert-True $blocked 'An incompatible live server must not be reused or restarted'
 Write-Output 'PASS refuse incompatible live server'
+function Get-StartupTextTransport{return 'cdp'}
+$script:mode='server-absent';$script:calls=@()
+function Wait-StartupService($Url,$Kind,$Seconds){$script:calls+='wait-'+$Kind;return @{service='videostudio';status='ok';text_transport='cdp';connected=$true}}
+Ensure-StartupServer
+Assert-True ($script:calls -contains 'start_cdp_server.ps1' -and $script:calls -notcontains 'start_extension.ps1') 'CDP setting must start the server in CDP mode'
+Write-Output 'PASS start missing server in CDP mode'
+$script:mode='ready';$blocked=$false
+try{Ensure-StartupServer}catch{$blocked=$true}
+Assert-True $blocked 'A live extension server must not be reused when CDP is configured'
+Write-Output 'PASS refuse extension server when CDP is configured'
+$script:mode='ready';$script:calls=@();Ensure-StartupBrowser
+Assert-True ($script:calls -contains 'probe-chatgpt') 'CDP mode must verify the ChatGPT sign-in after the browser is up'
+Write-Output 'PASS verify ChatGPT sign-in in CDP mode'
+function Get-StartupTextTransport{return 'extension'}
+function Wait-StartupService($Url,$Kind,$Seconds){$script:calls+='wait-'+$Kind;return @{service='videostudio';status='ok';text_transport='extension';connected=$true}}
 $script:mode='comfy-booting';$script:calls=@();Ensure-StartupComfy
 Assert-True ($script:calls.Count -eq 1 -and $script:calls[0] -eq 'wait-comfy') 'Booting Comfy must be awaited, never launched again'
 Write-Output 'PASS wait for Startup Comfy'

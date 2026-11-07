@@ -115,14 +115,21 @@ class ChatGPTImages:
         b.journal.own_target(target,'image')
         b.journal.set_conversation(job,saved['url'] if saved else 'https://chatgpt.com/',target)
         return target
-    async def _ready(self,session,marker):
+    async def _ready(self,session,marker,owned_prompt=None):
         b=self.bridge;deadline=time.monotonic()+35;switched=False
         while time.monotonic()<deadline:
             state=await b.evaluate(session,image_snapshot(marker))
             if state.get('login') or state.get('challenge'):raise ImageAuthentication('Sign in or finish verification in dedicated Chrome; no credentials automated')
             if state.get('mode')=='work':
-                if state.get('draft','').strip() or switched:raise RuntimeError('Work draft or uncertain mode; no image prompt sent')
-                await self._click(session,await b.evaluate(session,chat_mode_button_expression()));switched=True
+                draft=state.get('draft','').strip()
+                if draft and (not owned_prompt or ' '.join(draft.split())!=' '.join(owned_prompt.split())):
+                    raise RuntimeError('Different Work draft exists; no image prompt sent')
+                # Switching modes is asynchronous. An old Work snapshot during
+                # hydration is not a failed switch, and must not trigger a second click.
+                if not switched:
+                    button=await b.evaluate(session,chat_mode_button_expression())
+                    if button:
+                        await self._click(session,button);switched=True
             elif state.get('mode')=='chat' and state.get('composer'):return state
             await asyncio.sleep(.3)
         raise TimeoutError('Image composer not ready; no send attempted')
@@ -143,7 +150,7 @@ class ChatGPTImages:
                 return value
             await b.connect();target=await self._target(job,record['state']!='prepared');session=await b.session(target);await b.cdp.command('Target.activateTarget',{'targetId':target})
             if record['state']=='prepared':
-                state=await self._ready(session,marker);wrapped=image_prompt(prompt,identifier);draft=state.get('draft','').strip()
+                wrapped=image_prompt(prompt,identifier);state=await self._ready(session,marker,wrapped);draft=state.get('draft','').strip()
                 if state.get('generating'):raise RuntimeError('Image tab already generating; no overwrite')
                 if draft and ' '.join(draft.split())!=' '.join(wrapped.split()):raise RuntimeError('Different draft exists; no overwrite')
                 if not draft:

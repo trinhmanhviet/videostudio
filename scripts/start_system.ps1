@@ -41,25 +41,44 @@ function Invoke-StartupScript([string]$Name){
  Get-Content -LiteralPath $outLog -ErrorAction SilentlyContinue | ForEach-Object {Write-Host $_}
  if($child.ExitCode -ne 0){Get-Content -LiteralPath $errLog -ErrorAction SilentlyContinue | ForEach-Object {Write-Host $_};throw "$Name failed. See $errLog."}
 }
+function Get-StartupTextTransport{
+ # Machine setting in data	ext_transport.txt: 'cdp' (dedicated Chrome) or 'extension' (ordinary Chrome).
+ $file=Join-Path $script:StartupRoot 'data/text_transport.txt'
+ if(-not (Test-Path -LiteralPath $file)){return 'extension'}
+ $value=(Get-Content -LiteralPath $file -Raw).Trim().ToLowerInvariant()
+ if($value -notin @('cdp','extension')){throw "data	ext_transport.txt must contain cdp or extension, not '$value'."}
+ return $value
+}
 function Ensure-StartupServer{
+ $transport=Get-StartupTextTransport
+ $label=if($transport -eq 'cdp'){'dedicated Chrome (CDP)'}else{'extension bridge'}
  $health=Get-StartupJson 'http://127.0.0.1:8877/api/health'
  if(-not (Test-StartupResponse $health 'server')){
   if(Test-StartupListener 8877){throw 'Port 8877 is occupied but VideoStudio is not ready. No process was stopped; wait and run this launcher again.'}
-  Invoke-StartupScript 'start_extension.ps1'
+  Invoke-StartupScript $(if($transport -eq 'cdp'){'start_cdp_server.ps1'}else{'start_extension.ps1'})
   $health=Wait-StartupService 'http://127.0.0.1:8877/api/health' 'server' 30
  }
- if($health.text_transport -ne 'extension'){throw 'The running server is not using extension bridge. It was left running; do not restart it while a video is active.'}
- Write-Host '[OK] VideoStudio server (extension bridge).'
+ if($health.text_transport -ne $transport){throw "The running server is not using $label. It was left running; do not restart it while a video is active."}
+ Write-Host "[OK] VideoStudio server ($label)."
 }
 function Ensure-StartupBrowser{
  $status=Get-StartupJson 'http://127.0.0.1:8879/api/status'
  if((Test-StartupResponse $status 'browser') -and $status.connected){
-  Write-Host '[OK] Flow browser is already connected.';return
+  Write-Host '[OK] Flow browser is already connected.'
+  if((Get-StartupTextTransport) -eq 'cdp'){Confirm-StartupChatGPT}
+  return
  }
  Invoke-StartupScript 'start_browser.ps1'
  $status=Wait-StartupService 'http://127.0.0.1:8879/api/status' 'browser' 15
  if(-not $status.connected){throw 'Flow browser is not connected. See data\cdp.err.log.'}
  Write-Host '[OK] Dedicated browser for Flow.'
+ if((Get-StartupTextTransport) -eq 'cdp'){Confirm-StartupChatGPT}
+}
+function Confirm-StartupChatGPT{
+ # CDP text is gated on a verified ChatGPT sign-in; a restarted daemon has not checked it yet.
+ try{$probe=Invoke-RestMethod 'http://127.0.0.1:8879/api/browser/probe' -Method Post -ContentType 'application/json' -Headers @{'X-VS-Client'='videostudio'} -Body '{}' -TimeoutSec 90}catch{$probe=$null}
+ if($probe -and $probe.authentication -eq 'verified'){Write-Host '[OK] ChatGPT signed in (dedicated Chrome).'}
+ else{throw 'ChatGPT is not signed in in the dedicated Chrome. Sign in there, then restart.'}
 }
 function Get-ComfyStartupState{
  $raw=& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'comfy_host_state.ps1')
@@ -110,7 +129,7 @@ function Start-VideoStudioSystem{
   try{Ensure-StartupBrowser}catch{Write-Host ('[ERROR] '+$_.Exception.Message) -ForegroundColor Red;$failed=$true}
   try{Ensure-StartupComfy}catch{Write-Host ('[ERROR] '+$_.Exception.Message) -ForegroundColor Red;$failed=$true}
   if($serverReady){try{Open-StartupStudio}catch{Write-Host ('[ERROR] '+$_.Exception.Message) -ForegroundColor Red;$failed=$true}}
-  Write-Host 'In ordinary Chrome: keep Studio open. If disconnected, press Start in the floating panel, then Test chu.'
+  if((Get-StartupTextTransport) -eq 'extension'){Write-Host 'In ordinary Chrome: keep Studio open. If disconnected, press Start in the floating panel, then Test chu.'}else{Write-Host 'ChatGPT text uses the dedicated Chrome; keep it signed in to ChatGPT.'}
   if(Test-Path -LiteralPath (Join-Path $script:StartupRoot 'data/restart-baseline.json')){
    try{Invoke-StartupScript 'check_restart.ps1'}catch{Write-Host ('Restart acceptance: '+$_.Exception.Message)}
   }

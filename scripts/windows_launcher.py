@@ -135,7 +135,8 @@ def panel_main():
                 notice.set(('Đã dừng dịch vụ. Bấm Mở hệ thống để dùng lại.' if action=='stop' else 'Hoàn tất. Bấm Vào Studio để làm video.') if code==0 else 'Cần kiểm tra: xem nhật ký bên dưới hoặc data/launcher.log.')
             elif kind=='status':
                 polling=False;server=value['server'];flow=value['flow'];comfy=value['comfy']
-                labels['server'].configure(text='Đang chạy' if server and server.get('service')=='videostudio' and server.get('text_transport')=='extension' else 'Chưa sẵn sàng')
+                mode={'cdp':'chữ qua Chrome riêng','extension':'chữ qua extension'}.get((server or {}).get('text_transport'))
+                labels['server'].configure(text=('Đang chạy · '+mode) if server and server.get('service')=='videostudio' and mode else 'Chưa sẵn sàng')
                 labels['flow'].configure(text='Đã kết nối' if flow and flow.get('service')=='videostudio-dedicated-cdp' and flow.get('connected') else 'Chưa kết nối')
                 labels['comfy'].configure(text='Đang chạy' if comfy and 'system' in comfy and 'devices' in comfy else 'Chưa sẵn sàng')
         window.after(100,drain)

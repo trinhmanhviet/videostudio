@@ -31,6 +31,7 @@ class ChromeChatGPTBridge:
         self.job_lock = asyncio.Lock()
         self.authenticated = False
         self.last_error = None
+        self.reasoning_effort = None  # 'high' once High reasoning was verified
         self.images = ChatGPTImages(self, ROOT/'data'/'chatgpt-images')
         self.flow_images = FlowImages(self, ROOT/'data'/'flow-images')
 
@@ -45,7 +46,7 @@ class ChromeChatGPTBridge:
         return {'ok':True, 'service':'videostudio-dedicated-cdp', 'connected':connected,
                 'ready':connected and self.authenticated, 'mode':'headed', 'readiness_scope':'connector_only', 'production_ready':False,
                 'authentication':'verified' if connected and self.authenticated else 'unverified',
-                'last_error':self.last_error}
+                'last_error':self.last_error,'reasoning_effort':self.reasoning_effort}
 
     async def connect(self):
         async with self.connect_lock:
@@ -192,7 +193,8 @@ class ChromeChatGPTBridge:
                 except ValueError:pass
             return raw if isinstance(raw,dict) else {}
         current=await state()
-        if current.get('high'):return
+        if current.get('high'):
+            self.reasoning_effort='high';return True
         button=current.get('button')
         if not isinstance(button,dict):raise RuntimeError('ChatGPT High reasoning control unavailable; no request sent')
         for kind in ('mousePressed','mouseReleased'):
@@ -204,12 +206,23 @@ class ChromeChatGPTBridge:
             if isinstance(slider,dict) and isinstance(slider.get('track'),dict) and slider.get('max',0)>0:break
             await asyncio.sleep(.1)
         if not isinstance(slider,dict):raise RuntimeError('ChatGPT reasoning slider unavailable; no request sent')
-        track=slider['track']
-        for kind in ('mousePressed','mouseReleased'):
-            await self.cdp.command('Input.dispatchMouseEvent',{'type':kind,'x':track['x']+track['width']-2,'y':track['y'],'button':'left','clickCount':1},session=session)
+        # The slider ignores a click on its track (2026-11); step it with the arrow keys it announces.
+        await self.evaluate(session,"document.querySelector('[role=\"slider\"][aria-valuemax]')?.focus()")
+        steps=max(1,int(slider.get('max') or 0)-int(slider.get('value') or 0))
+        for _ in range(steps):
+            for kind in ('keyDown','keyUp'):
+                await self.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':'ArrowRight','code':'ArrowRight','windowsVirtualKeyCode':39},session=session)
+            await asyncio.sleep(.15)
         verified=await state()
         if not verified.get('high'):
             raise RuntimeError('ChatGPT High reasoning effort could not be verified; no request sent')
+        await self._close_menu(session)
+        self.reasoning_effort='high';return True
+
+    async def _close_menu(self, session):
+        for kind in ('keyDown','keyUp'):
+            await self.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':'Escape','code':'Escape','windowsVirtualKeyCode':27},session=session)
+        await asyncio.sleep(.2)
 
     async def ask_chatgpt(self, job, prompt_text, timeout_seconds=300):
         async with self.job_lock:
