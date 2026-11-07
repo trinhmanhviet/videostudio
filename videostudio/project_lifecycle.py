@@ -34,6 +34,16 @@ def reject_retired_job(c,identifier):
         raise ValueError('Các tệp đã bị xóa; hãy tạo job mới')
 
 
+def deleted_job_ids(c):
+    """Videos removed one by one from the library; they stay out of every list."""
+    if not has_table(c,'job_deletions'):return set()
+    return {row[0] for row in c.execute('SELECT job FROM job_deletions')}
+
+
+# Schedules that may still upload this video; deleting it would strand them.
+LIVE_SCHEDULE_STATES=('scheduled','blocked','processing','uploading','scheduled_remote','needs_attention')
+
+
 def _alias(path):
     return path.is_symlink() or (getattr(path,'is_junction',lambda:False)())
 
@@ -137,6 +147,7 @@ class ProjectLifecycle:
         with store.db() as c:c.execute('''CREATE TABLE IF NOT EXISTS project_lifecycle(
             name TEXT PRIMARY KEY,archived INTEGER NOT NULL DEFAULT 0,deleted INTEGER NOT NULL DEFAULT 0,
             files_deleted INTEGER NOT NULL DEFAULT 0,updated REAL NOT NULL)''')
+        with store.db() as c:c.execute('CREATE TABLE IF NOT EXISTS job_deletions(job TEXT PRIMARY KEY,files_deleted INTEGER NOT NULL,deleted REAL NOT NULL)')
     def metadata(self):
         with self.store.db() as c:return {r['name']:dict(r) for r in c.execute('SELECT * FROM project_lifecycle')}
     def _jobs(self,c,name):
@@ -175,3 +186,33 @@ class ProjectLifecycle:
             raise
         pending=removal.purge() if removal else False
         return {'ok':True,'name':name,'deleted':True,'files_deleted':files_deleted,'files_preserved':not files_deleted,'cleanup_pending':pending}
+    def delete_job(self,job_id,delete_files):
+        removal=None
+        try:
+            with self.store.db() as c:
+                c.execute('BEGIN IMMEDIATE')
+                row=c.execute('SELECT * FROM jobs WHERE id=?',(job_id,)).fetchone()
+                if row is None:raise KeyError(job_id)
+                if row['state'] not in TERMINAL_STATES:raise ValueError('Video đang chạy; hủy hoặc chờ xong rồi mới xóa')
+                if image_tasks_active(c,[job_id]):raise ValueError('Video có ảnh cảnh đang tạo hoặc chờ; dừng trước khi xóa')
+                if has_table(c,'publishing_schedules') and c.execute(
+                        'SELECT 1 FROM publishing_schedules WHERE job_id=? AND state IN (%s)'%','.join('?'*len(LIVE_SCHEDULE_STATES)),
+                        (job_id,*LIVE_SCHEDULE_STATES)).fetchone():
+                    raise ValueError('Video đang có lịch đăng; hủy lịch trước khi xóa')
+                if delete_files:
+                    removal=OutputRemoval(self.store,c,[dict(row)]);removal.stage()
+                    if has_table(c,'job_file_deletions'):c.execute('INSERT OR IGNORE INTO job_file_deletions VALUES(?,?)',(job_id,time.time()))
+                c.execute('UPDATE jobs SET cancel=1,updated=? WHERE id=?',(time.time(),job_id))
+                if has_table(c,'connector_scopes'):
+                    owner=c.execute('''SELECT COALESCE(m.bridge,s.id) AS bridge FROM connector_scopes s
+                        LEFT JOIN connector_bridge_memberships m ON m.scope=s.id WHERE s.job=?''',(job_id,)).fetchone()
+                    if owner and has_table(c,'connector_dismissed_jobs'):
+                        c.execute('INSERT OR IGNORE INTO connector_dismissed_jobs VALUES(?,?,?)',(job_id,owner['bridge'],time.time()))
+                c.execute('''INSERT INTO job_deletions VALUES(?,?,?) ON CONFLICT(job) DO UPDATE
+                    SET files_deleted=MAX(files_deleted,excluded.files_deleted),deleted=excluded.deleted''',(job_id,int(delete_files),time.time()))
+                self.store.event(c,job_id,None,'job_deleted','delete_files='+str(delete_files).lower())
+        except Exception:
+            if removal:removal.rollback()
+            raise
+        pending=removal.purge() if removal else False
+        return {'ok':True,'job_id':job_id,'deleted':True,'files_deleted':bool(delete_files),'files_preserved':not delete_files,'cleanup_pending':pending}

@@ -9,20 +9,26 @@ theo mockup đã duyệt. Trạng thái hệ thống thu gọn và có hành đ�
 
 ## Kế hoạch thực hiện
 
-- [ ] Dữ liệu lô và hàng đợi trong jobs.sqlite3. Mỗi mục có request cố định, khóa idempotency và checkpoint job hiện có.
+- [x] Dữ liệu lô và hàng đợi trong jobs.sqlite3. Mỗi mục có request cố định, khóa idempotency và checkpoint job hiện có.
   Tạm dừng sau video hiện tại, đổi thứ tự mục chờ, giữ lỗi riêng và tiến hành mục kế khi tài nguyên đã rảnh.
   API dùng lại admission/preflight/bridge của /api/jobs. Kiểm thử mất phản hồi, resume, thứ tự và pause.
-- [ ] Kho thành phẩm có lọc/phân trang, các bản xuất, duyệt bản theo hash, trạng thái đăng theo kênh,
+- [x] Kho thành phẩm có lọc/phân trang, các bản xuất, duyệt bản theo hash, trạng thái đăng theo kênh,
   tải MP4/caption/subtitle theo lựa chọn. Chỉ chấp nhận bản thật đã verified.
-- [ ] Giao diện chính navy theo mockup, form tạo đơn/nhập lô, preview kịch bản trước khi xếp hàng,
+- [x] Giao diện chính navy theo mockup, form tạo đơn/nhập lô, preview kịch bản trước khi xếp hàng,
   dự án, hàng đợi, kho video, lịch và cài đặt/kết nối. Tái sử dụng chức năng tạo job/dự án đang có.
 - [ ] Editor video lớn, filmstrip và một inspector theo mục đang chọn. Kho nhân vật/đạo cụ/nền/giọng
   dùng chung giao diện tài nguyên, giữ các thao tác upload/gán/chỉnh/căn/tải đã có.
-- [ ] Lịch SQLite bền vững theo giờ Việt Nam và bản video đã duyệt. Adapter đăng chỉ hoạt động khi
+- [x] Lịch SQLite bền vững theo giờ Việt Nam và bản video đã duyệt. Adapter đăng chỉ hoạt động khi
   tài khoản có quyền và kết nối thật. UI thể hiện riêng chờ kết nối, gửi đi, đã đăng, lỗi, chưa rõ kết quả.
   Không tự đăng bài trong lúc nghiệm thu. YouTube có lịch native; TikTok cần quyền/dịch vụ phù hợp.
 - [ ] Hồi quy API/worker/bridge, UI đọc dữ liệu thật, kiểm tra thao tác browser khi được môi trường hỗ trợ.
   Nạp backend khi không có job hoạt động. Không commit/push nếu người dùng chưa yêu cầu.
+
+Rà soát 2026-11-08: lô/hàng đợi, kho video, lịch, giao diện navy và kho tài nguyên đã chạy trên dữ liệu thật.
+Hàng đợi bổ sung ảnh thu nhỏ, lọc theo phong cách, tìm kiếm, cột độ dài, video mới nhất ở trên; các trang hiện
+"Đang tải…" khi chờ dữ liệu; trang dự án bỏ emoji, tiêu đề video lấy từ ý tưởng, nút Workflow chuyển lên đầu trang.
+Còn lại: editor video lớn/filmstrip chưa rà soát so với mockup; đăng thật chờ người dùng kết nối YouTube/Facebook Page.
+Ảnh cảnh mặc định ComfyUI vì Flow đang bị chặn.
 
 ## Quyết định vận hành
 

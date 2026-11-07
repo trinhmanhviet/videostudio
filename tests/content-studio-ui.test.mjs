@@ -17,6 +17,12 @@ test('JSON import accepts string and editable item objects without trusting othe
   assert.equal(typeof ui.parseImport, 'function');
   assert.deepEqual(plain(ui.parseImport('{"items":["Một",{"text":"Hai","title":"Tên","duration_seconds":90,"job_id":"ignored"}]}', 'stories.json')), [{text:'Một'}, {text:'Hai',title:'Tên',duration_seconds:90}]);
 });
+test('JSON import keeps per-video style and content source for the batch page', () => {
+  assert.deepEqual(plain(ui.parseImport('[{"text":"A","style":"meme","input_mode":"script"},{"text":"B","style":"Vụ án"}]', 'mix.json')),
+    [{text:'A',style:'meme',input_mode:'script'}, {text:'B',style:'case'}]);
+  assert.throws(()=>ui.parseImport('[{"text":"A","style":"phim"}]','a.json'));
+  assert.throws(()=>ui.parseImport('[{"text":"A","input_mode":"auto"}]','a.json'));
+});
 test('imports reject invalid data before any network request', () => {
   assert.equal(typeof ui.parseImport, 'function');
   for (const value of ['[]','[{}]','[{"text":"x","duration_seconds":0}]','[{"text":"x","duration_seconds":"invalid"}]']) assert.throws(()=>ui.parseImport(value,'a.json'));

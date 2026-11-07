@@ -35,7 +35,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     browser_manager=BrowserManager(active_jobs=browser_active_jobs)
     from .exchanges import Exchanges, EXTENSION_HEARTBEAT_SECONDS
     exchanges=Exchanges(store)
-    from .project_lifecycle import ProjectLifecycle, reject_deleted_project, reject_retired_job
+    from .project_lifecycle import ProjectLifecycle, deleted_job_ids, reject_deleted_project, reject_retired_job
     project_lifecycle=ProjectLifecycle(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
@@ -79,6 +79,14 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         for t in threads:t.join(timeout=2)
     app=FastAPI(title='VideoStudio local',lifespan=lifespan)
     app.state.store=store;app.state.pipeline=pipeline;app.state.image_jobs=image_jobs;app.state.flow_accounts=flow_accounts
+    @app.middleware('http')
+    async def revalidate_pages(request,call_next):
+        # Pages name their scripts with ?v=; without this a browser or phone keeps an old page
+        # (and so old scripts) from heuristic caching. ETag keeps the revalidation cheap.
+        response=await call_next(request)
+        if response.headers.get('content-type','').startswith('text/html') and 'cache-control' not in response.headers:
+            response.headers['Cache-Control']='no-cache'
+        return response
     # Explicit request lab only; video jobs keep their existing Flow provider.
     from FlowAPI.server import create_router as flow_request_router
     app.include_router(flow_request_router(store.path.parent/'flow-request.sqlite3'))
@@ -144,7 +152,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def get_projects(archived:bool=False,q:str="",page:int=1,page_size:int|None=None):
         if page<1 or (page_size is not None and page_size not in (10,20,30)):raise HTTPException(422,"Invalid project pagination")
         with store.db() as c:
-            rows=c.execute('SELECT id, request, state, stage, created, output FROM jobs ORDER BY created DESC').fetchall()
+            hidden=deleted_job_ids(c)
+            rows=[r for r in c.execute('SELECT id, request, state, stage, created, output FROM jobs ORDER BY created DESC').fetchall() if r['id'] not in hidden]
             p_rows=c.execute('SELECT name, created FROM projects ORDER BY created DESC').fetchall()
         projects_dict={}
         for r in rows:
@@ -642,8 +651,17 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         except ValueError as e:raise HTTPException(409 if 'already used' in str(e) else 422,str(e))
     @app.get('/api/jobs')
     def jobs():
-        items=[public_job(j) for j in store.list()]
+        with store.db() as c:hidden=deleted_job_ids(c)
+        items=[public_job(j) for j in store.list() if j['id'] not in hidden]
         return {'items':items,'jobs':items}
+    @app.post('/api/jobs/{job_id}/delete')
+    def delete_job(job_id:str,request:Request,data:dict|None=None):
+        same_origin(request);data=data or {}
+        if type(data.get('delete_files',False)) is not bool:raise HTTPException(422,'delete_files phải là boolean')
+        if data.get('confirm') is not True:raise HTTPException(422,'Cần xác nhận xóa video')
+        try:return project_lifecycle.delete_job(job_id,data.get('delete_files',False))
+        except KeyError:raise HTTPException(404,'Job not found')
+        except ValueError as error:raise HTTPException(409,str(error))
     @app.get('/api/jobs/{job_id}')
     def detail(job_id:str):
         try:return public_job(store.get(job_id))

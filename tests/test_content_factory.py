@@ -52,6 +52,19 @@ class FactoryTests(unittest.TestCase):
         restored = ContentFactory(self.store, self.submit)
         self.assertEqual(restored.queue()['items'][0]['id'], batch['items'][0]['id'])
 
+    def test_batch_page_sends_one_project_per_video_with_its_own_style_in_order(self):
+        # The batch page posts each row as its own single-item batch.
+        rows = [('Bố đi chợ', 'meme', 'idea', 45), ('Hồ sơ khu phố cũ', 'case', 'script', 360), ('Ông chú công nghệ', 'meme', 'script', 60)]
+        for index, (name, style, mode, seconds) in enumerate(rows):
+            self.factory.create_batch({'project': name, 'style': style, 'input_mode': mode,
+                                       'defaults': {'voice_id': 'voice', 'duration_seconds': seconds},
+                                       'items': [{'text': 'Nội dung ' + name, 'title': name}]}, f'row-{index}', 'bridge')
+        items = self.factory.queue()['items']
+        self.assertEqual([i['project'] for i in items], [r[0] for r in rows])
+        self.assertEqual([i['request']['workflow_mode'] for i in items], ['meme', 'provided_narration', 'meme'])
+        self.assertEqual([i['request'].get('meme_input_mode') for i in items], ['idea', None, 'script'])
+        self.assertEqual([i['request']['duration_seconds'] for i in items], [45, 360, 60])
+
     def test_only_one_job_is_dispatched_and_pause_survives_restart(self):
         batch = self.batch()
         self.assertTrue(self.factory.tick())

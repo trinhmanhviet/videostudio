@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .core import PermanentError, digest
 from .media import asset
-from .meme_animation_script import AnimationCatalog, MemeScriptError, validate, to_checkpoint
+from .meme_animation_script import SPEED, AnimationCatalog, MemeScriptError, validate, to_checkpoint
 from .meme_pipeline import _log, _save
 
 VERSION = 'comedy-story-v1'
@@ -67,20 +67,35 @@ def _history(records):
     return result
 
 
-def _speech_profile(store, voice_id):
-    rates=[]
+# Measured 2026-11-07 on 39 verified VieNeu jobs: median 3.99 syllables/s at normal speed (3.53-4.36);
+# atempo scales it exactly. Meme videos spent 87-91% (median 88.8%) of their length on speech.
+BASE_SYLLABLES_PER_SECOND = 4.0
+SPEECH_SHARE = .88
+
+
+def _speech_profile(store, voice_id, speed=SPEED):
+    """Speaking rate of this voice at the meme playback speed, from verified WAV durations.
+
+    Jobs rendered at another atempo are rescaled instead of mixed in raw: a 1.0x job read at
+    ~4.0/s would otherwise drag a 1.15x budget down and overfill the video.
+    """
+    rates=[];shares=[]
     with store.db() as c:
         rows=c.execute("""SELECT s.value FROM checkpoints s JOIN jobs j ON j.id=s.job
             JOIN checkpoints v ON v.job=j.id AND v.stage='verify'
             WHERE s.stage='speech' AND j.state='completed' AND json_extract(j.request,'$.voice_id')=?
             AND json_extract(v.value,'$.verified')=1 ORDER BY j.updated DESC LIMIT 8""",(voice_id,)).fetchall()
     for row in rows:
-        utterances=json.loads(row['value']).get('utterances',[])
+        value=json.loads(row['value']);utterances=value.get('utterances',[])
         seconds=sum(float(u.get('duration',0)) for u in utterances)
         words=sum(len(u.get('narration','').split()) for u in utterances)
-        if seconds>0 and words>0 and .5<=words/seconds<=12:rates.append(words/seconds)
-    return {'syllables_per_second':statistics.median(rates) if rates else 3.8,
-            'calibrated_from_verified_wav':bool(rates),'samples':len(rates)}
+        own=float(value.get('speed') or 1)
+        if seconds>0 and words>0 and own>0 and .5<=words/seconds<=12:rates.append(words/seconds*speed/own)
+        total=float(value.get('duration_seconds') or 0)
+        if value.get('meme_engine') and total>0 and .6<=seconds/total<=1:shares.append(seconds/total)
+    return {'syllables_per_second':round(statistics.median(rates),3) if rates else round(BASE_SYLLABLES_PER_SECOND*speed,3),
+            'speech_share':round(statistics.median(shares),3) if shares else SPEECH_SHARE,'speed':speed,
+            'calibrated_from_verified_wav':bool(rates),'samples':len(rates),'share_samples':len(shares)}
 
 
 def _step(pipeline, job, check, folder, name, prompt, normalize):
@@ -315,7 +330,7 @@ def write_story(pipeline, job, check, legacy_prefix=None):
     legacy_prefix = frozen.get('legacy_prefix')
     # Budget from independently measured voice durations, reserving time for pauses.
     speech_profile=frozen['speech_profile']
-    words_target=max(24,round(float(request['duration_seconds'])*speech_profile['syllables_per_second']*.88))
+    words_target=max(24,round(float(request['duration_seconds'])*speech_profile['syllables_per_second']*speech_profile.get('speech_share',SPEECH_SHARE)))
     count=max(1,math.ceil(words_target/180))
     if legacy_prefix:
         count = legacy_prefix['total_parts']

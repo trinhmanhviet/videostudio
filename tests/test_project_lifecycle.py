@@ -87,6 +87,29 @@ class ProjectLifecycleTests(unittest.TestCase):
   self.assertEqual(result.status_code,409,result.text)
   self.assertTrue(Path(first['output']).exists());self.assertTrue(Path(second['output']).exists())
   self.assertIn('Test',self.client.get('/api/projects').json()['projects'])
+ def delete_video(self,job_id,files=False,confirm=True):
+  return self.client.post(f'/api/jobs/{job_id}/delete',json={'delete_files':files,'confirm':confirm})
+ def test_delete_one_video_hides_it_everywhere_and_keeps_files_by_default(self):
+  gone=self.job(state='completed');kept=self.job(state='completed',bridge=False);target=Path(gone['output'])/'keep';target.write_text('fixture')
+  self.assertEqual(self.delete_video(gone['id'],confirm=False).status_code,422)
+  response=self.delete_video(gone['id']);self.assertEqual(response.status_code,200,response.text)
+  self.assertTrue(response.json()['files_preserved']);self.assertTrue(target.exists())
+  ids=[j['id'] for j in self.client.get('/api/jobs').json()['items']]
+  self.assertNotIn(gone['id'],ids);self.assertIn(kept['id'],ids)
+  self.assertIn('Test',self.client.get('/api/projects').json()['projects'])
+  reopened=TestClient(create_app(self.store,SimpleNamespace(handlers=lambda:{}),False))
+  self.assertNotIn(gone['id'],[j['id'] for j in reopened.get('/api/jobs').json()['items']]);reopened.close()
+  self.assertEqual(self.delete_video(gone['id']).status_code,200)
+ def test_delete_one_video_with_files_removes_only_its_output(self):
+  gone=self.job(state='completed');kept=self.job(state='completed',bridge=False);(Path(kept['output'])/'keep').write_text('safe')
+  response=self.delete_video(gone['id'],files=True);self.assertEqual(response.status_code,200,response.text)
+  self.assertTrue(response.json()['files_deleted']);self.assertFalse(Path(gone['output']).exists());self.assertTrue((Path(kept['output'])/'keep').exists())
+ def test_delete_one_video_refuses_running_and_unknown_jobs(self):
+  running=self.job(state='running')
+  self.assertEqual(self.delete_video(running['id'],files=True).status_code,409);self.assertTrue(Path(running['output']).is_dir())
+  self.assertIn(running['id'],[j['id'] for j in self.client.get('/api/jobs').json()['items']])
+  self.assertEqual(self.delete_video('missing').status_code,404)
+  self.assertEqual(self.client.post(f"/api/jobs/{running['id']}/delete",json={'confirm':True},headers={'Origin':'https://untrusted.invalid'}).status_code,403)
  def test_dismiss_optional_delete_body_and_confirmation(self):
   j=self.job();url=f'/api/connector/bridges/{self.bridge}/jobs/{j["id"]}/dismiss'
   result=self.client.post(url);self.assertEqual(result.status_code,200,result.text);self.assertTrue(result.json().get('files_preserved'))

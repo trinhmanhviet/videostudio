@@ -23,6 +23,20 @@ PENDING = ('pending', 'waiting')
 ACTIVE = ('queued', 'running', 'retrying', 'awaiting_visual_review', 'awaiting_flow_account')
 MAX_BATCH_ITEMS = 100
 MAX_IMPORT_CHARACTERS = 1_000_000
+_DIGESTS = {}
+
+
+def _cached_digest(path):
+    """The queue page polls every few seconds; rehash a thumbnail only when the file changes."""
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    if key not in _DIGESTS:
+        if len(_DIGESTS) > 512:
+            _DIGESTS.clear()
+        _DIGESTS[key] = digest(path)
+    return _DIGESTS[key]
+
+
 REQUEST_FIELDS = {'voice_id', 'duration_seconds', 'music_volume', 'pitch', 'quality_mode',
                   'image_provider', 'flow_batch_size', 'text_provider',
                   'edit_preset', 'references_enabled', 'captions_enabled', 'music_enabled', 'sfx_enabled'}
@@ -199,8 +213,17 @@ class ContentFactory:
             paused = bool(db.execute('SELECT paused FROM factory_settings WHERE id=1').fetchone()[0])
             rows = db.execute('''SELECT i.*,b.project,b.style,b.input_mode FROM factory_items i
                 JOIN factory_batches b ON b.id=i.batch_id ORDER BY i.position,i.created''').fetchall()
+            from .project_lifecycle import deleted_job_ids
+            hidden = deleted_job_ids(db)
+            rows = [row for row in rows if row['job_id'] not in hidden]
             active = db.execute("SELECT id FROM jobs WHERE state IN ('queued','running','retrying','awaiting_visual_review','awaiting_flow_account') ORDER BY created LIMIT 1").fetchone()
         items = [self._item(row) for row in rows]
+        for item in items:
+            job = item.get('job')
+            item['thumbnail'] = self._thumbnail(job) if job else None
+            speech = (job or {}).get('checkpoints', {}).get('speech', {})
+            measured = speech.get('duration_seconds') if isinstance(speech, dict) else None
+            item['duration_seconds'] = measured if isinstance(measured, (int, float)) and measured > 0                 else item['request'].get('duration_seconds')
         counts = {}
         for item in items:
             counts[item['state']] = counts.get(item['state'], 0) + 1
@@ -490,7 +513,7 @@ class ContentFactory:
                 path = Path(asset.get('path', '')).resolve()
                 if path.parent == root and path.suffix.lower() in ('.png', '.jpg', '.jpeg', '.webp') and path.is_file():
                     try:
-                        if digest(path) == asset.get('sha256'):
+                        if _cached_digest(path) == asset.get('sha256'):
                             return f"/api/jobs/{job['id']}/files/{path.name}"
                     except OSError:
                         pass
@@ -504,7 +527,9 @@ class ContentFactory:
         if review_state and review_state not in ('pending', 'approved'):
             raise ValueError('Trạng thái duyệt không hợp lệ')
         with self.store.db() as db:
-            ids = [row[0] for row in db.execute("SELECT id FROM jobs WHERE state='completed' ORDER BY created DESC")]
+            from .project_lifecycle import deleted_job_ids
+            hidden = deleted_job_ids(db)
+            ids = [row[0] for row in db.execute("SELECT id FROM jobs WHERE state='completed' ORDER BY created DESC") if row[0] not in hidden]
             metadata = {row['job_id']: dict(row) for row in db.execute('''SELECT i.job_id,i.title,b.style,b.input_mode FROM factory_items i
                 JOIN factory_batches b ON b.id=i.batch_id WHERE i.job_id IS NOT NULL''')}
             # Publisher registers this optional query hook for per-channel state.

@@ -130,7 +130,9 @@ CLI giữ nguyên python auto_meme.py --input story.txt --out out/video.mp4.
 ### H. Tiếp theo có căn cứ
 
 Cho người dùng chấm các mẫu và20 benchmark; ưu tiên cải thiện độ bất ngờ/câu kết theo nhận xét thật.
-Hiệu chỉnh trọng số critic/tốc độ giọng từ dữ liệu đã kiểm chứng, bổ sung hình đạo cụ còn đang là thẻ tên.
+Tốc độ giọng đã hiệu chỉnh (2026-11-07) từ 39 job đã kiểm chứng: 3,99 tiếng/giây ở tốc độ thường, job khác atempo được quy đổi
+về 1,15× thay vì trộn thô; video meme dành 88,8% thời lượng cho lời đọc. Trọng số critic chờ điểm chấm thật (benchmark), hiện
+weighted_score chỉ được ghi lại, không quyết định sửa/đạt. Bổ sung hình đạo cụ còn đang là thẻ tên.
 Các việc cài máy khác và nhiều video song song vẫn ngoài phạm vi nâng cấp này.
 
 ## Giới hạn phải giữ khi bàn giao

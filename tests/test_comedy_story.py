@@ -154,7 +154,8 @@ class ComedyStoryTests(unittest.TestCase):
     def test_legacy_prefix_continues_only_missing_part_and_runs_whole_critic(self):
         from videostudio.comedy_story import write_story
         with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as folder:
-            p,j,calls,answer=self.fixture(folder);j['request']['duration_seconds']=120
+            # 100 s at the uncalibrated 4.6 syllables/s budgets ~135 words per part, which the 76-word fixture part still meets.
+            p,j,calls,answer=self.fixture(folder);j['request']['duration_seconds']=100
             sample=json.loads((ROOT/'tests/fixtures/meme-animation-script.json').read_text(encoding='utf8'))
             prefix={'meta':{k:sample[k] for k in ('title','payoff','cast','scenes')},'total_parts':3,
                     'outline_parts':[{'summary':f'Sự kiện {i}','ending':'Câu chốt'} for i in range(3)],
@@ -253,9 +254,27 @@ class ComedyStoryTests(unittest.TestCase):
                 c.execute("UPDATE jobs SET state='completed' WHERE id=?",(j['id'],))
                 c.execute('INSERT INTO checkpoints VALUES(?,?,?)',(j['id'],'speech',json.dumps({'utterances':[{'narration':'một hai ba bốn năm','duration':1}]})))
                 c.execute('INSERT INTO checkpoints VALUES(?,?,?)',(j['id'],'verify',json.dumps({'verified':True})))
-            measured=_speech_profile(p.store,'test');self.assertTrue(measured['calibrated_from_verified_wav'])
+            measured=_speech_profile(p.store,'test',speed=1);self.assertTrue(measured['calibrated_from_verified_wav'])
             self.assertEqual(measured['syllables_per_second'],5)
-            self.assertFalse(_speech_profile(p.store,'other')['calibrated_from_verified_wav'])
+            # A 1.0x job is rescaled to the meme atempo instead of mixed in raw.
+            self.assertAlmostEqual(_speech_profile(p.store,'test',speed=1.15)['syllables_per_second'],5.75)
+            other=_speech_profile(p.store,'other',speed=1.15)
+            self.assertFalse(other['calibrated_from_verified_wav'])
+            self.assertAlmostEqual(other['syllables_per_second'],4.6)
+            self.assertEqual(other['speech_share'],.88)
+
+    def test_duration_profile_measures_speech_share_of_rendered_meme_videos(self):
+        from videostudio.comedy_story import _speech_profile
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as folder:
+            p,j,_,_=self.fixture(folder)
+            with p.store.db() as c:
+                c.execute("UPDATE jobs SET state='completed' WHERE id=?",(j['id'],))
+                c.execute('INSERT INTO checkpoints VALUES(?,?,?)',(j['id'],'speech',json.dumps({'utterances':[{'narration':'một hai ba bốn năm sáu','duration':1.15}],
+                          'speed':1.15,'meme_engine':'hyperframes','duration_seconds':1.25})))
+                c.execute('INSERT INTO checkpoints VALUES(?,?,?)',(j['id'],'verify',json.dumps({'verified':True})))
+            measured=_speech_profile(p.store,'test',speed=1.15)
+            self.assertAlmostEqual(measured['syllables_per_second'],5.217,places=3)
+            self.assertEqual(measured['speech_share'],.92)
 
     def test_history_context_is_compact_and_keeps_status_without_repeating_old_scripts(self):
         from videostudio.comedy_story import _history
