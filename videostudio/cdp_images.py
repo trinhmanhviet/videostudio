@@ -108,12 +108,14 @@ class ChatGPTImages:
         if saved:
             for t in targets:
                 if t['targetId']==saved['target'] and t['type']=='page' and valid_chat_url(t.get('url','')) and t['url'].split('?')[0].rstrip('/')==saved['url'].split('?')[0].rstrip('/'):
+                    await b.close_other_chat_tabs(targets,saved['target'])
                     return saved['target']
             if recover and '/c/' not in saved['url']:raise IndeterminateRequest('Image conversation URL unknown; inspect dedicated Chrome, never resend')
         # Never borrow/reuse another open conversation; only this image job owns this target.
         target=(await b.cdp.command('Target.createTarget',{'url':saved['url'] if saved else 'https://chatgpt.com/'}))['targetId']
         b.journal.own_target(target,'image')
         b.journal.set_conversation(job,saved['url'] if saved else 'https://chatgpt.com/',target)
+        await b.close_other_chat_tabs(targets,target)
         return target
     async def _ready(self,session,marker,owned_prompt=None):
         b=self.bridge;deadline=time.monotonic()+35;switched=False

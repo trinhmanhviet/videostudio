@@ -321,7 +321,7 @@ class AsyncImageRecoveryTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t);journal=RequestJournal(root/'journal.db');task=str(uuid.uuid4());job='__image__'+task;r=journal.prepare(job,'apple');journal.claim_send(r['id']);journal.set_conversation(job,'https://chatgpt.com/c/owned','owned')
             marker='[VideoStudio image request '+r['id']+']'
-            b=MagicMock();b.journal=journal;b.job_lock=asyncio.Lock();b.connect=AsyncMock();b.session=AsyncMock(return_value='session');b.cdp.command=AsyncMock(side_effect=lambda method,*a,**kw:{'targetInfos':[{'targetId':'owned','type':'page','url':'https://chatgpt.com/c/owned'}]} if method=='Target.getTargets' else {})
+            b=MagicMock();b.journal=journal;b.job_lock=asyncio.Lock();b.connect=AsyncMock();b.session=AsyncMock(return_value='session');b.close_other_chat_tabs=AsyncMock();b.cdp.command=AsyncMock(side_effect=lambda method,*a,**kw:{'targetInfos':[{'targetId':'owned','type':'page','url':'https://chatgpt.com/c/owned'}]} if method=='Target.getTargets' else {})
             b.evaluate=AsyncMock(return_value={'mode':'chat','login':False,'challenge':False,'url':'https://chatgpt.com/c/owned','image_turns':[{'user':marker,'state':'complete','images':[{'src':'blob:https://chatgpt.com/good','width':941,'height':1672,'loaded':True}]}]})
             path=root/(task+'.png');Image.new('RGB',(512,912),'green').save(path)
             image=ChatGPTImages(b,root);image._download=AsyncMock(return_value={'task_id':task,'file_path':str(path),'sha256':digest(path)})

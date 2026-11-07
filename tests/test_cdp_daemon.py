@@ -45,12 +45,15 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         self.bridge.journal.set_conversation('job','https://chatgpt.com/c/owned','gone')
         self.bridge.cdp=MagicMock()
         self.bridge.cdp.close=AsyncMock()
-        self.bridge.cdp.command=AsyncMock(side_effect=[{'targetInfos':[{'targetId':'foreign','url':'https://chatgpt.com/c/personal','type':'page'}]}, {'targetId':'new'}])
+        self.bridge.cdp.command=AsyncMock(side_effect=[{'targetInfos':[{'targetId':'foreign','url':'https://chatgpt.com/c/personal','type':'page'}]}, {'targetId':'new'}, {}])
         tid=await self.bridge.ensure_tab('job')
         self.assertEqual(tid,'new')
+        # Single-tab policy: the other ChatGPT tab is closed once the owned one exists, never reused.
+        closed=[c.args[1]['targetId'] for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Target.closeTarget']
+        self.assertEqual(closed,['foreign'])
         self.assertEqual(self.bridge.cdp.command.call_args_list[1].args[0],'Target.createTarget')
         self.assertEqual(self.bridge.cdp.command.call_args_list[1].args[1]['url'],'https://chatgpt.com/c/owned')
-    async def test_reuses_only_owned_text_tab_and_preserves_other_tabs(self):
+    async def test_reuses_owned_text_tab_and_closes_other_chatgpt_tabs_only(self):
         self.bridge.journal.own_target('tab1','text')
         self.bridge.journal.set_conversation('prior','https://chatgpt.com/','tab1')
         self.bridge.cdp=MagicMock()
@@ -67,14 +70,27 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         tid=await self.bridge.ensure_tab('new-job')
         self.assertEqual(tid,'tab1')
         closed=[c.args[1]['targetId'] for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Target.closeTarget']
-        self.assertEqual(closed,[])
+        self.assertEqual(closed,['tab2'])   # about:blank and non-ChatGPT pages are left alone
         self.assertEqual(self.bridge.journal.conversation('new-job')['target'],'tab1')
-    async def test_new_text_job_does_not_borrow_or_close_image_or_foreign_tab(self):
+    async def test_new_text_job_does_not_borrow_image_or_foreign_tab_but_closes_them(self):
         self.bridge.journal.own_target('img','image');self.bridge.cdp=MagicMock();self.bridge.cdp.close=AsyncMock()
-        self.bridge.cdp.command=AsyncMock(side_effect=[{'targetInfos':[{'targetId':'img','url':'https://chatgpt.com/c/image','type':'page'},{'targetId':'foreign','url':'https://chatgpt.com/c/human','type':'page'}]},{'targetId':'new-text'}])
+        self.bridge.cdp.command=AsyncMock(side_effect=[{'targetInfos':[{'targetId':'img','url':'https://chatgpt.com/c/image','type':'page'},{'targetId':'foreign','url':'https://chatgpt.com/c/human','type':'page'},{'targetId':'flow','url':'https://labs.google/fx/tools/flow','type':'page'}]},{'targetId':'new-text'},{},{}])
         self.assertEqual(await self.bridge.ensure_tab('new'),'new-text')
-        self.assertFalse(any(c.args[0]=='Target.closeTarget' for c in self.bridge.cdp.command.call_args_list))
+        closed=[c.args[1]['targetId'] for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Target.closeTarget']
+        self.assertEqual(closed,['img','foreign'])
         self.assertEqual(self.bridge.journal.target_purpose('new-text'),'text')
+
+    async def test_tab_with_a_sent_request_and_unknown_conversation_is_kept(self):
+        # The reply can only be found in that tab until ChatGPT assigns a /c/ URL.
+        record=self.bridge.journal.prepare('waiting','prompt')
+        with self.bridge.journal.db() as c:c.execute("UPDATE requests SET state='sending' WHERE id=?",(record['id'],))
+        self.bridge.journal.set_conversation('waiting','https://chatgpt.com/','pending-tab')
+        self.bridge.journal.set_conversation('done','https://chatgpt.com/c/known','old-tab')
+        self.bridge.cdp=MagicMock();self.bridge.cdp.close=AsyncMock()
+        self.bridge.cdp.command=AsyncMock(side_effect=[{'targetInfos':[{'targetId':'pending-tab','url':'https://chatgpt.com/','type':'page'},{'targetId':'old-tab','url':'https://chatgpt.com/c/known','type':'page'}]},{'targetId':'fresh'},{}])
+        self.assertEqual(await self.bridge.ensure_tab('another'),'fresh')
+        closed=[c.args[1]['targetId'] for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Target.closeTarget']
+        self.assertEqual(closed,['old-tab'])
     async def test_image_route_needs_header_and_calls_image_adapter_only(self):
         import uuid
         identifier=str(uuid.uuid4());self.bridge.images.generate=AsyncMock(return_value={'task_id':identifier,'sha256':'fixture'})

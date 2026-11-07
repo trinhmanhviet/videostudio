@@ -88,9 +88,24 @@ class ChromeChatGPTBridge:
             self.journal.own_target(target,'text')
             self.journal.set_conversation(job, url, target)
 
-        # Never close tabs merely because they are present. Uncertain image requests
-        # and owner-opened conversations remain untouched; reuse only attested text tabs.
+        await self.close_other_chat_tabs(targets, target)
         return target
+
+    async def close_other_chat_tabs(self, targets, keep):
+        """Keep a single ChatGPT tab open (owner request 2026-11-08: extra tabs cost RAM).
+        All ChatGPT work runs under job_lock, so no other tab is in use right now, and every
+        conversation URL is journaled, so a closed conversation reopens from its URL when needed.
+        Tabs holding a sent request whose URL is still unknown are kept for recovery."""
+        pinned = self.journal.pinned_targets()
+        for t in targets:
+            ident = t.get('targetId')
+            if t.get('type') != 'page' or ident == keep or ident in pinned or not valid_chat_url(t.get('url', '')):
+                continue
+            try:
+                await self.cdp.command('Target.closeTarget', {'targetId': ident})
+            except CDPError:
+                pass
+            self.sessions.pop(ident, None)
 
     async def session(self, target):
         if target not in self.sessions:

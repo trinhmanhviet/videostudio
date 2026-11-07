@@ -17,6 +17,17 @@ class CaptionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             p=Path(t)/'a.srt';result=write_captions([{'start':0,'end':1.25,'narration':'Xin chào'},{'start':1.25,'end':2,'narration':'Tạm biệt'}],p)
             self.assertEqual(result['cue_count'],2);self.assertIn('00:00:01,250',p.read_text(encoding='utf8'))
+    def test_splits_oversized_utterance_gracefully(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'a.srt'
+            long_text = 'Tôi mất ba phẩy mười bốn giây mới thông não. Đúng Bá Vương Mõm Nhôm, bảo sao học đúp lớp ba hai lần!'
+            result=write_captions([{'start':0,'end':5.0,'narration':long_text}],p)
+            self.assertGreaterEqual(result['cue_count'], 2)
+            srt_content = p.read_text(encoding='utf8')
+            self.assertIn('thông não', srt_content)
+            self.assertIn('học đúp', srt_content)
+            ass_content = Path(result['ass_path']).read_text(encoding='utf8')
+            self.assertIn('Dialogue:', ass_content)
 class MultiSceneTests(unittest.TestCase):
     def test_cpu_render_two_measured_scenes(self):
         from PIL import Image

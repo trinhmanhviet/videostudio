@@ -135,6 +135,14 @@ class RequestJournal:
         with self.db() as c:r=c.execute('SELECT purpose FROM owned_targets WHERE target=?',(target,)).fetchone()
         return r['purpose'] if r else None
 
+    def pinned_targets(self):
+        """Tabs that must stay open: a request was (maybe) sent there but its conversation URL is
+        not known yet, so the tab is the only way to find the reply again."""
+        with self.db() as c:
+            rows=c.execute("""SELECT DISTINCT v.target FROM requests r JOIN conversations v ON v.job=r.job
+                WHERE r.state='sending' AND v.url NOT LIKE '%/c/%'""").fetchall()
+        return {r['target'] for r in rows}
+
     def owned_targets(self,purpose):
         """Owned Chrome targets for one purpose, newest first (single-tab reuse)."""
         if purpose not in ('text','image','gemini'):raise ValueError('Invalid owned target purpose')
