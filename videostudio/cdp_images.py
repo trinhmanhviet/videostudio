@@ -125,6 +125,8 @@ class ChatGPTImages:
             if state.get('mode')=='work':
                 draft=state.get('draft','').strip()
                 if draft and (not owned_prompt or ' '.join(draft.split())!=' '.join(owned_prompt.split())):
+                    if getattr(b,'stale_own_draft',lambda _:False)(draft) is True:
+                        await b.clear_composer(session);continue
                     raise RuntimeError('Different Work draft exists; no image prompt sent')
                 # Switching modes is asynchronous. An old Work snapshot during
                 # hydration is not a failed switch, and must not trigger a second click.

@@ -2,6 +2,7 @@
 GET status is passive. Only explicit browser/start or a scoped job may connect.
 """
 import asyncio
+import re
 import json
 import os
 from pathlib import Path
@@ -107,6 +108,28 @@ class ChromeChatGPTBridge:
                 pass
             self.sessions.pop(ident, None)
 
+    def stale_own_draft(self, draft):
+        """ChatGPT restores an unsent composer draft into new chats. A draft that is one of our own
+        prompts which already has its answer is a stale copy and may be cleared; anything else stays."""
+        match = re.match(r'\[VideoStudio (?:image )?request ([0-9a-f]{16,128})\]', (draft or '').strip())
+        if not match:
+            return False
+        try:
+            record = self.journal.get(match.group(1))
+        except KeyError:
+            return False
+        return record['state'] == 'completed'
+
+    async def clear_composer(self, session):
+        focused = await self.evaluate(session, "(()=>{const e=[...document.querySelectorAll('#prompt-textarea,[contenteditable=\"true\"][role=\"textbox\"]')].find(n=>n.getBoundingClientRect().width>0);if(!e)return false;e.focus();return true})()")
+        if not focused:
+            raise RuntimeError('Composer unavailable; stale draft not cleared')
+        for kind in ('keyDown', 'keyUp'):
+            await self.cdp.command('Input.dispatchKeyEvent', {'type': kind, 'key': 'a', 'code': 'KeyA', 'modifiers': 2, 'windowsVirtualKeyCode': 65}, session=session)
+        for kind in ('keyDown', 'keyUp'):
+            await self.cdp.command('Input.dispatchKeyEvent', {'type': kind, 'key': 'Backspace', 'code': 'Backspace', 'windowsVirtualKeyCode': 8}, session=session)
+        await asyncio.sleep(.3)
+
     async def session(self, target):
         if target not in self.sessions:
             result = await self.cdp.command('Target.attachToTarget', {'targetId':target, 'flatten':True})
@@ -152,6 +175,9 @@ class ChromeChatGPTBridge:
             if state and state.get('mode') == 'work':
                 self.authenticated = False
                 if state.get('draft','').strip():
+                    if self.stale_own_draft(state['draft']):
+                        await self.clear_composer(session)
+                        continue
                     raise RuntimeError('Work draft exists; refusing to discard it by changing modes')
                 if switched:
                     raise RuntimeError('Chat mode switch did not take effect; no prompt sent')
@@ -254,6 +280,9 @@ class ChromeChatGPTBridge:
                 draft = state.get('draft','').strip()
                 if state.get('generating'):
                     raise RuntimeError('Owned tab has active generation; no overwrite or send')
+                if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()) and self.stale_own_draft(draft):
+                    await self.clear_composer(session)
+                    draft = (await self.evaluate(session, snapshot_expression(marker)) or {}).get('draft','').strip()
                 if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()):
                     raise RuntimeError('Owned tab has a different draft; no overwrite or send')
                 await self.ensure_high_effort(session)
