@@ -8,9 +8,9 @@ unused/
 build/
 dist/
 # Flow research contains a signed-in Chrome profile and captured credentials.
-FlowAPI/flow_profile/
-FlowAPI/cookie*.txt
-FlowAPI/*.har
+app/FlowAPI/flow_profile/
+app/FlowAPI/cookie*.txt
+app/FlowAPI/*.har
 
 # Generated output and API resume receipts (never store story text).
 out/

@@ -20,7 +20,7 @@ mỗi video. Thư viện asset phải CHUNG, dùng lại cho nhiều ý tưởng
 
 ## Việc đang chờ
 1. **Vẽ 16 sheet đồ vật mới (131 món)** bằng ChatGPT app: 4 tin, mỗi tin 4 sheet, ZIP tên `S1_sheets.zip` ... `S4_sheets.zip`.
-   Nội dung 4 tin đầy đủ: `tmp\prompt_chatgpt_sheets.txt` (tạo bằng `python scripts/meme_sheets.py`).
+   Nội dung 4 tin đầy đủ: `data\memestudio\prompt_chatgpt_sheets.txt` (tạo bằng `python scripts/meme_sheets.py`).
    Sheet: prop_fruit, prop_street_food, prop_kitchenware, prop_bathroom, prop_electronics, prop_retro_90s, prop_village, prop_animals2,
    prop_nature, prop_street, prop_office2, prop_jobs, prop_romance; fx_weather, fx_marks, fx_emotion2 (3 sheet fx không được HyperFrames nạp).
    ZIP về Downloads thì chạy `python scripts/ingest_asset_zips.py`, xem ảnh ghép kiểm tra style, rồi `python scripts/import_meme_library.py`.

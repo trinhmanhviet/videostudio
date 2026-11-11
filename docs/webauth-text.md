@@ -5,7 +5,7 @@ This is a **separate, selectable** text-only transport. It reads AICoworker's cu
 To start the Studio UI in this mode from a stopped server:
 
 ```powershell
-cd D:\Projects\videostudio
+cd D:\Projects\videostudio\app
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start_local.ps1 -TextTransport webauth
 ```
 

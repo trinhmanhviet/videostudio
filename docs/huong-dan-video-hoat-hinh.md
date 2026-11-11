@@ -1,7 +1,7 @@
 # Hướng dẫn tạo video hoạt hình gấu trúc (cho AI agent: Gemini, Codex, Claude)
 
 Tài liệu này để giao cho một AI agent tự tạo video hoạt hình meme gấu trúc tiếng Việt trên máy Windows của người dùng.
-Mọi thứ nằm trong **`D:\Projects\videostudio\memestudio`**. Đọc hết trước khi làm. Mọi lệnh đã được chạy thử ngày 2026-11-04.
+Mọi thứ nằm trong **`D:\Projects\videostudio\app\memestudio`**. Đọc hết trước khi làm. Mọi lệnh đã được chạy thử ngày 2026-11-04.
 
 Từ 2026-11-06, đây là engine duy nhất của pipeline hài tự động trong VideoStudio: chọn
 Video meme / hoạt hình nhân vật, nhập truyện và chọn giọng. Architect, writer, critic và continuity tự chạy bên trong.
@@ -9,8 +9,12 @@ CLI, checkpoint, migration và các giới hạn được mô tả ở [meme-vid
 Hướng dẫn bên dưới dành cho dựng từng tập thủ công; không chạy `make_voice.py` trên job tự động.
 Pipeline tự động tạo WAV tại stage speech và render chỉ dùng lại chúng. Job tự động nằm trong thư mục
 data của dự án video, tách khỏi `memestudio/episodes`.
+Trong pipeline tự động, ChatGPT (bước writer) ghi sẵn `pose` và `props` (kèm `near`) cho từng câu theo đúng quy tắc mục
+4.3a–4.3b, critic soát "hình khớp lời" và sửa lại câu thiếu. Khi nhận kịch bản do ChatGPT viết để dựng tay, vẫn soát lại
+theo bảng "Đọc lời kể → ghi gì" (mục 4.3a) trước khi dựng. Bộ áo chưa có hình dáng vẽ sẵn thì pipeline tự hạ dáng về
+dáng gần nhất (chổng mông→cúi, bò→quỳ, ngã→nằm ngửa, chạy→đứng); dựng tay thì vẽ bổ sung theo mục 3 bước 3.
 
-Tập mẫu làm theo đúng quy trình này: `memestudio\out\ep1.mp4` (60,7 giây, "Bố tôi lần đầu đi thang máy").
+Tập mẫu làm theo đúng quy trình này: `data\memestudio\out\ep1.mp4` (60,7 giây, "Bố tôi lần đầu đi thang máy").
 Kịch bản của nó: `memestudio\episodes\ep1\script.json`, đọc kỹ để làm theo.
 
 ---
@@ -65,7 +69,7 @@ Luồng một tập: `script.json` → `make_voice.py` → `make_episode.py` →
 Chạy trong PowerShell:
 
 ```powershell
-Set-Location D:\Projects\videostudio\memestudio
+Set-Location D:\Projects\videostudio\app\memestudio
 node --version                      # cần v22 trở lên
 ffmpeg -version | Select-Object -First 1
 python -I -c "import numpy, PIL; print('python ok')"
@@ -84,7 +88,7 @@ $env:HYPERFRAMES_NO_TELEMETRY = '1'
 $env:DO_NOT_TRACK = '1'
 ```
 
-Mọi lệnh dưới đây chạy **trong thư mục `D:\Projects\videostudio\memestudio`**.
+Mọi lệnh dưới đây chạy **trong thư mục `D:\Projects\videostudio\app\memestudio`**.
 
 ---
 
@@ -107,6 +111,18 @@ python -I engine\make_episode.py episodes\ep2 --check
 ```
 
 Phải in `OK: script.json hợp lệ`. Nếu in danh sách lỗi: sửa đúng từng dòng rồi chạy lại cho tới khi OK.
+
+Nếu lỗi là `chưa có hình dáng "..." cho trang phục ...`: **không đổi trang phục, không bỏ tư thế**. Cho máy vẽ thêm:
+
+```powershell
+python tools\make_pose_sheet.py --missing episodes\ep2
+```
+
+Lệnh nhờ ChatGPT ở Chrome riêng vẽ bảng 10 dáng cho từng trang phục còn thiếu (1–3 phút mỗi bộ), tự cắt và nhập kho, in
+`Xem lại ảnh ghép: assets/rig/poses/preview_<trang phục>.jpg`. Mở từng ảnh đó xem: 10 dáng có đủ, đầu ngồi trên vai, áo
+đúng màu/kiểu. Dáng nào hỏng (thiếu, sai áo, đầu lệch) → báo người dùng, có thể vẽ lại bằng
+`python tools\make_pose_sheet.py <trang phục> --again`. Rồi chạy lại `--check`.
+Lệnh báo `authentication_required` = Chrome riêng chưa đăng nhập ChatGPT → nhờ người dùng đăng nhập, không tự đăng nhập.
 
 ### Bước 4: tạo giọng đọc
 
@@ -152,12 +168,12 @@ Mở `snap_ep2\contact-sheet.jpg` (hoặc từng `frame-*.png`) và kiểm tra t
 ### Bước 8: render
 
 ```powershell
-node node_modules\hyperframes\bin\hyperframes.mjs render episodes\ep2 --quiet --fps 30 -o out\ep2.mp4
+node node_modules\hyperframes\bin\hyperframes.mjs render episodes\ep2 --quiet --fps 30 -o ..\..\data\memestudio\out\ep2.mp4
 ```
 
 Thời gian render xấp xỉ bằng thời lượng video (60 giây video ≈ 62 giây dựng).
 
-### Bước 9: kiểm tra MP4 (mục 6), rồi báo cáo đường dẫn `memestudio\out\ep2.mp4`
+### Bước 9: kiểm tra MP4 (mục 6), rồi báo cáo đường dẫn `data\memestudio\out\ep2.mp4`
 
 ---
 
@@ -205,6 +221,8 @@ Thời gian render xấp xỉ bằng thời lượng video (60 giây video ≈ 6
 | `caption` | không | chữ hiện phụ đề nếu khác `text` (ví dụ có số: "tầng 12") |
 | `emo` | không | đổi mặt khi câu bắt đầu: `{"bo": "gian", "con": "lo"}`. Mặt giữ nguyên tới khi đổi lần sau |
 | `act` | không | danh sách hành động (mục 4.3) |
+| `pose` | không | tư thế thân người (mục 4.3a): `{"bo": "lie_front"}`. Giữ nguyên tới khi đổi; sang cảnh mới trở về đứng |
+| `props` | không | đạo cụ xuất hiện/đổi chỗ từ câu này (mục 4.3b) |
 | `punch` | không | câu gây cười: sau câu có cú cắt cận mặt người nghe phản ứng `{"who": "con", "face": "soc"}` (+0,8 giây) |
 
 ### 4.3 Hành động (`act`)
@@ -212,7 +230,7 @@ Thời gian render xấp xỉ bằng thời lượng video (60 giây video ≈ 6
 | Hành động | Cú pháp | Hiệu ứng | SFX tự thêm |
 |---|---|---|---|
 | Đi vào | `["walk_in", "yta"]` | vai bắt đầu ngoài khung, bước vào chỗ đứng trong 1 giây. Vai này **chỉ xuất hiện từ câu đó** | whoosh |
-| Vung tay | `["gesture", "con"]` | tay phải xoè ngửa, vung khi nói | — |
+| Vung tay | `["gesture", "con"]` | tay phải xoè ngửa, vung khi nói. **Chỉ dùng khi lời nói thật sự khoa tay** (giải thích, khoe); không gắn vào mọi câu. Bị bỏ qua khi vai đang nằm | — |
 | Chỉ tay | `["point", "bo", "con"]` | chỉ về phía vai thứ hai, người nghiêng theo | whoosh |
 | Lắc đầu giận | `["angry", "bo"]` | lắc đầu nhanh 0,6 giây | impact nhỏ |
 | Sốc | `["shock", "bo"]` | mặt sốc, đầu bật lên, hai tay dang ra; máy quay rung | impact |
@@ -224,6 +242,112 @@ Thời gian render xấp xỉ bằng thời lượng video (60 giây video ≈ 6
 
 Tự động, không cần ghi: nói (gật đầu + nhép miệng), thở, khóc (khi vai chính của câu đổi sang mặt `khoc`),
 click đầu mỗi câu thoại, whoosh khi đổi cảnh.
+
+**Hình phải diễn đúng việc đang kể.** Câu nào kể vai đang nằm, ngồi, cúi, chổng mông, cầm/đặt đồ vật thì câu đó phải có
+`pose`/`props` tương ứng; vừa nói vừa làm thì ghi hành động đó, không thay bằng `gesture`. Mặc định khi nói chỉ nhép miệng
+và gật đầu, tay để yên.
+
+### 4.3a Tư thế (`pose`)
+
+| Tư thế | Cú pháp | Hình |
+|---|---|---|
+| Đứng (mặc định) | `"stand"` | trở lại đứng |
+| Quỳ | `"kneel"`, `["kneel", "con"]` | quỳ gối, quay về phía vai/hướng ghi |
+| Bò | `["crawl", "left"]` | bò bằng tay và gối |
+| Chổng mông | `["butt", "con"]` | cúi gập, **mông hướng về vai/hướng đó** |
+| Nằm sấp | `"lie_front"`, `["lie_front", "left"]` | nằm úp, thấy gáy (mặt ẩn); đầu bên phải (mặc định) hoặc trái |
+| Nằm ngửa | `"lie_back"`, `["lie_back", "right"]` | nằm ngửa; đầu bên trái (mặc định) hoặc phải |
+| Ngồi ghế | `["sit", "ghe"]` hoặc `"sit"` | ngồi co gối; ghi id đạo cụ (ví dụ ghế đẩu) thì ghế hiện dưới mông |
+| Ngồi bệt | `"sit_ground"` | ngồi xếp bằng dưới đất, nhìn thẳng |
+| Cúi nhặt | `["pick", "yta"]` | cúi, một tay chạm đất, về phía vai/hướng đó |
+| Ngã chổng vó | `"fall"` | ngã ngửa, hai chân giơ lên |
+| Chạy | `["run", "right"]` | dáng chạy về hướng đó |
+| Cúi (nhẹ) | `["bend", "con"]` | nghiêng thân về phía đó (dùng rig, không cần hình vẽ) |
+
+Mỗi tư thế (trừ `stand`, `bend`) là **một hình thân vẽ sẵn theo từng trang phục** (`memestudio\assets\rig\poses`),
+đầu của rig gắn lên cổ nên mặt, nhép miệng, tóc, mũ giữ nguyên. Trang phục đã có đủ 10 hình: xem
+`memestudio\assets\rig\poses\poses.json`. Nếu trang phục của vai chưa có hình:
+- `butt`, `crawl`, `pick`, `fall`, `run`: bước kiểm tra báo lỗi `chưa có hình dáng ... cho trang phục ...`. Chạy
+  `python tools\make_pose_sheet.py --missing episodes\<tập>` (trong `memestudio`): ChatGPT ở Chrome riêng tự vẽ bảng
+  10 dáng cho trang phục đó (1–3 phút/bộ, cần đăng nhập ChatGPT ở Chrome riêng), tự cắt và nhập kho. Mở ảnh
+  `memestudio\assets\rig\poses\preview_<trang phục>.jpg` xem lại; dáng nào lệch thì báo người dùng. Không tự đổi
+  trang phục của vai;
+- `sit`, `sit_ground`, `kneel`, `lie_back`, `lie_front`: dựng tạm bằng cách co chân/xoay rig.
+
+Khi đang ở tư thế vẽ sẵn: không cầm đồ trên tay và không có động tác tay (`gesture`, `point`, `press`). Máy quay tự
+lùi ra trung/toàn cảnh để thấy cả dáng. Chuyển dáng là đổi hình ngay kèm một nhịp nảy nhẹ.
+
+**Đọc lời kể → ghi gì** (làm cho MỌI câu, kể cả câu người kể `N`; câu có tư thế mà lời không nhắc tới thì giữ nguyên):
+
+| Lời kể / thoại có | Ghi trong câu đó |
+|---|---|
+| quỳ, quỳ lạy, quỳ xuống | `"pose": {"vai": ["kneel", "vai_kia"]}` |
+| bò, trườn, lết | `"pose": {"vai": ["crawl", "left"]}` (hướng bò) |
+| chổng mông, chổng đít, cong mông về phía ai | `"pose": {"vai": ["butt", "vai_kia"]}` |
+| nằm sấp, úp mặt, nằm úp | `"pose": {"vai": "lie_front"}` |
+| nằm, nằm ngửa, nằm vật ra, ngất | `"pose": {"vai": "lie_back"}` |
+| ngồi xuống ghế/ghế đẩu/ghế nhựa | `"pose": {"vai": ["sit", "id_ghế"]}` + khai báo ghế trong `props` (mục 4.3b) |
+| ngồi bệt, ngồi xếp bằng, ngồi phịch xuống đất | `"pose": {"vai": "sit_ground"}` |
+| cúi nhặt, cúi xuống lấy | `"pose": {"vai": ["pick", "vai_kia"]}` |
+| ngã ngửa, ngã chổng vó, té nhào | `"pose": {"vai": "fall"}` |
+| chạy, phi, chạy biến | `"pose": {"vai": ["run", "right"]}` |
+| ghé sát, cúi nhìn (nhẹ) | `"pose": {"vai": ["bend", "vai_kia"]}` |
+| đứng dậy, đứng lên | `"pose": {"vai": "stand"}` |
+| cầm, xách, chống (nạng), giơ ... | `"props": {"id": {"placement": "held", "owner": "vai"}}` (vai phải đang đứng) |
+| đặt, để, bày ... xuống | `"props": {"id": {"placement": "table", "near": "vai"}}` |
+| cất, giấu, vứt đi | `"props": {"id": {"placement": "hidden"}}` |
+
+Tư thế giữ nguyên ở các câu sau. Khi lời kể cho thấy vai đã đứng dậy/chuyển việc khác thì ghi `"stand"` hoặc tư thế mới;
+sang cảnh mới mọi vai tự đứng lại. Một câu có thể đổi tư thế của nhiều vai cùng lúc.
+
+### 4.3b Đạo cụ (`props`)
+
+Khai báo một lần ở gốc kịch bản, `asset` là **id trong mục 7.5** (ví dụ `crutches`, `cooking_pot`, `plastic_stool`,
+`bucket`); `label` là tên tiếng Việt ngắn; khoá (`nang`, `noi`...) do bạn đặt, chữ thường không dấu:
+
+```json
+"props": {"nang": {"asset": "crutches", "label": "Nạng"}, "noi": {"asset": "cooking_pot", "label": "Nồi"}}
+```
+
+Rồi trong câu, đổi trạng thái: `"props": {"nang": {"placement": "held", "owner": "bo"}, "noi": {"placement": "table", "near": "con"}}`.
+
+| `placement` | Hình |
+|---|---|
+| `held` + `owner` | vai đó cầm trên tay phải (mỗi vai hiện 1 món, món ghi sau cùng). Đồ quá to để cầm (xe, tủ, ghế, chó…) tự đứng dưới đất cạnh vai |
+| `table` (+ `near`) | đặt **dưới đất**, sát vai ghi ở `near` (không ghi thì giữa sân), tự né người và đồ khác |
+| `hidden` | cất đi |
+
+Mỗi vai chỉ hiện **1 món trên tay** (món ghi sau cùng). Đồ không có trong mục 7.5 thì không vẽ được: kể bằng lời,
+không khai báo `props` cho nó, hoặc báo người dùng cần thêm hình.
+Kích thước tự đúng theo đồ thật (`memestudio\assets\prop_sizes.json`: nạng cao gần ngang vai và chạm đất, cốc nhỏ trong
+tay, nồi/xô cỡ thật). Đồ dùng làm ghế trong `["sit", "id"]` thì không cần đặt `table` nữa.
+
+### 4.3c Ví dụ một cảnh làm đúng
+
+Lời kể: bố chống nạng ra sân → con đặt nồi xuống → bố ngồi ghế đẩu → bố nằm sấp ra chiếu → con cúi nhìn lưng bố.
+
+```json
+"props": {
+  "nang": {"asset": "crutches", "label": "Nạng"},
+  "noi": {"asset": "cooking_pot", "label": "Nồi cao"},
+  "ghe": {"asset": "plastic_stool", "label": "Ghế đẩu"}
+},
+"beats": [
+  {"scene": "san", "who": "N", "focus": "bo", "text": "Bố tôi chống nạng lò dò ra sân.",
+   "act": [["walk_in", "bo"]], "props": {"nang": {"placement": "held", "owner": "bo"}}},
+  {"scene": "san", "who": "N", "focus": "con", "text": "Tôi bê nồi cao đặt ngay cạnh bố.",
+   "props": {"noi": {"placement": "table", "near": "bo"}}},
+  {"scene": "san", "who": "bo", "text": "Cho bố ngồi cái ghế đẩu đã.",
+   "pose": {"bo": ["sit", "ghe"]}, "props": {"nang": {"placement": "table", "near": "bo"}}},
+  {"scene": "san", "who": "N", "focus": "bo", "text": "Rồi bố nằm sấp ra chiếu cho tôi đắp thuốc.",
+   "pose": {"bo": "lie_front"}},
+  {"scene": "san", "who": "con", "text": "Bố nằm yên, con xem cái lưng nào!",
+   "pose": {"con": ["bend", "bo"]}, "emo": {"con": "gian"}}
+]
+```
+
+Chú ý trong ví dụ: trước khi ngồi, nạng được đặt xuống đất (`table`) vì tư thế vẽ sẵn không cầm đồ; câu thoại của `con`
+vừa nói vừa làm nên có `pose` ngay trong câu đó; không câu nào dùng `gesture`.
 
 ### 4.4 Độ dài và nhịp
 
@@ -258,7 +382,7 @@ Lý do chia phần: phần nào lỗi thì chỉ làm lại phần đó; một c
 Ghép phần (cùng bộ dựng nên ghép không mã hoá lại; đã thử ngày 2026-11-04):
 
 ```powershell
-Set-Location D:\Projects\videostudio\memestudio\out
+Set-Location D:\Projects\videostudio\data\memestudio\out
 "file 'ep5_p1.mp4'`nfile 'ep5_p2.mp4'`nfile 'ep5_p3.mp4'" | Out-File -Encoding ascii parts.txt
 ffmpeg -v error -y -f concat -safe 0 -i parts.txt -c copy ep5_full.mp4
 ```
@@ -272,12 +396,15 @@ Phần 2 trở đi: giữ nguyên `title`/`payoff`, câu đầu mỗi phần n�
 
 1. `python -I engine\make_episode.py episodes\<tập> --check` → `OK`.
 2. `hyperframes check episodes\<tập>` → 0 error ở mọi mục.
-3. Xem ảnh chụp khung hình (mục 3 bước 7), từng ảnh:
+3. Đọc lại kịch bản từng câu theo bảng "Đọc lời kể → ghi gì" (mục 4.3a): câu nào kể nằm/ngồi/quỳ/bò/chổng mông/cầm/đặt
+   mà thiếu `pose`/`props` thì thêm vào, chạy lại `--check`. Đếm `gesture`: không quá 1 câu trên 5.
+4. Xem ảnh chụp khung hình (mục 3 bước 7), từng ảnh:
+   - **hình đúng việc đang kể**: người nằm thì nằm, ngồi thì ngồi, đồ vật đúng chỗ và đúng cỡ;
    - nhân vật không bị che mất mặt bởi vai khác; tay chỉ hướng đúng người;
    - râu/kính/khẩu trang nằm đúng chỗ trên mặt; tóc/mũ đội đúng đầu;
    - phụ đề không tràn quá 2 dòng; tiêu đề và câu chốt không tràn;
    - khung cận thấy rõ mặt người nói/người phản ứng.
-4. Kiểm tra MP4:
+5. Kiểm tra MP4:
 
 ```powershell
 ffprobe -v error -show_entries stream=codec_type,width,height,r_frame_rate,nb_frames -show_entries format=duration -of compact out\ep2.mp4
@@ -287,7 +414,7 @@ ffmpeg -hide_banner -i out\ep2.mp4 -af volumedetect -vn -f null - 2>&1 | Select-
 
    Cần: 1080×1920, 30/1 fps, có stream audio, thời lượng khớp số `make_episode.py` in ra; `max_volume` dưới 0 dB
    (khoảng −1 đến −4 dB), `mean_volume` khoảng −18 đến −22 dB.
-5. Báo cáo cho người dùng: đường dẫn MP4, thời lượng, số câu/cảnh/khung hình, kết quả các bước trên, và những chỗ còn
+6. Báo cáo cho người dùng: đường dẫn MP4, thời lượng, số câu/cảnh/khung hình, kết quả các bước trên, và những chỗ còn
    chưa đẹp nhìn thấy trong ảnh chụp.
 
 ---
@@ -377,6 +504,23 @@ Viết id đúng từng dấu. Giọng `clone:...` khác không được dùng n
 
 ---
 
+### 7.5 Đạo cụ (`props.*.asset`, 132 id; kích thước thật trong `memestudio\assets\prop_sizes.json`)
+
+- **Cầm một tay**: `parrot` con vẹt, `tshirt` áo phông, `jeans` quần jean, `sneakers` giày thể thao, `cap` mũ lưỡi trai, `conical_hat` nón lá, `sunglasses` kính râm, `necktie` cà vạt, `raincoat` áo mưa, `paper_money` tiền giấy, `wallet` Ví, `handbag` túi xách, `toilet_paper` cuộn giấy vệ, `toothbrush` bàn chải, `medicine_box` hộp thuốc, `banh_mi` bánh mì, `bubble_tea` trà sữa, `coffee_cup` cốc cà phê, `beer_can` lon bia, `water_bottle` chai nước, `wall_clock` đồng hồ treo, `umbrella_open` ô mở, `frying_pan` chảo, `smartphone` Điện thoại, `headphones` tai nghe, `tv_remote` điều khiển TV, `phone_charger` sạc điện thoại, `game_controller` tay cầm game, `pill_bottle` lọ thuốc, `pills` viên thuốc, `thermometer` nhiệt kế, `bandage` băng dán, `face_mask` khẩu trang, `ice_pack` túi chườm đá, `balloons` chùm bóng bay, `party_hat` mũ sinh nhật, `party_popper` pháo giấy, `microphone` micro, `wine_glass` ly rượu, `calculator` máy tính bỏ, `test_paper` bài kiểm tra, `ruler` thước kẻ, `eraser` tẩy, `chalk` phấn, `gold_bar` thỏi vàng, `bank_card` thẻ ngân hàng, `shopping_bag` túi mua sắm, `price_tag` nhãn giá, `soccer_ball` quả bóng đá, `dumbbell` tạ tay, `badminton_racket` vợt cầu lông, `running_shoes` giày chạy bộ, `jump_rope` dây nhảy, `whistle` còi, `basketball` quả bóng rổ, `book` sách, `notebook` vở, `pen` bút, `school_backpack` cặp sách, `briefcase` cặp tài liệu, `red_envelope` bao lì xì, `peach_blossom` cành đào, `red_lantern` đèn lồng đỏ, `apricot_blossom` cành mai, `broom` chổi, `bucket` xô nước, `mop` cây lau nhà, `toolbox` hộp đồ nghề, `watering_can` bình tưới, `screwdriver` Tuốc nơ vít, `flashlight` đèn pin, `can_cau` Cần câu, `cuoc` cuoc, `chia_khoa` Chìa khóa, `hoa_don` Tờ hóa đơn, `coc_co_quai` Cốc có quai, `o_gap` Ô gấp.
+- **Cầm hai tay / bê**: `cat` con mèo, `chicken` con gà, `duck` con vịt, `goldfish_bowl` bể cá vàng, `gift_box` hộp quà, `cardboard_box` thùng carton, `noodles` bát mì, `rice_plate` đĩa cơm, `birthday_cake` bánh sinh nhật, `pillow` gối, `blanket` chăn, `cooking_pot` nồi, `laptop_open` laptop, `guitar` đàn guitar, `beer_crate` két bia, `globe` quả địa cầu, `abacus` bàn tính, `piggy_bank` lợn đất tiết, `yoga_mat` thảm tập, `paper_stack` xấp giấy, `banh_chung` bánh chưng, `fruit_tray` mâm ngũ quả, `candy_box` hộp mứt Tết.
+- **Kẹp nách, chạm đất**: `crutches` nạng.
+- **Quá to, luôn đứng dưới đất** (ghi `held` cũng tự đặt cạnh vai): `dog` con chó, `pig` con lợn, `buffalo` con trâu, `plastic_stool` ghế nhựa, `office_chair` ghế văn phòng, `small_table` bàn nhỏ, `sofa` ghế sofa, `bed` giường, `wardrobe` tủ quần áo, `door_wood` cửa gỗ, `window` cửa sổ, `standing_fan` quạt cây, `tv` TV, `floor_lamp` đèn cây, `fridge` tủ lạnh, `wheelchair` xe lăn, `speaker` loa thùng, `school_bell` trống trường, `gold_coins` đống tiền vàng, `atm` cây ATM, `shopping_cart` xe đẩy siêu, `desktop_computer` máy tính bàn, `whiteboard` bảng trắng, `kumquat_tree` cây quất, `ladder` thang, `scooter` xe máy, `bicycle` xe đạp, `car` ô tô, `bus` xe buýt, `taxi` taxi, `delivery_tricycle` xe ba gác.
+
+Tra nhanh bằng lệnh (in id + tên + cỡ):
+
+```powershell
+python -c "import json;l=json.load(open(r'..\assets\Meme_Animation_Asset_Pack\catalog\library.json',encoding='utf8'))['items'];s=json.load(open(r'assets\prop_sizes.json',encoding='utf8'));[print(i['id'],'|',i.get('label_vi') or i.get('tags'),'|',s.get(i['id'])) for i in l if i['kind']=='prop']"
+```
+
+### 7.6 Trang phục đã có hình dáng vẽ sẵn (`memestudio\assets\rig\poses`)
+
+`ao_ba_ba_nau`, `ao_ba_lo_trang`, `ao_phong_xanh`, `blouse_bac_si`, `so_mi_hoc_sinh`. Trang phục khác dùng tư thế vẽ sẵn thì `--check` báo thiếu → chạy `tools\make_pose_sheet.py --missing` (mục 3 bước 3).
+
 ## 8. Thêm asset (chỉ khi người dùng yêu cầu)
 
 - **Nền mới**: thêm `bg_<tên>.png` (dọc 720×1280, cùng phong cách) vào `memestudio\assets\backgrounds`, dùng ngay bằng `"bg": "bg_<tên>"`.
@@ -410,7 +554,10 @@ Viết id đúng từng dấu. Giọng `clone:...` khác không được dùng n
 ## 10. Giới hạn hiện tại (nói rõ khi báo cáo, không tự sửa nếu không được yêu cầu)
 
 - Nhân vật luôn nhìn thẳng; chưa có dáng nghiêng/quay lưng; đi vào là trượt ngang + bước chân nhìn thẳng.
-- Chỉ có các hành động trong mục 4.3; chưa có chạy, ngã, ngồi, cầm đồ vật.
+- Chỉ có các hành động mục 4.3 và tư thế mục 4.3a. **Chưa có động tác với đồ vật** (khuấy nồi, đổ nước, xông hơi,
+  nấu): kể bằng lời, cho đồ vật đứng cạnh vai (`table` + `near`) và vai làm tư thế gần nhất (đứng cạnh nồi, ngồi ghế).
+  Không tự viết thêm hành động mới vào `act`.
+- Đang ở tư thế vẽ sẵn thì không cầm đồ và không có động tác tay; người nằm dài có thể đè lên chân vai đứng sát bên.
 - Tối đa 3 vai trong một cảnh.
 - Nhép miệng theo độ to của tiếng, không khớp từng âm.
 - SFX chỉ có 4 loại; chưa có nhạc nền (người dùng chưa cần nhạc). Tập không có SFX vẫn xuất track im lặng đúng thời lượng.

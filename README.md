@@ -4,13 +4,41 @@
 
 **Video hài tự động:** chọn Video meme / hoạt hình nhân vật, nhập truyện/ý tưởng và chọn giọng.
 Một pipeline tự phát triển truyện, viết, phản biện, giữ nhân vật/đạo cụ/callback rồi dựng HyperFrames; dùng lại lời đọc khi retry render.
-Cài engine bằng `npm ci` trong `memestudio` (Node.js 22+, Python NumPy/Pillow, FFmpeg).
-CLI: `python auto_meme.py --input story.txt --out out/video.mp4`.
+Cài engine bằng `npm ci` trong `app\memestudio` (Node.js 22+, Python NumPy/Pillow, FFmpeg).
+CLI (chạy trong `app\`): `python auto_meme.py --input story.txt --out out/video.mp4`.
 Chi tiết cài đặt, checkpoint, chuyển đổi job cũ và giới hạn nghiệm thu: [docs/meme-video.md](docs/meme-video.md).
+
+## Cấu trúc thư mục
+
+```text
+D:\Projects\videostudio
+├── app\                 code và vận hành
+│   ├── videostudio\     backend (API, worker, pipeline)
+│   ├── static\          giao diện web
+│   ├── memestudio\      engine video hoạt hình
+│   ├── FlowAPI\  extensions\  assets\  tests\
+│   ├── launch\          các file bấm đúp: Start/Stop/Restart VideoStudio, Chrome, VideoStudio.bat
+│   └── scripts\         khởi động, dừng, khay hệ thống, nhập asset
+│       ├── dev\         test, kiểm chứng, dò lỗi
+│       ├── oneoff\      script cứu lỗi đã dùng một lần
+│       └── facebook\    bộ crawl Facebook
+├── data\                mọi thứ tool ghi ra (không đưa lên Git)
+│   ├── jobs.sqlite3, chrome-profile\, chatgpt-images\, flow-images\, voices\ ...
+│   ├── logs\            nhật ký dịch vụ
+│   ├── facebook_cases\  memestudio\  flow-api\
+│   └── archive\         kết quả thử cũ, backup, tmp cũ; xoá được khi cần chỗ
+└── docs\                tài liệu
+    ├── (hướng dẫn đang dùng, TODO.md)
+    ├── flow-api\
+    ├── evidence\        file json/patch nghiệm thu
+    └── history\         handoff, báo cáo theo ngày
+```
+
+Đường dẫn code ghi trong tài liệu (ví dụ `videostudio/api.py`, `scripts/start_local.ps1`, `memestudio\assets`) tính từ `app\`. Chạy lệnh Python/PowerShell trong `app\`. Thư mục dữ liệu mặc định là `data\` cạnh `app\`; có thể đổi bằng `VS_DATA_ROOT`.
 
 ## Cài trên máy Windows mới
 
-Trên máy hiện tại bấm đúp **VideoStudio.bat** trong thư mục dự án, hoặc shortcut **VideoStudio** trên Desktop/Start Menu (tự tạo ở lần chạy đầu). Không cần build: file này chạy thẳng mã nguồn bằng `pythonw`, giống `vTransfer.bat`. App chạy ở **khay hệ thống** (góc phải thanh tác vụ), giống vTransfer:
+Trên máy hiện tại bấm đúp **app\launch\VideoStudio.bat**, hoặc shortcut **VideoStudio** trên Desktop/Start Menu (tự tạo ở lần chạy đầu). Không cần build: file này chạy thẳng mã nguồn bằng `pythonw`, giống `vTransfer.bat`. App chạy ở **khay hệ thống** (góc phải thanh tác vụ), giống vTransfer:
 
 - **Bấm** biểu tượng: vào Studio trong Chrome thường. Nếu hệ thống chưa chạy, app tự mở hệ thống rồi vào Studio.
 - **Chuột phải**: Mở hệ thống, Khởi động lại, Dừng hệ thống, Bảng điều khiển & nhật ký, Mở thư mục video, **Cài đặt** (khởi động cùng Windows, tự mở hệ thống khi khởi động cùng Windows, thông báo khi video xong/lỗi, shortcut Desktop và Start Menu), Thoát khay.
@@ -23,10 +51,10 @@ Cửa sổ điều khiển cũ vẫn mở được bằng menu **Bảng điều 
 
 ```powershell
 python -m pip install pyinstaller
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_windows_launcher.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File app/scripts/build_windows_launcher.ps1
 ```
 
-Nhật ký thao tác trong app: `data/launcher.log`. Bộ khởi động `.cmd` bên dưới vẫn dùng được độc lập.
+Nhật ký thao tác trong app: `data/logs/launcher.log`. Bộ khởi động `.cmd` bên dưới (trong `app\launch\`) vẫn dùng được độc lập.
 
 1. Cài Git, Python 3.12 x64, Google Chrome và FFmpeg (`ffmpeg`, `ffprobe` phải có trong `PATH`). Runtime/model/cache giọng đọc và ComfyUI là phần cài riêng; requirements không tự tải model lớn.
 
@@ -36,12 +64,12 @@ Set-Location D:\Projects\videostudio
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r app\requirements.txt
 ```
 
 Nếu chưa có `py -3.12`, cài Python 3.12 trước. Launcher dùng `C:\Python312\python.exe` nếu có, nếu không dùng Python đầu tiên trong `PATH`.
 
-2. Nạp extension: Chrome thường → `chrome://extensions` → bật Developer mode → **Load unpacked** → chọn `D:\Projects\videostudio\extensions\videostudio-chatgpt`.
+2. Nạp extension: Chrome thường → `chrome://extensions` → bật Developer mode → **Load unpacked** → chọn `D:\Projects\videostudio\app\extensions\videostudio-chatgpt`.
 3. Đăng nhập Google qua `Chrome - Clean.cmd`; sau đó mở **Mở debug** trong float để Flow cho phép tool điều khiển.
 4. Bấm đúp **Start VideoStudio.cmd**. Mở Studio, đăng nhập ChatGPT trong Chrome thường. Trong float bấm **Start**, rồi **Test chữ** nếu bridge chưa kết nối. Muốn tắt hoặc khởi động lại hệ thống, dùng **Stop VideoStudio.cmd** hoặc **Restart VideoStudio.cmd**.
 
@@ -52,7 +80,7 @@ Chrome debug dùng cổng local cố định `19223` và không thêm `--enable-
 ComfyUI nếu đã chạy được mở bởi shortcut của người dùng thì launcher sẽ dùng lại. Nếu chưa chạy, launcher gọi `scripts/start_comfy_recovery.py`, cần có cấu hình launcher/runtime hợp lệ trên máy đó. Launcher này không cài ComfyUI, model, node hay tài khoản. Khởi động backend thủ công:
 
 ```powershell
-Set-Location D:\Projects\videostudio
+Set-Location D:\Projects\videostudio\app
 python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 ```
 
@@ -64,13 +92,13 @@ python -m uvicorn videostudio.api:app --host 127.0.0.1 --port 8877
 
 - [Tài liệu bàn dựng mới và Workflow](docs/editor-workflow.md): hướng dẫn, trạng thái nghiệm thu, thiết kế, schema/API, sơ đồ kỹ thuật, cache và các việc còn lại trong một file.
 
-Kế hoạch **animation bằng asset + code** (parallax, nhân vật/đạo cụ nhiều lớp, mask, mouth animation và FX) đã được ghi trong [TODO](TODO.md) và [phần mở rộng kỹ thuật](docs/editor-workflow.md#code-animation), **chưa triển khai**. HyperFrames là ứng viên engine cần kiểm chứng; bàn dựng hiện tại dùng FFmpeg, không phải engine HyperFrames.
+Kế hoạch **animation bằng asset + code** (parallax, nhân vật/đạo cụ nhiều lớp, mask, mouth animation và FX) đã được ghi trong [TODO](docs/TODO.md) và [phần mở rộng kỹ thuật](docs/editor-workflow.md#code-animation), **chưa triển khai**. HyperFrames là ứng viên engine cần kiểm chứng; bàn dựng hiện tại dùng FFmpeg, không phải engine HyperFrames.
 
 Các hành vi dựng tự động mới chỉ bật khi chủ động opt-in bằng `edit_preset`/`workflow` hoặc các tùy chọn node tương ứng. Request từ UI cũ không tự bị đổi sang preset hay cách tạo nhạc mới. Bản xuất editor tạo child render-only job, dùng lại media và giữ video cũ.
 
 ## Thử Flow bằng request qua extension
 
-Đường thử mới nằm trong **extension VideoStudio hiện có**, bật qua popup icon extension và quyền Flow tùy chọn. Chạy `Start Flow Request.cmd`, mở `http://localhost:8878/flow-request`, ghép mã kết nối rồi thử liệt kê dự án trước. Không cần cài extension thứ hai, xuất cookie hay restart backend đang chạy. Hướng dẫn đầy đủ và giới hạn nghiệm thu: [FlowAPI/README.md](FlowAPI/README.md). Các video hiện tại vẫn dùng provider Flow cũ; tạo ảnh bằng request chưa được mặc định bật.
+Đường thử mới nằm trong **extension VideoStudio hiện có**, bật qua popup icon extension và quyền Flow tùy chọn. Chạy `Start Flow Request.cmd`, mở `http://localhost:8878/flow-request`, ghép mã kết nối rồi thử liệt kê dự án trước. Không cần cài extension thứ hai, xuất cookie hay restart backend đang chạy. Hướng dẫn đầy đủ và giới hạn nghiệm thu: [docs/flow-api/README.md](docs/flow-api/README.md). Các video hiện tại vẫn dùng provider Flow cũ; tạo ảnh bằng request chưa được mặc định bật.
 
 ## Tạo và phục hồi video
 
@@ -99,7 +127,7 @@ Nghiệm thu ngày 2026-11-03: người dùng đã tạo thành công video 8 gi
 
 ### Kiểm tra sau khi restart Windows
 
-Chuẩn bị một lần bằng `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_restart.ps1 -Prepare`. Sau khi tự restart Windows, mở `VideoStudio.exe` → **Mở hệ thống**. Bộ khởi động tự ghi kết quả vào `data/restart-acceptance.json`: xác nhận boot đã đổi, Studio dùng extension, Chrome Flow đã nối và Comfy phản hồi. Báo cáo này chỉ xác nhận khởi động dịch vụ; tạo và xuất một video thật vẫn là bước nghiệm thu tiếp theo.
+Chuẩn bị một lần bằng `powershell -NoProfile -ExecutionPolicy Bypass -File app/scripts/check_restart.ps1 -Prepare`. Sau khi tự restart Windows, mở `VideoStudio.exe` → **Mở hệ thống**. Bộ khởi động tự ghi kết quả vào `data/restart-acceptance.json`: xác nhận boot đã đổi, Studio dùng extension, Chrome Flow đã nối và Comfy phản hồi. Báo cáo này chỉ xác nhận khởi động dịch vụ; tạo và xuất một video thật vẫn là bước nghiệm thu tiếp theo.
 
 ## Kiến trúc và luồng xử lý
 
@@ -170,7 +198,7 @@ Các điểm vào chính: API/exchange tại `videostudio/api.py` và `videostud
 
 README phân biệt luồng production hiện hành và UI mới đang phát triển; `docs/auto-pipeline-design.md` là bản đề xuất cũ, không dùng làm tài liệu kiến trúc hiện tại.
 
-Repo cũng giữ các tài liệu handoff, log thử nghiệm trong `docs/` và script chẩn đoán/cứu job trong `scripts/` để tham khảo lịch sử. Những script này có thể gắn với job ID, đường dẫn hoặc cổng Chrome của một lần xử lý cụ thể; không thuộc quy trình khởi động thông thường. Hướng dẫn vận hành hiện tại nằm trong README này.
+Repo cũng giữ các tài liệu handoff, log thử nghiệm trong `docs/history/` và script chẩn đoán/cứu job trong `app/scripts/dev/`, `app/scripts/oneoff/` để tham khảo lịch sử. Những script này có thể gắn với job ID, đường dẫn hoặc cổng Chrome của một lần xử lý cụ thể; không thuộc quy trình khởi động thông thường. Hướng dẫn vận hành hiện tại nằm trong README này.
 
 ## File và cài đặt local
 
@@ -193,6 +221,6 @@ Các biến môi trường thường dùng: `VS_DATABASE` (mặc định `data/j
 
 ## Mức nghiệm thu
 
-Đã hoàn thành một video thật và lô thử Flow 10 ảnh. Chưa nghiệm thu mọi account, model, giọng đọc, thời lượng hay máy mới. Preflight có thể chặn job khi runtime/model cần thiết chưa sẵn sàng. Worker và GPU xử lý video tuần tự; **chạy nhiều video song song thật** vẫn còn trong [TODO.md](TODO.md).
+Đã hoàn thành một video thật và lô thử Flow 10 ảnh. Chưa nghiệm thu mọi account, model, giọng đọc, thời lượng hay máy mới. Preflight có thể chặn job khi runtime/model cần thiết chưa sẵn sàng. Worker và GPU xử lý video tuần tự; **chạy nhiều video song song thật** vẫn còn trong [TODO.md](docs/TODO.md).
 
 Các hướng dẫn chi tiết: [bắt đầu sau khi restart máy](docs/startup.md), [tự khôi phục ChatGPT](docs/self-service-chatgpt-recovery.md), [chuyển tài khoản Flow](docs/flow-batch-verification.md) và [thiết lập Chrome riêng](docs/browser-profile-controls-2026-10-30.md).

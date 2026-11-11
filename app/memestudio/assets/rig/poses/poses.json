@@ -1,0 +1,982 @@
+{
+ "version": 1,
+ "poses": [
+  "kneel",
+  "crawl",
+  "butt",
+  "lie_front",
+  "lie_back",
+  "sit",
+  "sit_ground",
+  "pick",
+  "fall",
+  "run"
+ ],
+ "items": [
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "kneel",
+   "file": "ao_ba_ba_nau/kneel.png",
+   "size": [
+    184,
+    256
+   ],
+   "neck": [
+    110.4,
+    43.9
+   ],
+   "ground": 250,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "crawl",
+   "file": "ao_ba_ba_nau/crawl.png",
+   "size": [
+    266,
+    186
+   ],
+   "neck": [
+    207.8,
+    41.7
+   ],
+   "ground": 180,
+   "scale": 0.46,
+   "head_rotation": 15,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "butt",
+   "file": "ao_ba_ba_nau/butt.png",
+   "size": [
+    168,
+    250
+   ],
+   "neck": [
+    121.1,
+    53.3
+   ],
+   "ground": 245,
+   "scale": 0.46,
+   "head_rotation": 35,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "lie_front",
+   "file": "ao_ba_ba_nau/lie_front.png",
+   "size": [
+    370,
+    116
+   ],
+   "neck": [
+    222.0,
+    37.1
+   ],
+   "ground": 110,
+   "scale": 0.46,
+   "head_rotation": 90,
+   "face": false,
+   "lift": 24,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "lie_back",
+   "file": "ao_ba_ba_nau/lie_back.png",
+   "size": [
+    286,
+    94
+   ],
+   "neck": [
+    11.4,
+    47.0
+   ],
+   "ground": 89,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 38,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "sit",
+   "file": "ao_ba_ba_nau/sit.png",
+   "size": [
+    200,
+    276
+   ],
+   "neck": [
+    100.0,
+    49.7
+   ],
+   "ground": 270,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": [
+    60.0,
+    165.6
+   ]
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "sit_ground",
+   "file": "ao_ba_ba_nau/sit_ground.png",
+   "size": [
+    244,
+    244
+   ],
+   "neck": [
+    122.0,
+    33.5
+   ],
+   "ground": 239,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "pick",
+   "file": "ao_ba_ba_nau/pick.png",
+   "size": [
+    232,
+    238
+   ],
+   "neck": [
+    175.8,
+    63.9
+   ],
+   "ground": 233,
+   "scale": 0.46,
+   "head_rotation": 60,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "fall",
+   "file": "ao_ba_ba_nau/fall.png",
+   "size": [
+    264,
+    224
+   ],
+   "neck": [
+    110.9,
+    208.3
+   ],
+   "ground": 219,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 40,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_ba_nau",
+   "pose": "run",
+   "file": "ao_ba_ba_nau/run.png",
+   "size": [
+    290,
+    282
+   ],
+   "neck": [
+    163.5,
+    47.5
+   ],
+   "ground": 276,
+   "scale": 0.46,
+   "head_rotation": 8,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "kneel",
+   "file": "ao_ba_lo_trang/kneel.png",
+   "size": [
+    186,
+    256
+   ],
+   "neck": [
+    111.6,
+    41.9
+   ],
+   "ground": 250,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "crawl",
+   "file": "ao_ba_lo_trang/crawl.png",
+   "size": [
+    266,
+    180
+   ],
+   "neck": [
+    207.5,
+    42.2
+   ],
+   "ground": 174,
+   "scale": 0.46,
+   "head_rotation": 15,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "butt",
+   "file": "ao_ba_lo_trang/butt.png",
+   "size": [
+    172,
+    250
+   ],
+   "neck": [
+    124.6,
+    53.3
+   ],
+   "ground": 245,
+   "scale": 0.46,
+   "head_rotation": 35,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "lie_front",
+   "file": "ao_ba_lo_trang/lie_front.png",
+   "size": [
+    372,
+    116
+   ],
+   "neck": [
+    223.2,
+    37.1
+   ],
+   "ground": 110,
+   "scale": 0.46,
+   "head_rotation": 90,
+   "face": false,
+   "lift": 24,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "lie_back",
+   "file": "ao_ba_lo_trang/lie_back.png",
+   "size": [
+    286,
+    94
+   ],
+   "neck": [
+    11.4,
+    47.0
+   ],
+   "ground": 88,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 38,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "sit",
+   "file": "ao_ba_lo_trang/sit.png",
+   "size": [
+    198,
+    278
+   ],
+   "neck": [
+    99.0,
+    51.8
+   ],
+   "ground": 272,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": [
+    59.4,
+    166.8
+   ]
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "sit_ground",
+   "file": "ao_ba_lo_trang/sit_ground.png",
+   "size": [
+    238,
+    238
+   ],
+   "neck": [
+    119.0,
+    44.2
+   ],
+   "ground": 233,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "pick",
+   "file": "ao_ba_lo_trang/pick.png",
+   "size": [
+    230,
+    236
+   ],
+   "neck": [
+    179.3,
+    60.5
+   ],
+   "ground": 230,
+   "scale": 0.46,
+   "head_rotation": 60,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "fall",
+   "file": "ao_ba_lo_trang/fall.png",
+   "size": [
+    260,
+    224
+   ],
+   "neck": [
+    109.2,
+    208.3
+   ],
+   "ground": 218,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 40,
+   "seat": null
+  },
+  {
+   "costume": "ao_ba_lo_trang",
+   "pose": "run",
+   "file": "ao_ba_lo_trang/run.png",
+   "size": [
+    286,
+    282
+   ],
+   "neck": [
+    162.9,
+    35.6
+   ],
+   "ground": 276,
+   "scale": 0.46,
+   "head_rotation": 8,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "kneel",
+   "file": "ao_phong_xanh/kneel.png",
+   "size": [
+    188,
+    250
+   ],
+   "neck": [
+    112.8,
+    44.7
+   ],
+   "ground": 245,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "crawl",
+   "file": "ao_phong_xanh/crawl.png",
+   "size": [
+    268,
+    182
+   ],
+   "neck": [
+    209.7,
+    40.5
+   ],
+   "ground": 177,
+   "scale": 0.46,
+   "head_rotation": 15,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "butt",
+   "file": "ao_phong_xanh/butt.png",
+   "size": [
+    170,
+    246
+   ],
+   "neck": [
+    124.6,
+    50.6
+   ],
+   "ground": 241,
+   "scale": 0.46,
+   "head_rotation": 35,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "lie_front",
+   "file": "ao_phong_xanh/lie_front.png",
+   "size": [
+    370,
+    118
+   ],
+   "neck": [
+    222.0,
+    37.8
+   ],
+   "ground": 113,
+   "scale": 0.46,
+   "head_rotation": 90,
+   "face": false,
+   "lift": 24,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "lie_back",
+   "file": "ao_phong_xanh/lie_back.png",
+   "size": [
+    284,
+    98
+   ],
+   "neck": [
+    11.4,
+    49.0
+   ],
+   "ground": 93,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 38,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "sit",
+   "file": "ao_phong_xanh/sit.png",
+   "size": [
+    198,
+    276
+   ],
+   "neck": [
+    99.0,
+    53.7
+   ],
+   "ground": 271,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": [
+    59.4,
+    165.6
+   ]
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "sit_ground",
+   "file": "ao_phong_xanh/sit_ground.png",
+   "size": [
+    244,
+    242
+   ],
+   "neck": [
+    122.0,
+    31.4
+   ],
+   "ground": 236,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "pick",
+   "file": "ao_phong_xanh/pick.png",
+   "size": [
+    234,
+    238
+   ],
+   "neck": [
+    179.3,
+    62.9
+   ],
+   "ground": 233,
+   "scale": 0.46,
+   "head_rotation": 60,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "fall",
+   "file": "ao_phong_xanh/fall.png",
+   "size": [
+    262,
+    226
+   ],
+   "neck": [
+    110.0,
+    210.2
+   ],
+   "ground": 220,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 40,
+   "seat": null
+  },
+  {
+   "costume": "ao_phong_xanh",
+   "pose": "run",
+   "file": "ao_phong_xanh/run.png",
+   "size": [
+    286,
+    284
+   ],
+   "neck": [
+    160.2,
+    54.5
+   ],
+   "ground": 278,
+   "scale": 0.46,
+   "head_rotation": 8,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "kneel",
+   "file": "blouse_bac_si/kneel.png",
+   "size": [
+    190,
+    260
+   ],
+   "neck": [
+    114.0,
+    47.1
+   ],
+   "ground": 254,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "crawl",
+   "file": "blouse_bac_si/crawl.png",
+   "size": [
+    268,
+    182
+   ],
+   "neck": [
+    209.1,
+    42.4
+   ],
+   "ground": 177,
+   "scale": 0.46,
+   "head_rotation": 15,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "butt",
+   "file": "blouse_bac_si/butt.png",
+   "size": [
+    176,
+    256
+   ],
+   "neck": [
+    129.7,
+    51.4
+   ],
+   "ground": 251,
+   "scale": 0.46,
+   "head_rotation": 35,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "lie_front",
+   "file": "blouse_bac_si/lie_front.png",
+   "size": [
+    376,
+    122
+   ],
+   "neck": [
+    225.6,
+    39.0
+   ],
+   "ground": 116,
+   "scale": 0.46,
+   "head_rotation": 90,
+   "face": false,
+   "lift": 24,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "lie_back",
+   "file": "blouse_bac_si/lie_back.png",
+   "size": [
+    290,
+    102
+   ],
+   "neck": [
+    11.6,
+    51.0
+   ],
+   "ground": 96,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 38,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "sit",
+   "file": "blouse_bac_si/sit.png",
+   "size": [
+    200,
+    282
+   ],
+   "neck": [
+    100.0,
+    49.0
+   ],
+   "ground": 276,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": [
+    60.0,
+    169.2
+   ]
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "sit_ground",
+   "file": "blouse_bac_si/sit_ground.png",
+   "size": [
+    236,
+    244
+   ],
+   "neck": [
+    118.0,
+    47.5
+   ],
+   "ground": 239,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "pick",
+   "file": "blouse_bac_si/pick.png",
+   "size": [
+    232,
+    236
+   ],
+   "neck": [
+    179.3,
+    61.5
+   ],
+   "ground": 231,
+   "scale": 0.46,
+   "head_rotation": 60,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "fall",
+   "file": "blouse_bac_si/fall.png",
+   "size": [
+    260,
+    226
+   ],
+   "neck": [
+    109.2,
+    210.2
+   ],
+   "ground": 220,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 40,
+   "seat": null
+  },
+  {
+   "costume": "blouse_bac_si",
+   "pose": "run",
+   "file": "blouse_bac_si/run.png",
+   "size": [
+    290,
+    288
+   ],
+   "neck": [
+    165.0,
+    36.9
+   ],
+   "ground": 283,
+   "scale": 0.46,
+   "head_rotation": 8,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "kneel",
+   "file": "so_mi_hoc_sinh/kneel.png",
+   "size": [
+    182,
+    256
+   ],
+   "neck": [
+    109.2,
+    51.9
+   ],
+   "ground": 250,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "crawl",
+   "file": "so_mi_hoc_sinh/crawl.png",
+   "size": [
+    260,
+    180
+   ],
+   "neck": [
+    202.7,
+    42.2
+   ],
+   "ground": 175,
+   "scale": 0.46,
+   "head_rotation": 15,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "butt",
+   "file": "so_mi_hoc_sinh/butt.png",
+   "size": [
+    170,
+    252
+   ],
+   "neck": [
+    125.2,
+    50.2
+   ],
+   "ground": 246,
+   "scale": 0.46,
+   "head_rotation": 35,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "lie_front",
+   "file": "so_mi_hoc_sinh/lie_front.png",
+   "size": [
+    370,
+    116
+   ],
+   "neck": [
+    222.0,
+    37.1
+   ],
+   "ground": 110,
+   "scale": 0.46,
+   "head_rotation": 90,
+   "face": false,
+   "lift": 24,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "lie_back",
+   "file": "so_mi_hoc_sinh/lie_back.png",
+   "size": [
+    292,
+    94
+   ],
+   "neck": [
+    11.7,
+    47.0
+   ],
+   "ground": 88,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 38,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "sit",
+   "file": "so_mi_hoc_sinh/sit.png",
+   "size": [
+    196,
+    276
+   ],
+   "neck": [
+    98.0,
+    55.7
+   ],
+   "ground": 270,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": [
+    58.8,
+    165.6
+   ]
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "sit_ground",
+   "file": "so_mi_hoc_sinh/sit_ground.png",
+   "size": [
+    236,
+    240
+   ],
+   "neck": [
+    118.0,
+    39.3
+   ],
+   "ground": 235,
+   "scale": 0.46,
+   "head_rotation": 0,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "pick",
+   "file": "so_mi_hoc_sinh/pick.png",
+   "size": [
+    232,
+    238
+   ],
+   "neck": [
+    176.7,
+    63.4
+   ],
+   "ground": 232,
+   "scale": 0.46,
+   "head_rotation": 60,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "fall",
+   "file": "so_mi_hoc_sinh/fall.png",
+   "size": [
+    262,
+    220
+   ],
+   "neck": [
+    110.0,
+    204.6
+   ],
+   "ground": 214,
+   "scale": 0.46,
+   "head_rotation": -90,
+   "face": true,
+   "lift": 40,
+   "seat": null
+  },
+  {
+   "costume": "so_mi_hoc_sinh",
+   "pose": "run",
+   "file": "so_mi_hoc_sinh/run.png",
+   "size": [
+    288,
+    282
+   ],
+   "neck": [
+    160.5,
+    60.3
+   ],
+   "ground": 276,
+   "scale": 0.46,
+   "head_rotation": 8,
+   "face": true,
+   "lift": 0,
+   "seat": null
+  }
+ ]
+}

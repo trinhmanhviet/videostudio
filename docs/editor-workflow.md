@@ -92,7 +92,7 @@ Workflow Run đi qua API admission hiện hành; fixture chỉ giả preflight v
 
 ### Server fixture và cách tiếp tục kiểm tra
 
-Các script nằm ở `scripts/create_editor_fixture.py` và `scripts/editor_fixture_server.py`. Chúng khóa DB/output vào `data/editor-fixture` của checkout; không dùng E:\Videos hoặc DB production, không gọi Comfy/ChatGPT/Flow.
+Các script nằm ở `scripts/dev/create_editor_fixture.py` và `scripts/dev/editor_fixture_server.py`. Chúng khóa DB/output vào `data/editor-fixture` của checkout; không dùng E:\Videos hoặc DB production, không gọi Comfy/ChatGPT/Flow.
 
 ```powershell
 & C:\Python312\python.exe -m scripts.editor_fixture_server --port 8886
@@ -659,7 +659,7 @@ Lip sync đầu tiên có thể dùng closed/half/open theo năng lượng audio
 ### Kết quả engine spike HyperFrames (2026-11-04)
 
 > **Vị trí hiện tại:** bộ dựng hoạt hình gấu trúc đã chuyển vào `memestudio/` (engine, tools, asset rig/mặt/tủ đồ/nền/SFX,
-> các tập trong `memestudio/episodes/`, video trong `memestudio/out/`). Các mục dưới ghi đường dẫn cũ lúc thử nghiệm
+> các tập trong `memestudio/episodes/`, video trong `data/memestudio/out/`). Các mục dưới ghi đường dẫn cũ lúc thử nghiệm
 > (`tmp/hyperframes-spike/...`, `memestudio/assets/rig/...`, `scripts/build_rig_faces.py`,
 > `scripts/import_rig_wardrobe.py`). Thư mục `tmp/hyperframes-spike` (các cảnh thử, ảnh chụp, video thử ngoài `ep1.mp4`)
 > đã xoá ngày 2026-11-04 theo yêu cầu người dùng. Hướng dẫn làm tập mới: [huong-dan-video-hoat-hinh.md](huong-dan-video-hoat-hinh.md).

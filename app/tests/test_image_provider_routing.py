@@ -1,0 +1,202 @@
+import json
+import tempfile
+import unittest
+import uuid
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import httpx
+from PIL import Image
+
+from videostudio.core import PermanentError, digest
+from videostudio.providers import Pipeline, single_frame_prompt, scene_image_prompt
+
+
+class InitialImageProviderRoutingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
+        self.job_id=str(uuid.uuid4());self.output=self.root/'job';self.output.mkdir()
+        self.job={'id':self.job_id,'output':str(self.output),'request':{'duration_seconds':8},'checkpoints':{'speech':{'duration_seconds':6,'utterances':[
+            {'scene_id':'scene-0','visual_prompt':'prompt zero','duration':2},
+            {'scene_id':'scene-1','visual_prompt':'prompt one','duration':2},
+            {'scene_id':'scene-2','visual_prompt':'prompt two','duration':2},
+        ]}}}
+        self.pipeline=Pipeline.__new__(Pipeline);self.pipeline.comfy='http://127.0.0.1:8188';self.pipeline.store=None
+        def fake_comfy(job,kind,graph,path,check):
+            Path(path).parent.mkdir(parents=True,exist_ok=True);Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG');check()
+            return {'path':str(path),'prompt_id':'fixture-'+kind,'assets':[]}
+        self.pipeline.comfy_asset=Mock(side_effect=fake_comfy)
+    def tearDown(self):self.tmp.cleanup()
+
+    def _remote_fixture(self,provider):
+        calls=[]
+        def post(url,*,json,headers,timeout,trust_env):
+            self.assertFalse(trust_env)
+            self.assertEqual(headers['X-VS-Client'],'videostudio')
+            calls.append((url,json))
+            task_id=json['task_id'];source_root=self.root/'data'/(('flow-images' if provider=='flow' else 'chatgpt-images'))
+            source=source_root/(task_id+'.png');source.parent.mkdir(parents=True,exist_ok=True)
+            Image.effect_noise((768,1376),80).convert('RGB').save(source,format='PNG')
+            data={'task_id':task_id,'file_path':str(source),'sha256':digest(source),'request_id':provider+'-'+task_id,'width':768,'height':1376,'source':provider}
+            if provider=='flow':
+                self.assertEqual(json['job_id'],self.job_id)
+                data.update(media_id=str(uuid.uuid5(uuid.UUID(task_id),'media')),project_url='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc')
+            return httpx.Response(200,json={'ok':True,'data':data})
+        return calls,post
+
+    def test_flow_routes_each_scene_serially_with_stable_task_ids_and_checkpoints(self):
+        self.job['request']['image_provider']='flow';calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'0'},clear=False):
+            result=self.pipeline.images(self.job,lambda:None)
+            self.assertEqual(len(result['scenes']),3)
+            for index,(url,body) in enumerate(calls):
+                self.assertTrue(url.endswith('/api/flow/images/generate'))
+                expected=str(uuid.uuid5(uuid.UUID(self.job_id),f'bulk-scene-image:{index}'))
+                self.assertEqual(body['task_id'],expected);self.assertEqual(body['prompt'],scene_image_prompt(f'prompt {('zero','one','two')[index]}',wide=True))
+                checkpoint=self.output/f'images-{index:04}.checkpoint.json'
+                self.assertTrue(checkpoint.is_file())
+            self.pipeline.images(self.job,lambda:None)
+            self.assertEqual(len(calls),3,'verified per-scene checkpoints must prevent duplicate Flow submissions')
+
+    def test_batch_endpoint_helper_validates_and_maps_reordered_results_by_task_id(self):
+        tasks=[]
+        for index in range(2):
+            tasks.append({'task_id':str(uuid.uuid5(uuid.UUID(self.job_id),f'batch:{index}')),'prompt':f'prompt {index}','character_mentions':[],'ordinal':index,'output_path':self.output/f'batch-{index}.png'})
+        calls=[]
+        def post(url,*,json,headers,timeout,trust_env):
+            self.assertTrue(url.endswith('/api/flow/images/generate-batch'));self.assertFalse(trust_env)
+            self.assertEqual(headers['X-VS-Client'],'videostudio');self.assertEqual(json['job_id'],self.job_id)
+            calls.append((url,json));data=[]
+            for task in reversed(json['tasks']):
+                source=self.root/'data'/'flow-images'/(task['task_id']+'.png');source.parent.mkdir(parents=True,exist_ok=True)
+                Image.effect_noise((768,1376),80).convert('RGB').save(source,format='PNG')
+                data.append({'task_id':task['task_id'],'file_path':str(source),'sha256':digest(source),'media_id':'media-'+task['task_id'][:8],
+                             'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc','width':768,'height':1376})
+            self.assertTrue(all('output_path' not in item for item in json['tasks']))
+            return httpx.Response(200,json={'ok':True,'data':data})
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post):
+            result=self.pipeline._browser_scene_images_batch(self.job,tasks,lambda:None,timeout=1200)
+        self.assertEqual(set(result),{x['task_id'] for x in tasks})
+        self.assertEqual(result[tasks[0]['task_id']]['path'],str(tasks[0]['output_path'].resolve()))
+        self.assertTrue(all(Path(x['path']).is_file() and x['width']==768 for x in result.values()))
+        self.assertEqual(len(calls),1)
+
+    def test_flow_batch_feature_chunks_in_ordinal_order_and_reuses_checkpoints(self):
+        self.job['request'].update(image_provider='flow',flow_batch_size=10);calls=[]
+        def fake_batch(job,tasks,check,timeout=3600):
+            calls.append([x['ordinal'] for x in tasks]);results={}
+            for item in tasks:
+                path=Path(item['output_path']);path.parent.mkdir(parents=True,exist_ok=True)
+                Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG')
+                results[item['task_id']]={'task_id':item['task_id'],'path':str(path),'width':768,'height':1376,'sha256':digest(path),
+                                          'request_id':'req-'+item['task_id'],'media_id':'media-'+str(item['ordinal']),
+                                          'project_url':'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'}
+            return results
+        self.pipeline._browser_scene_images_batch=Mock(side_effect=fake_batch)
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            result=self.pipeline.images(self.job,lambda:None)
+            self.assertEqual([Path(x['path']).name for x in result['scenes']],['images-0000.png','images-0001.png','images-0002.png'])
+            self.assertEqual(calls,[[0,1,2]])
+            second=self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(len(second['scenes']),3);self.assertEqual(self.pipeline._browser_scene_images_batch.call_count,1)
+
+    def test_one_stays_serial_and_unvalidated_batch_fails_before_browser(self):
+        self.job['request'].update(image_provider='flow',flow_batch_size=1)
+        calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            self.pipeline.images(self.job,lambda:None)
+        self.assertTrue(calls and all(url.endswith('/api/flow/images/generate') for url,_ in calls))
+        self.job['request']['flow_batch_size']=20
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch('videostudio.providers.httpx.post') as post,patch.dict('os.environ',{'VS_FLOW_BATCH_ENABLED':'1','VS_FLOW_BATCH_VALIDATED_SIZES':'10'},clear=False):
+            with self.assertRaises(PermanentError):self.pipeline.images(self.job,lambda:None)
+            post.assert_not_called()
+
+    def test_chatgpt_routes_each_scene_through_existing_browser_endpoint(self):
+        self.job['request']['image_provider']='chatgpt';calls,post=self._remote_fixture('chatgpt')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'):
+            result=self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(len(result['scenes']),3)
+        self.assertTrue(all(url.endswith('/api/images/generate') for url,_ in calls))
+        self.assertTrue(all('job_id' not in body for _,body in calls))
+
+    def test_comfy_routes_to_existing_qwen_graph_and_legacy_jobs_stay_comfy(self):
+        calls=[]
+        def comfy(job,kind,graph,path,check):
+            calls.append((kind,graph));Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG');check()
+            return {'path':str(path),'prompt_id':'comfy-'+kind,'assets':[]}
+        self.job['request']['image_provider']='comfy';self.pipeline.comfy_asset=Mock(side_effect=comfy)
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'):
+            self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(len(calls),3)
+        self.assertEqual(calls[0][1]['4']['inputs']['prompt'],single_frame_prompt('prompt zero',wide=True))
+        legacy_output=self.root/'legacy';legacy_output.mkdir()
+        legacy={**self.job,'output':str(legacy_output),'request':{'duration_seconds':8}}
+        self.pipeline.comfy_asset.reset_mock();self.pipeline.images(legacy,lambda:None)
+        self.assertEqual(self.pipeline.comfy_asset.call_count,3)
+
+    def test_required_visual_qa_rejects_noncomfy_provider_before_any_submission(self):
+        self.job['request']['image_provider']='flow';self.pipeline.comfy_asset=Mock(side_effect=AssertionError('must not generate'))
+        with patch('videostudio.visual_quality.gate_mode',return_value='required'),patch('videostudio.providers.httpx.post') as post:
+            with self.assertRaises(PermanentError):self.pipeline.images(self.job,lambda:None)
+        self.pipeline.comfy_asset.assert_not_called();post.assert_not_called()
+
+
+    def _flow_character_script(self):
+        phrase='weathered face and gray beard'
+        self.job['checkpoints']['script']={'flow_character_manifest_version':1,'characters':[{'character_id':'father','name':'the father','appearance_evidence':[phrase]}],'scenes':[
+            {'visual_prompt':'A man with a '+phrase,'character_ids':['father']},
+            {'visual_prompt':'A landscape without a character','character_ids':[]},
+            {'visual_prompt':'The same man with a '+phrase,'character_ids':['father']},
+        ]}
+        for index in (0,2):self.job['checkpoints']['speech']['utterances'][index]['character_ids']=['father']
+
+    def test_flow_scene_requests_use_native_character_names_and_reuse_receipts(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        reference={'character_id':entity_id,'name':'father','project_url':project}
+        self.pipeline._flow_native_characters=Mock(return_value=({'father':reference},[]))
+        calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
+            result=self.pipeline.images(self.job,lambda:None)
+            self.assertEqual(result['reference_mode'],'native_flow_characters')
+            mentions=[body.get('character_mentions',[]) for _,body in calls]
+            self.assertEqual(mentions,[[{'character_id':entity_id,'name':'father','project_url':project}],[],[{'character_id':entity_id,'name':'father','project_url':project}]])
+            self.assertNotIn('reference_media_ids',calls[0][1])
+            checkpoint=json.loads((self.output/'images-0000.checkpoint.json').read_text(encoding='utf8'))
+            self.assertEqual(checkpoint['character_mentions'],mentions[0])
+            self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(len(calls),3,'scene receipts must prevent duplicate Flow generations')
+
+    def test_changed_native_character_never_overwrites_existing_scene_image(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();first_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        reference={'character_id':first_id,'name':'father','project_url':project};self.pipeline._flow_native_characters=Mock(return_value=({'father':reference},[]))
+        calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
+            self.pipeline.images(self.job,lambda:None);original=digest(self.output/'images-0000.png')
+            changed={'character_id':str(uuid.uuid4()),'name':'father','project_url':project};self.pipeline._flow_native_characters=Mock(return_value=({'father':changed},[]))
+            with self.assertRaisesRegex(PermanentError,'refusing to overwrite'):
+                self.pipeline.images(self.job,lambda:None)
+            self.assertEqual(digest(self.output/'images-0000.png'),original)
+        self.assertEqual(len(calls),3)
+
+    def test_removing_native_character_never_overwrites_an_existing_scene(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script();self.job['checkpoints']['speech']['utterances'][0]['character_ids']=[]
+        entity_id=str(uuid.uuid4());project='https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+        self.pipeline._flow_native_characters=Mock(return_value=({'father':{'character_id':entity_id,'name':'father','project_url':project}},[]))
+        path=self.output/'images-0000.png';Image.effect_noise((768,1376),80).convert('RGB').save(path,format='PNG')
+        checkpoint=path.with_suffix('.checkpoint.json');checkpoint.write_text(json.dumps({'sha256':digest(path),'prompt':'prompt zero','provider':'flow','character_mentions':[{'character_id':entity_id,'name':'father','project_url':project}]}),encoding='utf8')
+        with patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'1'}):
+            with self.assertRaisesRegex(PermanentError,'refusing to overwrite'):
+                self.pipeline.images(self.job,lambda:None)
+
+    def test_native_character_mode_blocks_before_any_creation_until_ui_verified(self):
+        self.job['request']['image_provider']='flow';self._flow_character_script()
+        self.pipeline._flow_native_characters=Mock(side_effect=AssertionError('Character must not be created'))
+        calls,post=self._remote_fixture('flow')
+        with patch('videostudio.providers.DATA_ROOT',self.root/'data'),patch('videostudio.providers.httpx.post',side_effect=post),patch('videostudio.visual_quality.gate_mode',return_value='legacy'),patch.dict('os.environ',{'VS_FLOW_REFERENCE_UI_VERIFIED':'0'},clear=False):
+            with self.assertRaisesRegex(PermanentError,'not enabled'):
+                self.pipeline.images(self.job,lambda:None)
+        self.assertEqual(calls,[])
+        self.pipeline._flow_native_characters.assert_not_called()
+
+if __name__=='__main__':
+    unittest.main()
