@@ -10,6 +10,7 @@ import math
 import re
 import time
 import uuid
+from .speech_worker import DEFAULT_SPEECH_BATCH_SIZE, MAX_SPEECH_BATCH_SIZE
 
 OPTIONAL = {'research', 'references', 'captions', 'music', 'sfx'}
 REQUIRED = {'input', 'script', 'speech', 'images', 'render', 'output'}
@@ -34,7 +35,7 @@ REQUIRED_PORTS['render'] = {'images','speech'}
 CONFIG = {
     'input': {'idea','duration_seconds','workflow_mode'},
     'research': {'enabled','provider'}, 'script': {'provider'},
-    'speech': {'voice_id','pitch'}, 'references': {'enabled'},
+    'speech': {'voice_id','pitch','speech_batch_size'}, 'references': {'enabled'},
     'images': {'provider','batch_size','quality_mode'}, 'captions': {'enabled'},
     'music': {'enabled','volume'}, 'sfx': {'enabled'},
     'render': {'preset_id'}, 'output': set(),
@@ -58,6 +59,7 @@ def _config(kind, config):
         if key=='enabled' and type(value) is not bool: raise ValueError('enabled must be boolean')
         if key=='provider' and value not in (('flow','chatgpt','comfy','meta') if kind=='images' else ('chatgpt','gemini')): raise ValueError(f'Unsupported {kind} provider')
         if key=='batch_size' and (type(value) is not int or value not in (1,3,5,10)): raise ValueError('Invalid batch_size')
+        if key=='speech_batch_size' and (type(value) is not int or not 1<=value<=MAX_SPEECH_BATCH_SIZE): raise ValueError(f'speech_batch_size must be an integer from 1 to {MAX_SPEECH_BATCH_SIZE}')
         if key=='quality_mode' and value not in ('quick','careful'): raise ValueError('Invalid quality_mode')
         if key=='workflow_mode' and value not in ('research','provided_narration'): raise ValueError('Invalid workflow_mode')
         if key=='preset_id' and value not in ('documentary','science','everyday'): raise ValueError('Invalid preset_id')
@@ -134,7 +136,7 @@ def execution_order(graph):
 def default_workflow(preset_id='documentary'):
     if preset_id not in ('documentary','science','everyday'):raise ValueError('Invalid preset_id')
     layout={'input':(30,100),'research':(290,100),'script':(550,100),'speech':(810,100),'references':(810,340),'images':(1080,100),'captions':(1080,340),'music':(1080,560),'sfx':(1080,780),'render':(1370,100),'output':(1640,100)}
-    configs={'research':{'enabled':True},'script':{},'images':{'provider':'flow','batch_size':1},'music':{'enabled':True,'volume':0.15},'render':{'preset_id':preset_id}}
+    configs={'research':{'enabled':True},'script':{},'speech':{'speech_batch_size':DEFAULT_SPEECH_BATCH_SIZE},'images':{'provider':'flow','batch_size':1},'music':{'enabled':True,'volume':0.15},'render':{'preset_id':preset_id}}
     graph={'schema_version':1,'id':'','name':preset_id.title()+' workflow','revision':0,'nodes':[{'id':kind,'type':kind,'x':xy[0],'y':xy[1],'config':configs.get(kind,{})} for kind,xy in layout.items()],'edges':[],'viewport':{'x':20,'y':30,'zoom':0.55}}
     def edge(source,port,target,target_port=None):graph['edges'].append({'id':f'{source}-{target}-{port}','source':source,'source_port':port,'target':target,'target_port':target_port or port})
     edge('input','brief','research');edge('research','brief','script');edge('script','script','speech');edge('script','script','references');edge('script','script','images');edge('speech','speech','images');edge('references','references','images');edge('images','images','render');edge('speech','speech','render')

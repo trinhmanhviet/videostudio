@@ -220,6 +220,9 @@ class Publishing:
                     raise ValueError('Idempotency-Key already used cho lịch khác')
                 identifier = prior['id']
             else:
+                if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_history'").fetchone():
+                    if db.execute('SELECT 1 FROM publication_history WHERE job_id=?',(normalized['job_id'],)).fetchone() or not db.execute('SELECT 1 FROM jobs WHERE id=?',(normalized['job_id'],)).fetchone():
+                        raise ValueError('Video đã được dọn hoặc không còn tồn tại; không tạo lịch đăng mới')
                 duplicate = db.execute("SELECT 1 FROM publishing_schedules WHERE channel_id=? AND sha256=? AND state!='cancelled'", (channel['id'],approved['sha256'])).fetchone()
                 if duplicate:
                     raise ValueError('Bản video này đã có lịch hoặc đã đăng trên kênh; không tạo trùng')

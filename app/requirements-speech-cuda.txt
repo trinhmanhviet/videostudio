@@ -1,0 +1,7 @@
+# Optional speech environment only, NOT app/requirements.txt or system Python.
+# Tested on Windows, Python 3.13, RTX 3090 Ti, existing VieNeu 3.8.3.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.8.0+cu128
+torchaudio==2.8.0+cu128
+transformers==5.22.2
+safetensors==0.8.0

@@ -1,7 +1,6 @@
-"""Read-only StoryForge import; never infer clone IDs from sample filenames.
-StoryForge services/voice_samples.py: clone IDs are 'clone:'+Asset.id, not a
-sample's storage filename. A complete DB export must include every voice-sample
-asset (all projects/statuses) and resolved local reference paths; DB is never started.
+"""VideoStudio's local voice inventory; never infer clone IDs from filenames.
+Clone IDs retain their imported identity, not a sample's storage filename.
+A complete catalog includes preset and clone entries with local reference paths.
 Optional VS_VOICES_EXPORT: JSON {complete: true, voices:[{id,name,kind,
 reference_path?,sample_path?,sha256?}]}. Existing entries are never dropped.
 """
@@ -32,7 +31,7 @@ class Voices:
                 if not isinstance(r.get('id'),str) or r.get('kind') not in ('preset','clone'):raise ValueError('Invalid voice export')
                 rows[r['id']]={**rows.get(r['id'],{}),**r,'source':'read_only_export'}
             complete=d.get('complete') is True
-        if not complete:warnings.append('Voice inventory incomplete: stopped StoryForge DB not queried. Supply complete read-only asset/preset export; no clone is silently omitted or fabricated.')
+        if not complete:warnings.append('Voice inventory incomplete: supply the complete local voice catalog; no clone is silently omitted or fabricated.')
         for r in rows.values():
             if r['kind']=='clone':
                 p=Path(r.get('reference_path','__missing__'))

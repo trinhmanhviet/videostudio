@@ -28,6 +28,8 @@ def reject_deleted_project(c,name):
 
 
 def reject_retired_job(c,identifier):
+    if has_table(c,'publication_history') and c.execute('SELECT 1 FROM publication_history WHERE job_id=?',(identifier,)).fetchone():
+        raise ValueError('Video đã đăng và dọn; không thể khởi động lại job đã xóa')
     row=c.execute('SELECT request FROM jobs WHERE id=?',(identifier,)).fetchone()
     if row:reject_deleted_project(c,project_name(row['request']))
     if has_table(c,'job_file_deletions') and c.execute('SELECT 1 FROM job_file_deletions WHERE job=?',(identifier,)).fetchone():
@@ -89,11 +91,14 @@ class OutputRemoval:
             self.targets.append(target)
         if len(set(self.targets))!=len(self.targets) or any(a!=b and a.is_relative_to(b) for a in self.targets for b in self.targets):
             raise ValueError('Output dùng chung hoặc lồng nhau; hãy giữ lại tệp')
+        resolved_references={}
         def touches(value):
             try:
                 p=Path(value)
                 if not p.is_absolute():return False
-                p=p.resolve()
+                key=str(p)
+                if key not in resolved_references:resolved_references[key]=p.resolve()
+                p=resolved_references[key]
                 return any(p==target or p.is_relative_to(target) for target in self.targets)
             except (ValueError,OSError):return False
         for other in c.execute('SELECT id,output,request FROM jobs'):

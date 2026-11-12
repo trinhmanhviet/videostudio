@@ -24,9 +24,10 @@ if not _args:
     fail('Cách dùng: python engine\\make_voice.py episodes\\<tập>')
 HERE = Path(_args[0]).resolve()                    # episode folder (script.json lives here)
 OUT = HERE / 'assets' / 'voice'
-STORYFORGE = Path('D:/Projects/storyforge')
-SPEECH_PY = STORYFORGE / '.runtime/media/.venv/Scripts/python.exe'
-CACHE = STORYFORGE / '.runtime/media/model-cache'
+sys.path.insert(0, str(ROOT))
+from videostudio.paths import DATA_ROOT, RUNTIME_ROOT, VOICE_ROOT
+SPEECH_PY = RUNTIME_ROOT / 'media/.venv/Scripts/python.exe'
+CACHE = RUNTIME_ROOT / 'media/model-cache'
 
 
 def duration(path):
@@ -40,8 +41,8 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(ROOT))
     from videostudio.voices import Voices
-    export = ROOT.parent / 'data' / 'voices-export.json'
-    voices = Voices(STORYFORGE, export if export.is_file() else None)
+    export = DATA_ROOT / 'voices-export.json'
+    voices = Voices(VOICE_ROOT, export if export.is_file() else None)
     # Old voice.json files can be upgraded from the existing text+voice stamps.
     # If a previous WAV checksum exists, also use it to detect damaged cache files.
     previous = {}

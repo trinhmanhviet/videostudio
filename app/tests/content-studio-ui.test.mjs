@@ -168,3 +168,9 @@ test('a raw story file becomes one video without its heading line', () => {
   assert.equal(ui.parseStoryFile('nội dung', 'all_cases_clean.txt'), null);
   assert.equal(ui.parseStoryFile('   ', 'c.txt'), null);
 });
+
+
+test('JSON speech batches accept every integer from 1 to 512 and reject invalid values',()=>{
+  for(const size of [1,17,256,512])assert.equal(ui.parseImport(JSON.stringify([{text:'Voice',speech_batch_size:size}]),'voice.json')[0].speech_batch_size,size);
+  for(const size of [0,513,1.5,'invalid'])assert.throws(()=>ui.parseImport(JSON.stringify([{text:'Voice',speech_batch_size:size}]),'voice.json'));
+});

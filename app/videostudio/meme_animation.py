@@ -188,7 +188,8 @@ def speech(pipeline, job, check):
     assets = raw.get('assets', []) + [asset(p) for p in files if p.is_file() and p.suffix not in ('.log', '.part')] + [asset(path)]
     return {'path': str(path), 'duration_seconds': seconds, 'utterances': utterances, 'scenes': utterances,
             'final_narration': job['checkpoints']['script']['narration'], 'duration_attempts': 1,
-            'meme_engine': 'hyperframes', 'speed': speed, 'pitch': pitch, 'assets': assets}
+            'meme_engine': 'hyperframes', 'speed': speed, 'pitch': pitch,
+            'voice_id':voice['id'],'voice_sha256':voice.get('sha256'),'assets': assets}
 
 
 def images(pipeline, job, check):

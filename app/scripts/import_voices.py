@@ -1,8 +1,14 @@
-"""Read-only authoritative voice import from the already-running local StoryForge DB.
+"""Historical one-time importer, NOT needed to run VideoStudio.
+
+Requires the retired StoryForge database and explicitly reintroduces old paths.
+Do not run after the local-runtime migration. VideoStudio uses its existing
+data/voices-export.json, data/Voices and data/runtime independently.
 No DB writes, no service start, no secret output. Keeps preset IDs and clone identities.
 """
-import hashlib,json,subprocess
+import hashlib,json,subprocess,sys
 from pathlib import Path
+if '--legacy-storyforge' not in sys.argv:
+    raise SystemExit('Importer StoryForge đã nghỉ dùng. VideoStudio dùng data/voices-export.json và data/Voices; không cần Docker/database cũ. Chỉ dùng --legacy-storyforge khi chủ động nhập lại từ dự án cũ.')
 ROOT=Path(__file__).resolve().parents[1]
 STORY=Path('D:/Projects/storyforge')
 sql="BEGIN READ ONLY; SELECT json_agg(t) FROM (SELECT id,status,sha256,metadata_json FROM assets WHERE metadata_json->>'purpose'='voice_sample')t; COMMIT;"

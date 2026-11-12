@@ -38,7 +38,7 @@ def _cached_digest(path):
 
 
 REQUEST_FIELDS = {'voice_id', 'duration_seconds', 'music_volume', 'pitch', 'quality_mode',
-                  'image_provider', 'flow_batch_size', 'meta_batch_size', 'text_provider',
+                  'image_provider', 'flow_batch_size', 'meta_batch_size', 'speech_batch_size', 'text_provider',
                   'edit_preset', 'references_enabled', 'captions_enabled', 'music_enabled', 'sfx_enabled'}
 
 
@@ -163,6 +163,8 @@ class ContentFactory:
                                            'defaults': defaults, 'items': normalized, 'scope': scope,
                                            **({'auto_name': True} if auto_name else {})}).encode()).hexdigest()
         with self.store.db() as db:
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_retired_batches'").fetchone() and db.execute('SELECT 1 FROM publication_retired_batches WHERE idem=?',(key,)).fetchone():
+                raise ValueError('Lô này đã đăng và dọn; không tạo lại bằng khóa yêu cầu cũ')
             old = db.execute('SELECT id,fingerprint FROM factory_batches WHERE idem=?', (key,)).fetchone()
         if old:
             if old['fingerprint'] != fingerprint:
@@ -176,6 +178,8 @@ class ContentFactory:
         now, batch_id = time.time(), uuid.uuid4().hex
         with self.store.db() as db:
             db.execute('BEGIN IMMEDIATE')
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_retired_batches'").fetchone() and db.execute('SELECT 1 FROM publication_retired_batches WHERE idem=?',(key,)).fetchone():
+                raise ValueError('Lô này đã đăng và dọn; không tạo lại bằng khóa yêu cầu cũ')
             old = db.execute('SELECT id,fingerprint FROM factory_batches WHERE idem=?', (key,)).fetchone()
             if old:
                 if old['fingerprint'] != fingerprint:
@@ -629,7 +633,8 @@ class ContentFactory:
             # Publisher registers this optional query hook for per-channel state.
         records = []
         for identifier in ids:
-            job = self.store.get(identifier)
+            try:job = self.store.get(identifier)
+            except KeyError:continue
             request = job['request']
             meta = metadata.get(identifier, {})
             item_style = meta.get('style') or ('meme' if request.get('workflow_mode') == 'meme' else 'news')

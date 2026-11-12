@@ -1,5 +1,11 @@
 # VideoStudio
 
+**Dọn sau khi đăng:** trong Kho video/cửa sổ xem video, chọn **Đã đăng & dọn** để lưu tên,
+ngày giờ, nền tảng/kênh và link bài (tùy chọn), rồi xóa job cùng file riêng. Tra cứu tại
+**Kho video → Sổ đăng**, có tìm kiếm và phân trang. Tác vụ đang chạy hoặc lịch đăng chưa kết thúc
+được giữ lại; file đang bận được tự thử dọn tiếp. Không tự xóa chỉ vì đã upload.
+Chi tiết và giới hạn: [Xưởng nội dung](docs/content-studio.md#đã-đăng--dọn--sổ-đăng).
+
 Ứng dụng local trên Windows để tạo và quản lý video theo dự án. Server và worker chạy trên máy người dùng; ảnh Flow dùng Chrome riêng; ChatGPT text dùng extension trên Chrome thường; file xuất mặc định lưu ở `E:\Videos`.
 
 **Video hài tự động:** chọn Video meme / hoạt hình nhân vật, nhập truyện/ý tưởng và chọn giọng.
@@ -35,6 +41,25 @@ D:\Projects\videostudio
 ```
 
 Đường dẫn code ghi trong tài liệu (ví dụ `videostudio/api.py`, `scripts/start_local.ps1`, `memestudio\assets`) tính từ `app\`. Chạy lệnh Python/PowerShell trong `app\`. Thư mục dữ liệu mặc định là `data\` cạnh `app\`; có thể đổi bằng `VS_DATA_ROOT`.
+
+Runtime tạo giọng và dữ liệu giọng hiện thuộc VideoStudio: `data/runtime/media/.venv`,
+`data/runtime/media/model-cache`, `data/Voices` và `data/voices-export.json`.
+Cấu hình mở ComfyUI nằm tại `data/runtime/comfyui-launcher.json`; ComfyUI vẫn dùng bộ cài riêng
+được ghi trong cấu hình đó. Không cần chạy StoryForge, Docker hay PostgreSQL để dùng VideoStudio.
+`VS_VOICE_ROOT` đổi gốc kho giọng (mặc định `data/`); `VS_SPEECH_PYTHON` và `VS_SPEECH_CACHE`
+cho phép chọn runtime/cache khác. Không dùng script lịch sử `scripts/import_voices.py` sau khi đã chuyển dữ liệu.
+
+VieNeu có torch CUDA sẽ dùng PyTorch GPU; thiếu torch/CUDA thì dùng ONNX. Tùy chọn cài đúng bộ gói đã kiểm tra
+vào **riêng môi trường giọng đã có** (chạy từ gốc repo, không cài vào Python của backend):
+
+```powershell
+uv pip install --python data/runtime/media/.venv/Scripts/python.exe -r app/requirements-speech-cuda.txt
+```
+
+Lệnh này cài thư viện, không cài/tải model. Giữ cache offline sẵn có trong `data/runtime/media/model-cache`.
+`VS_SPEECH_BACKEND=onnx|pytorch` chọn backend; `VS_SPEECH_DEVICE=cpu` ưu tiên CPU.
+Batch giọng mặc định **256**, chỉnh theo từng video bằng số nguyên **1–512**; vẫn lưu WAV/receipt riêng từng câu.
+Chi tiết giao diện, phục hồi và Sổ đăng: [Xưởng nội dung](docs/content-studio.md).
 
 ## Cài trên máy Windows mới
 

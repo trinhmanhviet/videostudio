@@ -1,5 +1,5 @@
 from __future__ import annotations
-from .paths import DATA_ROOT
+from .paths import DATA_ROOT, VOICE_ROOT
 import json, os, sqlite3, threading, time, uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parent.parent
 def create_app(store=None,pipeline=None,worker_enabled=True):
     store=store or Store(os.getenv('VS_DATABASE',str(DATA_ROOT/'jobs.sqlite3')),os.getenv('VS_OUTPUT_DIR','E:/Videos'))
     default_export=DATA_ROOT/'voices-export.json'
-    voices=Voices(os.getenv('VS_STORYFORGE_ROOT','D:/Projects/storyforge'),os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
+    voices=Voices(VOICE_ROOT,os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
     pipeline.store=store
     from .scene_editor import SceneEditor
@@ -41,7 +41,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     project_lifecycle=ProjectLifecycle(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
-    factory=None;publisher=None
+    factory=None;publisher=None;posted_cleanup=None
     def loop():
         while not stop.is_set():
             if flow_accounts.blocks_workers():stop.wait(.5);continue
@@ -67,12 +67,24 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 import logging
                 logging.getLogger(__name__).exception('Publishing scheduler tick failed')
             stop.wait(5)
+    def cleanup_loop():
+        while not stop.is_set():
+            try:
+                if posted_cleanup:posted_cleanup.tick()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Publication cleanup will retry')
+            if posted_cleanup:
+                posted_cleanup.wake.wait(1)
+                posted_cleanup.wake.clear()
+            else:stop.wait(1)
     @asynccontextmanager
     async def lifespan(app):
         threads=[]
         if worker_enabled:
+            if posted_cleanup:posted_cleanup.recover()
             flow_accounts.recover_after_restart()
-            for target in (loop,heartbeat,publishing_loop):
+            for target in (loop,heartbeat,publishing_loop,cleanup_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
         yield
         stop.set()
@@ -390,8 +402,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     @app.get('/api/voices')
     def catalog():
         c=voices.catalog()
+        from .voice_timing import reading_profiles
+        profiles=reading_profiles(store,c['voices'])
         # Absolute filesystem paths are server-private, sample URLs are scoped.
-        c['voices']=[{k:v for k,v in r.items() if k not in ('reference_path','sample_path','sha256')}|{'sample_url':'/api/voices/'+r['id']+'/sample' if r.get('sample_path') else None} for r in c['voices']]
+        c['voices']=[{k:v for k,v in r.items() if k not in ('reference_path','sample_path','sha256')}|{'sample_url':'/api/voices/'+r['id']+'/sample' if r.get('sample_path') else None,'reading_profile':profiles[r['id']]} for r in c['voices']]
         c['unmapped_sample_files']=[Path(p).name for p in c['unmapped_sample_files']]
         return {**c,'items':c['voices'],'unavailable_reasons':c['warnings']}
     @app.get('/api/voices/{voice_id:path}/sample')
@@ -690,8 +704,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             pipeline.context.job=job_id;pipeline.context.text_provider=j['request'].get('text_provider','chatgpt')
             try:return pipeline.llm_json(prompt,lambda:None)
             finally:pipeline.context.job=None
-        social_copy.start(ask,j)
-        return social_copy.read(j)
+        from .meme_editor import _LIB_LOCK
+        with _LIB_LOCK:
+            try:j=store.get(job_id)
+            except KeyError:raise HTTPException(404,'Video đã được dọn hoặc không còn tồn tại')
+            social_copy.start(ask,j)
+            return social_copy.read(j)
     @app.post('/api/jobs/{job_id}/composer-diagnostics')
     def composer_diagnostics(job_id:str,data:dict,request:Request):
         same_origin(request)
@@ -758,6 +776,25 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if candidate not in allowed or not candidate.is_file():raise HTTPException(404,'File not checkpointed')
         if name in ('video.mp4','video-ngang.mp4') and j['state']!='completed':raise HTTPException(409,'Video not verified')
         return FileResponse(candidate)
+    @app.post('/api/jobs/{job_id}/open-folder')
+    def open_video_folder(job_id:str,request:Request,data:dict|None=None):
+        browser_request_local(request);same_origin(request)
+        data=data or {}
+        if set(data)-{'version_id'}:raise HTTPException(422,'Chỉ nhận phiên bản video, không nhận đường dẫn tùy ý')
+        try:
+            job=store.get(job_id)
+            if data.get('version_id'):
+                video=Path(factory.get_video_version(job_id,data['version_id'])['path'])
+            else:
+                from .output_layout import final_video_path
+                video=final_video_path(job)
+        except KeyError:raise HTTPException(404,'Không tìm thấy video')
+        except (ValueError,TypeError):raise HTTPException(409,'Phiên bản video không còn khả dụng')
+        if not video.is_file():raise HTTPException(409,'Chưa có file video để mở thư mục')
+        try:os.startfile(str(video.resolve().parent))
+        except (OSError,AttributeError):raise HTTPException(503,'Không mở được Windows Explorer trên máy chạy VideoStudio')
+        return {'opened':True}
+
     meme_assets = ROOT / 'memestudio' / 'assets'
     if meme_assets.is_dir():
         app.mount('/meme-assets', StaticFiles(directory=meme_assets), name='meme_assets')
@@ -1007,6 +1044,11 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         with _LIB_LOCK:
             if job_id in _EDITOR_RENDERS:
                 raise HTTPException(409, 'Tập này đang xuất video.')
+            try:j=store.get(job_id)
+            except KeyError:raise HTTPException(404,'Video đã được dọn hoặc không còn tồn tại')
+            with store.db() as connection:
+                try:reject_retired_job(connection,job_id)
+                except ValueError as error:raise HTTPException(409,str(error))
             _EDITOR_RENDERS.add(job_id)
         try:
             if factory:factory.remember_verified(job_id)
@@ -1108,6 +1150,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     from .publishing_api import register_publishing_routes
     publisher=register_publishing_routes(app,store,factory,same_origin,browser_request_local)
     factory.channel_states=publisher.channel_states
+    from .posted_cleanup_api import register_posted_cleanup_routes
+    posted_cleanup=register_posted_cleanup_routes(app,store,same_origin,browser_request_local)
 
     static=ROOT/'static'
     if static.is_dir():

@@ -7,10 +7,9 @@ services:
     environment:
       VS_DATABASE: /data/jobs.sqlite3
       VS_OUTPUT_DIR: /videos
-      VS_STORYFORGE_ROOT: /storyforge
+      VS_VOICE_ROOT: /data
       VS_WORKER_ENABLED: "0"
     volumes:
       - ../data:/data
       - E:/Videos:/videos
-      - D:/Projects/storyforge:/storyforge:ro
     restart: "no"

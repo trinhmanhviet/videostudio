@@ -21,6 +21,10 @@ class AwaitingFlowAccount(Exception): pass
 
 class PermanentError(Exception): pass
 
+def reject_retired_idempotency(connection,key):
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_history'").fetchone() and connection.execute('SELECT 1 FROM publication_history WHERE source_idem=?',(key,)).fetchone():
+        raise ValueError('Video đã đăng và dọn; không tạo lại bằng khóa yêu cầu cũ')
+
 
 
 def available_flow_batch_sizes():
@@ -94,7 +98,7 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
 
     if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
@@ -153,6 +157,13 @@ def validate_request(data):
     if provider!='meta' and meta_batch!=1:
 
         raise ValueError('meta_batch_size above 1 requires Meta AI')
+
+    # Keep omission intact so old idempotency payloads remain identical.
+    if 'speech_batch_size' in data:
+        from .speech_worker import MAX_SPEECH_BATCH_SIZE
+        size=data['speech_batch_size']
+        if type(size) is not int or not 1<=size<=MAX_SPEECH_BATCH_SIZE:
+            raise ValueError(f'speech_batch_size must be an integer from 1 to {MAX_SPEECH_BATCH_SIZE}')
 
     text_provider=data.get('text_provider','chatgpt')
 
@@ -272,6 +283,8 @@ class Store:
 
             c.execute('BEGIN IMMEDIATE')
 
+            reject_retired_idempotency(c,key)
+
             if connector_bridge:
 
                 root=c.execute('SELECT id FROM connector_scopes WHERE id=? AND NOT EXISTS (SELECT 1 FROM connector_bridge_memberships WHERE scope=?)',(connector_bridge,connector_bridge)).fetchone()
@@ -307,6 +320,8 @@ class Store:
                 return self.get(row['id']),False
 
             from .project_lifecycle import reject_deleted_project
+
+            reject_retired_idempotency(c,key)
 
             reject_deleted_project(c,data.get('project') or 'Dự án mặc định')
 
@@ -376,6 +391,7 @@ class Store:
             from .project_lifecycle import reject_retired_job
 
             reject_retired_job(c,parent_job_id)
+            reject_retired_idempotency(c,key)
 
             j=str(uuid.uuid4())
 
@@ -489,7 +505,11 @@ class Store:
 
         with self.db() as c: ids=[r[0] for r in c.execute('SELECT id FROM jobs ORDER BY created DESC LIMIT 200')]
 
-        return [self.get(j) for j in ids]
+        result=[]
+        for identifier in ids:
+            try:result.append(self.get(identifier))
+            except KeyError:pass # A concurrent explicit cleanup already removed it.
+        return result
 
     def cancel(self,j):
 

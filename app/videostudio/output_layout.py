@@ -1,6 +1,8 @@
 """Project-level deliverables, isolated per-job working files."""
 import hashlib
 import re
+import shutil
+import uuid
 from pathlib import Path
 
 
@@ -60,7 +62,7 @@ def publish_video(job, result):
         source.replace(destination)
         result={**result,'video':str(destination),
                 'assets':[a for a in result.get('assets',[]) if Path(a['path']).resolve()!=source.resolve()]+[asset(destination)]}
-    return result
+    return publish_subtitles(job,result)
 
 
 def _project_stem(job):
@@ -91,7 +93,48 @@ def publish_pair(job, result):
     sources[0].replace(doc)
     sources[1].replace(landscape)
     kept = [a for a in result.get('assets', []) if Path(a['path']).resolve() not in moved]
-    return {**result, 'video': str(doc), 'video_ngang': str(landscape), 'assets': kept + [asset(doc), asset(landscape)]}
+    return publish_subtitles(job,{**result, 'video': str(doc), 'video_ngang': str(landscape), 'assets': kept + [asset(doc), asset(landscape)]})
+
+
+def publish_subtitles(job,result,overwrite=True):
+    """Copy genuine generated subtitle files beside the current MP4(s).
+
+    Originals/checkpoints remain in data/. Historical MP4s must never be
+    backfilled using a newer script. No transcription or translation occurs.
+    """
+    from .media import asset
+    folder=Path(job['output'])
+    subtitles=job.get('checkpoints',{}).get('subtitles',{})
+    sources={}
+    if result.get('edit_plan_sha256'):
+        # Editor captions use its own timing/emphasis. Never export the old
+        # checkpoint when the editor disabled/replaced the caption overlay.
+        overlays=folder/'edit-overlays.ass'
+        if overlays.is_file():
+            lines=overlays.read_text(encoding='utf8').splitlines()
+            if any(line.startswith('Dialogue:') and len(line.split(',',9))==10 and line.split(',',9)[3]=='Caption' for line in lines):sources['.ass']=overlays
+    elif not str(result.get('renderer','')).endswith('-rerender'):
+        for key in ('srt_path','path','ass_path','vtt_path'):
+            source=Path(subtitles[key]) if isinstance(subtitles.get(key),str) else None
+            if source and source.suffix.lower() in ('.srt','.ass','.vtt') and source.is_file():sources[source.suffix.lower()]=source
+    files=[]
+    for key in ('video','video_ngang'):
+        if not isinstance(result.get(key),str):continue
+        video=Path(result[key])
+        if not video.is_file():continue
+        actual=dict(sources)
+        if key=='video' and result.get('video_ngang') and (folder/'subtitles-doc.ass').is_file():actual['.ass']=folder/'subtitles-doc.ass'
+        for suffix,source in actual.items():
+            target=video.with_suffix(suffix)
+            if source.resolve()!=target.resolve() and (overwrite or not target.exists()):
+                temporary=target.with_name(target.name+'.'+uuid.uuid4().hex+'.tmp')
+                try:shutil.copy2(source,temporary);temporary.replace(target)
+                finally:temporary.unlink(missing_ok=True)
+            if target.is_file():files.append(target)
+    if not files:return result
+    records={str(Path(item['path']).resolve()):item for item in result.get('assets',[])}
+    for path in files:records[str(path.resolve())]=asset(path)
+    return {**result,'subtitle_files':[str(path) for path in files],'assets':list(records.values())}
 
 
 def job_video_files(job):
@@ -107,4 +150,5 @@ def job_video_files(job):
 def job_deliverables(job):
     """Every finished file of a job, for deletion: its video versions plus the landscape copy."""
     landscape = job.get('checkpoints', {}).get('render', {}).get('video_ngang')
-    return job_video_files(job) + ([Path(landscape)] if landscape else [])
+    videos=list(dict.fromkeys(job_video_files(job) + ([Path(landscape)] if landscape else [])))
+    return videos+[video.with_suffix(suffix) for video in videos for suffix in ('.srt','.ass','.vtt') if video.with_suffix(suffix).is_file()]

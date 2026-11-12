@@ -17,7 +17,7 @@ const uid=()=>globalThis.crypto?.randomUUID?.()||`n-${Date.now()}-${Math.random(
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export class WorkflowModel {
  constructor(graph){this.load(graph);}
- load(graph){this.graph=copy(graph);this.dirty=false;}
+ load(graph){this.graph=copy(graph);for(const node of this.graph.nodes)if(node.type==='speech')node.config.speech_batch_size??=256;this.dirty=false;}
  changed(){this.dirty=true;}
  move(id,x,y){const node=this.graph.nodes.find(n=>n.id===id);if(node){Object.assign(node,{x,y});this.changed();}}
  configure(id,key,value){const node=this.graph.nodes.find(n=>n.id===id);if(node){if(value===''||value===undefined)delete node.config[key];else node.config[key]=value;this.changed();}}
@@ -106,7 +106,7 @@ export function mountWorkflowCanvas(container,{api,onRun,job=null}={}) {
   if(type==='checkbox')return `<label class="wf-check"><input data-config="${key}" type="checkbox" ${value!==false?'checked':''}>${label}</label>`;
   if(type==='select')return `<label>${label}<select data-config="${key}" ${key==='batch_size'&&(node.config.provider??currentJob?.request?.image_provider??'flow')!=='flow'?'disabled':''}>${options.map(([v,name])=>`<option value="${v}" ${String(v)===String(value)?'selected':''}>${name}</option>`).join('')}</select></label>`;
   if(type==='textarea')return `<label>${label}<textarea data-config="${key}" rows="7" placeholder="${esc(placeholder)}">${esc(value)}</textarea></label>`;
-  return `<label>${label}<input data-config="${key}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${type==='number'?'step="any"':''}></label>`;
+  return `<label>${label}<input data-config="${key}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${type==='number'?(key==='speech_batch_size'?'min="1" max="512" step="1"':'step="any"'):''}></label>`;
  };
  function inspector(){
   if(!model)return;const node=model.graph.nodes.find(n=>n.id===selected);if(!node){$('.wf-inspector').innerHTML='<h3>Thiết lập bước</h3><p class="wf-muted">Chọn một bước trên canvas.</p>';return;}
@@ -114,7 +114,7 @@ export function mountWorkflowCanvas(container,{api,onRun,job=null}={}) {
   if(NODE_TYPES[node.type].optional)content+=field('enabled','Bật bước này','checkbox');
   if(node.type==='input')content+=field('workflow_mode','Chế độ','select',[['','Theo yêu cầu'],['research','Nghiên cứu ý tưởng'],['provided_narration','Dùng lời đọc có sẵn']])+field('idea','Ý tưởng / lời đọc','textarea',null,currentJob?.request?.idea||'Nhập ý tưởng hoặc lời đọc ở đây')+field('duration_seconds','Thời lượng (giây)','number',null,currentJob?.request?.duration_seconds||30);
   if(['research','script'].includes(node.type))content+=field('provider','Nhà cung cấp văn bản','select',providerOptions)+'<p class="wf-hint">Các bước văn bản dùng chung kết nối đang cài; chọn cùng nhà cung cấp cho nghiên cứu và kịch bản.</p>';
-  if(node.type==='speech')content+=field('voice_id','Giọng đọc','select',[['','Theo yêu cầu'],...voices.map(v=>[v.id,v.name||v.id])])+field('pitch','Cao độ (-12 đến 12)','number',null,'0');
+  if(node.type==='speech')content+=field('voice_id','Giọng đọc','select',[['','Theo yêu cầu'],...voices.map(v=>[v.id,v.name||v.id])])+field('pitch','Cao độ (-12 đến 12)','number',null,'0')+field('speech_batch_size','Batch giọng đọc (câu mỗi lượt)','number',null,'256');
   if(node.type==='images')content+=field('provider','Nhà cung cấp hình ảnh','select',[['flow','Google Flow'],['chatgpt','ChatGPT'],['comfy','ComfyUI']])+field('batch_size','Số cảnh mỗi nhóm Flow','select',batchSizes.map(n=>[n,String(n)]))+field('quality_mode','Chế độ kiểm tra','select',[['','Theo yêu cầu'],['quick','Nhanh'],['careful','Cẩn thận']]);
   if(node.type==='music')content+=field('volume','Âm lượng nhạc (0–1)','number',null,'0.15');
   if(node.type==='render')content+=field('preset_id','Phong cách dựng','select',[['documentary','Tài liệu'],['science','Khoa học'],['everyday','Đời thường']]);
@@ -217,7 +217,7 @@ export function mountWorkflowCanvas(container,{api,onRun,job=null}={}) {
    if(results[0].status==='rejected')throw results[0].reason;library=results[0].value;
    if(results[1].status==='fulfilled')voices=results[1].value.voices||[];
    if(results[2].status==='fulfilled')batchSizes=results[2].value.flow_batch_sizes||[1];
-   renderLibrary();const initial=job?.request?.workflow||library.templates[0];if(!initial)throw Error('Không có workflow template');load(initial);
+   renderLibrary();const initial=job?.request?.workflow||library.templates[0];if(!initial)throw Error('Không có workflow template');load(initial);if(job?.request&&!job.request.workflow){for(const node of model.graph.nodes)if(node.type==='speech')node.config.speech_batch_size=job.request.speech_batch_size??256;}
   }catch(error){fail(error);}
  })();
  function setJob(value){
@@ -227,7 +227,7 @@ export function mountWorkflowCanvas(container,{api,onRun,job=null}={}) {
    if(req.workflow)load(req.workflow);
    else for(const node of model.graph.nodes){
     if(node.type==='input')Object.assign(node.config,{idea:req.idea??'',duration_seconds:req.duration_seconds??30,workflow_mode:req.workflow_mode??'research'});
-    if(node.type==='speech')Object.assign(node.config,{voice_id:req.voice_id??'',pitch:req.pitch??0});
+    if(node.type==='speech')Object.assign(node.config,{voice_id:req.voice_id??'',pitch:req.pitch??0,speech_batch_size:req.speech_batch_size??256});
     if(node.type==='images')Object.assign(node.config,{provider:req.image_provider??'flow',batch_size:req.flow_batch_size??1});
     if(node.type==='render'&&req.edit_preset)node.config.preset_id=req.edit_preset;
     const flag=req[node.type+'_enabled'];if(typeof flag==='boolean'&&NODE_TYPES[node.type].optional)node.config.enabled=flag;

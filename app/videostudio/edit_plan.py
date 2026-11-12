@@ -393,6 +393,8 @@ class EditPlanService:
         with self.store.db() as c:
             c.execute('BEGIN IMMEDIATE')
             old = c.execute('SELECT j.id,e.parent,e.revision FROM jobs j LEFT JOIN edit_plan_exports e ON e.child=j.id WHERE j.idem=?', (idem,)).fetchone()
+            from .core import reject_retired_idempotency
+            reject_retired_idempotency(c,idem)
             if old:
                 if old['parent'] != jid or old['revision'] != revision: raise ValueError('Idempotency key already used for another snapshot')
                 child = old['id']

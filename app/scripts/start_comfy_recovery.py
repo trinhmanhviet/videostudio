@@ -11,7 +11,10 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = Path('D:/Projects/storyforge/.runtime/comfyui-launcher.json')
+import sys
+sys.path.insert(0, str(ROOT))
+from videostudio.paths import DATA_ROOT, RUNTIME_ROOT
+CONFIG = RUNTIME_ROOT / 'comfyui-launcher.json'
 AUTHORIZED_SHA256 = '590a95b06f12165dc60de6aaf8119a9b7ee8a5d246a56d034c8074a6f1cf64b6'
 
 
@@ -57,10 +60,10 @@ def main(expected_url=None):
     try:require_absent_service()
     except RuntimeError:
         return wait_existing(config['url'])
-    logdir = ROOT.parent / 'data/comfy-recovery'
+    logdir = DATA_ROOT / 'comfy-recovery'
     logdir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
-    env.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', HF_HOME='D:/Projects/storyforge/.runtime/media/model-cache')
+    env.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', HF_HOME=str(RUNTIME_ROOT/'media/model-cache'))
     breakaway = getattr(subprocess, 'CREATE_BREAKAWAY_FROM_JOB', 0x01000000)
     with (logdir / 'startup.log').open('ab') as log:
         process = subprocess.Popen(

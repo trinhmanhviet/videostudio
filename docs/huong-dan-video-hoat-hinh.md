@@ -74,7 +74,7 @@ node --version                      # cần v22 trở lên
 ffmpeg -version | Select-Object -First 1
 python -I -c "import numpy, PIL; print('python ok')"
 Test-Path node_modules\hyperframes\bin\hyperframes.mjs                      # False thì chạy: npm install
-Test-Path D:\Projects\storyforge\.runtime\media\.venv\Scripts\python.exe   # giọng đọc VieNeu, phải True
+Test-Path D:\Projects\videostudio\data\runtime\media\.venv\Scripts\python.exe   # giọng đọc VieNeu, phải True
 # Không có job video nào đang chạy (giọng đọc dùng chung GPU):
 python -I -c "import sqlite3; c=sqlite3.connect('file:../data/jobs.sqlite3?mode=ro', uri=True); print('jobs dang chay:', c.execute('select count(*) from jobs where state in (?,?)', ('running','queued')).fetchone()[0])"
 ```

@@ -14,7 +14,7 @@ import httpx
 from .core import PermanentError, Cancelled, digest, available_flow_batch_sizes
 from .cdp_flow import normalize_flow_prompt
 from .media import asset, probe, render, verify, run
-from .speech_worker import SpeechJob
+from .speech_worker import SpeechJob,MAX_SPEECH_BATCH_SIZE
 from .storyboard import (VISUAL_GROUPING_VERSION, VISUAL_GROUPING_RULES, grouping_enabled,
                          normalize_visual_scenes, group_supplied_scenes)
 
@@ -390,8 +390,9 @@ class Pipeline:
         self.voices=voices
         self.comfy=os.getenv('VS_COMFY_URL','http://127.0.0.1:8188').rstrip('/')
         self.llm=os.getenv('VS_LLM_URL','').rstrip('/');self.model=os.getenv('VS_LLM_MODEL','');self.key=os.getenv('VS_LLM_KEY','')
-        existing_python=voices.root/'.runtime/media/.venv/Scripts/python.exe'
-        existing_cache=voices.root/'.runtime/media/model-cache'
+        from .paths import RUNTIME_ROOT
+        existing_python=RUNTIME_ROOT/'media/.venv/Scripts/python.exe'
+        existing_cache=RUNTIME_ROOT/'media/model-cache'
         self.speech_python=os.getenv('VS_SPEECH_PYTHON',str(existing_python) if existing_python.is_file() else os.sys.executable)
         self.speech_cache=os.getenv('VS_SPEECH_CACHE',str(existing_cache) if existing_cache.is_dir() else '')
         self.knowledge=Path(os.environ['VS_KNOWLEDGE_DIR']) if os.getenv('VS_KNOWLEDGE_DIR') else None
@@ -1243,6 +1244,24 @@ class Pipeline:
         scenes_input=j['checkpoints']['script']['scenes']
         total_scenes=len(scenes_input)
         total_lines=sum(len(s.get('narration_lines') or [s.get('narration','')]) for s in scenes_input)
+        line_plan=[line.strip() for scene in scenes_input for line in (scene.get('narration_lines') or [scene.get('narration','')]) if line.strip()]
+        prepared={}
+        def validate_audio(part):
+            data=probe(part,self.ffprobe);duration=float(data['format']['duration'])
+            if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in data.get('streams',[])):
+                raise PermanentError('Invalid utterance audio stream/duration')
+            from .media import audio_report
+            normalized=False
+            try:quality=audio_report(part,check,self.ffmpeg)
+            except PermanentError as error:
+                if 'Silent or clipped audio' not in str(error):raise
+                tmp_part=part.with_suffix('.norm.wav')
+                run([self.ffmpeg,'-v','error','-y','-i',str(part),'-af','volume=0.95',str(tmp_part)],check)
+                tmp_part.replace(part);quality=audio_report(part,check,self.ffmpeg);normalized=True
+            return duration,quality,normalized
+        def save_receipt(receipt,identity,part):
+            pending=receipt.with_suffix('.part.json')
+            pending.write_text(json.dumps({'identity':identity,'sha256':digest(part)}));pending.replace(receipt)
         u_idx=0
         with ExitStack() as resources:
             worker = None
@@ -1259,25 +1278,24 @@ class Pipeline:
                     changed = not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part))
                     if changed:
                         if worker is None:
-                            worker = resources.enter_context(SpeechJob(self.speech_python, self.speech_cache, v, check))
-                        worker.write_line(line_text, part)
-                    audio_data=probe(part,self.ffprobe)
-                    duration=float(audio_data['format']['duration'])
-                    if not math.isfinite(duration) or duration<=0 or not any(stream.get('codec_type')=='audio' for stream in audio_data.get('streams',[])):
-                        raise PermanentError('Invalid utterance audio stream/duration')
-                    from .media import audio_report
-                    try:
-                        quality=audio_report(part,check,self.ffmpeg)
-                    except PermanentError as e:
-                        if 'Silent or clipped audio' not in str(e):
-                            raise
-                        tmp_part=part.with_suffix('.norm.wav')
-                        run([self.ffmpeg,'-v','error','-y','-i',str(part),'-af','volume=0.95',str(tmp_part)],check)
-                        tmp_part.replace(part)
-                        quality=audio_report(part,check,self.ffmpeg)
-                        changed = True
-                    if changed:
-                        receipt.write_text(json.dumps({'identity':identity,'sha256':digest(part)}))
+                            worker = resources.enter_context(SpeechJob(self.speech_python, self.speech_cache, v, check, j['request'].get('speech_batch_size')))
+                        size=getattr(worker,'batch_size',1)
+                        if type(size) is int and size>1 and callable(getattr(worker,'write_lines',None)):
+                            group=[]
+                            for index,text in enumerate(line_plan[u_idx:u_idx+min(size,MAX_SPEECH_BATCH_SIZE)],u_idx):
+                                target=out.with_name(f'speech-{index:04}.wav');record=target.with_suffix('.json')
+                                key=hashlib.sha256(json.dumps({'narration':text,'voice':v},sort_keys=True).encode()).hexdigest()
+                                cached=json.loads(record.read_text()) if record.is_file() else {}
+                                if target.is_file() and cached.get('identity')==key and cached.get('sha256')==digest(target):continue
+                                group.append((index,text,target,record,key))
+                            def completed(position):
+                                index,_,target,record,key=group[position]
+                                prepared[index]=validate_audio(target)
+                                save_receipt(record,key,target)
+                            worker.write_lines([item[1] for item in group],[item[2] for item in group],on_complete=completed)
+                        else:worker.write_line(line_text, part)
+                    duration,quality,normalized=prepared.pop(u_idx) if u_idx in prepared else validate_audio(part)
+                    if changed or normalized:save_receipt(receipt,identity,part)
                     utterances.append({**scene,'scene_index':scene_idx,'scene_id':scene.get('scene_id',f'scene-{scene_idx:04}'),'line_index':line_idx,'narration':line_text,'path':str(part),'start':cursor,'end':cursor+duration,'duration':duration,'audio_quality':quality})
                     cursor+=duration;assets.append(asset(part))
                     u_idx+=1
@@ -1307,7 +1325,8 @@ class Pipeline:
             s_start=s_utts[0]['start'] if s_utts else 0.0
             s_end=s_utts[-1]['end'] if s_utts else 0.0
             scenes_timing.append({**s,'scene_index':s_idx,'start':s_start,'end':s_end,'duration':s_end-s_start})
-        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'scenes':scenes_timing,'assets':assets+[asset(out)]}
+        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'scenes':scenes_timing,
+                'voice_id':v['id'],'voice_sha256':v.get('sha256'),'assets':assets+[asset(out)]}
     def _visual_workflow(self,j,compiled,index):
         # Fixed prefix only for identity; output filename is derived from the resulting key.
         return image_graph(compiled['positive'],image_seed(j,index),'visual-conditioning-key',compiled['negative'])

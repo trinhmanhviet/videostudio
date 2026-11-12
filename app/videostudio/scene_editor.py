@@ -182,6 +182,8 @@ class SceneEditor:
             c.execute('BEGIN IMMEDIATE')
             from .project_lifecycle import reject_retired_job
             reject_retired_job(c,jid)
+            from .core import reject_retired_idempotency
+            reject_retired_idempotency(c,idem)
             old=c.execute('SELECT j.id,e.* FROM jobs j LEFT JOIN scene_exports e ON e.child=j.id WHERE j.idem=?',(idem,)).fetchone()
             if old:
                 if old['parent']!=jid or old['version']!=version or old['confirm_all']!=int(confirm_all):raise ValueError('Idempotency key already used for another editor snapshot')

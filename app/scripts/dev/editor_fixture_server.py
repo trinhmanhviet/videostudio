@@ -6,7 +6,7 @@ os.environ['VS_DATABASE']=str(FIXTURE/'jobs.sqlite3')
 os.environ['VS_OUTPUT_DIR']=str(FIXTURE/'outputs')
 os.environ['VS_WORKER_ENABLED']='0'
 os.environ['VS_LLM_TRANSPORT']='cdp'
-os.environ['VS_STORYFORGE_ROOT']=str(FIXTURE/'unused-legacy')
+os.environ['VS_VOICE_ROOT']=str(FIXTURE/'voices')
 from fastapi import HTTPException
 from videostudio.api import create_app
 from videostudio.core import Worker

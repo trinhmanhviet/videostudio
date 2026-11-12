@@ -32,6 +32,62 @@ Còn lại: editor video lớn/filmstrip chưa rà soát so với mockup; đăng
 
 ## Quyết định vận hành
 
+### Đã đăng & dọn — Sổ đăng
+
+Trong Kho video hoặc cửa sổ xem video, chọn **Đã đăng & dọn**, rồi xác nhận trong popup một bước;
+không cần nhập tên/kênh/ngày/link. Tool lấy metadata đã có; bài đăng qua scheduler giữ kênh và link thật,
+bài đăng thủ công chưa lưu thông tin được ghi là Khác, thời gian là lúc xác nhận. Nút cuối là xác nhận của người dùng,
+không phải tín hiệu upload tự động. Tính năng không tự đăng bài hay tự đánh dấu các video sẵn có.
+
+Sổ đăng nằm trong Kho video, có tìm kiếm không dấu, lọc nền tảng và phân trang 10/20/30.
+Nó giữ metadata bài đăng và biên nhận chống thao tác trùng; nội dung job, checkpoint, prompt riêng,
+ảnh, audio, video, phụ đề và media nhập riêng của job được dọn. Giữ tài nguyên/giọng/model dùng chung
+và số đo tốc độ giọng dạng số nhỏ gọn. Nếu job khác còn dùng nguồn, lịch đăng chưa kết thúc,
+ảnh cảnh chưa rõ kết quả hoặc editor/social writer đang chạy, thao tác bị chặn trước khi xóa.
+
+Tệp được chuyển vào vùng cách ly của đúng ổ đĩa với journal phục hồi. Nếu giao dịch thất bại,
+khôi phục file; sau commit mới xóa vật lý. File đang bận hiển thị **Chờ dọn**, được thử lại có backoff
+và có nút thử lại thủ công trong Sổ đăng. Khởi động lại backend tiếp tục dọn các biên nhận đã commit,
+không tạo lại job. Các API ghi chỉ nhận yêu cầu cùng origin/loopback và không nhận đường dẫn tùy ý.
+Không có tác vụ dọn video thật nào được chạy trong kiểm thử; các test dùng SQLite/file tạm.
+
+Sửa timeout: HTTP trả ngay sau khi commit biên nhận/chuyển file, phần xóa vật lý chạy nền và được
+đánh thức ngay. Kiểm tra chia sẻ cache kết quả resolve theo đường dẫn trong từng lượt, không bỏ guard
+symlink/junction. Nếu mạng/HTTP timeout/5xx, UI tự GET đối soát receipt rồi retry đúng body/key cũ,
+tối đa 3 POST trong 3 phút; lỗi 409/422 không tự thực hiện lại. GET status không ghi/xóa dữ liệu.
+Phép đo chỉ đọc trên cùng job giảm bước shared validation 44,226 → 5,525 giây; không dùng video thật để thử xóa.
+
+Kiểm tra 2026-11-12: 21 test service dọn/phục hồi, 4 test tích hợp API và 42 test UI/import đạt;
+hồi quy lifecycle (22), hàng đợi (31), publishing (12), scene editor (17), edit plan (11), timing giọng (10) đạt.
+Có một assertion fixture kịch bản hài cũ (`test_single_beat_repair_does_not_rewrite_other_lines`) vẫn lỗi;
+đã tái hiện cùng lỗi khi nạp `core.py` từ HEAD, không chỉnh pipeline hài trong tính năng dọn.
+
+Kiểm tra trước merge 2026-11-12: toàn bộ Python 1008 test, chỉ còn assertion fixture hài nêu trên;
+toàn bộ test JavaScript đạt. Runtime/model/audio thử/database/profile nằm trong data hoặc ngoài repo,
+không đưa lên Git. Bộ gói CUDA tùy chọn được ghim trong app/requirements-speech-cuda.txt để tái lập môi trường.
+
+### Nhập kịch bản và thời lượng theo giọng (2026-11-11)
+
+Các form tạo đơn/hàng loạt và node giọng trên Workflow cho nhập **Batch giọng đọc**: mặc định **256**,
+số nguyên **1–512**, không yêu cầu bội số 16. Lưu riêng theo request/video; CPU/ONNX vẫn xử lý tuần tự.
+Thay batch không vô hiệu hóa WAV/receipt đúng đã có. Request cũ không bị tự thêm trường mặc định khi retry.
+Màn xem video dùng một player, đổi định dạng Dọc/Ngang và cập nhật đúng link tải; form hàng loạt căn ô 42px,
+3/2/1 cột theo màn hình, giữ thao tác nhập file/thư mục và bộ đếm từ/ký tự.
+
+Trang Tạo hàng loạt dùng ô nhập nhỏ: bấm để chọn một/nhiều TXT hoặc JSON, hoặc kéo thả file/thư mục.
+Thả ở bất kỳ đâu trên giao diện chính sẽ mở Tạo hàng loạt và dùng cùng luồng nhập, không tự chạy video.
+Mỗi bài hiển thị số từ/ký tự và có lựa chọn ảnh riêng: ComfyUI, Google Flow, ChatGPT hoặc Meta AI;
+video meme vẫn dùng bộ asset của engine và hiển thị rõ lựa chọn ảnh không áp dụng.
+Thư mục được đọc cả các thư mục con; nội dung vẫn hiện thành các hàng chỉnh sửa trước khi người dùng xếp hàng.
+Trên điện thoại có nút chọn file và chọn thư mục (khả năng chọn thư mục tùy trình duyệt).
+
+Thời lượng tự tính dùng tốc độ của đúng giọng: ưu tiên các video hoàn tất đã kiểm chứng, sau đó đến
+mẫu preview có lời đọc và danh tính giọng khớp. Nhịp phát nhanh/chậm trong dữ liệu cũ được chuẩn hóa.
+Không chạy thêm AI hay tạo lời đọc để đo. Nếu chưa có số đo đáng tin, UI ghi rõ tạm tính.
+Mỗi video có thể đổi sang Tự nhập thời lượng; đổi giọng hoặc sửa kịch bản không ghi đè số nhập tay.
+Đây là ước lượng/mục tiêu sản xuất: video có lời đọc sẵn vẫn giữ đủ lời, timeline cuối theo audio thật,
+không cắt lời chỉ để khớp tuyệt đối số giây đã nhập.
+
 Chạy tuần tự là mặc định. Người dùng duyệt thành phẩm trước khi đăng. Một video có nhiều bản xuất và nhiều trạng thái kênh.
 Lịch ghim đường dẫn/hash bản được duyệt, không tự chuyển sang bản mới. Lịch local cần máy chạy để gửi bài;
 nơi hỗ trợ lịch native sẽ nhận video trước giờ công khai. Các bước cần kết nối tài khoản được hiển thị để người dùng hoàn tất.
