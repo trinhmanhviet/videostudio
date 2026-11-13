@@ -137,6 +137,9 @@ def main():
 class SpeechJob:
     """Run sequential utterances in an owned subprocess, with cancellation between polls."""
 
+    worker_module='videostudio.speech_worker'
+    engine_name='VieNeu'
+
     def __init__(self, python, cache, voice, check, batch_size=None):
         self.python = python
         self.batch_size=speech_batch_size(batch_size)
@@ -151,7 +154,7 @@ class SpeechJob:
         self.log = tempfile.TemporaryFile()
         try:
             self.process = subprocess.Popen(
-                [self.python, '-u', '-m', 'videostudio.speech_worker', '--job',
+                [self.python, '-u', '-m', self.worker_module, '--job',
                  json.dumps(self.config, ensure_ascii=False)],
                 stdin=subprocess.PIPE, stdout=self.log, stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
@@ -164,7 +167,7 @@ class SpeechJob:
     def _worker_error(self):
         self.log.seek(max(0, self.log.seek(0, os.SEEK_END) - 3000))
         detail = self.log.read().decode('utf-8', errors='replace').strip()
-        return RuntimeError(detail or 'VieNeu worker exited before producing audio')
+        return RuntimeError(detail or self.engine_name+' worker exited before producing audio')
 
     def write_line(self, text, output, timeout=900):
         self.check()
@@ -186,7 +189,7 @@ class SpeechJob:
             if self.process.poll() is not None:
                 raise self._worker_error()
             if time.monotonic() >= deadline:
-                raise TimeoutError('VieNeu did not finish the current utterance in time')
+                raise TimeoutError(self.engine_name+' did not finish the current utterance in time')
             time.sleep(0.1)
 
     def write_lines(self,texts,outputs,timeout=900,on_complete=None):
@@ -209,7 +212,7 @@ class SpeechJob:
                     if on_complete:on_complete(index)
             if not self.pending_batch:return
             if self.process.poll() is not None:raise self._worker_error()
-            if time.monotonic()>=deadline:raise TimeoutError('VieNeu did not finish the utterance batch in time')
+            if time.monotonic()>=deadline:raise TimeoutError(self.engine_name+' did not finish the utterance batch in time')
             time.sleep(.1)
 
     def __exit__(self, exc_type, *_):

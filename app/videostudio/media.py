@@ -36,7 +36,7 @@ def scenes_are_wide(scenes):
 
 def visual_clip_identity(sha, duration, provider=None, wide=False):
     import hashlib
-    policy='1920x1080-30-pan-v1' if wide else '1080x1920-30-pan-v1'
+    policy='1920x1080-30-pan-v2-444-4x' if wide else '1080x1920-30-pan-v2-444-4x'
     if provider=='flow':policy+='-flow-bottom-crop-6pct-v1'
     return hashlib.sha256((sha+str(duration)+policy).encode()).hexdigest()
 
@@ -70,8 +70,12 @@ def audio_report(path,check,ffmpeg='ffmpeg',peak_limit=1.05,clipped_fraction_lim
     if rms<.001 or peak>peak_limit or clipped>clipped_fraction_limit:raise PermanentError('Silent or clipped audio')
     return {'full_decode_ok':True,'finite_samples':True,'rms':rms,'peak':peak,'clipped_fraction':clipped,'semantic_completeness_verified':False}
 
-# Supersampled so the slow zoom stays smooth; the visual track keeps enough quality for the final encode.
-WIDE_MOTION="scale=2560:1440:force_original_aspect_ratio=increase:flags=lanczos,crop=2560:1440,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1920x1080:fps=30,setsar=1"
+# zoompan quantizes its crop window/position. At the old near-output resolution,
+# 4:2:0 chroma alignment made a centred slow zoom jump by 1-2 output pixels.
+# Sample at >=4x output size in 4:4:4, then let zoompan downsample to delivery size.
+# Keep the old crop aspect ratios and zoom curve; only spatial precision changes.
+WIDE_MOTION="scale=7680:4320:force_original_aspect_ratio=increase:flags=lanczos,crop=7680:4320,format=yuv444p,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1920x1080:fps=30,setsar=1"
+PORTRAIT_MOTION="scale=4480:7968:force_original_aspect_ratio=increase:flags=lanczos,crop=4480:7968,format=yuv444p,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,setsar=1"
 
 def visual_track(scenes,output,check,ffmpeg='ffmpeg',wide=False):
     import hashlib
@@ -88,7 +92,7 @@ def visual_track(scenes,output,check,ffmpeg='ffmpeg',wide=False):
         if not reusable:
             part=clip.with_suffix('.part.mp4')
             framing='crop=iw:trunc(ih*0.94/2)*2:0:0,' if scene.get('image_provider')=='flow' else ''
-            motion=WIDE_MOTION if wide else framing+"scale=1120:1992:force_original_aspect_ratio=increase,crop=1120:1992,zoompan=z='1.02+0.015*sin(on/90)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1080x1920:fps=30,setsar=1"
+            motion=WIDE_MOTION if wide else framing+PORTRAIT_MOTION
             run([ffmpeg,'-v','error','-y','-loop','1','-i',source,'-vf',motion,'-t',duration,'-an','-c:v','libx264','-preset','veryfast',*(['-crf','14'] if wide else []),'-pix_fmt','yuv420p',part],check)
             part.replace(clip);receipt.write_text(json.dumps({'identity':identity,'sha256':digest(clip)}))
         clips.append(clip)

@@ -39,6 +39,7 @@ def _cached_digest(path):
 
 REQUEST_FIELDS = {'voice_id', 'duration_seconds', 'music_volume', 'pitch', 'quality_mode',
                   'image_provider', 'flow_batch_size', 'meta_batch_size', 'speech_batch_size', 'text_provider',
+                  'speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text',
                   'edit_preset', 'references_enabled', 'captions_enabled', 'music_enabled', 'sfx_enabled'}
 
 

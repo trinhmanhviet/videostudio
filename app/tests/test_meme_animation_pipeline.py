@@ -7,6 +7,17 @@ from videostudio.media import asset,probe
 ROOT=Path(__file__).resolve().parents[1]
 class AnimationPipelineTests(unittest.TestCase):
  @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
+ def test_selected_engine_does_not_reuse_legacy_aggregate_speech(self):
+  from videostudio import meme_animation as m
+  with tempfile.TemporaryDirectory(dir=ROOT.parent/'data'/'test-tmp') as folder:
+   pipeline,job=self.fixture(folder)
+   job['request'].update(speech_engine='khanhtts',khanh_steps=16,speech_speed=1.2,speech_rhythm='story')
+   job['checkpoints']['script']['migration']={'voice_id':'test','speech':{'utterances':[], 'assets':[]}}
+   result=m.speech(pipeline,job,lambda:None)
+   pipeline._speech_attempt.assert_called_once()
+   self.assertEqual(result['speech_engine'],'khanhtts')
+   self.assertAlmostEqual(result['speed'],1.15*1.2)
+ @unittest.skipUnless(shutil.which('ffmpeg'),'FFmpeg required')
  def test_migrated_speech_preserves_original_aggregate_audio(self):
   from videostudio import meme_animation as m
   with tempfile.TemporaryDirectory(dir=ROOT.parent/'data'/'test-tmp') as folder:

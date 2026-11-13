@@ -1,0 +1,389 @@
+[
+  {
+    "number": 1,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-1-YNdLAsQsRH2MEKS5",
+    "file": "chapters/chuong_00001.txt",
+    "characters": 13310,
+    "sha256": "7d3bdee11f27836c543856913c5afb5932a9b5c4789f2727ea533ad7619efb2b",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-2-YNdLAsQsRH2MEKS6"
+  },
+  {
+    "number": 2,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-2-YNdLAsQsRH2MEKS6",
+    "file": "chapters/chuong_00002.txt",
+    "characters": 13803,
+    "sha256": "9815ffc7b270a9b3a35a2ae96a5b0588af0774ffe0fcb4e06eebac76d6fbd400",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-3-YNdLAsQsRH2MEKS7"
+  },
+  {
+    "number": 3,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-3-YNdLAsQsRH2MEKS7",
+    "file": "chapters/chuong_00003.txt",
+    "characters": 13612,
+    "sha256": "856293833700582cda0de3c69c880130a24d3f5d32f440f940c0e4b3073494ed",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-4-YNdLAsQsRH2MEKS8"
+  },
+  {
+    "number": 4,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-4-YNdLAsQsRH2MEKS8",
+    "file": "chapters/chuong_00004.txt",
+    "characters": 13633,
+    "sha256": "b7745f18cabed9d868525a37dfb22a8d4f2979d1e165bb8cf259443083d8b7ad",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-5-YNdLAsQsRH2MEKS9"
+  },
+  {
+    "number": 5,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-5-YNdLAsQsRH2MEKS9",
+    "file": "chapters/chuong_00005.txt",
+    "characters": 13763,
+    "sha256": "89f5290ba54a02496e7ce238038d133e92e392a568d55000b38161bf6d7a0a1b",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-6-YNdLAsQsRH2MEKS%7E"
+  },
+  {
+    "number": 6,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-6-YNdLAsQsRH2MEKS%7E",
+    "file": "chapters/chuong_00006.txt",
+    "characters": 13637,
+    "sha256": "4c30c028d10cc510124229e73a696e75ec78c9cd7a2c89860f5272d817f83fbb",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-7-YNdLAsQsRH2MEKS_"
+  },
+  {
+    "number": 7,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-7-YNdLAsQsRH2MEKS_",
+    "file": "chapters/chuong_00007.txt",
+    "characters": 13454,
+    "sha256": "c02f8955784cc392a137a32abc842814a337e7151ae9f571263c685bb93190dc",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-8-YNdLAsQsRH2MEKTA"
+  },
+  {
+    "number": 8,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-8-YNdLAsQsRH2MEKTA",
+    "file": "chapters/chuong_00008.txt",
+    "characters": 13547,
+    "sha256": "b4f4d1e15b82b1284062c562078f5075face704d71a9464f6970969ac2f00fa2",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-9-YNdLAsQsRH2MEKTB"
+  },
+  {
+    "number": 9,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-9-YNdLAsQsRH2MEKTB",
+    "file": "chapters/chuong_00009.txt",
+    "characters": 14045,
+    "sha256": "cdb42eeb817e791ed4ffa8a0bdafb34b91ca09bb12121d88afaf102c0438fe53",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-10-YNdLAsQsRH2MEKTC"
+  },
+  {
+    "number": 10,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-10-YNdLAsQsRH2MEKTC",
+    "file": "chapters/chuong_00010.txt",
+    "characters": 13991,
+    "sha256": "87733a95d65a32966c46a07771b7e26ba86c056abc8f4e4cfd7143498dbf1f9e",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-11-YNdLAsQsRH2MEKTD"
+  },
+  {
+    "number": 11,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-11-YNdLAsQsRH2MEKTD",
+    "file": "chapters/chuong_00011.txt",
+    "characters": 13308,
+    "sha256": "56151763a192cdbfc1dc2a8e5cfb7553258b2449357a31974a39bb90d822664c",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-12-YNdLAsQsRH2MEKTE"
+  },
+  {
+    "number": 12,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-12-YNdLAsQsRH2MEKTE",
+    "file": "chapters/chuong_00012.txt",
+    "characters": 13008,
+    "sha256": "21d04622596fcdc658d3760fec17e79aa599112e463f2c26a4e769e0cd92d4c8",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-13-YNdLAsQsRH2MEKTF"
+  },
+  {
+    "number": 13,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-13-YNdLAsQsRH2MEKTF",
+    "file": "chapters/chuong_00013.txt",
+    "characters": 13695,
+    "sha256": "988116ec3c9f4937c8bc6a409b3e1ba1629a24995c7775174e00142d7325a7a3",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-14-YNdLAsQsRH2MEKTG"
+  },
+  {
+    "number": 14,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-14-YNdLAsQsRH2MEKTG",
+    "file": "chapters/chuong_00014.txt",
+    "characters": 13254,
+    "sha256": "b53641b9c61619e43f96d8b42c53cabd141bb2602097bd162202eb8cfb6d6624",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-15-YNdLAsQsRH2MEKTH"
+  },
+  {
+    "number": 15,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-15-YNdLAsQsRH2MEKTH",
+    "file": "chapters/chuong_00015.txt",
+    "characters": 13343,
+    "sha256": "09592544c824d928e36a78b8bfbbf452639e83dcfe82b7907561b3659986e1d6",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-16-YNdLAsQsRH2MEKTI"
+  },
+  {
+    "number": 16,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-16-YNdLAsQsRH2MEKTI",
+    "file": "chapters/chuong_00016.txt",
+    "characters": 13663,
+    "sha256": "e6f8938736663f706b47283ba5028f00b67c6f2b1040cb3f480bd8d703a9d873",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-17-YNdLAsQsRH2MEKTJ"
+  },
+  {
+    "number": 17,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-17-YNdLAsQsRH2MEKTJ",
+    "file": "chapters/chuong_00017.txt",
+    "characters": 13741,
+    "sha256": "7ba2b8e57badd5580a255afa2fafed2def2895d6a16812c27e02223da6278fa8",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-18-YNdLAsQsRH2MEKTK"
+  },
+  {
+    "number": 18,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-18-YNdLAsQsRH2MEKTK",
+    "file": "chapters/chuong_00018.txt",
+    "characters": 13961,
+    "sha256": "618edca9d3cdddba3f28904d406f288490796389cbf279ee77764effa2dc722d",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-19-YNdLAsQsRH2MEKTL"
+  },
+  {
+    "number": 19,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-19-YNdLAsQsRH2MEKTL",
+    "file": "chapters/chuong_00019.txt",
+    "characters": 13610,
+    "sha256": "2fdbbec5fd5b327444fde4dc6acd0860f6c16c95f1967ab761b3abbb1dbd467d",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-20-YNdLAsQsRH2MEKTM"
+  },
+  {
+    "number": 20,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-20-YNdLAsQsRH2MEKTM",
+    "file": "chapters/chuong_00020.txt",
+    "characters": 13752,
+    "sha256": "547b57f21efe78a46d1f3cc1ba343a3b33663c49f310a3831e62270e4931e818",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-21-YNdLAsQsRH2MEKTN"
+  },
+  {
+    "number": 21,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-21-YNdLAsQsRH2MEKTN",
+    "file": "chapters/chuong_00021.txt",
+    "characters": 13853,
+    "sha256": "d14ac9bbc90503380e5e0cc1b21d8f8f54793a228ed8b61ae6d5671308046c83",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-22-YNdLAsQsRH2MEKTO"
+  },
+  {
+    "number": 22,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-22-YNdLAsQsRH2MEKTO",
+    "file": "chapters/chuong_00022.txt",
+    "characters": 13819,
+    "sha256": "5ac663cf2f30affbf1a19ce70a60993b7699ae7bfe8a93b5cd01eee72a77cb29",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-23-YNdLAsQsRH2MEKTP"
+  },
+  {
+    "number": 23,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-23-YNdLAsQsRH2MEKTP",
+    "file": "chapters/chuong_00023.txt",
+    "characters": 13469,
+    "sha256": "3fe12ca4c1b2056830d7535a33cb5e543c2057b4625c24485f2fafb0dda43ed6",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-24-YNdLAsQsRH2MEKTQ"
+  },
+  {
+    "number": 24,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-24-YNdLAsQsRH2MEKTQ",
+    "file": "chapters/chuong_00024.txt",
+    "characters": 13589,
+    "sha256": "f84faa6d84f6d48319673a3838271b613a66228f06f3e8115ba71ac6abd684e9",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-25-YNdLAsQsRH2MEKTR"
+  },
+  {
+    "number": 25,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-25-YNdLAsQsRH2MEKTR",
+    "file": "chapters/chuong_00025.txt",
+    "characters": 13725,
+    "sha256": "a4d45131c224c43adb71ee989e3203afe859aa547a4dd56dcc317ef4ea49b2c2",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-26-YNdLAsQsRH2MEKTS"
+  },
+  {
+    "number": 26,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-26-YNdLAsQsRH2MEKTS",
+    "file": "chapters/chuong_00026.txt",
+    "characters": 13553,
+    "sha256": "ab616b072ca8459b1de65f12c462ff6bc134a720265bfc3fa86437e42c44e5e2",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-27-YNdLAsQsRH2MEKTT"
+  },
+  {
+    "number": 27,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-27-YNdLAsQsRH2MEKTT",
+    "file": "chapters/chuong_00027.txt",
+    "characters": 13376,
+    "sha256": "df5dd3729fb1e77311b2c94e6c2c47371b553e5384593d79bbeb50756b4d1634",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-28-YNdLAsQsRH2MEKTU"
+  },
+  {
+    "number": 28,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-28-YNdLAsQsRH2MEKTU",
+    "file": "chapters/chuong_00028.txt",
+    "characters": 13660,
+    "sha256": "96d39f678dc5ffdfbc5ba5d8b4a6e7de51a81a406b03050b793124ce154f5076",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-29-YNdLAsQsRH2MEKTV"
+  },
+  {
+    "number": 29,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-29-YNdLAsQsRH2MEKTV",
+    "file": "chapters/chuong_00029.txt",
+    "characters": 13917,
+    "sha256": "d2306bf5841888bf42fa8783c387690de2c3a11e52bbb2426ad69e84466e8744",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-30-YNdLAsQsRH2MEKTW"
+  },
+  {
+    "number": 30,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-30-YNdLAsQsRH2MEKTW",
+    "file": "chapters/chuong_00030.txt",
+    "characters": 14115,
+    "sha256": "54fdcb7c60498173cebbe7ca03cf765e2f11e1a64fc079edabd2c83b4713d7ea",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-31-YNdLAsQsRH2MEKTX"
+  },
+  {
+    "number": 31,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-31-YNdLAsQsRH2MEKTX",
+    "file": "chapters/chuong_00031.txt",
+    "characters": 13399,
+    "sha256": "f4d390255783e89291d23cb0c8fef0bfd0f037ee1f67efdb60c9e5d7765966f2",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-32-YNdLAsQsRH2MEKTY"
+  },
+  {
+    "number": 32,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-32-YNdLAsQsRH2MEKTY",
+    "file": "chapters/chuong_00032.txt",
+    "characters": 13205,
+    "sha256": "3468c2c9495022ebdc8306843f3e0a71e53db7f11ba74f1bae66c91b6368166b",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-33-YNdLAsQsRH2MEKTZ"
+  },
+  {
+    "number": 33,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-33-YNdLAsQsRH2MEKTZ",
+    "file": "chapters/chuong_00033.txt",
+    "characters": 13692,
+    "sha256": "8afbe4a57d2f4eafa27f88d9493b9b471da407cda1fa702c3836615583bc0f2c",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-34-YNdLAsQsRH2MEKTa"
+  },
+  {
+    "number": 34,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-34-YNdLAsQsRH2MEKTa",
+    "file": "chapters/chuong_00034.txt",
+    "characters": 13392,
+    "sha256": "451e1e6a20751fa643e0dc8c7a809d71b143bc8c15dd447f841550c66ba6ee26",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-35-YNdLAsQsRH2MEKTb"
+  },
+  {
+    "number": 35,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-35-YNdLAsQsRH2MEKTb",
+    "file": "chapters/chuong_00035.txt",
+    "characters": 13742,
+    "sha256": "5a032e8dbe93be0f26bff0792ec74fba1bf9911422861b32b49161418a6b245f",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-36-YNdLAsQsRH2MEKTc"
+  },
+  {
+    "number": 36,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-36-YNdLAsQsRH2MEKTc",
+    "file": "chapters/chuong_00036.txt",
+    "characters": 13396,
+    "sha256": "694b7d0178b8db87c22f0f231298827c7ae93d49ecda23d01662416e19bee856",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-37-YNdLAsQsRH2MEKTd"
+  },
+  {
+    "number": 37,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-37-YNdLAsQsRH2MEKTd",
+    "file": "chapters/chuong_00037.txt",
+    "characters": 13455,
+    "sha256": "0ac1cffdfacc16c226011514d1383d4f4ded425df3ecda3bc282b78aafa6eb90",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-38-YNdLAsQsRH2MEKTe"
+  },
+  {
+    "number": 38,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-38-YNdLAsQsRH2MEKTe",
+    "file": "chapters/chuong_00038.txt",
+    "characters": 13081,
+    "sha256": "91a5d78a786e8954264262c334928f9afad2117939e86b1e3adcc3dbd84911b2",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-39-YNdLAsQsRH2MEKTf"
+  },
+  {
+    "number": 39,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-39-YNdLAsQsRH2MEKTf",
+    "file": "chapters/chuong_00039.txt",
+    "characters": 13165,
+    "sha256": "c985baaa0503845d5fb49f0709600ce17629766c6b1406439bbfe6bafa72cd9c",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-40-YNdLAsQsRH2MEKTg"
+  },
+  {
+    "number": 40,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-40-YNdLAsQsRH2MEKTg",
+    "file": "chapters/chuong_00040.txt",
+    "characters": 12982,
+    "sha256": "5c376618785f32edb8c0018c2a4fdcea7096f1ce59f9449570160cfd2391696d",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-41-YNdLAsQsRH2MEKTh"
+  },
+  {
+    "number": 41,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-41-YNdLAsQsRH2MEKTh",
+    "file": "chapters/chuong_00041.txt",
+    "characters": 13391,
+    "sha256": "fc191940cc1d30e91c9a6669ccab74ca0590a205b2caf7583e550e5c94a7edf1",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-42-YNdLAsQsRH2MEKTi"
+  },
+  {
+    "number": 42,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-42-YNdLAsQsRH2MEKTi",
+    "file": "chapters/chuong_00042.txt",
+    "characters": 13311,
+    "sha256": "c7ec4d4cdcf827f23272af77bde04ab08176c5c4526ed95cc867313f9d90fce7",
+    "next_url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-43-YNdLAsQsRH2MEKTj"
+  },
+  {
+    "number": 43,
+    "title": "1",
+    "url": "https://wikicv.org/truyen/trong-sinh-chi-khan-cap-cong-luoc/phan-43-YNdLAsQsRH2MEKTj",
+    "file": "chapters/chuong_00043.txt",
+    "characters": 4014,
+    "sha256": "cd36d6081b69b0d52598bfb7db9d4f28b133d4c8e363b2c28bc37f57611e7bb1",
+    "next_url": null
+  }
+]

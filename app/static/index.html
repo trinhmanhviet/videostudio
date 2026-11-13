@@ -89,7 +89,7 @@ audio{width:100%;height:36px;margin-top:8px}
 </div></div><div id="paneClone" hidden><section class="card" style="max-width:760px;margin:auto"><h2>🎙️ Clone giọng đọc mẫu</h2><p class="muted">Nhân bản giọng nói tiếng Việt từ file thu âm mẫu qua mô hình VieNeu trên GPU và tự động lưu vào danh mục giọng.</p><form id="cloneForm"><label for="cloneName">Tên giọng đọc</label><input id="cloneName" required placeholder="Ví dụ: Giọng truyền cảm, Giọng của tôi..." maxlength="100"><label for="cloneFile">File âm thanh mẫu (mp3, wav, m4a, flac)</label><input id="cloneFile" type="file" accept="audio/*" required><label for="cloneDuration">Độ dài mẫu sử dụng: <span id="cloneDurationVal">15 giây</span></label><input id="cloneDuration" type="range" min="5" max="60" value="15" step="5"><p class="notice">Gợi ý: Chọn file thu âm rõ lời, ít tạp âm từ 10 - 30 giây để mô hình học chính xác nhất âm sắc và ngữ điệu.</p><button id="cloneSubmit" type="submit">Bắt đầu nhân bản giọng (GPU)</button><p id="cloneError" class="error" role="alert"></p><p id="cloneStatus" class="notice"></p><div id="cloneResult" hidden style="margin-top:16px;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:10px"><h3>Nghe thử giọng vừa clone</h3><audio id="cloneSample" controls style="width:100%;margin:10px 0"></audio><button type="button" id="useCloneBtn">Dùng giọng này để tạo video</button></div></form></section></div><div id="projectModal" hidden class="modal-backdrop"><div class="modal-box"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0;font-size:18px;color:var(--accent)">✨ Tạo dự án mới</h3><button type="button" class="secondary" id="btnCloseProjectModal" style="padding:4px 10px;font-size:12px">✕</button></div><p class="muted" style="margin:0 0 14px;font-size:13px">Đặt tên cho dự án video của bạn (ví dụ: Áo giáp thời Trung cổ, Lịch sử Hà Nội...):</p><input id="modalProjectName" placeholder="Nhập tên dự án mới..." maxlength="100" style="margin-bottom:16px"><div class="row" style="justify-content:flex-end;gap:10px"><button type="button" class="secondary" id="btnCancelProjectModal">Hủy</button><button type="button" id="btnConfirmProjectModal" style="background:var(--accent);color:#101a0e;font-weight:700">Tạo dự án</button></div></div></div><div id="resetImagesModal" hidden class="modal-backdrop"><div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="resetImagesTitle"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><h3 id="resetImagesTitle" style="margin:0;font-size:18px;color:var(--accent)">🔄 Tạo lại bộ ảnh</h3><button type="button" class="secondary" id="btnCloseResetImagesModal" style="padding:4px 10px;font-size:12px">✕</button></div><p class="muted" style="margin:0 0 14px;font-size:13px">Tái sử dụng kịch bản và giọng đọc đã có. Tạo mới hoàn toàn bộ ảnh và dựng lại video.</p><label for="resetImageProvider" style="display:block;margin-bottom:4px;font-weight:600">Nguồn tạo ảnh</label><select id="resetImageProvider" style="width:100%;margin-bottom:12px"><option value="flow">Google Flow</option><option value="chatgpt">ChatGPT</option><option value="meta">Meta AI (tab trong Chrome riêng)</option><option value="comfy" selected>ComfyUI · Qwen Image 2.1</option></select><div id="resetFlowBatchGroup" style="margin-bottom:14px"><label for="resetFlowBatchSize" style="display:block;margin-bottom:4px;font-weight:600">Ảnh mỗi đợt (Google Flow)</label><select id="resetFlowBatchSize" style="width:100%"><option value="1">1 ảnh - tuần tự</option><option value="3" selected>3 ảnh / đợt (Khuyên dùng)</option><option value="5">5 ảnh / đợt</option><option value="10">10 ảnh / đợt</option></select></div><p id="resetImagesError" class="error" role="alert" style="margin:0 0 12px"></p><div class="row" style="justify-content:flex-end;gap:10px"><button type="button" class="secondary" id="btnCancelResetImagesModal">Hủy</button><button type="button" id="btnConfirmResetImagesModal" style="background:var(--accent);color:#101a0e;font-weight:700">Bắt đầu tạo lại</button></div></div></div></main>
 <script>
 'use strict';
-const $=s=>document.querySelector(s);let ready=false,voices=[],submitting=false,refreshing=false,currentKey=null,activeProject=null,allJobs=[];
+const $=s=>document.querySelector(s);let ready=false,voices=[],submitting=false,refreshing=false,currentKey=null,activeProject=null,activeVideoJobId=null,allJobs=[];
 const stages={plan:'Phân tích ý tưởng',research:'Tìm hiểu bằng ChatGPT',script:'Viết kịch bản & kiểm chứng',speech:'Tạo lời đọc (GPU)',images:'Tạo hình từng cảnh (GPU)',subtitles:'Căn phụ đề ASS',music:'Tạo nhạc nền (GPU)',render:'Dựng video',verify:'Kiểm tra thành phẩm'};
 const recoveryStages={plan:'phân tích ý tưởng',research:'tìm hiểu',script:'viết kịch bản',speech:'tạo lời đọc',images:'tạo ảnh',subtitles:'căn phụ đề',music:'nhạc',render:'dựng video',verify:'kiểm tra thành phẩm'};
 function recoveryLabel(stage){return 'Tiếp tục từ bước '+(recoveryStages[stage]||stage||'bị gián đoạn');}
@@ -287,8 +287,9 @@ $('#btnConfirmResetImagesModal').onclick=async()=>{
   }
 };
 
-function openProject(pname){
+function openProject(pname,jobId=null){
   activeProject=pname;
+  activeVideoJobId=jobId;
   $('#viewGallery').hidden=true;
   $('#viewWorkspace').hidden=false;
   $('#currentProjectTitle').textContent='Dự án: '+pname;
@@ -297,6 +298,7 @@ function openProject(pname){
 }
 $('#btnBackToGallery').onclick=()=>{
   activeProject=null;
+  activeVideoJobId=null;
   $('#viewWorkspace').hidden=true;
   $('#viewGallery').hidden=false;
   loadProjects();
@@ -728,10 +730,10 @@ function updateHeroCompletedVideo(filtered){
 
 function renderProjectJobs(){
   const root=$('#projectJobsList');if(!root)return;
-  const filtered=allJobs.filter(j=>(j.project||'Dự án mặc định')===activeProject);
+  const filtered=allJobs.filter(j=>(j.project||'Dự án mặc định')===activeProject&&(!activeVideoJobId||j.id===activeVideoJobId));
   filtered.sort((a,b)=>(b.created||0)-(a.created||0));
   updateHeroCompletedVideo(filtered);
-  if(!filtered.length){root.replaceChildren(text('p','Chưa có video nào trong dự án này. Hãy điền form bên trên để tạo video đầu tiên!','muted'));return;}
+  if(!filtered.length){root.replaceChildren(text('p',activeVideoJobId?'Đang tải chi tiết video…':'Chưa có video nào trong dữ liệu này.','muted'));return;}
   const emptyP=root.querySelector('p.muted');if(emptyP)emptyP.remove();
   const existingIds=new Set();
   let prevEl=null;
@@ -802,4 +804,4 @@ setInterval(()=>{
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){loadJobs();preflight();loadProjects();}
 });
-</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261108-meta1"></script><link rel="stylesheet" href="/studio-shell.css?v=20261110-1"><script src="/content-studio.js?v=20261111-3"></script><script src="/video-folder.js?v=20261112-1"></script></body></html>
+</script><script src="/scene-generation-ui.js?v=20261026-comfy1"></script><script src="/scene-editor.js?v=20261108-meta1"></script><link rel="stylesheet" href="/studio-shell.css?v=20261110-1"><link rel="stylesheet" href="/studio-create.css?v=20261113-dd4caf788a5d"><link rel="stylesheet" href="/studio-details.css?v=20261113-d476d677bf9a"><link rel="stylesheet" href="/studio-unified.css?v=20261113-68d5f69567ce"><script src="/studio-create.js?v=20261113-52e26175a99d"></script><script src="/studio-details.js?v=20261113-f3e1e0e90a9c"></script><script src="/content-studio.js?v=20261113-8f56d2822aa3"></script><script src="/video-folder.js?v=20261112-1"></script></body></html>

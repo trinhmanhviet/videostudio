@@ -15,6 +15,7 @@ from .core import PermanentError, Cancelled, digest, available_flow_batch_sizes
 from .cdp_flow import normalize_flow_prompt
 from .media import asset, probe, render, verify, run
 from .speech_worker import SpeechJob,MAX_SPEECH_BATCH_SIZE
+from .speech_engine import create_speech_job,speech_identity
 from .storyboard import (VISUAL_GROUPING_VERSION, VISUAL_GROUPING_RULES, grouping_enabled,
                          normalize_visual_scenes, group_supplied_scenes)
 
@@ -1238,6 +1239,9 @@ class Pipeline:
         return result
     def _speech_attempt(self,j,check,revision):
         check();v=self.voices.selected(j['request']['voice_id']);out=revision/'speech.wav'
+        if j['request'].get('speech_engine')=='khanhtts':
+            from .speech_engine import prepare_reference
+            prepare_reference(self,v,j['request'],check)
         from .core import digest
         import hashlib
         utterances=[];assets=[];cursor=0
@@ -1273,18 +1277,18 @@ class Pipeline:
                     if not line_text:continue
                     if getattr(self,'store',None):self.store.log(j['id'],'speech',f'Đang tổng hợp giọng nói: câu {u_idx+1}/{total_lines} (cảnh {scene_idx+1}/{total_scenes})...')
                     part=out.with_name(f'speech-{u_idx:04}.wav');receipt=part.with_suffix('.json')
-                    identity=hashlib.sha256(json.dumps({'narration':line_text,'voice':v},sort_keys=True).encode()).hexdigest()
+                    identity=speech_identity(line_text,v,j['request'],self)
                     saved=json.loads(receipt.read_text()) if receipt.is_file() else {}
                     changed = not (part.is_file() and saved.get('identity')==identity and saved.get('sha256')==digest(part))
                     if changed:
                         if worker is None:
-                            worker = resources.enter_context(SpeechJob(self.speech_python, self.speech_cache, v, check, j['request'].get('speech_batch_size')))
+                            worker = resources.enter_context(create_speech_job(self,v,j['request'],check,worker_factory=SpeechJob))
                         size=getattr(worker,'batch_size',1)
                         if type(size) is int and size>1 and callable(getattr(worker,'write_lines',None)):
                             group=[]
                             for index,text in enumerate(line_plan[u_idx:u_idx+min(size,MAX_SPEECH_BATCH_SIZE)],u_idx):
                                 target=out.with_name(f'speech-{index:04}.wav');record=target.with_suffix('.json')
-                                key=hashlib.sha256(json.dumps({'narration':text,'voice':v},sort_keys=True).encode()).hexdigest()
+                                key=speech_identity(text,v,j['request'],self)
                                 cached=json.loads(record.read_text()) if record.is_file() else {}
                                 if target.is_file() and cached.get('identity')==key and cached.get('sha256')==digest(target):continue
                                 group.append((index,text,target,record,key))
@@ -1325,8 +1329,12 @@ class Pipeline:
             s_start=s_utts[0]['start'] if s_utts else 0.0
             s_end=s_utts[-1]['end'] if s_utts else 0.0
             scenes_timing.append({**s,'scene_index':s_idx,'start':s_start,'end':s_end,'duration':s_end-s_start})
-        return {'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'scenes':scenes_timing,
+        result={'path':str(out),'duration_seconds':actual_dur,'utterances':utterances,'scenes':scenes_timing,
                 'voice_id':v['id'],'voice_sha256':v.get('sha256'),'assets':assets+[asset(out)]}
+        if any(key in j['request'] for key in ('speech_engine','speech_rhythm','speech_speed','khanh_steps')):
+            from .speech_engine import speech_options
+            result.update(speech_options(j['request']));result['speed']=result['speech_speed']
+        return result
     def _visual_workflow(self,j,compiled,index):
         # Fixed prefix only for identity; output filename is derived from the resulting key.
         return image_graph(compiled['positive'],image_seed(j,index),'visual-conditioning-key',compiled['negative'])

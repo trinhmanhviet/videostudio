@@ -9,6 +9,34 @@ vm.runInContext(source, context);
 const ui = context.ContentStudio || {};
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('import and rerun preserve the effective speech engine settings',()=>{
+  const settings={voice_id:'Thiện Minh',speech_engine:'khanhtts',khanh_steps:16,speech_rhythm:'story',speech_speed:1.1};
+  const imported=plain(ui.parseImport(JSON.stringify([{text:'Nội dung',...settings}]),'batch.json'))[0];
+  for(const [key,value] of Object.entries(settings))assert.equal(imported[key],value);
+  const payload=ui.rerunPayload({project:'A',style:'case',input_mode:'script',content:'Nội dung',request:settings},{image_provider:'comfy'});
+  for(const [key,value] of Object.entries(settings))assert.equal(payload.defaults[key],value);
+  assert.throws(()=>ui.parseImport(JSON.stringify([{text:'A',speech_engine:'fake'}]),'batch.json'));
+});
+
+test('admitted but queued jobs are waiting, not reported as running',()=>{
+  const result=ui.queueGroups([{id:'running',job_id:'r',content:'running',state:'running',job:{state:'running'}},{id:'waiting',job_id:'q',content:'waiting',state:'queued',job:{state:'queued'}}]);
+  assert.equal(result.active.length,1);assert.equal(result.waiting.length,1);
+});
+
+test('video details isolate one job while legacy project links retain their jobs',()=>{
+  const html=fs.readFileSync(new URL('../static/index.html',import.meta.url),'utf8');
+  const definition=html.match(/function renderProjectJobs\(\)[\s\S]*?(?=\nasync function loadJobs)/)[0];
+  const jobs=[{id:'one',project:'shared',created:1},{id:'two',project:'shared',created:2},{id:'other',project:'elsewhere'}];
+  for(const [selected,expected] of [['one',['one']],[null,['two','one']],['missing',[]],['other',[]]]){
+    let visible;
+    const root={children:[],querySelector:()=>null,prepend:()=>{},replaceChildren:()=>{}};
+    const context=vm.createContext({$:()=>root,allJobs:jobs,activeProject:'shared',activeVideoJobId:selected,
+      updateHeroCompletedVideo:items=>{visible=items.map(item=>item.id);},renderJobCard:job=>({id:'job-'+job.id,after:()=>{}}),text:()=>({})});
+    vm.runInContext(definition,context);context.renderProjectJobs();
+    assert.deepEqual(visible,expected);
+  }
+});
+
 test('TXT import preserves multiline scripts separated by a blank line', () => {
   assert.equal(typeof ui.parseImport, 'function');
   assert.deepEqual(plain(ui.parseImport('\uFEFFLời đầu\r\nLời tiếp\r\n\r\nVideo hai', 'stories.txt')), [{text:'Lời đầu\nLời tiếp'}, {text:'Video hai'}]);

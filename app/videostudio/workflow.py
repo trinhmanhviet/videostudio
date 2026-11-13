@@ -35,7 +35,7 @@ REQUIRED_PORTS['render'] = {'images','speech'}
 CONFIG = {
     'input': {'idea','duration_seconds','workflow_mode'},
     'research': {'enabled','provider'}, 'script': {'provider'},
-    'speech': {'voice_id','pitch','speech_batch_size'}, 'references': {'enabled'},
+    'speech': {'voice_id','pitch','speech_batch_size','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text'}, 'references': {'enabled'},
     'images': {'provider','batch_size','quality_mode'}, 'captions': {'enabled'},
     'music': {'enabled','volume'}, 'sfx': {'enabled'},
     'render': {'preset_id'}, 'output': set(),
@@ -55,6 +55,9 @@ def _identifier(value, name, empty=False):
 def _config(kind, config):
     if not isinstance(config,dict) or set(config)-CONFIG[kind]: raise ValueError(f'Unsupported {kind} config')
     result=copy.deepcopy(config)
+    if kind=='speech':
+        from .speech_engine import speech_options
+        speech_options(config)
     for key,value in config.items():
         if key=='enabled' and type(value) is not bool: raise ValueError('enabled must be boolean')
         if key=='provider' and value not in (('flow','chatgpt','comfy','meta') if kind=='images' else ('chatgpt','gemini')): raise ValueError(f'Unsupported {kind} provider')

@@ -16,6 +16,7 @@
   const $ = selector => document.querySelector(selector);
   const labels = {props:'đạo cụ', backgrounds:'bối cảnh', voices:'giọng đọc', sfx:'âm thanh'};
   const state = {kind:'props', selected:null, props:[], backgrounds:[], voices:[], sfx:[], extra:{}, errors:[]};
+  let voiceWorkspace;
   function node(tag, text, className) {
     const el = document.createElement(tag);
     if (text != null) el.textContent = text;
@@ -110,14 +111,17 @@
       const audio = node('audio'); audio.controls = true; audio.preload = 'none'; audio.src = item.url; panel.append(audio);
       panel.append(node('p', 'Âm thanh có sẵn trong bộ tài nguyên hoạt hình.'));
     } else panel.append(node('p', 'Chọn bối cảnh này từ tab Cảnh trong phòng chỉnh sửa tập phim.'));
-    const projects = node('a', 'Mở dự án video →', 'btn secondary'); projects.href = '/?view=projects'; panel.append(projects);
+    const projects = node('a', 'Tạo video →', 'btn secondary'); projects.href = '/?view=batch'; panel.append(projects);
   }
   function selectKind(kind, updateURL = true) {
     if (!['characters','props','backgrounds','voices','sfx'].includes(kind)) kind = 'props';
     state.kind = kind; state.selected = null;
     document.querySelectorAll('[data-resource]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.resource === kind)));
     $('#characterResource').hidden = kind !== 'characters';
-    $('#resourceBody').hidden = kind === 'characters';
+    $('#resourceBody').hidden = kind === 'characters'||kind==='voices';
+    let voiceRoot=$('#voiceWorkspace');if(!voiceRoot){voiceRoot=node('section');voiceRoot.id='voiceWorkspace';$('#resourceBody').before(voiceRoot);}
+    voiceRoot.hidden=kind!=='voices';
+    if(kind==='voices'&&window.VoiceWorkspace){if(!voiceWorkspace)voiceWorkspace=window.VoiceWorkspace.mount(voiceRoot,{onOpenClone:()=>$('#cloneDialog').showModal()});voiceWorkspace.setVisible(true);}else voiceWorkspace?.setVisible(false);
     $('#resourceFilter').hidden = kind !== 'props';
     $('#voiceNote').hidden = kind !== 'voices';
     $('#resourceImport').hidden = kind !== 'props';
@@ -173,7 +177,7 @@
     try {
       const data = await request('/api/voices/clone', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, audio_base64:await readAudio(file), duration:Number($('#resourceCloneDuration').value)})});
       $('#cloneMessage').textContent = 'Đã tạo giọng. Bản nghe mẫu có trong thư viện.';
-      await load(); state.selected = data.voice?.id; render();
+        await load(); state.selected = data.voice?.id; render();await voiceWorkspace?.refresh();
     } catch (error) { $('#cloneError').textContent = error.message; $('#cloneMessage').textContent = ''; }
     finally { $('#resourceCloneSubmit').disabled = false; }
   };

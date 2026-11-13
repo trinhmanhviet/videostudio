@@ -98,7 +98,7 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text'}
 
     if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
@@ -159,6 +159,8 @@ def validate_request(data):
         raise ValueError('meta_batch_size above 1 requires Meta AI')
 
     # Keep omission intact so old idempotency payloads remain identical.
+    from .speech_engine import speech_options
+    speech_options(data)
     if 'speech_batch_size' in data:
         from .speech_worker import MAX_SPEECH_BATCH_SIZE
         size=data['speech_batch_size']

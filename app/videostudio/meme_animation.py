@@ -138,7 +138,8 @@ def speech(pipeline, job, check):
     rawjob = copy.deepcopy(job); rawjob['request']['pitch'] = 0
     revision = ep / 'raw-voice'; revision.mkdir(exist_ok=True)
     migration = job['checkpoints']['script'].get('migration',{})
-    raw = migration.get('speech') if migration.get('voice_id')==job['request']['voice_id'] else None
+    from .speech_engine import legacy_sound_request
+    raw = migration.get('speech') if migration.get('voice_id')==job['request']['voice_id'] and legacy_sound_request(job['request']) else None
     if raw is None:
         from .meme_migration import reuse_legacy_voice
         reuse_legacy_voice(job,revision)
@@ -186,10 +187,14 @@ def speech(pipeline, job, check):
     part.replace(path)
     files = [p for p in ep.rglob('*') if p.name not in ('render-receipt.json', 'sfx.wav')]
     assets = raw.get('assets', []) + [asset(p) for p in files if p.is_file() and p.suffix not in ('.log', '.part')] + [asset(path)]
-    return {'path': str(path), 'duration_seconds': seconds, 'utterances': utterances, 'scenes': utterances,
+    result={'path': str(path), 'duration_seconds': seconds, 'utterances': utterances, 'scenes': utterances,
             'final_narration': job['checkpoints']['script']['narration'], 'duration_attempts': 1,
             'meme_engine': 'hyperframes', 'speed': speed, 'pitch': pitch,
             'voice_id':voice['id'],'voice_sha256':voice.get('sha256'),'assets': assets}
+    if any(key in job['request'] for key in ('speech_engine','speech_rhythm','speech_speed','khanh_steps')):
+        from .speech_engine import speech_options
+        result.update(speech_options(job['request']));result['speed']=speed*result['speech_speed']
+    return result
 
 
 def images(pipeline, job, check):

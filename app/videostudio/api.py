@@ -32,6 +32,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             states="('running')" if flow_accounts.blocks_workers() else "('queued','running','retrying')"
             count=connection.execute('SELECT COUNT(*) FROM jobs WHERE state IN '+states).fetchone()[0]
             count+=connection.execute("SELECT COUNT(*) FROM scene_image_tasks WHERE state IN ('queued','running')").fetchone()[0]
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_studio_tasks'").fetchone():
+                count+=connection.execute("SELECT COUNT(*) FROM voice_studio_tasks WHERE state IN ('queued','running')").fetchone()[0]
+            if connection.execute("SELECT 1 FROM worker_lock WHERE owner LIKE 'voice-clone-%' AND expires>?",(time.time(),)).fetchone():count+=1
             if flow_accounts.blocks_browser_changes():count=max(count,1)
             return count
     browser_manager=BrowserManager(active_jobs=browser_active_jobs)
@@ -41,7 +44,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     project_lifecycle=ProjectLifecycle(store)
     if hasattr(pipeline,'use_exchanges'):pipeline.use_exchanges(exchanges)
     worker=Worker(store,pipeline.handlers());stop=threading.Event();working=threading.Event()
-    factory=None;publisher=None;posted_cleanup=None
+    factory=None;publisher=None;posted_cleanup=None;voice_studio=None
     def loop():
         while not stop.is_set():
             if flow_accounts.blocks_workers():stop.wait(.5);continue
@@ -52,7 +55,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                     except Exception:
                         import logging
                         logging.getLogger(__name__).exception('Factory admission tick failed; existing jobs continue')
-                did=image_jobs.step(worker.owner) or worker.step()
+                did=image_jobs.step(worker.owner) or worker.step() or (voice_studio.step(worker.owner) if voice_studio else False)
             except Exception:did=False
             finally:working.clear()
             if not did:stop.wait(.5)
@@ -84,6 +87,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if worker_enabled:
             if posted_cleanup:posted_cleanup.recover()
             flow_accounts.recover_after_restart()
+            if voice_studio:voice_studio.recover()
             for target in (loop,heartbeat,publishing_loop,cleanup_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
         yield
@@ -432,6 +436,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         tmp_in=vdir/f'tmp-in-{vid}.bin'
         ref_wav=vdir/f'ref-{vid}.wav'
         prev_wav=vdir/f'preview-{vid}.wav'
+        clone_owner='voice-clone-'+vid
+        if browser_active_jobs() or not store.lock(clone_owner,ttl=120):
+            raise HTTPException(409,'GPU đang được dùng hoặc có tác vụ chờ. Hãy đợi trước khi thêm giọng từ bản thu.')
         try:
             tmp_in.write_bytes(raw_bytes)
             subprocess.run([pipeline.ffmpeg,'-y','-v','error','-i',str(tmp_in),'-t',str(duration),'-ar','16000','-ac','1',str(ref_wav)],check=True,timeout=30)
@@ -468,10 +475,14 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             return {'ok':True,'voice':{'id':entry['id'],'name':entry['name'],'sample_url':f'/api/voices/{entry["id"]}/sample'}}
         finally:
             if tmp_in.is_file():tmp_in.unlink(missing_ok=True)
+            store.release(clone_owner)
     def same_origin(request):
         from urllib.parse import urlparse
         origin=request.headers.get('origin')
         if origin and urlparse(origin).netloc!=request.headers.get('host'):raise HTTPException(403,'Cross-origin writes denied')
+    from .voice_studio_api import register_voice_studio
+    voice_studio=register_voice_studio(app,store,pipeline,voices,same_origin)
+    voice_studio.stop_event=stop
     @app.get('/api/system/status')
     def system_status(request:Request):
         browser_request_local(request)
@@ -511,6 +522,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         return {'ok':True,'message':'VideoStudio đang khởi động lại...'}
     from .editor_api import register_editor_routes
     register_editor_routes(app,store,scene_editor,same_origin,public_job,image_jobs)
+    from .job_details import register_job_details_routes
+    register_job_details_routes(app,store,scene_editor,same_origin)
     from .workflow_api import register_workflow_routes
     register_workflow_routes(app,store,same_origin)
     from .edit_plan_api import register_edit_plan_routes
@@ -648,6 +661,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 except KeyError:raise HTTPException(422,'Unknown connector bridge root')
                 if not compatible:raise HTTPException(409,'Reload VideoStudio extension 0.3.0, refresh this Studio tab and start the bridge before creating another video')
             pf=pipeline.preflight(request.headers.get('x-connector-scope')) if isinstance(pipeline,Pipeline) else pipeline.preflight()
+            from .speech_engine import preflight_for_request as speech_preflight
+            pf=speech_preflight(pf,pipeline,normalized)
             from .meme_animation import preflight_for_request
             pf=preflight_for_request(pf,normalized)
             if not pf['ready']:
@@ -1135,7 +1150,14 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         if os.getenv('VS_LLM_TRANSPORT','cdp')=='chrome':
             raise ValueError('Hàng đợi tự động cần extension bridge hoặc CDP; chế độ chrome thử nghiệm cũ chỉ chạy từng phiên có giám sát')
         normalized=validate_request(data)
-        voices.selected(normalized['voice_id'])
+        selected_voice=voices.selected(normalized['voice_id'])
+        if normalized.get('speech_engine')=='khanhtts':
+            from .speech_engine import engine_status
+            readiness=engine_status(pipeline,selected_voice,normalized)
+            if not readiness['ready']:
+                if not readiness.get('reference_ready',True):
+                    raise ValueError('Giọng clone này chưa có lời của bản thu mẫu. Mở Cài đặt riêng → Nâng cao để nhập lời chính xác, hoặc tạo mẫu tham chiếu trước trong Phòng thử giọng.')
+                raise ValueError('KhanhTTS chưa sẵn sàng. Kiểm tra bộ đọc trong Kho tài nguyên → Giọng đọc trước khi xếp video vào hàng đợi.')
         return normalized
     factory=register_content_factory_routes(app,store,same_origin,public_job,
         lambda data,key,scope:submit(data,factory_request(scope),idempotency_key=key),
