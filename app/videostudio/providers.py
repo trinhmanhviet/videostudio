@@ -737,6 +737,7 @@ class Pipeline:
         if getattr(self,'store',None):self.store.log(j['id'],'verify','Đang viết tiêu đề và caption để đăng bài...')
         social_copy.generate(lambda prompt:self.llm_json(prompt,check),j)
     def plan(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.plan(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.plan(self,j,check)
         if getattr(self,'store',None):self.store.log(j['id'],'plan','Đang phân tích ý tưởng và lập kế hoạch sản xuất...')
         transport=os.getenv('VS_LLM_TRANSPORT','cdp')
@@ -789,6 +790,7 @@ class Pipeline:
         if not isinstance(d.get('research_required'),bool) or not isinstance(d.get('source_urls'),list):raise ValueError('Plan must classify factuality and provide source URLs')
         return {**d,'visual_grouping_version':VISUAL_GROUPING_VERSION}
     def research(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.research(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.research(self,j,check)
         check()
         plan=j['checkpoints']['plan'];mode=j['request'].get('workflow_mode')
@@ -830,6 +832,7 @@ class Pipeline:
         manifest=Path(j['output'])/'sources.json';manifest.write_text(json.dumps({'sources':sources,'retrieval_errors':errors},ensure_ascii=False,indent=2),encoding='utf8')
         return {'sources':sources,'assets':[{'path':s['path'],'sha256':s['sha256']} for s in sources]+[asset(manifest)],'mode':'retrieved_reference_data','retrieval_errors':errors}
     def script(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.script(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.script(self,j,check)
         """Research uses one review and local omissions; source-quote mode stays strict."""
         if j['request'].get('workflow_mode')=='provided_narration':
@@ -1221,6 +1224,7 @@ class Pipeline:
                 all_new_scenes.append(s)
         return {'narration':' '.join(s['narration'] for s in all_new_scenes),'source_paths':previous.get('source_paths',[]),'scenes':all_new_scenes,'chapters':chapters}
     def speech(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.speech(self,j,check)
         from . import meme_animation
         if meme_animation.enabled(j):return meme_animation.speech(self,j,check)
         # Requested seconds guide script planning; natural speech sets the timeline.
@@ -1754,6 +1758,7 @@ class Pipeline:
         return {'scenes':scenes,'assets':assets,'image_provider':'flow','character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
 
     def images(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.images(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.images(self,j,check)
         """Run the images stage with Comfy models kept resident; unload them once at the end."""
         return self._with_comfy_hold(j,'images',self._images,check)
@@ -2267,11 +2272,13 @@ class Pipeline:
         scenes[-1]['duration']+=timeline_duration(j)-j['checkpoints']['speech']['duration_seconds']
         return {'scenes':scenes,'assets':assets,'image_provider':provider,'character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
     def subtitles(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.subtitles(self,j,check)
         from .captions import write_captions
         check();p=Path(j['output'])/'subtitles.srt'
         result=write_captions(j['checkpoints']['speech']['utterances'],p)
         return {'path':result['ass_path'],'srt_path':str(p),**result,'assets':[asset(p),asset(result['ass_path'])]}
     def music(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.music(self,j,check)
         from . import meme_animation
         if meme_animation.enabled(j):return meme_animation.music(self,j,check)
         """Music parts reuse the same Stable Audio models; unload once after the last part."""
@@ -2334,6 +2341,7 @@ class Pipeline:
             'assets':assets+assembled['assets']+normalized['assets']
         }
     def render(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.render(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.render(self,j,check)
         from .output_layout import publish_video
         if j['checkpoints'].get('images',{}).get('edit_plan_snapshot'):
@@ -2389,6 +2397,7 @@ class Pipeline:
         english,short_title=translate(self.llm_json,title,[cue[2] for cue in cues],Path(j['output'])/'subtitles-bilingual.json',check)
         return write_two_formats(cues,english,short_title,timeline_duration(j),j['output'])
     def verify(self,j,check):
+        if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.verify(self,j,check)
         if j.get('request',{}).get('workflow_mode')=='meme':from . import meme_pipeline;return meme_pipeline.verify(self,j,check)
         snapshot=j['checkpoints'].get('images',{}).get('edit_plan_snapshot') or j['checkpoints'].get('render',{}).get('edit_plan_snapshot')
         if snapshot:

@@ -39,6 +39,11 @@ class Voices:
             else:r['available']=True
             if r.get('status') and r['status']!='locked':r['available']=False
             if r.get('selectable') is False:r['available']=False
+        # Voices without a recorded preview use the sample made by scripts/make_voice_samples.py (same engine, fixed text).
+        for r in rows.values():
+            if not (r.get('sample_path') and Path(r['sample_path']).is_file()):
+                generated=generated_sample_path(self.root,r['id'])
+                if generated.is_file():r['sample_path']=str(generated)
         # Loose samples are retained as inventory, NOT falsely advertised as cloned IDs.
         samples=[str(p) for p in (self.root/'Voices'/'Samples').glob('*') if p.is_file()]
         return {'voices':sorted(rows.values(),key=lambda r:r['id']),'complete':complete,'warnings':warnings,'unmapped_sample_files':samples}
@@ -48,3 +53,8 @@ class Voices:
                 if not v['available']:raise ValueError('Clone reference unavailable or checksum unverified')
                 return v
         raise ValueError('Unknown voice; import catalog first')
+
+
+def generated_sample_path(root,voice_id):
+    import hashlib
+    return Path(root)/'Voices'/'Generated-samples'/(hashlib.sha256(voice_id.encode('utf-8')).hexdigest()[:16]+'.wav')

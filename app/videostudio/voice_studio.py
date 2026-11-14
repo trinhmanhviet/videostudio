@@ -18,6 +18,9 @@ from pathlib import Path
 from .core import Cancelled, digest
 
 
+VOLUMES = (50, 75, 100, 125, 150, 200)
+TARGET_LUFS = -16
+
 def _json(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
 
@@ -79,6 +82,10 @@ class VoiceStudio:
         request = dict(text=_text(body.get('text'), 20000, 'Nội dung'), voice_id=voice_id,
                        speech_engine=engine, speech_rhythm=rhythm, speech_speed=float(speed))
         if engine == 'khanhtts': request['khanh_steps'] = steps
+        if 'speech_volume' in body:
+            # Output loudness only: 100% is speech loudness -16 LUFS. Old tasks without the field keep their raw level.
+            if type(body['speech_volume']) not in (int, float) or body['speech_volume'] not in VOLUMES: raise ValueError('Âm lượng không hợp lệ')
+            request['speech_volume'] = int(body['speech_volume'])
         if body.get('speech_reference_id'):
             reference = self.reference(owner, body['speech_reference_id'])
             request['speech_reference_id'] = reference['id']
@@ -334,6 +341,13 @@ class VoiceStudio:
         listing=output/'concat.txt'
         listing.write_text('\n'.join("file '"+part.name+"'" for part in parts),encoding='utf-8')
         run([getattr(self.pipeline,'ffmpeg','ffmpeg'),'-v','error','-y','-f','concat','-safe','1','-i',listing,'-c:a','pcm_s16le',target],check)
+        if 'speech_volume' in request:
+            with wave.open(str(target),'rb') as w:rate=w.getframerate()
+            leveled=output/'audio.level.wav'
+            gain=request['speech_volume']/100
+            run([getattr(self.pipeline,'ffmpeg','ffmpeg'),'-v','error','-y','-i',target,'-af',
+                 f'loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11,volume={gain:.4f},alimiter=limit=0.89:level=false','-ar',str(rate),'-c:a','pcm_s16le',leveled],check)
+            leveled.replace(target)
         quality=audio_report(target,check,getattr(self.pipeline,'ffmpeg','ffmpeg'))
         with wave.open(str(target),'rb') as w:duration=w.getnframes()/w.getframerate()
         if not math.isfinite(duration) or duration<=0:raise ValueError('Bản đọc không có âm thanh hợp lệ')

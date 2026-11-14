@@ -3,7 +3,7 @@ import re
 
 _ESCAPE = re.compile(r'\\([\\`*_{}\[\]()#+\-.!~|>])')
 _FENCE = re.compile(r'^\s*(```|~~~)')
-_RULE = re.compile(r'^\s*(?:([-*_])(?:\s*\1){2,}|={3,})\s*$')
+_RULE = re.compile(r'^\s*(?:([-*_★☆◆◇■□●○])(?:\s*\1){1,}|={3,})\s*$')
 _TABLE_RULE = re.compile(r'^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$')
 _QUOTE = re.compile(r'^\s*(?:>\s*)+')
 _HEADING = re.compile(r'^\s*#{1,6}\s+(.*?)(?:\s+#+)?\s*$')

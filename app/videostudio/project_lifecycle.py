@@ -65,15 +65,17 @@ def _strings(value):
 
 class OutputRemoval:
     def __init__(self,store,c,jobs):
-        self.moves=[];self.root=store.outputs.resolve();self.targets=[]
+        self.moves=[];self.root=store.outputs.resolve();self.targets=[];self.store=store
         selected={j['id'] for j in jobs}
         for job in jobs:
             raw=Path(job['output']);target=raw.resolve()
-            if not raw.is_absolute() or not target.is_relative_to(self.root) or target==self.root:
+            # Videos may live in an earlier save folder (Settings → Nơi lưu video); each job uses its own root.
+            root=store.root_containing(target) or self.root
+            if not raw.is_absolute() or not target.is_relative_to(root) or target==root:
                 raise ValueError('Không thể xóa: thư mục output phải nằm riêng bên trong thư mục xuất video')
             # Refuse aliases, including junctions and symlinks within the tree.
             chain=[raw,*raw.parents]
-            if any(_alias(p) for p in chain if p!=store.outputs.parent):
+            if any(_alias(p) for p in chain if p!=root.parent and p.resolve()!=root.parent):
                 raise ValueError('Không thể xóa output qua symlink/junction')
             if target.exists() and not target.is_dir():raise ValueError('Output không phải thư mục')
             if target.exists() and any(_alias(p) for p in target.rglob('*')):
@@ -85,7 +87,8 @@ class OutputRemoval:
         for final in [path for job in jobs for path in job_deliverables(job)]:
             target=final.resolve()
             if any(target==directory or target.is_relative_to(directory) for directory in self.targets):continue
-            if not target.is_relative_to(self.root) or any(_alias(p) for p in [final,*final.parents]):
+            owner=store.root_containing(target)
+            if owner is None or not target.is_relative_to(owner) or any(_alias(p) for p in [final,*final.parents] if p.resolve()!=owner.parent):
                 raise ValueError('Không thể xóa video qua symlink/junction hoặc ngoài thư mục output')
             if target.exists() and not target.is_file():raise ValueError('Output video không phải tệp')
             self.targets.append(target)
@@ -128,7 +131,8 @@ class OutputRemoval:
         try:
             for target in self.targets:
                 if not target.exists():continue
-                quarantine=self.root/('.deleted-'+uuid.uuid4().hex)
+                # Same drive as the target, so the move is a rename and can be rolled back.
+                quarantine=(self.store.root_containing(target) or self.root)/('.deleted-'+uuid.uuid4().hex)
                 target.rename(quarantine);self.moves.append((target,quarantine))
         except OSError as error:
             self.rollback()

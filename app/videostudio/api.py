@@ -14,7 +14,8 @@ from .providers import Pipeline
 ROOT=Path(__file__).resolve().parent.parent
 
 def create_app(store=None,pipeline=None,worker_enabled=True):
-    store=store or Store(os.getenv('VS_DATABASE',str(DATA_ROOT/'jobs.sqlite3')),os.getenv('VS_OUTPUT_DIR','E:/Videos'))
+    from .output_settings import configured_root
+    store=store or Store(os.getenv('VS_DATABASE',str(DATA_ROOT/'jobs.sqlite3')),configured_root())
     default_export=DATA_ROOT/'voices-export.json'
     voices=Voices(VOICE_ROOT,os.getenv('VS_VOICES_EXPORT',str(default_export) if default_export.is_file() else None))
     pipeline=pipeline or Pipeline(voices)
@@ -665,6 +666,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             pf=speech_preflight(pf,pipeline,normalized)
             from .meme_animation import preflight_for_request
             pf=preflight_for_request(pf,normalized)
+            from .story_pipeline import preflight_for_request as story_preflight
+            pf=story_preflight(pf,pipeline,normalized)
             if not pf['ready']:
                 raise HTTPException(503,{'message':'Production preflight blocked','checks':[c for c in pf['checks'] if not c['ok']]})
         if isinstance(pipeline,Pipeline) and os.getenv('VS_LLM_TRANSPORT','cdp') in ('chrome','extension') and not scope:
@@ -1174,6 +1177,18 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     factory.channel_states=publisher.channel_states
     from .posted_cleanup_api import register_posted_cleanup_routes
     posted_cleanup=register_posted_cleanup_routes(app,store,same_origin,browser_request_local)
+    @app.get('/api/settings/output-root')
+    def output_root():
+        from .output_settings import describe
+        return describe(store)
+    @app.put('/api/settings/output-root')
+    def set_output_root(data:dict,request:Request):
+        same_origin(request)
+        from .output_settings import save
+        try:return save(store,data.get('path'))
+        except ValueError as error:raise HTTPException(422,str(error))
+    from .story_api import register_story_routes
+    register_story_routes(app,store,factory,pipeline,voices,same_origin)
 
     static=ROOT/'static'
     if static.is_dir():

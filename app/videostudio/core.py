@@ -98,7 +98,7 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text','story_snapshot'}
 
     if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
@@ -118,10 +118,13 @@ def validate_request(data):
 
     mode=data.get('workflow_mode')
 
-    if 'content_style' in data and (not isinstance(data['content_style'],str) or data['content_style'] not in ('news','case','meme')):
-        raise ValueError('content_style must be news, case, or meme')
+    if 'content_style' in data and (not isinstance(data['content_style'],str) or data['content_style'] not in ('news','case','meme','story')):
+        raise ValueError('content_style must be news, case, meme or story')
 
-    if 'workflow_mode' in data and mode not in ('research','provided_narration','meme'):raise ValueError('workflow_mode must be research, provided_narration or meme')
+    if 'workflow_mode' in data and mode not in ('research','provided_narration','meme','story_narration'):raise ValueError('workflow_mode must be research, provided_narration, meme or story_narration')
+    # Story narration reads a frozen server-side snapshot (by hash), never the idea text.
+    if (mode=='story_narration')!=('story_snapshot' in data):raise ValueError('story_narration needs story_snapshot, and only it may carry one')
+    if mode=='story_narration' and (not isinstance(data['story_snapshot'],str) or not re.fullmatch(r'[0-9a-f]{64}',data['story_snapshot'])):raise ValueError('Invalid story_snapshot')
 
     if mode=='meme' and not 15<=d<=600:raise ValueError('Video meme dài 15–600 giây')
 
@@ -222,6 +225,31 @@ def validate_request(data):
 
 
 class Store:
+
+    def output_roots(self):
+        """Every folder that holds this tool's videos: the current one (Settings), earlier ones, and each project's parent."""
+        roots=[Path(self.outputs)]
+        try:
+            from .output_settings import previous_roots
+            roots+=previous_roots()
+        except Exception:pass
+        try:
+            with self.db() as c:
+                for table in ('project_output_roots','project_output_history'):
+                    if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone():
+                        roots+=[Path(r['path']).parent for r in c.execute(f'SELECT path FROM {table}')]
+        except Exception:pass
+        seen,result=set(),[]
+        for root in roots:
+            resolved=root.resolve()
+            if resolved not in seen and resolved.parent!=resolved:seen.add(resolved);result.append(resolved)
+        return result
+
+    def root_containing(self,path):
+        """The owned output root that contains `path` (deepest match), or None."""
+        target=Path(path).resolve()
+        found=[root for root in self.output_roots() if target==root or target.is_relative_to(root)]
+        return max(found,key=lambda r:len(r.parts)) if found else None
 
     def __init__(self,path,outputs):
 

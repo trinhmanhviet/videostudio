@@ -18,7 +18,7 @@ from .core import digest, validate_request
 from .output_layout import final_video_path, job_video_files
 
 
-STYLES = {'news', 'case', 'meme'}
+STYLES = {'news', 'case', 'meme', 'story'}
 PENDING = ('pending', 'waiting')
 ACTIVE = ('queued', 'running', 'retrying', 'awaiting_visual_review', 'awaiting_flow_account')
 MAX_BATCH_ITEMS = 100
@@ -200,6 +200,43 @@ class ContentFactory:
                         VALUES(?,?,?,?,?,?,?,?,?,?)''',
                         (identifier, batch_id, position + index, item['title'], item['content'],
                          _json(item['request']), 'factory:' + identifier, now, now, int(auto_name)))
+        return self.get_batch(batch_id)
+
+    def create_prepared_batch(self, project, style, items, key, scope=None):
+        """Queue requests that were built and frozen elsewhere (Kể truyện). Same tables, ordering and
+        idempotency as create_batch; items: [{'title', 'content', 'request'}] with validated requests."""
+        key = _text(key, 'Idempotency-Key', 200)
+        project = _text(project, 'Dự án', 200)
+        if style not in STYLES or not isinstance(items, list) or not 1 <= len(items) <= MAX_BATCH_ITEMS:
+            raise ValueError('Lô không hợp lệ')
+        normalized = [{'title': _text(i['title'], 'Tiêu đề', 300), 'content': _text(i['content'], 'Nội dung', 100000),
+                       'request': validate_request(i['request'])} for i in items]
+        fingerprint = hashlib.sha256(_json({'project': project, 'style': style, 'items': normalized, 'scope': scope}).encode()).hexdigest()
+        if self.validate_submission:
+            for item in normalized:
+                self.validate_submission(item['request'])
+        now, batch_id = time.time(), uuid.uuid4().hex
+        with self.store.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            old = db.execute('SELECT id,fingerprint FROM factory_batches WHERE idem=?', (key,)).fetchone()
+            if old:
+                if old['fingerprint'] != fingerprint:
+                    raise ValueError('Idempotency key already used for a different batch')
+                batch_id = old['id']
+            else:
+                from .project_lifecycle import reject_deleted_project
+                reject_deleted_project(db, project)
+                db.execute('INSERT OR IGNORE INTO projects VALUES(?,?)', (project, now))
+                db.execute('INSERT INTO factory_batches VALUES(?,?,?,?,?,?,?,?,?,?)',
+                           (batch_id, key, fingerprint, scope, project, style, 'script', _json({}), now, now))
+                position = db.execute('SELECT COALESCE(MAX(position),0) FROM factory_items').fetchone()[0]
+                for index, item in enumerate(normalized, 1):
+                    identifier = uuid.uuid4().hex
+                    db.execute('''INSERT INTO factory_items
+                        (id,batch_id,position,title,content,request,idem,created,updated,auto_name)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)''',
+                        (identifier, batch_id, position + index, item['title'], item['content'],
+                         _json(item['request']), 'factory:' + identifier, now, now, 0))
         return self.get_batch(batch_id)
 
     def _sync(self, db):
@@ -474,7 +511,7 @@ class ContentFactory:
 
     def _owned_videos(self, job):
         output = Path(job['output']).resolve()
-        if not output.is_relative_to(self.store.outputs.resolve()):
+        if self.store.root_containing(output) is None:
             return []
         latest_path = final_video_path(job)
         final = latest_path.resolve()
@@ -485,7 +522,7 @@ class ContentFactory:
             if candidate.is_symlink():
                 continue
             path = candidate.resolve()
-            if path.parent == final.parent and path.is_relative_to(self.store.outputs.resolve()) and path.is_file():
+            if path.parent == final.parent and self.store.root_containing(path) is not None and path.is_file():
                 paths.append(path)
         return paths
 

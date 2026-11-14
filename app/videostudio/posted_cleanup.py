@@ -132,7 +132,7 @@ class PostedCleanup:
         return targets
 
     def _valid_move(self,target,quarantine,job_id=None,task_ids=()):
-        root=self.store.outputs.resolve()
+        root=self.store.root_containing(target) or self.store.outputs.resolve()
         allowed=self._external_targets(job_id,task_ids)
         destination=root if target.resolve().is_relative_to(root) and target.resolve()!=root else allowed.get(target)
         return (target.is_absolute() and destination is not None
@@ -141,7 +141,7 @@ class PostedCleanup:
                 and not any(_alias(p) for p in (target,quarantine,*target.parents,*quarantine.parents)))
 
     def _purge_path(self,path):
-        roots={self.store.outputs.resolve(),self.store.path.parent.resolve(),DATA_ROOT.resolve()}
+        roots={*self.store.output_roots(),self.store.path.parent.resolve(),DATA_ROOT.resolve()}
         if path.resolve().parent not in roots or not re.fullmatch(r'\.deleted-[a-f0-9]{32}',path.name) or any(_alias(p) for p in (path,*path.parents)):raise ValueError('Vị trí dọn không hợp lệ')
         if not path.exists():return
         if path.is_dir():
@@ -150,7 +150,7 @@ class PostedCleanup:
         else:path.unlink()
 
     def _owned_targets(self,db,job,removal,task_ids):
-        identifier=job['id'];targets={target:self.store.outputs.resolve() for target in removal.targets}
+        identifier=job['id'];targets={target:self.store.root_containing(target) or self.store.outputs.resolve() for target in removal.targets}
         targets.update(self._external_targets(identifier,task_ids))
         # A failed restore must be resolved before a replay can retire this job.
         for journal in self.journal_root.glob('*.json'):
@@ -315,8 +315,8 @@ class PostedCleanup:
             journal=self.journal_root/(identifier+'.json')
             try:
                 record=json.loads(journal.read_text(encoding='utf8'))
-                root=self.store.outputs.resolve()
                 for original,_ in record['moves']:
+                    root=self.store.root_containing(original) or self.store.outputs.resolve()
                     parent=Path(original).parent
                     while parent.resolve().is_relative_to(root) and parent.resolve()!=root:
                         if any(_alias(p) for p in (parent,*parent.parents)):break

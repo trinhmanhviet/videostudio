@@ -581,7 +581,8 @@ async def create_app(bridge=None):
                 from .core import Store
                 from .flow_account import FlowAccountService
                 db=Path(os.getenv('VS_DATABASE',str(DATA_ROOT/'jobs.sqlite3')))
-                store=Store(db,os.getenv('VS_OUTPUT_DIR','E:/Videos'));service=FlowAccountService(store,flow_root=bridge.flow_images.root)
+                from .output_settings import configured_root
+                store=Store(db,configured_root());service=FlowAccountService(store,flow_root=bridge.flow_images.root)
                 job=store.get(job_id)
                 with store.db() as c:
                     phase=service._read(c,job_id)[0]
@@ -657,7 +658,11 @@ async def create_app(bridge=None):
                 prompt, job = body.get('prompt'), body.get('job_id')
                 if not isinstance(prompt,str) or not 1 <= len(prompt) <= 500000 or not isinstance(job,str) or not 1 <= len(job) <= 200:
                     raise web.HTTPBadRequest(text='Scoped job_id and prompt required')
-                value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt)}
+                # Long answers (a whole edited novel chapter) may need more than the default five minutes.
+                timeout = body.get('timeout_seconds', 300)
+                if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 30 <= timeout <= 1800:
+                    raise web.HTTPBadRequest(text='timeout_seconds must be 30..1800')
+                value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt, timeout_seconds=float(timeout))}
             bridge.last_error = None
             return web.json_response(value)
         except MetaQuotaExhausted as e:

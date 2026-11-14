@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Kho tài nguyên · VideoStudio</title>
   <link rel="stylesheet" href="/editor-workspace.css">
-  <link rel="stylesheet" href="/voice-workspace.css?v=20261113-bfb3442110d4">
-  <link rel="stylesheet" href="/studio-unified.css?v=20261113-68d5f69567ce">
+  <link rel="stylesheet" href="/voice-workspace.css?v=20261113-ebd44290bbc4">
+  <link rel="stylesheet" href="/studio-unified.css?v=20261113-eb396d301576">
 </head>
 <body>
   <div class="resource-shell">
@@ -14,6 +14,7 @@
       <a href="/" class="workspace-brand"><span class="brand-mark">▶</span>VideoStudio</a>
       <nav aria-label="Điều hướng chính">
         <a href="/?view=batch"><span aria-hidden="true">▱</span>Tạo video</a>
+        <a href="/?view=story"><span aria-hidden="true">❏</span>Kể truyện</a>
         <a href="/?view=queue"><span aria-hidden="true">☷</span>Hàng đợi</a>
         <a href="/?view=videos"><span aria-hidden="true">▷</span>Kho video</a>
         <a href="/?view=calendar"><span aria-hidden="true">▦</span>Lịch đăng</a>
@@ -54,7 +55,7 @@
   <dialog id="cloneDialog" class="resource-dialog" aria-labelledby="cloneTitle">
     <form id="resourceCloneForm"><h2 id="cloneTitle">Clone giọng đọc</h2><p class="resource-notice">Tạo giọng bằng VieNeu từ bản thu mẫu rõ lời, ít tạp âm.</p><label for="resourceCloneName">Tên giọng đọc</label><input id="resourceCloneName" required maxlength="100"><label for="resourceCloneFile">Bản thu mẫu (âm thanh)</label><input id="resourceCloneFile" type="file" accept="audio/*" required><label for="resourceCloneDuration">Độ dài mẫu: <span id="resourceCloneDurationLabel">15 giây</span></label><input id="resourceCloneDuration" type="range" min="5" max="60" step="5" value="15"><p id="cloneMessage" class="resource-notice" role="status"></p><p id="cloneError" class="resource-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" id="closeClone">Đóng</button><button type="submit" id="resourceCloneSubmit">Tạo giọng (GPU)</button></div></form>
   </dialog>
-  <script src="/voice-workspace.js?v=20261113-5eb1c2d9e49f"></script>
+  <script src="/voice-workspace.js?v=20261113-5c268b17511f"></script>
   <script src="/resources.js?v=20261113-d7e112b5c831"></script>
 </body>
 </html>

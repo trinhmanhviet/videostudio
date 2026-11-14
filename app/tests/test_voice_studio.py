@@ -36,6 +36,11 @@ class VoiceStudioTests(unittest.TestCase):
         self.assertEqual(self.calls[0]['speech_speed'],1.25)
         self.assertTrue(self.service.file(OWNER,a['id'],'wav').is_file())
         with self.assertRaises(KeyError):self.service.file('other-owner-000001',a['id'],'wav')
+    def test_output_volume_is_validated_and_absent_on_old_requests(self):
+        self.assertNotIn('speech_volume',self.service._request(OWNER,self.body))
+        self.assertEqual(self.service._request(OWNER,{**self.body,'speech_volume':125})['speech_volume'],125)
+        for bad in (130,'100',True,0):
+            with self.assertRaises(ValueError):self.service._request(OWNER,{**self.body,'speech_volume':bad})
     def test_video_and_scene_idle_guards_prevent_synthesis(self):
         self.create();self.store.create({'idea':'idea','project':'p','voice_id':'preset','duration_seconds':30},'video')
         self.assertFalse(self.service.step('worker'));self.assertEqual(self.calls,[])

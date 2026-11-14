@@ -10,19 +10,25 @@ def allocate_output(store, connection, request, job_id):
     from .core import output_slug
     project=request.get('project') or 'Dự án mặc định'
     connection.execute('CREATE TABLE IF NOT EXISTS project_output_roots(project TEXT PRIMARY KEY,path TEXT UNIQUE COLLATE NOCASE NOT NULL)')
+    connection.execute('CREATE TABLE IF NOT EXISTS project_output_history(project TEXT NOT NULL,path TEXT NOT NULL,retired REAL NOT NULL)')
     saved=connection.execute('SELECT path FROM project_output_roots WHERE project=?',(project,)).fetchone()
-    if saved:
+    if saved and Path(saved['path']).resolve().parent==store.outputs.resolve():
         root=Path(saved['path'])
-        if root.resolve().parent!=store.outputs.resolve():raise ValueError('Project output root is outside output directory')
     else:
+        # New project, or the save folder was changed in Settings: new videos go to <current folder>/<project>;
+        # the earlier folder is kept in history so its videos stay listed, playable and removable.
         slug=output_slug(project)
         if slug.upper() in {'CON','PRN','AUX','NUL',*(f'COM{i}' for i in range(1,10)),*(f'LPT{i}' for i in range(1,10))}:slug='project-'+slug
-        root=store.outputs/slug
         suffix=hashlib.sha256(project.encode('utf8')).hexdigest()[:10]
-        if root.exists() or connection.execute('SELECT 1 FROM project_output_roots WHERE path=?',(str(root),)).fetchone():
-            root=store.outputs/(slug+'-'+suffix)
-        if root.exists():raise ValueError('Project output folder already exists without a registered owner')
-        connection.execute('INSERT INTO project_output_roots VALUES(?,?)',(project,str(root)))
+        candidates=[store.outputs/slug,store.outputs/(slug+'-'+suffix)]+[store.outputs/f'{slug}-{suffix}-{n}' for n in range(2,50)]
+        taken=lambda path:path.exists() or connection.execute('SELECT 1 FROM project_output_roots WHERE path=?',(str(path),)).fetchone()
+        root=next((path for path in candidates if not taken(path)),None)
+        if root is None:raise ValueError('Project output folder already exists without a registered owner')
+        if saved:
+            import time
+            connection.execute('INSERT INTO project_output_history VALUES(?,?,?)',(project,saved['path'],time.time()))
+            connection.execute('UPDATE project_output_roots SET path=? WHERE project=?',(str(root),project))
+        else:connection.execute('INSERT INTO project_output_roots VALUES(?,?)',(project,str(root)))
     output=root/'data'/job_id
     output.mkdir(parents=True,exist_ok=False)
     return output
@@ -46,7 +52,7 @@ def final_video_path(job):
     recorded = render.get('video')
     if recorded:
         path = Path(recorded)
-        if path.resolve().parent == base.parent.resolve() and (_matches_video_name(path, base) or render.get('video_ngang')):
+        if path.resolve().parent == base.parent.resolve() and (_matches_video_name(path, base) or render.get('video_ngang') or render.get('story_outputs')):
             return path
     return base
 
@@ -151,4 +157,6 @@ def job_deliverables(job):
     """Every finished file of a job, for deletion: its video versions plus the landscape copy."""
     landscape = job.get('checkpoints', {}).get('render', {}).get('video_ngang')
     videos=list(dict.fromkeys(job_video_files(job) + ([Path(landscape)] if landscape else [])))
-    return videos+[video.with_suffix(suffix) for video in videos for suffix in ('.srt','.ass','.vtt') if video.with_suffix(suffix).is_file()]
+    # Story episodes also deliver an MP3 and per-orientation SRT files beside the videos.
+    story=[Path(p) for p in job.get('checkpoints', {}).get('render', {}).get('story_files', []) if Path(p).is_file() and Path(p) not in videos]
+    return videos+[video.with_suffix(suffix) for video in videos for suffix in ('.srt','.ass','.vtt') if video.with_suffix(suffix).is_file() and video.with_suffix(suffix) not in story]+story

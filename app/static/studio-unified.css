@@ -50,4 +50,11 @@ body.studio-ready,.resource-shell,.studio-create,.voice-workspace,.studio-detail
 @media(max-width:760px){.studio-nav{grid-template-columns:repeat(6,minmax(0,1fr))}.studio-nav button,.studio-nav a{font-size:10px}.studio-queue-summary{grid-template-columns:repeat(2,1fr)}.studio-queue-summary>div:nth-child(2){border-right:0}.studio-queue-summary>div{padding:10px}.studio-queue-summary strong{font-size:23px}.studio-queue-summary span{font-size:12px}.studio-queue-context{padding:14px}.studio-create h2,.voice-workspace h2,.studio-details h2{font-size:24px}.studio-create .sc-heading{padding-right:0;min-height:0}.studio-create .sc-heading h1{font-size:27px}.studio-create .sc-draft-state{position:static}.studio-create .sc-panel-heading h2{font-size:18px}.studio-ready:has(#studio-batch:not([hidden])) main>.studio-topbar{position:static;margin-bottom:18px}}
 
 /* Shared duration value, unit and automatic reset. */
-.studio-create .sc-duration-line{grid-template-columns:minmax(45px,1fr) 68px auto;align-items:center;gap:6px}.studio-create .sc-unit-select{min-width:0;padding:7px 5px}
+.studio-create .sc-duration-line{display:grid;grid-template-columns:minmax(90px,1fr) 88px auto;align-items:center;gap:8px}
+.studio-create .sc-duration-line>input{min-width:90px;font-size:16px;padding:8px 10px}
+.studio-create .sc-unit-select{min-width:0;padding:7px 8px}
+.studio-create .sc-common-bottom>.sc-field:first-child{width:310px;flex:0 1 310px;max-width:100%}
+.studio-create .sc-inline-duration{grid-template-columns:110px minmax(290px,340px) minmax(0,1fr)}
+@media(max-width:1100px){.studio-create .sc-inline-duration{grid-template-columns:1fr}.studio-create .sc-inline-duration>small{grid-column:auto}}
+.studio-output-root .studio-drive-list{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.studio-output-root .studio-drive-list button{font-size:12px;padding:5px 9px;min-height:30px}
+.studio-output-root .studio-output-row{display:flex;gap:8px;align-items:center}.studio-output-root .studio-output-row input{flex:1;min-width:0}

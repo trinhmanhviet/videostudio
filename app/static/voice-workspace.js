@@ -17,7 +17,9 @@
     if(!Number.isFinite(speed)||speed<.5||speed>2)throw new Error('Tốc độ cần từ 0,5 đến 2.');
     const engine=settings.speech_engine||'vieneu',rhythm=settings.speech_rhythm||'natural';
     if(!['vieneu','khanhtts'].includes(engine)||!['natural','story'].includes(rhythm))throw new Error('Bộ đọc hoặc nhịp đọc không hợp lệ.');
-    const request={text,voice_id:settings.voice_id,speech_engine:engine,speech_rhythm:rhythm,speech_speed:speed};
+    const volume=Number(settings.speech_volume??100);
+    if(![50,75,100,125,150,200].includes(volume))throw new Error('Âm lượng cần là 50, 75, 100, 125, 150 hoặc 200%.');
+    const request={text,voice_id:settings.voice_id,speech_engine:engine,speech_rhythm:rhythm,speech_speed:speed,speech_volume:volume};
     if(engine==='khanhtts'){const steps=Number(settings.khanh_steps??32);if(![16,32].includes(steps))throw new Error('Chọn 16 hoặc 32 bước.');request.khanh_steps=steps;}
     if(settings.speech_reference_id)request.speech_reference_id=settings.speech_reference_id;
     if(engine==='khanhtts'&&!settings.speech_reference_id&&settings.speech_reference_text?.trim())request.speech_reference_text=settings.speech_reference_text.trim();
@@ -38,7 +40,7 @@
     function read(key,fallback){try{return JSON.parse(storage.getItem('voice-workspace:'+key))??fallback;}catch{return fallback;}}
     function write(key,value){try{storage.setItem('voice-workspace:'+key,JSON.stringify(value));}catch{notice('Trình duyệt chưa lưu được thiết lập. Giữ cửa sổ này để theo dõi bản đọc.',true);}}
     const owner=read('owner',null)||global.crypto.randomUUID();
-    const defaults={text:'',voice_id:'',speech_engine:'vieneu',speech_speed:1,speech_rhythm:'natural',khanh_steps:32,speech_reference_id:'',speech_reference_text:'',title:''};
+    const defaults={text:'',voice_id:'',speech_engine:'vieneu',speech_speed:1,speech_volume:100,speech_rhythm:'natural',khanh_steps:32,speech_reference_id:'',speech_reference_text:'',title:''};
     const state={...defaults,...read('settings',{}),...read('draft',{}),voices:[],references:[],favorites:read('favorites',[]),filter:'all',query:'',page:1,historyPage:1,saved:false,history:[],total:0,active:null,activeId:read('active',null),pending:read('pending',null),visible:true,destroyed:false,loading:false,submitting:false,engineReady:false};
     let timer=null,statusTimer=null,statusSequence=0,loadingPromise=null,referenceURL=null,historySequence=0;
     const uiEvents=new AbortController();
@@ -61,7 +63,7 @@
           <div class="vw-text-heading"><h3>Nội dung cần đọc</h3><button type="button" data-action="import">Nhập TXT</button><input type="file" data-role="txtFile" accept=".txt,text/plain" hidden></div>
           <textarea data-field="text" maxlength="20000" rows="10" placeholder="Nhập nội dung muốn nghe thử…" aria-label="Nội dung cần đọc"></textarea>
           <div class="vw-text-meta"><small data-role="textCount"></small><button type="button" data-action="clear" class="vw-link">Xóa nội dung</button></div>
-          <div class="vw-controls"><label>Nhịp đọc<select data-field="speech_rhythm"><option value="natural">Tự nhiên · nhịp A</option><option value="story">Kể chuyện · nhịp B</option></select></label><label>Tốc độ<select data-field="speech_speed"><option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="0.9">0,9×</option><option value="1">1,0×</option><option value="1.1">1,1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="2">2,0×</option></select></label><label data-role="quality">Chất lượng KhanhTTS<select data-field="khanh_steps"><option value="16">Nhanh · 16 bước</option><option value="32">Chuẩn · 32 bước</option></select></label></div>
+          <div class="vw-controls"><label>Nhịp đọc<select data-field="speech_rhythm"><option value="natural">Tự nhiên · nhịp A</option><option value="story">Kể chuyện · nhịp B</option></select></label><label>Tốc độ<select data-field="speech_speed"><option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="0.9">0,9×</option><option value="1">1,0×</option><option value="1.1">1,1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="2">2,0×</option></select></label><label>Âm lượng<select data-field="speech_volume"><option value="50">50%</option><option value="75">75%</option><option value="100">100% · chuẩn</option><option value="125">125%</option><option value="150">150%</option><option value="200">200%</option></select></label><label data-role="quality">Chất lượng KhanhTTS<select data-field="khanh_steps"><option value="16">Nhanh · 16 bước</option><option value="32">Chuẩn · 32 bước</option></select></label></div>
           <div class="vw-reference"><label>Sắc thái theo tham chiếu<select data-field="speech_reference_id"><option value="">Theo mẫu của giọng</option></select></label><button type="button" data-action="addReference">＋ Thêm mẫu sắc thái</button><button type="button" data-action="removeReference" hidden>Xóa mẫu</button></div>
           <small class="vw-muted">Sắc thái phụ thuộc bản thu tham chiếu. Nhịp B điều chỉnh khoảng nghỉ.</small>
           <audio data-role="referencePlayer" controls preload="none" hidden aria-label="Nghe mẫu sắc thái"></audio>
@@ -101,7 +103,7 @@
       $('[data-action="removeReference"]').hidden=!state.speech_reference_id;
     }
     function renderVoices(){
-      const visible=pageItems(filterVoices(state.voices,state.query,state.filter,state.favorites),state.page,8);state.page=visible.page;
+      const visible=pageItems(filterVoices(state.voices,state.query,state.filter,state.favorites),1,Number.MAX_SAFE_INTEGER);state.page=visible.page;
       root.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===state.filter)));
       role('voices').replaceChildren();
       for(const voice of visible.items){
@@ -117,7 +119,7 @@
         row.append(preview,favorite);role('voices').append(row);
       }
       if(!visible.total)role('voices').append(element('p','Không có giọng phù hợp.','vw-empty'));
-      role('voiceCount').textContent=`${visible.total} giọng`;role('voicePage').textContent=`${visible.page} / ${visible.pages}`;
+      role('voiceCount').textContent=`${visible.total} giọng`;role('voicePage').textContent='';root.querySelectorAll('[data-action="voicePrev"],[data-action="voiceNext"]').forEach(b=>b.hidden=true);
       $('[data-action="voicePrev"]').disabled=visible.page<=1;$('[data-action="voiceNext"]').disabled=visible.page>=visible.pages;
     }
     function renderReferences(){
@@ -166,14 +168,14 @@
       const labels={queued:'Chờ GPU rảnh',running:'Đang tạo',completed:'Sẵn sàng',failed:'Lỗi',cancelled:'Đã dừng'};
       for(const task of state.history){const card=element('article',null,'vw-history-card');card.append(element('strong',task.title),element('small',`${voiceName(task.request.voice_id)} · ${task.request.speech_engine==='khanhtts'?'KhanhTTS':'VieNeu'} · ${duration(task)||labels[task.state]||task.state}`));if(['failed','queued','running'].includes(task.state))card.append(element('p',task.message,'vw-task-message'));const controls=element('div',null,'vw-history-actions');taskButtons(task,controls);card.append(controls);role('history').append(card);}
       if(!state.history.length)role('history').append(element('p',state.saved?'Chưa có bản đọc lưu vào thư viện.':'Chưa có bản đọc. Nội dung mới sẽ chờ GPU rảnh.','vw-empty'));
-      const pages=Math.max(1,Math.ceil(state.total/10));role('historyPage').textContent=`${state.historyPage} / ${pages}`;
+      const pages=Math.max(1,Math.ceil(state.total/30));role('historyPage').textContent=`${state.historyPage} / ${pages}`;
       $('[data-action="historyPrev"]').disabled=state.historyPage<=1;$('[data-action="historyNext"]').disabled=state.historyPage>=pages;
     }
     async function refreshHistory(){
       const sequence=++historySequence;
-      const history=await request(`/api/voice-studio/tasks?page=${state.historyPage}&page_size=10&saved=${state.saved}`);
+      const history=await request(`/api/voice-studio/tasks?page=${state.historyPage}&page_size=30&saved=${state.saved}`);
       if(state.destroyed||sequence!==historySequence)return;state.history=history.items;state.total=history.total;
-      if(state.historyPage>Math.max(1,Math.ceil(state.total/10))){state.historyPage=Math.max(1,Math.ceil(state.total/10));return refreshHistory();}
+      if(state.historyPage>Math.max(1,Math.ceil(state.total/30))){state.historyPage=Math.max(1,Math.ceil(state.total/30));return refreshHistory();}
       if(state.activeId){const currentId=state.activeId;const active=state.history.find(t=>t.id===currentId)||await request('/api/voice-studio/tasks/'+currentId).catch(error=>{if(error.status===404)return null;throw error;});if(sequence!==historySequence||state.activeId!==currentId)return;state.active=active;if(!state.active){state.activeId=null;write('active',null);}}
       renderHistory();renderResult();
     }

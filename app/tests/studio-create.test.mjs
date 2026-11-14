@@ -118,11 +118,12 @@ test('loading voices fills empty selections and refresh preserves the focused ed
   assert.equal(controller.common.voice,'voice-a');
   assert.equal(document.activeElement,textarea);
   assert.equal(textarea.value,'one two');
-  const minute=find(node=>node.attributes['aria-label']==='Độ dài (phút) — mục đang sửa');
-  minute.value=String(state.batchRows[0].seconds);minute.oninput();
+  const minute=find(node=>node.attributes['aria-label']==='phút — mục đang sửa');
+  const second=find(node=>node.attributes['aria-label']==='giây — mục đang sửa');
+  minute.value='0';second.value='24';second.oninput();
   textarea.value='one two three';textarea.oninput();
   assert.equal(state.batchRows[0].duration_mode,'manual');
-  assert.equal(Number(state.batchRows[0].seconds),.4);
+  assert.equal(Number(state.batchRows[0].seconds)*Number(state.batchRows[0].unit),24);
 });
 
 test('mounted editor autosaves the entire draft and keeps the previous settings for a new row', () => {
@@ -140,10 +141,11 @@ test('common controls immediately configure a single video and its minute overri
   const engine=find(node=>node.attributes['aria-label']==='Bộ đọc — thiết lập chung');
   engine.value='khanhtts';engine.onchange();
   assert.equal(state.batchRows[0].speech_engine,'khanhtts');
-  const minutes=find(node=>node.attributes['aria-label']==='Độ dài (phút) — thiết lập chung');
-  minutes.value='3.5';minutes.oninput();
+  const minutes=find(node=>node.attributes['aria-label']==='phút — thiết lập chung');
+  const seconds=find(node=>node.attributes['aria-label']==='giây — thiết lập chung');
+  minutes.value='3';seconds.value='30';minutes.oninput();
   const textarea=find(node=>node.tagName==='TEXTAREA');textarea.value='A longer script';textarea.oninput();
   assert.equal(state.batchRows[0].duration_mode,'manual');
-  assert.equal(Number(state.batchRows[0].seconds),3.5);
+  assert.equal(Number(state.batchRows[0].seconds)*Number(state.batchRows[0].unit),210);
   assert.equal(state.batchRows[0].speech_engine,'khanhtts');
 });

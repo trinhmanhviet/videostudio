@@ -253,7 +253,15 @@ class TrayApp:
             self.tray.notify('Không mở được thư mục', str(error), warning=True)
 
     def open_output(self):
-        self.open_folder(os.environ.get('VS_OUTPUT_DIR') or 'E:/Videos')
+        # The folder chosen in Settings → Nơi lưu video (data/output-root.json), else VS_OUTPUT_DIR, else E:/Videos.
+        root = os.environ.get('VS_OUTPUT_DIR') or 'E:/Videos'
+        try:
+            import json
+            saved = json.loads((Path(__file__).resolve().parents[2] / 'data' / 'output-root.json').read_text(encoding='utf-8')).get('root')
+            root = saved or root
+        except (OSError, ValueError):
+            pass
+        self.open_folder(root)
 
     def toggle_startup(self):
         on = not self.integration.startup_enabled()

@@ -35,7 +35,7 @@ class JobDetails:
         job = self.store.get(jid)
         raw = Path(job['output'])
         root = raw.resolve()
-        outputs = self.store.outputs.resolve()
+        outputs = self.store.root_containing(raw) or self.store.outputs.resolve()
         if not raw.is_absolute() or root == outputs or not root.is_relative_to(outputs):
             raise ValueError('Output is outside the owned output directory')
         if any(_alias(p) for p in (raw, *raw.parents)):
@@ -128,7 +128,7 @@ class JobDetails:
             # Derived exports retain attested parent audio/subtitles. Permit
             # only a matching asset owned by another recorded job, never an
             # arbitrary path supplied by this checkpoint.
-            path = self._owned(entry['path'], self.store.outputs.resolve())
+            path = self._owned(entry['path'], self.store.root_containing(entry['path']) or self.store.outputs.resolve())
             proven = False
             with self.store.db() as db:
                 for row in db.execute('SELECT c.value,j.output FROM checkpoints c JOIN jobs j ON j.id=c.job WHERE c.stage=?', (stage,)):

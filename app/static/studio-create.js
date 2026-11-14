@@ -128,6 +128,11 @@
     const voiceList = () => (options.voiceOptions?.() || []).map(voice => Array.isArray(voice) ? voice : [voice.id,voice.name || voice.id]);
     const voiceName = id => voiceList().find(([value]) => value === id)?.[1] || id || 'Chưa chọn giọng';
     const labelFor = (list,value) => list.find(([key]) => key === value)?.[1] || value;
+    const ICONS={up:'<path d="M6 15l6-6 6 6"/>',down:'<path d="M6 9l6 6 6-6"/>',
+      copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+      trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'};
+    const iconButton=(name,label,action)=>{const value=button('',action,'sc-icon-button');value.title=label;value.setAttribute('aria-label',label);
+      value.innerHTML=`<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;return value;};
     const page = node('div','studio-create'); page.dataset.batchPage='true';
     const heading = append(node('header','sc-heading'),append(node('div'),node('h1','','Tạo video'),node('p','sc-muted','Một kịch bản hay cả thư mục — tạo lần lượt, giữ riêng cài đặt từng bài.')));
     const saved = node('span','sc-draft-state','Chưa lưu nháp');saved.setAttribute('role','status');heading.append(saved);
@@ -168,6 +173,15 @@
         edit(row,{unit:changed.unit,seconds:changed.seconds});
       }
     }
+    function setDuration(target,total) {
+      if(!Number.isFinite(total)||total<0)return;
+      const patch={seconds:total,unit:'1',duration_mode:'manual'};
+      if (target==='common') {
+        Object.assign(common,patch);
+        if(state.batchRows.length===1&&!locked(rowForActive())){edit(rowForActive(),patch);return;}
+        refresh(false);
+      } else edit(rowForActive(),patch);
+    }
     function changeSetting(target,key,value) {
       if (target === 'common') {
         if(key==='voice'&&common.voice!==value)delete common.speech_reference_text;
@@ -189,15 +203,16 @@
       wrapper.append(input);(target==='common'?commonControls:editorControls).set(key,{input,wrapper});return wrapper;
     }
     function durationField(target) {
-      const wrapper = field(target,'seconds','Thời lượng',null,{type:'number',min:'0.000001',step:'any',inputmode:'decimal'});
-      const line = node('div','sc-duration-line');const input=wrapper.lastChild;line.append(input);
-      const unitSelect = node('select','sc-unit-select');
-      unitSelect.setAttribute('aria-label',`Đơn vị thời lượng${target==='common'?' — thiết lập chung':' — mục đang sửa'}`);
-      const optMin=node('option','','Phút');optMin.value='60';
-      const optSec=node('option','','Giây');optSec.value='1';
-      unitSelect.append(optMin,optSec);
-      unitSelect.onchange = () => changeUnit(target, unitSelect.value);
-      line.append(unitSelect);
+      // Minutes and seconds are typed directly; there is no unit dropdown to switch.
+      const scope=target==='common'?' — thiết lập chung':' — mục đang sửa';
+      const wrapper=node('div','sc-field sc-duration-field');wrapper.append(node('span','','Thời lượng'));
+      const line=node('div','sc-duration-line');
+      const part=(label,max)=>{const box=node('label','sc-duration-part');const input=node('input');input.type='number';input.min='0';if(max)input.max=String(max);input.step='1';input.inputMode='numeric';input.setAttribute('aria-label',`${label}${scope}`);box.append(input,node('span','sc-muted',label));return {box,input};};
+      const minutes=part('phút'),secs=part('giây',59);
+      const typed=()=>{const m=Number(minutes.input.value||0),s=Number(secs.input.value||0);if(!Number.isFinite(m)||!Number.isFinite(s)||m<0||s<0)return;setDuration(target,Math.round(m*60+s));};
+      minutes.input.oninput=typed;secs.input.oninput=typed;
+      line.append(minutes.box,secs.box);
+      (target==='common'?commonControls:editorControls).set('seconds',{input:minutes.input,wrapper,minutes:minutes.input,secs:secs.input});
       const reset = button('Tự tính',() => {
         if (target==='common') {
           common.duration_mode='auto';const active=rowForActive();
@@ -206,7 +221,7 @@
         }
         else {const row=rowForActive();edit(row,{duration_mode:'auto'});}
       },'sc-reset');reset.title='Bỏ thời lượng tự nhập, tính lại theo nội dung và giọng';line.append(reset);wrapper.append(line);
-      const note=node('small','sc-muted');wrapper.append(note);Object.assign((target==='common'?commonControls:editorControls).get('seconds'),{reset,note,unitSelect});return wrapper;
+      const note=node('small','sc-muted');wrapper.append(note);Object.assign((target==='common'?commonControls:editorControls).get('seconds'),{reset,note});return wrapper;
     }
     function voiceField(target) {
       const wrapper=field(target,'voice','Giọng đọc',() => voiceList());const line=node('div','sc-voice-line');line.append(wrapper.lastChild);
@@ -279,7 +294,7 @@
       if(activeKey===row.key)activeKey=state.batchRows[Math.min(index,state.batchRows.length-1)]?.key;
       refresh();
     }
-    const duplicateButton=button('▢  Nhân bản mục',()=>duplicate(rowForActive()),'sc-link');
+    const duplicateButton=button('⧉  Nhân bản mục',()=>duplicate(rowForActive()),'sc-link');
     const removeButton=button('♜  Xóa mục',()=>removeRow(rowForActive()),'sc-link');
     const editorActions=append(node('div','sc-editor-actions'),duplicateButton,removeButton,counts);
     const rowError=node('p','sc-row-error');rowError.setAttribute('role','alert');
@@ -323,20 +338,18 @@
     function syncFields(target,records,value) {
       for(const [key,record] of records) {
         const disabled=target==='row'?locked(value):busy();
-        syncControl(record,value[key],disabled || key==='image_provider'&&value.style==='meme');
+        if(key!=='seconds')syncControl(record,value[key],disabled || key==='image_provider'&&value.style==='meme');
         if(key==='khanh_steps')record.wrapper.hidden=value.speech_engine!=='khanhtts';
         if(key==='speech_reference_text')record.wrapper.hidden=value.speech_engine!=='khanhtts'||!String(value.voice||'').startsWith('clone:');
         if(key==='seconds') {
-          const isSec = String(value.unit) === '1';
-          record.unitSelect.value = isSec ? '1' : '60';
-          record.unitSelect.disabled = disabled;
-          record.reset.disabled = disabled;
-          record.input.setAttribute('aria-label', `${isSec ? 'Độ dài (giây)' : 'Độ dài (phút)'}${target==='common'?' — thiết lập chung':' — mục đang sửa'}`);
-          record.input.step = 'any';
-          record.input.min = '0.000001';
+          const total=Math.max(0,Math.round(Number(value.seconds)*Number(value.unit||60)||0));
+          const focused=[record.minutes,record.secs].includes(doc.activeElement);
+          // While the user types, keep their raw input; normalise (e.g. 90 giây → 1 phút 30) once they leave the box.
+          if(!focused){record.minutes.value=String(Math.floor(total/60));record.secs.value=String(total%60);}
+          record.minutes.disabled=disabled;record.secs.disabled=disabled;record.reset.disabled=disabled;record.wrapper.classList.toggle('is-disabled',disabled);
           record.note.textContent=value.duration_mode==='manual'
-            ? `Đã tự nhập (${isSec ? 'giây' : 'phút'}) · giữ nguyên khi sửa nội dung/giọng`
-            : `Tự tính theo nội dung và giọng (${isSec ? 'giây' : 'phút'}) · có thể sửa trực tiếp`;
+            ? 'Đã tự nhập · giữ nguyên khi sửa nội dung/giọng'
+            : 'Tự tính theo nội dung và giọng · có thể sửa trực tiếp';
         }
       }
     }
@@ -352,12 +365,12 @@
         const open=button('',()=>{activeKey=row.key;refresh();},'sc-script-open');open.setAttribute('aria-label',`Sửa video ${index+1}: ${titleFor(row,index)}`);open.setAttribute('aria-pressed',String(row.key===activeKey));
         const rowMetrics=metrics(row.text);const seconds=row.uncertain&&row.submitted_duration_seconds?row.submitted_duration_seconds:Number(row.seconds)*Number(row.unit);
         append(open,node('strong','',`${String(index+1).padStart(2,'0')}  ${titleFor(row,index)}`),node('span','sc-muted',`${rowMetrics.words.toLocaleString('vi-VN')} từ · ≈ ${Number.isFinite(seconds)?durationText(seconds):'chưa có độ dài'} · ${labelFor(styles,row.style)}`),node('span','sc-row-chip',`${voiceName(row.voice)} · ${labelFor(imageOptions,row.image_provider)}${row.uncertain?' · Chờ xác định':''}`));
-        const actions=node('div','sc-card-actions');const copy=button('▢',()=>duplicate(row));copy.title='Nhân bản';copy.setAttribute('aria-label',`Nhân bản video ${index+1}`);copy.disabled=locked(row);
-        const menu=node('details','sc-card-menu');const menuSummary=node('summary','','•••');menuSummary.setAttribute('aria-label',`Thao tác video ${index+1}`);menu.append(menuSummary);
-        const menuBody=node('div','sc-card-menu-body');
-        const up=button('↑ Lên',()=>{moveRow(state.batchRows,index,index-1);refresh();});up.disabled=busy()||index===0;
-        const down=button('↓ Xuống',()=>{moveRow(state.batchRows,index,index+1);refresh();});down.disabled=busy()||index===state.batchRows.length-1;
-        const remove=button('Xóa',()=>removeRow(row));remove.disabled=locked(row);append(menuBody,up,down,remove);menu.append(menuBody);append(actions,copy,menu);
+        const actions=node('div','sc-card-actions');
+        const up=iconButton('up',`Đưa video ${index+1} lên`,()=>{moveRow(state.batchRows,index,index-1);refresh();});up.disabled=busy()||index===0;
+        const down=iconButton('down',`Đưa video ${index+1} xuống`,()=>{moveRow(state.batchRows,index,index+1);refresh();});down.disabled=busy()||index===state.batchRows.length-1;
+        const copy=iconButton('copy',`Nhân bản video ${index+1}`,()=>duplicate(row));copy.disabled=locked(row);
+        const remove=iconButton('trash',`Xóa video ${index+1}`,()=>removeRow(row));remove.disabled=locked(row);remove.classList.add('sc-icon-danger');
+        append(actions,up,down,copy,remove);
         append(card,grip,check,open,actions);if(row.error)card.append(node('span','sc-card-error',row.error));list.append(card);
       }
       if(!state.batchRows.length)list.append(node('p','sc-empty sc-muted','Chưa có kịch bản. Thêm kịch bản hoặc nhập file để bắt đầu.'));

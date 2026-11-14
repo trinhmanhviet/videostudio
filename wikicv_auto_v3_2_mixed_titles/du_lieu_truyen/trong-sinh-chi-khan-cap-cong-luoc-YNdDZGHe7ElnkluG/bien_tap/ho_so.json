@@ -1,0 +1,957 @@
+{
+ "luu_y": [
+  "Hồ sơ này được xây dựng từ toàn văn hai chương mở đầu và đối chiếu với hồ sơ cũ. Những chi tiết chưa được hai chương xác nhận phải xem là dữ kiện tạm thời, không tự biến thành sự thật đã được chứng minh.",
+  "Tên chuẩn của nữ chính là Bạch Thù Văn. Những chỗ viết Bạch Thục Văn hoặc Thục Văn trong bản convert cần sửa nhất quán. Không tự thay bằng tên khác.",
+  "Tên Nghiêu chỉ có trong hồ sơ cũ, chưa được xác nhận trực tiếp ở hai chương mở đầu. Trước khi nhân vật tự giới thiệu tên hoặc có dữ kiện xác nhận, tiếp tục gọi là mèo trắng.",
+  "Tên tiếng Việt thống nhất là Trọng Sinh: Công Lược Khẩn Cấp. Tên cũ Trọng Sinh Chi Khẩn Cấp Công Lược được xem là tên convert, không dùng lẫn lộn trong các chương đã biên tập.",
+  "Hồ sơ cũ ghi tổng cộng 45 chương và hai chương đã hoàn thành, nhưng phần nguồn hiện được cung cấp chưa đủ để xác minh tổng số chương hoặc chất lượng bản biên tập trước. Không dùng dữ kiện tiến độ làm bằng chứng về cốt truyện.",
+  "Thể loại bách hợp là phân loại kế thừa từ hồ sơ cũ. Không vì Giang Thự là hôn phu ở thế giới ban đầu mà tự loại bỏ thể loại này. Ngược lại, không tự thêm quan hệ tình cảm giữa các nhân vật nữ trước khi văn bản thể hiện.",
+  "Phân biệt rõ thế giới ban đầu và thế giới song song năm 2011. Bạch Thù Văn không đơn giản quay ngược thời gian trong cùng một dòng lịch sử, mà theo lời mèo trắng, linh hồn cô đi vào thân thể một phiên bản khác của chính mình.",
+  "Thân thể Bạch Thù Văn ở thế giới song song đã chết trước khi được linh hồn từ thế giới ban đầu nhập vào. Nguyên nhân được mèo trắng công bố là bị người khác đâm chết. Không tự sáng tác hung khí, địa điểm, hung thủ hoặc quá trình chữa lành thân thể.",
+  "Linh hồn nguyên bản của thân thể năm 2011 không được khẳng định là đã tiêu tan. Mèo trắng nói linh hồn ấy quá yếu và đã được đưa đến thế giới khác. Phải bảo toàn sự khác biệt này.",
+  "Ở thế giới ban đầu, Bạch Thù Văn chết sau khi bị xe tông, trước đó cảm nhận rõ một bàn tay đẩy mình ra đường. Người lái xe khẳng định cô tự lao ra. Đây là các thông tin từ những góc nhìn khác nhau, không được xóa bỏ hoặc tự kết luận thay tác giả.",
+  "Cô gái tóc mái dài xuất hiện trong ký ức cuối cùng của Bạch Thù Văn chưa được xác định danh tính. Không tự gộp cô gái này với ủy viên sao đỏ, dù cả hai đều có liên quan đến những sự kiện khiến nữ chính đau khổ.",
+  "Giang Thự đã phản bội Bạch Thù Văn ở thế giới ban đầu theo những gì cô tận mắt nhìn thấy. Tuy nhiên, Giang Thự năm 2011 chưa trải qua các sự kiện tương lai đó. Phải giữ mâu thuẫn giữa ký ức của nữ chính và sự ngơ ngác của Giang Thự thời học sinh.",
+  "Không tự khẳng định Giang Thự cố ý khiến Bạch Thù Văn chết, đồng lõa với hung thủ hoặc biết trước âm mưu. Lời cảnh báo không được băng qua đường là một chi tiết bí ẩn cần giữ nguyên.",
+  "Nữ sinh sao đỏ được Bạch Thù Văn nhận ra là người phụ nữ trên giường Giang Thự ở thế giới trước. Tuy nhiên, việc họ đã có quan hệ tình cảm từ thời trung học mới là suy đoán của nữ chính, không phải sự kiện được xác nhận.",
+  "Mốc thời gian quan trọng là ngày 9 tháng 9 năm 2011, ngày hôm sau là Ngày Nhà giáo, Giang Thự xem đồng hồ lúc 7 giờ 20 phút, giờ tự học bắt đầu lúc 7 giờ 30 phút, quãng đường đạp xe đến trường mất ít nhất 15 phút. Giữ đúng toàn bộ số liệu.",
+  "Ngày Nhà giáo trong bối cảnh Trung Quốc là ngày 10 tháng 9. Không tự chuyển thành ngày 20 tháng 11 theo lịch Việt Nam.",
+  "Theo ký ức của Bạch Thù Văn, Giang Thự tỏ tình trong kỳ nghỉ Quốc khánh năm lớp mười, trên vòng đu quay ở công viên giải trí. Đây cũng là ngày cô trao nụ hôn đầu tiên. Chưa cần tự bổ sung giờ, địa điểm cụ thể hoặc nội dung lời tỏ tình.",
+  "Bạch Thù Văn của thế giới ban đầu cao khoảng 1,7 mét, còn thân thể năm 2011 thấp hơn 1,6 mét. Sự thay đổi chiều cao là chi tiết khiến cô phát hiện sự bất thường và tạo ra tình huống hài hước.",
+  "Không mô tả Bạch Thù Văn là cô gái ngoan hiền bẩm sinh. Trước khi yêu Giang Thự, cô từng gây chuyện, đánh nhau và bắt nạt các nữ sinh khác. Sau khi yêu anh, cô mới trở nên ngoan ngoãn hơn. Giữ nguyên cả phần tính cách tiêu cực này.",
+  "Mối quan hệ với anh trai là một phần nguyên nhân hình thành tính cách nữ chính. Không tự biến anh trai thành nhân vật xấu hoặc người cố ý dạy em gái làm điều sai trái nếu văn bản không nói như vậy.",
+  "Bố Bạch Thù Văn nghiêm khắc và có hình phạt bằng thước gỗ đánh mu bàn tay, không phải lòng bàn tay. Đây là chi tiết cụ thể được tác giả nhấn mạnh, không được sửa hoặc làm nhẹ đi.",
+  "Mẹ Bạch Thù Văn vừa quan tâm vừa nóng tính. Giữ lời trách mắng tự nhiên của người mẹ, không biến thành lời thoại quá trang trọng hoặc cứng nhắc.",
+  "Mèo trắng là người dẫn đường linh hồn, không mặc định là hệ thống trò chơi. Không tự thêm bảng nhiệm vụ, điểm thưởng, cấp độ, thông báo hệ thống, hình phạt hoặc giao diện chỉ số nếu chúng chưa xuất hiện trong văn bản.",
+  "Theo lời mèo trắng, linh hồn tồn tại sau khi cơ thể chết, có thể đi qua các thế giới song song, yếu dần sau những lần dịch chuyển. Linh hồn đủ mạnh có thể nhập vào cơ thể người, còn linh hồn suy yếu có thể trở thành vật vô tri trước khi hoàn toàn biến mất. Đây là quy tắc siêu nhiên bên trong truyện, không trình bày như kiến thức khoa học thực tế.",
+  "Mèo trắng tự nhận mình đã cứu Bạch Thù Văn và vì vậy cô phải giúp nó tiến hành thí nghiệm. Bạch Thù Văn không hoàn toàn tự nguyện ngay từ đầu. Giữ nét miễn cưỡng, hoài nghi và bất mãn trong phản ứng của cô.",
+  "Mèo trắng nói mục tiêu thí nghiệm là quan sát những thay đổi ở một thế giới có ảnh hưởng đến các thế giới song song khác hay không. Không tự khẳng định hiệu ứng này đã được chứng minh hoặc chắc chắn sẽ xảy ra.",
+  "Nhiệm vụ công lược ban đầu nhằm tăng thiện cảm của những người xung quanh Bạch Thù Văn, qua đó giảm nguy cơ bị hãm hại. Không mặc định mọi mục tiêu đều là người yêu, cũng không đồng nhất công lược với việc phải quyến rũ hoặc kết hôn.",
+  "Khả năng đọc suy nghĩ có giới hạn rõ ràng: chỉ sử dụng được khi đối phương có mong muốn mãnh liệt bày tỏ tâm ý với Bạch Thù Văn. Không biến năng lực thành khả năng đọc mọi ý nghĩ bất cứ lúc nào.",
+  "Hiệu ứng Thù Văn là cách mèo trắng đùa về tên thí nghiệm, dựa trên hiệu ứng cánh bướm. Giữ cả ý nghĩa khoa học được nhắc đến trong truyện và sắc thái chơi chữ bằng tên nhân vật.",
+  "Lời mời trở thành thiếu nữ phép thuật của mèo trắng là một câu đùa theo mô-típ văn hóa đại chúng Nhật Bản. Dịch trọn thành tiếng Việt dễ nghe, giữ cảm giác bất ngờ và hơi ngớ ngẩn. Không để nguyên cụm Mahou Shoujo khiến TTS phải đọc tiếng nước ngoài.",
+  "Giọng nữ chính phải giữ được sự đanh đá, bốc đồng, mạnh miệng và hài hước. Đừng làm cô quá dịu dàng, cũng đừng tăng mức tục tĩu vượt quá lời văn gốc.",
+  "Giọng mèo trắng có sắc thái tự đắc, tinh quái, ngạo kiều. Khi nó trêu nữ chính hoặc đòi báo đáp, lời thoại cần mang cảm giác vừa đáng yêu vừa đáng ghét.",
+  "Đối thoại giữa Bạch Thù Văn và mèo trắng cần nhanh, tự nhiên, có nhịp tung hứng. Giữ những câu đáp cụt, khoảnh khắc cạn lời và sự đối lập giữa vấn đề sinh tử nghiêm trọng với thái độ thản nhiên của mèo.",
+  "Giữ giọng kể hài hước của tác giả, bao gồm những lúc người kể trêu chọc Bạch Thù Văn. Tuy nhiên, không tự thêm lời bình mới, câu đùa mới hoặc những màn đối đáp không có trong nguồn.",
+  "Không tự bổ sung suy nghĩ, ký ức, lời thoại hoặc hành động để giải thích những chỗ tác giả cố tình bỏ ngỏ. Khi cần làm rõ chủ thể, chỉ bổ sung lời dẫn thoại ngắn, không bổ sung nội dung sự kiện.",
+  "Các cảnh bạo lực, ngoại tình, phản bội, tai nạn và cái chết phải giữ đúng mức độ mô tả của bản gốc. Không tự kiểm duyệt, nhưng cũng không tự tăng độ ghê rợn hoặc gợi dục.",
+  "Với chi tiết nhạy cảm có cách diễn đạt mơ hồ, ưu tiên bảo toàn thông tin trực tiếp. Chẳng hạn chất lỏng không rõ bên môi người phụ nữ không được tự xác định thành một chất cụ thể nếu nguồn không nói.",
+  "Đọc hiểu toàn bộ ngữ cảnh trước khi biên tập từng câu. Các đại từ trong bản convert có thể bị dùng sai giới tính hoặc quy chiếu nhầm người. Cần xác định ai hành động, ai bị tác động, ai đang nói rồi mới chuyển ngữ.",
+  "Khi nhiều nhân vật nữ xuất hiện trong một cảnh, không liên tiếp dùng cô khiến người nghe nhầm chủ thể. Thay bằng tên, vai trò hoặc lời dẫn tự nhiên khi cần. Tương tự với đại từ anh, anh ta, ông và bà.",
+  "Xưng hô phải dựa trên tuổi, quan hệ, trạng thái tình cảm và bối cảnh. Không áp dụng nguyên xi anh - em của giai đoạn yêu đương trưởng thành cho tất cả hội thoại thời học sinh.",
+  "Trong lời kể, ưu tiên cô, anh, bà, ông thay cho nàng, hắn, y, thị của lối văn cổ. Chỉ dùng từ có sắc thái mạnh khi góc nhìn hoặc tình huống cho phép.",
+  "Tránh dịch máy móc các cụm cú pháp tiếng Trung như làm cho nàng, đem ánh mắt nhìn, một cái nữ nhân, cái kia nam nhân, đối với nàng tiến hành, trên mặt lộ ra biểu tình. Chuyển về cấu trúc câu tiếng Việt tự nhiên.",
+  "Không lặp liên tục các từ cô, anh, sau đó, lúc này, trong lòng, không khỏi, lập tức, đột nhiên. Có thể thay bằng tên nhân vật, đảo cấu trúc hoặc bỏ thành phần dư thừa mà không làm mất thông tin.",
+  "Giữ đầy đủ mọi hành động, suy nghĩ, chi tiết miêu tả, lời thoại và trình tự của bản gốc. Không tóm tắt các đoạn giải thích cơ chế linh hồn hoặc các đoạn hồi tưởng chỉ vì chúng dài.",
+  "Mỗi câu ưu tiên dưới khoảng 200 ký tự và mỗi đoạn không quá khoảng 120 từ. Câu dài phải tách ở ranh giới ý hợp lý, giữ quan hệ nguyên nhân, kết quả và trình tự hành động. Sử dụng dấu phẩy ở các vế khi cần tạo nhịp nghe.",
+  "Mỗi lượt thoại của nhân vật phải được tách thành một đoạn riêng. Khi người nghe không thể xác định ai nói, thêm lời dẫn ngắn như Bạch Thù Văn hỏi, Giang Thự đáp, mèo trắng nói hoặc mẹ cô quát.",
+  "Không dùng các dấu ~, chuỗi dấu chấm lửng, hai dấu chấm than hoặc dấu hỏi liên tiếp, dấu hỏi chấm kết hợp, ngoặc chú thích, ngoặc vuông kiểu Trung Quốc và gạch ngang kéo dài. Mỗi câu hỏi hoặc cảm thán chỉ dùng một dấu kết thúc phù hợp.",
+  "Dấu ba chấm đơn chỉ sử dụng khi nhân vật thật sự ngập ngừng hoặc bỏ dở lời nói. Nếu bản convert dùng một dòng toàn dấu chấm để thể hiện sự cạn lời, chuyển thành câu kể ngắn có chủ thể rõ ràng.",
+  "Những nội dung nằm trong ngoặc ký hiệu dành cho hệ thống, suy nghĩ hoặc giọng nói đặc biệt phải được đưa thành lời kể hay lời thoại có nguồn phát rõ ràng. Tuyệt đối không để TTS đọc ký hiệu trang trí.",
+  "Mọi dấu phân cách cảnh bằng hàng sao, hình thoi hoặc ký hiệu khác đều chuyển thành một dòng duy nhất chứa ba dấu sao, với một dòng trống trước và sau. Không biến dấu phân cảnh thành lời kể.",
+  "Từ tượng thanh chỉ giữ khi tạo hiệu quả nghe rõ ràng. Tiếng phanh xe, tiếng cửa đóng, tiếng giày cao gót và tiếng dép phải phù hợp với hành động, không dùng chuỗi ký tự kéo dài.",
+  "Với tiếng lóng và lời chửi, ưu tiên tương đương tiếng Việt có cùng sắc thái và độ mạnh. Không dịch sát thành các cụm khó hiểu như giải thích ngươi cái tam cô nhị đại gia. Không biến lời mắng thành lời nói lịch sự trái tính cách.",
+  "Các câu tự vấn của Bạch Thù Văn cần nghe như tiếng nói trong đầu một cô gái trẻ. Có thể dùng câu hỏi ngắn và từ ngữ đời thường, nhưng không tự thêm thông tin hoặc phản ứng không tồn tại trong nguồn.",
+  "Giữ nguyên số lượng, đơn vị, thời gian và địa danh. Số thập phân sử dụng dấu phẩy. Khi cần chuyển cách ghi cho TTS, không làm thay đổi giá trị số liệu.",
+  "Với các yếu tố văn hóa Trung Quốc như ngày lễ, hệ thống lớp học, kỷ luật học sinh và hình thức sinh hoạt gia đình, dịch theo nghĩa dễ hiểu nhưng không Việt hóa sai bối cảnh.",
+  "Loại bỏ tiêu đề trang, số phần lẻ, dòng nguồn, địa chỉ web, quảng cáo, ghi chú của người crawl hoặc ký hiệu trang trí không thuộc tác phẩm. Giữ số chương và tiêu đề chương thật, không tự tạo tiêu đề từ số thứ tự trang.",
+  "Tiêu đề chương phải được nhận diện theo nội dung và cấu trúc thực tế, không dựa vào một mẫu duy nhất. Những nhãn như Trang 1, Phần 28 hoặc các dòng hỗn hợp không mặc định là tiêu đề chương.",
+  "Nếu có ký tự bị che, đoạn thiếu chữ hoặc câu mơ hồ, chọn cách hiểu bảo toàn nhiều thông tin có căn cứ nhất. Không dựng tình tiết mới để lấp khoảng trống. Những điểm chưa thể xác định phải được đưa vào ghi_chu của đợt biên tập tương ứng.",
+  "Khi các chương sau cung cấp tên thật, giới tính, quan hệ hoặc động cơ của nhân vật đang để tạm, cập nhật hồ sơ nhất quán và rà soát những chỗ trước đó có thể bị hiểu sai. Không sửa ngược nội dung quá khứ chỉ để làm cho các nhân vật có vẻ luôn biết trước tương lai.",
+  "Trước khi hoàn thành mỗi chương, đối chiếu bản gốc theo từng đoạn để kiểm tra đủ sự kiện, hành động, lời thoại, suy nghĩ, số liệu và trình tự. Sau đó đọc lại như một bản thu âm nhằm phát hiện câu tối nghĩa, lặp đại từ, nhịp ngắt thiếu tự nhiên hoặc người nói không rõ.",
+  "Bản truyện cuối cùng phải là văn học hoàn chỉnh để đọc thành tiếng, không có giải thích của AI chen vào. Các ghi chú biên tập, nếu được yêu cầu, phải nằm ở trường riêng ngoài nội dung chương."
+ ],
+ "nhan_vat": [
+  {
+   "dai_tu_loi_ke": "Cô. Dùng Bạch Thù Văn hoặc Thù Văn khi cần nhấn mạnh chủ thể, mở cảnh mới hoặc phân biệt với nhân vật nữ khác. Tránh liên tục lặp tên đầy đủ. Không dùng nàng trong lời kể hiện đại.",
+   "gioi_tinh": "Nữ",
+   "ten": "Bạch Thù Văn",
+   "ten_goi_khac": [
+    "Văn Văn",
+    "Thù Văn",
+    "Bạch Thục Văn",
+    "Thục Văn",
+    "Bạch Thù Văn đồng học",
+    "nàng",
+    "thiếu nữ",
+    "nữ chính"
+   ],
+   "than_phan": "Nhân vật trung tâm. Con gái một gia đình có điều kiện, bố là quan chức chính phủ cấp cao, mẹ là giảng viên đại học. Tính tình nóng nảy, thẳng thắn, hiếu thắng, có khả năng đánh nhau và từng cùng anh trai gây chuyện trong thời tiểu học, trung học cơ sở. Ở thế giới ban đầu, cô đã tốt nghiệp đại học được hai tháng, chuẩn bị kết hôn với Giang Thự, người quen biết từ nhỏ. Ngay trước lễ cưới, cô phát hiện anh ngoại tình. Sau khi bỏ đi, cô bị một người bí ẩn đẩy vào đường xe chạy và tử vong. Linh hồn được đưa đến một thế giới song song vào ngày 9 tháng 9 năm 2011, trong thân thể chính mình ở tuổi học sinh lớp mười. Theo mèo trắng, chủ nhân trước của thân thể này vừa bị đâm chết. Cô giữ nguyên ký ức kiếp trước. Không muốn tiếp tục mối tình với Giang Thự, nhưng phải tham gia nhiệm vụ công lược để thay đổi vận mệnh và tránh chết oan lần nữa.",
+   "xung_ho": "Với Giang Thự khi còn học sinh: ưu tiên tôi - cậu trong những cuộc đối đầu, có thể dùng tớ - cậu ở những đoạn hồi tưởng thân mật nếu phù hợp ngữ cảnh. Với Giang Thự khi trưởng thành và còn yêu nhau: em - anh. Sau khi phát hiện phản bội: tôi - anh, đôi lúc tự xưng bà đây khi nổi giận hoặc muốn áp đảo. Không sử dụng bà đây liên tục. Với bố: con - bố, khi sợ hãi vẫn giữ lễ phép. Với mẹ: con - mẹ. Với anh trai: em - anh. Với mèo trắng: tôi - cậu, khi tức giận có thể gọi thẳng là mèo hoặc con mèo này. Với bạn học ngang tuổi: tôi - cậu hoặc tớ - cậu tùy mức độ thân thiết. Với ủy viên sao đỏ: tôi - cậu, có thể chuyển sang giọng mỉa mai hoặc lời nói gay gắt khi xung đột. Với giáo viên và chủ nhiệm giáo dục: em - thầy/cô. Khi tự độc thoại: mình, tôi hoặc bà đây tùy sắc thái; không máy móc giữ lão nương."
+  },
+  {
+   "dai_tu_loi_ke": "Anh hoặc Giang Thự. Khi lời kể bám theo sự căm giận của Bạch Thù Văn có thể dùng anh ta. Không chuyển mặc định thành hắn nếu tình huống không có sắc thái thù địch.",
+   "gioi_tinh": "Nam",
+   "ten": "Giang Thự",
+   "ten_goi_khac": [
+    "Giang Thự",
+    "Thự",
+    "thanh mai trúc mã",
+    "hôn phu",
+    "người yêu cũ",
+    "hắn"
+   ],
+   "than_phan": "Bạn từ thuở nhỏ của Bạch Thù Văn, hai người có hôn ước từ bé. Ở thế giới ban đầu, họ chính thức yêu nhau từ thời trung học phổ thông và chuẩn bị kết hôn sau khi cô tốt nghiệp đại học. Ngay trước đám cưới, Bạch Thù Văn bắt gặp anh trên giường với một phụ nữ khác. Sau khi cô bỏ đi, anh đuổi theo và cảnh báo cô không được băng qua đường, nhưng không ngăn được tai nạn. Ở thế giới song song năm 2011, Giang Thự là học sinh gương mẫu, thường đạp xe đưa Bạch Thù Văn đến trường, chưa tỏ tình với cô. Theo ký ức của nữ chính, lời tỏ tình sẽ diễn ra vào kỳ nghỉ Quốc khánh, trên vòng đu quay ở công viên giải trí. Trong hai chương đầu, chưa có bằng chứng cho thấy Giang Thự thời học sinh biết về tương lai hoặc hành động phản bội của phiên bản trưởng thành.",
+   "xung_ho": "Với Bạch Thù Văn thời học sinh: tớ - cậu, thường gọi thân mật là Văn Văn. Khi trưởng thành và trong quan hệ yêu đương: anh - em, gọi Văn Văn. Khi giải thích hoặc cầu xin sau khi bị bắt gặp ngoại tình: anh - em, giữ sự hoảng loạn và thân mật còn sót lại. Với bạn học: tớ - cậu hoặc tôi - cậu tùy tình huống. Với ủy viên sao đỏ thời học sinh: tớ - cậu hoặc mình - cậu, lịch sự nhưng không tự ý thêm lời tán tỉnh. Với thầy cô: em - thầy/cô. Với bố mẹ Bạch Thù Văn: cháu - bác, trừ khi các chương sau xác định cách gọi khác."
+  },
+  {
+   "dai_tu_loi_ke": "Mèo trắng, chú mèo trắng hoặc nó. Khi tên Nghiêu được xác nhận trong văn bản, sử dụng Nghiêu để thay đổi nhịp câu và tránh lặp. Không áp đặt giới tính của thực thể từ hình dáng mèo.",
+   "gioi_tinh": "Chưa xác định từ hai chương mở đầu. Nghiêu là tên ghi trong hồ sơ trước, chưa xuất hiện trực tiếp trong phần nguồn được cung cấp.",
+   "ten": "Nghiêu",
+   "ten_goi_khac": [
+    "mèo trắng",
+    "chú mèo trắng",
+    "mèo con",
+    "tiểu bạch miêu",
+    "người dẫn đường linh hồn",
+    "linh hồn dẫn đường người"
+   ],
+   "than_phan": "Thực thể siêu nhiên tự nhận là người dẫn đường linh hồn, có khả năng di chuyển linh hồn qua các thế giới song song. Xuất hiện trong hình dạng một con mèo trắng, nói chuyện trực tiếp với Bạch Thù Văn, trong khi người bình thường chỉ nhìn thấy một con mèo đang kêu. Tính cách tự mãn, ngạo kiều, thích trêu chọc, đôi khi thiếu kiên nhẫn. Đã đưa linh hồn Bạch Thù Văn đến thế giới hiện tại, sau đó yêu cầu cô tham gia thí nghiệm công lược. Mục đích được công bố là quan sát tác động của những thay đổi trong một thế giới đối với các thế giới song song khác. Đổi lại, mèo trắng hứa cố gắng bảo vệ cô khỏi cái chết oan và trao năng lực đọc suy nghĩ có điều kiện.",
+   "xung_ho": "Với Bạch Thù Văn: ta - cô, thường gọi thiếu nữ, cô bé hoặc Bạch Thù Văn khi cần. Cách gọi thiếu nữ mang sắc thái trêu chọc, hơi khoa trương. Với những nhân vật khác: chưa có dữ liệu. Giọng nói tự tin, thích giải thích như người hiểu biết hơn, nhưng đôi khi trẻ con, lém lỉnh và không chịu nhận phần vô lý của mình. Không biến thành người phục vụ trung thành hoặc trợ lý máy móc."
+  },
+  {
+   "dai_tu_loi_ke": "Ông, bố cô hoặc bố Bạch. Khi lời kể mang sắc thái hài hước từ góc nhìn nữ chính có thể dùng ông bố đáng sợ của cô.",
+   "gioi_tinh": "Nam",
+   "ten": "Bố Bạch Thù Văn",
+   "ten_goi_khac": [
+    "bố",
+    "bố Bạch",
+    "cha cô",
+    "ông Bạch",
+    "lão cha",
+    "phụ thân"
+   ],
+   "than_phan": "Bố ruột của Bạch Thù Văn, quan chức cấp cao trong chính phủ. Có uy quyền lớn trong gia đình, nghiêm khắc và đặc biệt chú trọng việc dạy dỗ con gái. Gia đình có hình phạt truyền thống là dùng thước gỗ dày đánh vào mu bàn tay. Trong phần mở đầu, ông tức giận khi con gái cãi cọ, nói năng thiếu lễ phép và không chịu đi học.",
+   "xung_ho": "Với Bạch Thù Văn: bố - con khi bình thường; tao - mày khi nổi giận dữ dội, đúng với tính cách nghiêm khắc đã thể hiện. Có thể dùng mày mà không cần liên tục tự xưng tao. Với mẹ Bạch Thù Văn: chưa có lời thoại trực tiếp, tạm dùng tôi - bà trong sinh hoạt gia đình nếu phù hợp văn cảnh, nhưng ưu tiên cách xưng hô thực tế ở các chương sau. Với Giang Thự: bác - cháu nếu không có chỉ dẫn khác."
+  },
+  {
+   "dai_tu_loi_ke": "Bà, mẹ cô hoặc mẹ Bạch. Không dùng mẫu thân trong lời kể thông thường.",
+   "gioi_tinh": "Nữ",
+   "ten": "Mẹ Bạch Thù Văn",
+   "ten_goi_khac": [
+    "mẹ",
+    "mẹ Bạch",
+    "Bạch mụ mụ",
+    "mẫu thân",
+    "mẫu thượng đại nhân",
+    "bà Bạch"
+   ],
+   "than_phan": "Mẹ ruột của Bạch Thù Văn, giảng viên đại học. Quan tâm đến sinh hoạt và việc học của con gái, hay cằn nhằn, dễ nổi nóng khi con hành xử khác thường. Trong phần mở đầu, bà liên tục giục con dậy, ăn sáng và đến trường, đồng thời lấy gia quy của bố ra cảnh cáo. Bà có hành động vỗ hoặc đánh nhẹ vào đầu con khi bực mình.",
+   "xung_ho": "Với Bạch Thù Văn: mẹ - con khi bình thường, mẹ - mày khi trách mắng hoặc mất kiên nhẫn. Với chồng: chưa có lời thoại để xác định, ưu tiên cách gọi tự nhiên theo văn cảnh. Với Giang Thự: bác - cháu. Cụm mẫu thượng đại nhân là cách Bạch Thù Văn nghĩ về mẹ với sắc thái hài hước, không phải danh xưng trang trọng bắt buộc giữ nguyên."
+  },
+  {
+   "dai_tu_loi_ke": "Cô ta, nữ sinh sao đỏ hoặc cô bạn sao đỏ. Trong những đoạn thể hiện sự căm ghét của Bạch Thù Văn, có thể dùng cô ả, nhưng không lạm dụng trong lời kể trung tính.",
+   "gioi_tinh": "Nữ",
+   "ten": "Ủy viên sao đỏ",
+   "ten_goi_khac": [
+    "ủy viên tác phong",
+    "tác phong ủy viên",
+    "học sinh sao đỏ",
+    "cô bạn sao đỏ",
+    "nữ sinh trực cổng",
+    "người phụ nữ trên giường Giang Thự"
+   ],
+   "than_phan": "Nữ sinh phụ trách ghi tên học sinh vi phạm nội quy tại cổng trường. Bạch Thù Văn nhận ra cô ta chính là người phụ nữ mình bắt gặp trên giường Giang Thự ở thế giới trước. Trong hiện tại năm 2011, nữ sinh này tỏ ra không hài lòng với cách Bạch Thù Văn đối xử với Giang Thự, đồng thời thể hiện sự quan tâm đến anh. Khi Bạch Thù Văn châm chọc về chuyện trở thành kẻ thứ ba, cô ta tức giận và đỏ mặt. Chưa biết tên thật, tuổi chính xác hoặc thời điểm bắt đầu quan hệ tình cảm với Giang Thự ở thế giới ban đầu.",
+   "xung_ho": "Với Bạch Thù Văn: tôi - cậu, giọng soi mói, chỉ trích khi xung đột. Với Giang Thự thời học sinh: tớ - cậu hoặc mình - cậu, giọng mềm hơn, có thể e thẹn nếu văn bản thể hiện. Khi trưởng thành, xưng hô với Giang Thự cần được xác định bằng ngữ cảnh từng chương, không áp đặt em - anh ngay từ thời học sinh. Với giáo viên: em - thầy/cô."
+  },
+  {
+   "dai_tu_loi_ke": "Anh trai cô, anh hoặc tên riêng khi được xác nhận.",
+   "gioi_tinh": "Nam",
+   "ten": "Anh trai Bạch Thù Văn",
+   "ten_goi_khac": [
+    "anh trai",
+    "anh cô",
+    "anh trai nhà họ Bạch"
+   ],
+   "than_phan": "Anh ruột của Bạch Thù Văn. Từ nhỏ thường dẫn em gái đi chơi và gây chuyện, góp phần hình thành tính cách ngang ngược, thích đánh nhau của cô. Khi Bạch Thù Văn lên cấp ba, anh chuẩn bị vào học trường quân sự nên không thể tiếp tục ở bên em gái thường xuyên. Chưa xuất hiện trực tiếp và chưa rõ tên.",
+   "xung_ho": "Với Bạch Thù Văn: anh - em trong tình huống bình thường, có thể sử dụng anh - mày nếu các chương sau thể hiện sự suồng sã và nghịch ngợm giữa hai anh em. Với bố mẹ: con - bố/mẹ. Không tự tạo biệt danh hoặc tên riêng."
+  },
+  {
+   "dai_tu_loi_ke": "Cô gái, cô ta hoặc kẻ bí ẩn khi ngữ cảnh cần thể hiện nghi vấn.",
+   "gioi_tinh": "Nữ",
+   "ten": "Cô gái bí ẩn có tóc mái dài",
+   "ten_goi_khac": [
+    "cô gái bí ẩn",
+    "người đẩy Bạch Thù Văn",
+    "cô gái có tóc mái che mắt",
+    "kẻ đẩy cô ra đường"
+   ],
+   "than_phan": "Người xuất hiện trong ký ức cuối cùng của Bạch Thù Văn trước khi cô chết ở thế giới ban đầu. Có tóc mái gần che mắt, mặt tái nhợt, lấm tấm mồ hôi, ánh mắt né tránh, lòng trắng mắt nổi tia máu và hốc mắt ngấn lệ. Trước khi bị xe tông, Bạch Thù Văn cảm nhận có một bàn tay run rẩy nhưng mạnh mẽ đẩy mình ra đường. Ký ức thoáng qua khiến cô liên hệ hình ảnh cô gái này với cú đẩy. Chưa xác định danh tính, động cơ hay quan hệ với những nhân vật khác.",
+   "xung_ho": "Chưa có lời thoại trực tiếp. Không tự tạo cách xưng hô. Đặc biệt không đồng nhất nhân vật này với ủy viên sao đỏ khi chưa có chứng cứ từ các chương sau."
+  },
+  {
+   "dai_tu_loi_ke": "Vị chủ nhiệm, giáo viên phụ trách kỷ luật hoặc chức danh đã được xác nhận.",
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Chủ nhiệm giáo dục",
+   "ten_goi_khac": [
+    "chủ nhiệm giáo dục",
+    "thầy hoặc cô phụ trách kỷ luật",
+    "giáo viên phụ trách kỷ luật"
+   ],
+   "than_phan": "Người phụ trách kỷ luật trong trường trung học, có giọng nói nghiêm khắc và từng khiến Bạch Thù Văn sợ hãi khi còn học phổ thông. Ở chương hai, bắt gặp cô đi nhầm phòng học và chất vấn. Giang Thự phải đứng ra giải thích giúp cô.",
+   "xung_ho": "Với học sinh: thầy/cô - em hoặc tôi - em tùy cách nói trong nguồn. Chưa xác định giới tính nên không tự quyết định thầy hay cô trước khi có dữ kiện."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Người lạ xuất hiện cuối chương",
+   "xung_ho": "Chưa rõ quan hệ với Bạch Thù Văn. Người này nói câu: Ơ, sao cậu lại đến đây nữa? Giữ cách gọi cậu, chưa tự tạo tên, tuổi, giới tính hoặc thân phận."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Đường Trưng",
+   "xung_ho": "Mười sáu tuổi, học tại Trường Trung học Thực nghiệm ở một thành phố chưa được ghi rõ tên. Làm việc tại quán bar trong khu đèn đỏ, thích nhạc rock, viết lời bài hát và sáng tác nhạc. Có mái tóc đỏ dài chấm vai, tóc mái gần che mắt, thường đeo tai nghe trắng, mặc trang phục màu đen, đeo dây xích và vòng tay, quần rách gối, trong miệng ngậm thuốc lá. Tính cách ban đầu lạnh lùng, khó gần, nóng nảy và có thái độ xua đuổi Bạch Thù Văn. Được Lăng Ương gọi là đại ca. Là mục tiêu công lược đầu tiên được hệ thống xác nhận. Với Bạch Thù Văn: tôi - cậu, có thể dùng giọng cộc lốc hoặc lược đại từ khi đuổi người. Với Lăng Ương: quan hệ chưa được xác định đầy đủ, tạm dùng tôi - cậu nếu xuất hiện lời thoại. Trong lời kể dùng cậu, cậu ta hoặc Đường Trưng. Không tự khẳng định Đường Trưng là hung thủ hoặc là người yêu chính thức của chủ nhân thân thể trước."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Lăng Ương",
+   "xung_ho": "Nam sinh đeo kính gọng đen, mặc trang phục bằng vải bò, làm việc hoặc giúp dọn dẹp tại quán bar. Xuất hiện khi mang túi rác ra cửa sau. Biết Bạch Thù Văn từ trước, biết cô từng có hẹn với Đường Trưng vào tối hôm trước. Gọi Đường Trưng là đại ca, có phần sợ anh và cố ngăn Bạch Thù Văn tiếp tục tìm gặp. Tính tình tương đối hiền, dè dặt, biết quan tâm và có thiện cảm với mèo. Với Bạch Thù Văn: tôi - cậu, giọng lịch sự, đôi lúc nghiêm túc hoặc lo lắng. Với Đường Trưng: gọi đại ca, cách tự xưng chưa được xác nhận. Trong lời kể dùng Lăng Ương hoặc cậu ta. Chưa rõ tuổi chính xác, quan hệ gia đình và vai trò cụ thể tại quán bar."
+  },
+  {
+   "gioi_tinh": "Giọng nữ máy móc, chưa xác định có nhân cách hoặc hình dạng riêng",
+   "ten": "Giọng nữ hệ thống",
+   "xung_ho": "Xuất hiện lần đầu dưới dạng thông báo vang lên trong đầu Bạch Thù Văn khi Đường Trưng xuất hiện. Thông báo hệ thống khởi động, liên kết nhân vật duy nhất là Bạch Thù Văn, yêu cầu xác nhận mục tiêu công lược và cung cấp thông tin Đường Trưng. Không dùng đại từ nhân xưng khi thông báo. Lời thoại ngắn gọn, máy móc, chính xác, không mang cảm xúc. Mỗi lượt thông báo phải có lời dẫn để TTS phân biệt với tiếng Nghiêu trò chuyện trong đầu nữ chính. Nghiêu cũng có thể cảm nhận được giọng nói này. Chưa xác định hệ thống là thực thể độc lập hay có quan hệ cụ thể nào với Nghiêu."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Người gọi Đường Trưng lên sân khấu",
+   "xung_ho": "Chỉ xuất hiện qua tiếng gõ cửa và lời gọi Đường Trưng đến lượt biểu diễn. Gọi Đường Trưng là Đường, xưng hô trực tiếp bằng cậu. Chưa biết tên, tuổi, giới tính hoặc vai trò cụ thể tại quán bar."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "La Hiểu Hiểu",
+   "xung_ho": "Nữ sinh sao đỏ phụ trách kỷ luật tại Trường Trung học Số Một, chính là nhân vật trước đây được gọi tạm là ủy viên sao đỏ. Đeo kính, thường trực ở cổng trường, biết tên Bạch Thù Văn và có thái độ đối đầu với cô. Trong thế giới trước, Bạch Thù Văn đã bắt gặp La Hiểu Hiểu trên giường cùng Giang Thự. Ở thế giới hiện tại, La Hiểu Hiểu là mục tiêu công lược mới do hệ thống xác nhận. Mức thiện cảm được kiểm tra lần đầu là năm. Với Bạch Thù Văn: tôi - cậu, giọng hay châm chọc, soi mói. Với Giang Thự: chưa có lời thoại trực tiếp trong chương này, tiếp tục dùng tớ - cậu hoặc mình - cậu theo ngữ cảnh đã xác định. Trong lời kể dùng La Hiểu Hiểu, cô ta hoặc nữ sinh sao đỏ. Đây là nhân vật cũ được xác nhận tên thật, không phải một nhân vật khác."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Bà chủ quán ăn sáng",
+   "xung_ho": "Chủ quán ăn sáng mà Bạch Thù Văn và Giang Thự thường xuyên ghé đến. Tính tình vui vẻ, nhiệt tình, giọng nói sang sảng, quen thuộc với món ăn hai người thường gọi. Với Bạch Thù Văn và Giang Thự: cô - cháu, cách nói thân thiện, tự nhiên. Trong lời kể dùng bà chủ hoặc bà chủ quán. Chưa rõ tên thật và tuổi chính xác."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Lớp trưởng của Bạch Thù Văn",
+   "xung_ho": "Được Giang Thự nhắc đến khi muốn tìm người trao đổi cách giải bài toán cuối cùng trong phần tự luận. Chưa xuất hiện trực tiếp, chưa rõ tên, giới tính hoặc quan hệ cụ thể ngoài chức vụ lớp trưởng. Nếu xuất hiện trong chương sau, xác định cách xưng hô theo ngữ cảnh thực tế."
+  }
+ ],
+ "ten_truyen": "Trọng Sinh: Công Lược Khẩn Cấp",
+ "the_loai": "Trọng sinh, xuyên không gian và thời gian, thế giới song song, đô thị hiện đại, thanh xuân vườn trường, nhiệm vụ công lược, siêu nhiên, đọc suy nghĩ, bí ẩn, tự cứu và thay đổi vận mệnh. Hồ sơ trước xác định yếu tố bách hợp, nhưng hai chương mở đầu chưa đủ để kiểm chứng hướng phát triển tình cảm này. Truyện kết hợp hài hước, sa điêu, tình huống trớ trêu, đối đáp sắc sảo với nguy cơ bị sát hại và bí ẩn về những cái chết ở các thế giới song song. Cơ chế nhiệm vụ do người dẫn đường linh hồn đưa ra, chưa có bằng chứng về một hệ thống trò chơi độc lập.",
+ "thuat_ngu": [
+  {
+   "dich": "Trọng Sinh: Công Lược Khẩn Cấp",
+   "goc": "Trọng sinh chi khẩn cấp công lược"
+  },
+  {
+   "dich": "Bạch Thù Văn, Thù Văn",
+   "goc": "Bạch Thục Văn, Thục Văn, thục văn"
+  },
+  {
+   "dich": "Khương Ỷ",
+   "goc": "Khương Khỉ"
+  },
+  {
+   "dich": "Trọng sinh, sống lại hoặc trở về quá khứ tùy ngữ cảnh",
+   "goc": "Trọng sinh"
+  },
+  {
+   "dich": "Xuyên không gian và thời gian, hoặc xuyên đến thế giới khác",
+   "goc": "Xuyên qua, xuyên qua thời không"
+  },
+  {
+   "dich": "Thế giới song song",
+   "goc": "Song song thế giới"
+  },
+  {
+   "dich": "Người dẫn đường linh hồn",
+   "goc": "Linh hồn dẫn đường người"
+  },
+  {
+   "dich": "Mượn xác hoàn hồn",
+   "goc": "Mượn xác hoàn hồn"
+  },
+  {
+   "dich": "Sức mạnh linh hồn",
+   "goc": "Linh hồn lực"
+  },
+  {
+   "dich": "Khe hở giữa không gian và thời gian",
+   "goc": "Thời không kẽ hở"
+  },
+  {
+   "dich": "Luân hồi hoặc vòng chuyển kiếp",
+   "goc": "Luân hồi"
+  },
+  {
+   "dich": "Công lược, nghĩa là từng bước tiếp cận và giành thiện cảm của mục tiêu. Giữ từ công lược khi chỉ nhiệm vụ đặc thù, dùng chinh phục hoặc lấy lòng khi cần diễn đạt tự nhiên trong câu.",
+   "goc": "Công lược"
+  },
+  {
+   "dich": "Mục tiêu công lược",
+   "goc": "Công lược mục tiêu"
+  },
+  {
+   "dich": "Thiện cảm, cảm tình hoặc mức độ yêu mến tùy ngữ cảnh",
+   "goc": "Hảo cảm"
+  },
+  {
+   "dich": "Thí nghiệm",
+   "goc": "Thực nghiệm"
+  },
+  {
+   "dich": "Hiệu ứng cánh bướm",
+   "goc": "Hiệu ứng bươm bướm"
+  },
+  {
+   "dich": "Hiệu ứng Thù Văn",
+   "goc": "Thục văn hiệu ứng"
+  },
+  {
+   "dich": "Thuật đọc suy nghĩ. Giữ tên năng lực này thống nhất, chỉ kích hoạt khi đối phương có mong muốn mãnh liệt được bày tỏ tâm ý với Bạch Thù Văn.",
+   "goc": "Thuật đọc tâm"
+  },
+  {
+   "dich": "Thiếu nữ phép thuật",
+   "goc": "Mahou Shoujo, ma pháp thiếu nữ"
+  },
+  {
+   "dich": "Ký khế ước hoặc lập giao ước",
+   "goc": "Ký kết khế ước"
+  },
+  {
+   "dich": "Thiết lập nhân vật hoặc tính cách được định sẵn",
+   "goc": "Nhân thiết"
+  },
+  {
+   "dich": "Diễn biến vốn có hoặc kịch bản ban đầu",
+   "goc": "Nguyên kịch bản"
+  },
+  {
+   "dich": "Bị cắm sừng hoặc bị phản bội",
+   "goc": "Bị lục, tái rồi"
+  },
+  {
+   "dich": "Kẻ thứ ba",
+   "goc": "Tiểu tam, làm tam"
+  },
+  {
+   "dich": "Thanh mai trúc mã, đôi bạn lớn lên bên nhau từ nhỏ",
+   "goc": "Thanh mai trúc mã"
+  },
+  {
+   "dich": "Đôi bạn vô tư từ thuở nhỏ",
+   "goc": "Hai nhỏ vô tư"
+  },
+  {
+   "dich": "Tiểu thuyết đầy tình tiết éo le, chuyện ngang trái như trong tiểu thuyết",
+   "goc": "Tiểu thuyết cẩu huyết, cẩu huyết tình tiết"
+  },
+  {
+   "dich": "Ngớ người, hoang mang, đờ người hoặc ngơ ngác tùy mức độ",
+   "goc": "Mộng bức, mông vòng, ngốc bức"
+  },
+  {
+   "dich": "Bà đây hoặc tôi tùy sắc thái. Chỉ dùng bà đây khi nhân vật cố ý tỏ vẻ hung hăng hay ngang ngược.",
+   "goc": "Lão nương"
+  },
+  {
+   "dich": "Mẹ yêu quý của cô, bà mẹ đáng kính hoặc mẹ cô, tùy giọng mỉa mai",
+   "goc": "Mẫu thượng đại nhân"
+  },
+  {
+   "dich": "Uy quyền đáng sợ hoặc sự áp đảo",
+   "goc": "Dâm uy"
+  },
+  {
+   "dich": "Phạt theo gia quy",
+   "goc": "Gia quy xử trí"
+  },
+  {
+   "dich": "Chiếc thước gỗ dày được cho là truyền qua nhiều đời",
+   "goc": "Tổ truyền thước"
+  },
+  {
+   "dich": "Mèo trắng, chú mèo trắng hoặc mèo con",
+   "goc": "Tiểu bạch miêu"
+  },
+  {
+   "dich": "Móng mèo, đệm thịt dưới bàn chân mèo",
+   "goc": "Miêu trảo, thịt lót"
+  },
+  {
+   "dich": "Kiêu kỳ, ngoài mặt kiêu ngạo nhưng hành động có nét đáng yêu",
+   "goc": "Ngạo kiều"
+  },
+  {
+   "dich": "Dễ thương, đáng yêu hoặc cố tình tỏ vẻ đáng yêu",
+   "goc": "Nhuyễn manh, bán manh"
+  },
+  {
+   "dich": "Ủy viên sao đỏ hoặc học sinh sao đỏ phụ trách kỷ luật",
+   "goc": "Tác phong ủy viên"
+  },
+  {
+   "dich": "Hội học sinh",
+   "goc": "Học sinh hội"
+  },
+  {
+   "dich": "Lớp mười, lớp mười một, lớp mười hai",
+   "goc": "Cao một, cao nhị, cao tam"
+  },
+  {
+   "dich": "Giờ tự học buổi sáng",
+   "goc": "Sớm tự học"
+  },
+  {
+   "dich": "Phân ban học tập",
+   "goc": "Phần khoa"
+  },
+  {
+   "dich": "Chủ nhiệm giáo dục hoặc giáo viên phụ trách kỷ luật",
+   "goc": "Chủ nhiệm giáo dục"
+  },
+  {
+   "dich": "Ngày Nhà giáo",
+   "goc": "Giáo viên tiết"
+  },
+  {
+   "dich": "Kỳ nghỉ Quốc khánh",
+   "goc": "Quốc khánh tiết"
+  },
+  {
+   "dich": "Vòng đu quay",
+   "goc": "Bánh xe quay"
+  },
+  {
+   "dich": "Thú bông, máy gắp thú bông",
+   "goc": "Oa oa, oa oa cơ"
+  },
+  {
+   "dich": "Chồng, ông xã hoặc chồng tương lai",
+   "goc": "Lão công"
+  },
+  {
+   "dich": "Động đến gân cốt phải mất trăm ngày mới lành",
+   "goc": "Thương gân động cốt một trăm thiên"
+  },
+  {
+   "dich": "Lược bỏ khi không cần thiết, hoặc thay bằng bất giác, chợt, bỗng tùy câu",
+   "goc": "Không khỏi"
+  },
+  {
+   "dich": "Không ngờ, vậy mà hoặc lược bỏ",
+   "goc": "Cư nhiên"
+  },
+  {
+   "dich": "Rất, vô cùng, cực kỳ hoặc lược bỏ nếu câu đã đủ sắc thái",
+   "goc": "Thực, thập phần, phi thường"
+  },
+  {
+   "dich": "Chuyển sang cấu trúc động từ trực tiếp tự nhiên trong tiếng Việt",
+   "goc": "Đem, lấy, tiến hành"
+  },
+  {
+   "dich": "Lược bỏ những lượng từ và đại từ thừa, chỉ giữ khi cần xác định vật hoặc người",
+   "goc": "Một cái, cái kia, cái này"
+  },
+  {
+   "dich": "Á, này, chậc, ừm, hử hoặc câu diễn đạt cảm xúc rõ ràng tùy tình huống. Không chuyển máy móc từng âm.",
+   "goc": "A a a, nha a, sách, ngô, ân"
+  },
+  {
+   "dich": "Tiếng giày cao gót gõ lộp cộp, tiếng dép lẹp xẹp, hoặc âm thanh tương ứng với hành động",
+   "goc": "Cùm cụp cùm cụp, lạch cạch lạch cạch"
+  },
+  {
+   "dich": "Tiếng phanh xe rít lên hoặc Két! tùy nhịp cảnh",
+   "goc": "Sát ——"
+  },
+  {
+   "dich": "Rầm! hoặc một câu kể về tiếng va đập, theo đúng nguồn phát ra âm thanh",
+   "goc": "Ầm, phanh, bang"
+  },
+  {
+   "goc": "Nhận người nhớ thương, các phương diện",
+   "dich": "Được người ta nhớ thương đủ kiểu, bao gồm cả yêu thích lẫn oán hận"
+  },
+  {
+   "goc": "Cắm đội",
+   "dich": "Chen ngang vào lượt luân hồi"
+  },
+  {
+   "goc": "Gánh thì nặng mà đường thì xa",
+   "dich": "Gánh thì nặng, mà đường thì còn xa"
+  },
+  {
+   "goc": "Miêu mễ tị hiềm thể chất, miêu mễ vật cách điện chất",
+   "dich": "Người không có duyên với mèo, gần như chẳng con mèo nào chịu đến gần"
+  },
+  {
+   "goc": "Nhân gia mới không phì",
+   "dich": "Người ta có béo đâu!"
+  },
+  {
+   "goc": "Nhất manh thân cao kém",
+   "dich": "Chênh lệch chiều cao trông rất đáng yêu"
+  },
+  {
+   "goc": "Trầm mê sắc đẹp, vô tâm chọn lựa",
+   "dich": "Mải mê sắc đẹp, chẳng còn tâm trí đâu mà chọn"
+  },
+  {
+   "goc": "Lão tình nhân",
+   "dich": "Người yêu cũ, người từng yêu hoặc Giang Thự tùy ngữ cảnh"
+  },
+  {
+   "goc": "Tử vi hoa thụ",
+   "dich": "Cây tử vi, loài cây có những chùm hoa nhỏ màu tím đỏ"
+  },
+  {
+   "goc": "Nhĩ Khang, ngươi tử vi khai thật không sai",
+   "dich": "Nhĩ Khang à, Tử Vi nhà anh nở đẹp thật đấy!"
+  },
+  {
+   "goc": "Tiểu bạch miêu, Nghiêu",
+   "dich": "Nghiêu, mèo trắng hoặc chú mèo trắng"
+  },
+  {
+   "goc": "□□ dật",
+   "dich": "An nhàn, yên ổn, thoải mái"
+  },
+  {
+   "goc": "Khu đèn đỏ",
+   "dich": "Khu đèn đỏ"
+  },
+  {
+   "goc": "Quán bar",
+   "dich": "Quán bar, quán rượu có phục vụ đồ uống"
+  },
+  {
+   "goc": "Sờ soạng thọc",
+   "dich": "Lén lút mò đến đâm, bất ngờ ra tay bằng cách đánh lén"
+  },
+  {
+   "goc": "Đại lịch sử đi hướng",
+   "dich": "Hướng phát triển chung của lịch sử"
+  },
+  {
+   "goc": "Đại ca",
+   "dich": "Đại ca, cách Lăng Ương gọi Đường Trưng, chưa xác định quan hệ anh em ruột"
+  },
+  {
+   "goc": "Trói định nhân vật",
+   "dich": "Liên kết nhân vật"
+  },
+  {
+   "goc": "Duy nhất trói định nhân vật",
+   "dich": "Nhân vật được liên kết duy nhất"
+  },
+  {
+   "goc": "Hệ thống khởi động thành công",
+   "dich": "Hệ thống khởi động thành công"
+  },
+  {
+   "goc": "Công lược mục tiêu xuất hiện, thỉnh xác nhận",
+   "dich": "Mục tiêu công lược đã xuất hiện, vui lòng xác nhận"
+  },
+  {
+   "goc": "Đang ở thu hoạch mục tiêu tư liệu",
+   "dich": "Đang thu thập thông tin mục tiêu"
+  },
+  {
+   "goc": "Đường Trưng",
+   "dich": "Đường Trưng"
+  },
+  {
+   "goc": "Lăng Ương",
+   "dich": "Lăng Ương"
+  },
+  {
+   "goc": "xx thị thực nghiệm trung học",
+   "dich": "Trường Trung học Thực nghiệm tại thành phố chưa rõ tên"
+  },
+  {
+   "goc": "Rock 'n roll",
+   "dich": "Nhạc rock"
+  },
+  {
+   "goc": "Làm từ soạn nhạc",
+   "dich": "Viết lời bài hát và sáng tác nhạc"
+  },
+  {
+   "goc": "ROCK",
+   "dich": "Dòng chữ mang tên thể loại nhạc rock"
+  },
+  {
+   "goc": "Hip-hop phi chủ lưu phong",
+   "dich": "Phong cách ăn mặc lập dị, nổi loạn, mang ảnh hưởng của văn hóa âm nhạc đường phố"
+  },
+  {
+   "goc": "Sách",
+   "dich": "Tặc lưỡi tỏ vẻ khó chịu hoặc khinh thường"
+  },
+  {
+   "goc": "Bạch Thù Văn có tiểu cảm xúc",
+   "dich": "Bạch Thù Văn bắt đầu nổi giận"
+  },
+  {
+   "goc": "Tinh thần đối thoại",
+   "dich": "Trò chuyện trực tiếp trong đầu"
+  },
+  {
+   "goc": "Kính bạo rock 'n roll",
+   "dich": "Nhạc rock sôi động, dữ dội"
+  },
+  {
+   "goc": "Quần ma loạn vũ",
+   "dich": "Đám đông nhảy múa hỗn loạn"
+  },
+  {
+   "goc": "Chướng khí mù mịt",
+   "dich": "Bầu không khí hỗn tạp, ngột ngạt"
+  },
+  {
+   "goc": "Màu xanh lơ sương khói",
+   "dich": "Khói thuốc xanh xám"
+  },
+  {
+   "goc": "Biểu ca",
+   "dich": "Anh họ"
+  },
+  {
+   "goc": "Học sinh chế phục",
+   "dich": "Đồng phục học sinh"
+  },
+  {
+   "goc": "Kim sắc đôi mắt",
+   "dich": "Đôi mắt màu vàng kim"
+  },
+  {
+   "goc": "Tinh thần giao lưu",
+   "dich": "Trao đổi trực tiếp bằng suy nghĩ"
+  },
+  {
+   "goc": "Xoát hảo cảm độ",
+   "dich": "Tăng mức thiện cảm, khiến mục tiêu ngày càng có cảm tình"
+  },
+  {
+   "goc": "Mất trí nhớ ngạnh",
+   "dich": "Tình tiết mất trí nhớ"
+  },
+  {
+   "goc": "Sảng ước",
+   "dich": "Thất hẹn, không thực hiện cuộc hẹn"
+  },
+  {
+   "goc": "Tưởng tượng kịch bản",
+   "dich": "Kế hoạch đã tính trước"
+  },
+  {
+   "goc": "Miệng vết thương, đao thương",
+   "dich": "Vết thương do dao đâm"
+  },
+  {
+   "goc": "Băng vải □□ ra tới",
+   "dich": "Để lộ phần băng quấn bên trong"
+  },
+  {
+   "goc": "Một cái đầu hai cái đại",
+   "dich": "Đầu như muốn nứt làm đôi"
+  },
+  {
+   "goc": "Khổ bức hề hề",
+   "dich": "Vẻ mặt khổ sở đến đáng thương"
+  },
+  {
+   "goc": "Tiểu bạch thử",
+   "dich": "Chuột bạch nhỏ"
+  },
+  {
+   "goc": "Ma ma",
+   "dich": "Mẹ ơi"
+  },
+  {
+   "goc": "Trương dương xán lạn",
+   "dich": "Phóng khoáng, rạng ngời"
+  },
+  {
+   "goc": "Lên sân khấu",
+   "dich": "Lên sân khấu biểu diễn"
+  },
+  {
+   "goc": "Quân khu đại viện",
+   "dich": "Khu tập thể dành cho gia đình quân nhân, hoặc khu nhà có dáng dấp tương tự"
+  },
+  {
+   "goc": "Che trời đại thụ",
+   "dich": "Cây cổ thụ cao lớn, tán rộng"
+  },
+  {
+   "goc": "Thụ linh 300 năm",
+   "dich": "Cây được kể là đã tồn tại khoảng ba trăm năm"
+  },
+  {
+   "goc": "Nhân loại hình thái",
+   "dich": "Hình dạng con người"
+  },
+  {
+   "goc": "Biểu tình bao",
+   "dich": "Hình chế, hình biểu cảm dùng khi nhắn tin"
+  },
+  {
+   "goc": "Công lược hệ thống",
+   "dich": "Hệ thống công lược"
+  },
+  {
+   "goc": "Nhân vật hồ sơ",
+   "dich": "Hồ sơ nhân vật"
+  },
+  {
+   "goc": "Trước mặt hảo cảm độ",
+   "dich": "Mức thiện cảm hiện tại"
+  },
+  {
+   "goc": "Thủ động mở ra",
+   "dich": "Tự mở hệ thống"
+  },
+  {
+   "goc": "Hướng dẫn hệ thống",
+   "dich": "Hệ thống chỉ đường"
+  },
+  {
+   "goc": "Biên soạn hệ thống",
+   "dich": "Lập trình hoặc viết ra một hệ thống"
+  },
+  {
+   "goc": "Ăn đậu hủ",
+   "dich": "Lợi dụng cơ hội được người khác ôm ấp, vuốt ve"
+  },
+  {
+   "goc": "Kim □□ mắt",
+   "dich": "Đôi mắt vàng kim"
+  },
+  {
+   "goc": "Yêu quý động vật mỗi người có trách",
+   "dich": "Yêu thương động vật là trách nhiệm của mọi người"
+  },
+  {
+   "goc": "Dược phòng",
+   "dich": "Hiệu thuốc"
+  },
+  {
+   "goc": "Băng vải",
+   "dich": "Băng vải, băng quấn"
+  },
+  {
+   "goc": "Tiếng Anh từ điển",
+   "dich": "Từ điển tiếng Anh"
+  },
+  {
+   "goc": "Giản thể, làm quái tự thể, lối viết thảo",
+   "dich": "Chữ giản thể, chữ cách điệu và chữ viết tay bay bướm"
+  },
+  {
+   "goc": "Lục mũi tên kẹo cao su",
+   "dich": "Kẹo cao su Mũi Tên Xanh"
+  },
+  {
+   "goc": "Bản nháp bổn",
+   "dich": "Vở nháp"
+  },
+  {
+   "goc": "Tiện lợi dán",
+   "dich": "Giấy ghi chú có keo dán"
+  },
+  {
+   "goc": "Phiên đến trang sau cắt đầu",
+   "dich": "Mũi tên chỉ sang trang sau, báo hiệu nội dung còn tiếp tục"
+  },
+  {
+   "goc": "So tâm",
+   "dich": "Gửi cậu một trái tim"
+  },
+  {
+   "goc": "Tri tâm tiểu ca ca",
+   "dich": "Người anh trai tâm lý, luôn lắng nghe và cho lời khuyên"
+  },
+  {
+   "goc": "Não động mở rộng ra, não bổ",
+   "dich": "Tha hồ tưởng tượng, tự hình dung những tình huống chưa xảy ra trước mắt"
+  },
+  {
+   "goc": "Cẩu huyết trường hợp",
+   "dich": "Tình huống éo le, sướt mướt như trong tiểu thuyết tình cảm"
+  },
+  {
+   "goc": "□□",
+   "dich": "Ứng dụng nhắn tin cũ, chưa xác nhận tên do nguồn bị che"
+  },
+  {
+   "goc": "WeChat",
+   "dich": "WeChat, ứng dụng nhắn tin"
+  },
+  {
+   "goc": "Cá tính ký tên",
+   "dich": "Dòng giới thiệu hoặc trạng thái cá nhân"
+  },
+  {
+   "goc": "Tình bất tri sở khởi, một hướng mà tình thâm",
+   "dich": "Tình chẳng biết bắt đầu từ đâu, chỉ một lòng mà ngày càng sâu đậm"
+  },
+  {
+   "goc": "Hoa bách hợp khai",
+   "dich": "Hoa Bách Hợp Nở"
+  },
+  {
+   "goc": "Bách hợp",
+   "dich": "Bách hợp, vừa chỉ hoa bách hợp vừa gợi đến tình cảm giữa các nhân vật nữ trong ngữ cảnh truyện"
+  },
+  {
+   "goc": "Sa canh",
+   "dich": "Canh sa, món canh ăn sáng được nhắc đến trong bối cảnh địa phương Trung Quốc"
+  },
+  {
+   "goc": "Lão bản nương",
+   "dich": "Bà chủ quán"
+  },
+  {
+   "goc": "Lão bộ dáng",
+   "dich": "Như mọi khi, phần ăn quen thuộc"
+  },
+  {
+   "goc": "Rau thơm",
+   "dich": "Rau mùi, loại rau được yêu cầu không cho vào bát canh"
+  },
+  {
+   "goc": "Một vỉ bánh bao nhỏ",
+   "dich": "Một xửng bánh bao nhỏ"
+  },
+  {
+   "goc": "Một lung chưng sủi cảo",
+   "dich": "Một xửng sủi cảo hấp"
+  },
+  {
+   "goc": "Hai khối tiền sủi cảo chiên",
+   "dich": "Phần sủi cảo chiên trị giá hai tệ"
+  },
+  {
+   "goc": "Toán học đại đề",
+   "dich": "Bài toán tự luận"
+  },
+  {
+   "goc": "Đệ nhị hỏi",
+   "dich": "Câu hỏi thứ hai trong một bài toán"
+  },
+  {
+   "goc": "Văn khoa",
+   "dich": "Ban xã hội"
+  },
+  {
+   "goc": "Cơ sở phân",
+   "dich": "Điểm phần kiến thức cơ bản"
+  },
+  {
+   "goc": "Thi đại học",
+   "dich": "Kỳ thi đại học"
+  },
+  {
+   "goc": "Tác phong ủy viên La Hiểu Hiểu",
+   "dich": "La Hiểu Hiểu, nữ sinh sao đỏ phụ trách kỷ luật"
+  },
+  {
+   "goc": "xx thị đệ nhất trung học",
+   "dich": "Trường Trung học Số Một, thuộc thành phố chưa rõ tên"
+  },
+  {
+   "goc": "Hứng thú yêu thích: Bất tường",
+   "dich": "Sở thích: Chưa rõ"
+  },
+  {
+   "goc": "Trình tự tự khải",
+   "dich": "Hệ thống tự khởi động"
+  },
+  {
+   "goc": "Hảo cảm độ: 5",
+   "dich": "Mức thiện cảm: Năm"
+  },
+  {
+   "goc": "Hảo cảm độ: 80",
+   "dich": "Mức thiện cảm: Tám mươi, ngưỡng được tính là công lược thành công"
+  },
+  {
+   "goc": "Hảo cảm độ tăng lên lý do",
+   "dich": "Nguyên nhân tăng mức thiện cảm"
+  },
+  {
+   "goc": "Toán học khóa đại biểu",
+   "dich": "Cán sự môn Toán"
+  },
+  {
+   "goc": "Tam hảo học sinh",
+   "dich": "Học sinh gương mẫu, học sinh giỏi toàn diện theo cách gọi trong trường học Trung Quốc"
+  },
+  {
+   "goc": "Ngăn kéo trong bụng",
+   "dich": "Ngăn bàn"
+  },
+  {
+   "goc": "Tiểu hòa thượng đọc kinh",
+   "dich": "Đọc bài đều đều như chú tiểu tụng kinh"
+  },
+  {
+   "goc": "Công lược hậu cung trò chơi",
+   "dich": "Trò chơi chinh phục nhiều người yêu"
+  },
+  {
+   "goc": "Thổ lộ tình cảm hảo bằng hữu",
+   "dich": "Bạn tốt có thể thật lòng chia sẻ tâm sự với nhau"
+  },
+  {
+   "goc": "Bài tra nguy hiểm nhân vật",
+   "dich": "Loại bỏ những người có khả năng gây nguy hiểm"
+  },
+  {
+   "goc": "Thẳng nhiều năm",
+   "dich": "Từ trước đến nay vẫn thích người khác giới"
+  },
+  {
+   "goc": "Bị lục lão công",
+   "dich": "Bị cướp chồng, bị phản bội trong chuyện tình cảm"
+  },
+  {
+   "goc": "Đứng lên flag",
+   "dich": "Tự dựng lên một dấu hiệu báo trước rắc rối hoặc kết cục trớ trêu"
+  },
+  {
+   "goc": "Lập flag",
+   "dich": "Tự tin nói trước một điều rồi có nguy cơ bị thực tế làm cho bẽ mặt"
+  },
+  {
+   "goc": "Ngạo kiều thiếu niên tiểu tâm tư",
+   "dich": "Tâm Tư Của Chàng Thiếu Niên Kiêu Ngạo"
+  },
+  {
+   "goc": "Tiểu bạch",
+   "dich": "Tiểu Bạch, tên Giang Thự dùng để gọi mèo trắng"
+  },
+  {
+   "goc": "Quán bar tiểu lão thử",
+   "dich": "Chú chuột nhỏ ở quán bar, cách Nghiêu trêu gọi Lăng Ương"
+  },
+  {
+   "goc": "yd",
+   "dich": "Cười đầy vẻ gian xảo, có ý trêu chọc"
+  },
+  {
+   "goc": "Bản mẫu tập vẽ",
+   "dich": "Giấy ghi nhạc, bản nhạc viết tay"
+  },
+  {
+   "goc": "Nhạc phổ",
+   "dich": "Bản nhạc, các ký hiệu ghi giai điệu"
+  },
+  {
+   "goc": "Ban ngày sử",
+   "dich": "Thiên sứ ban ngày, tên liên lạc mang sắc thái tự đề cao và trêu đùa"
+  }
+ ],
+ "van_phong": "Văn xuôi tiếng Việt hiện đại, tự nhiên, linh hoạt, giàu nhịp điệu, ưu tiên khả năng nghe hiểu khi đọc thành tiếng. Ngôi kể thứ ba, chủ yếu bám theo nhận thức, cảm xúc và suy nghĩ của Bạch Thù Văn. Giọng kể trẻ trung, dí dỏm, đôi lúc châm biếm và tinh nghịch, nhưng không biến mọi tình huống thành trò đùa. Giữ sự nóng nảy, bộc trực và những phản ứng hơi khoa trương của nữ chính. Khi nhân vật tức giận, sử dụng câu ngắn, dồn dập, lời nói sắc bén. Khi nhân vật hoang mang hoặc tự vấn, giảm tốc độ kể, làm rõ dòng suy nghĩ bằng những câu văn mạch lạc. Khi xuất hiện bí ẩn, tai nạn hoặc nguy hiểm, chuyển sang giọng căng thẳng, trực diện, tránh bình luận phá vỡ không khí. Lời thoại phải giống tiếng Việt giao tiếp thật, không mang cú pháp dịch sát tiếng Trung. Giữ nét ngạo kiều, tự mãn và đôi khi trẻ con của mèo trắng. Giữ sự đối lập hài hước giữa nữ chính ngang ngược và những tình huống khiến cô bất lực. Hạn chế lời kể toàn tri vượt quá những điều văn bản đã xác nhận. Không thêm suy đoán về động cơ, danh tính hoặc quan hệ nhân vật. Mỗi câu văn phải rõ nghĩa khi người nghe không nhìn thấy chữ viết. Duy trì nhất quán tên riêng, đại từ, thuật ngữ và giọng nói xuyên suốt toàn bộ tác phẩm."
+}
