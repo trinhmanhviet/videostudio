@@ -685,6 +685,11 @@ class ContentFactory:
             if status and status not in ('completed', 'ready'):
                 continue
             versions = self._discover_versions(job, strict=False)
+            drive = None
+            if not versions and getattr(self, 'drive_versions', None):
+                # Files moved to Google Drive: list them from Drive's record (play/download through the server).
+                drive = self.drive_versions(job)
+                versions = drive['versions'] if drive else []
             if not versions or not any(version['latest'] for version in versions):
                 continue
             approved = self.approved_version(identifier, versions)
@@ -701,8 +706,8 @@ class ContentFactory:
                             'state': 'completed', 'status': 'completed', 'created': job['created'],
                             'duration_seconds': versions[0]['duration_seconds'], 'thumbnail': self._thumbnail(job),
                             'output_url': versions[0]['url'], 'review_state': review, 'approved': approved,
-                            'wide_url': f"/api/jobs/{identifier}/files/video-ngang.mp4" if job['checkpoints'].get('render', {}).get('video_ngang') else None,
-                            'versions': versions, 'channels': channels})
+                            'wide_url': (drive['wide_url'] if drive else f"/api/jobs/{identifier}/files/video-ngang.mp4") if (drive or job['checkpoints'].get('render', {}).get('video_ngang')) else None,
+                            'versions': versions, 'channels': channels, 'drive_files': drive['drive_files'] if drive else None})
         total = len(records)
         return {'items': records[(page - 1) * page_size:page * page_size], 'page': page, 'page_size': page_size,
                 'total': total, 'total_pages': max(1, (total + page_size - 1) // page_size)}

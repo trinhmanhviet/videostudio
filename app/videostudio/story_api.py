@@ -127,6 +127,45 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
             raise
         return call(library.add_gameplay, temporary, name, digest.hexdigest())
 
+    link_jobs = {}
+
+    @app.post('/api/story/gameplay/link')
+    def gameplay_link(data: dict, request: Request):
+        """A gameplay video on Google Drive: downloaded in the background into the bounded cache (fetched again
+        later if trimmed). Returns a task to poll, so a slow download never times out the page."""
+        same_origin(request)
+        from .drive_storage import CACHE, DriveError, DriveStorage, cache_trim, file_id_from_link
+        url = str(data.get('url') or '')
+        try:
+            file_id = file_id_from_link(url)
+            drive = DriveStorage(store)
+            account, meta = drive.metadata(file_id)
+        except (ValueError, DriveError) as error:
+            raise HTTPException(422, str(error))
+        name = meta.get('name') or (file_id + '.mp4')
+        suffix = Path(name).suffix.lower() or '.mp4'
+        if suffix not in ('.mp4', '.mkv', '.mov', '.webm'):
+            raise HTTPException(422, 'Link này không phải video MP4/MKV/MOV/WebM')
+        task = {'id': uuid.uuid4().hex, 'name': name, 'size': int(meta.get('size') or 0), 'received': 0, 'state': 'running', 'error': None, 'clip': None}
+        link_jobs[task['id']] = task
+
+        def work():
+            try:
+                target = CACHE / f'{file_id}{suffix}'
+                sha, _ = drive.download(file_id, target, account=account, progress=lambda n: task.update(received=n))
+                cache_trim(keep=[target])
+                task.update(clip=library.add_gameplay_cached(target, name, sha, file_id, url), state='done')
+            except Exception as error:
+                task.update(state='failed', error=str(error)[:300])
+        threading.Thread(target=work, daemon=True).start()
+        return task
+
+    @app.get('/api/story/gameplay/link/{task_id}')
+    def gameplay_link_status(task_id: str):
+        if task_id not in link_jobs:
+            raise HTTPException(404, 'Không có lượt tải này')
+        return link_jobs[task_id]
+
     @app.put('/api/story/books/{book_id}/gameplay')
     def playlist(book_id: str, data: dict, request: Request):
         same_origin(request)

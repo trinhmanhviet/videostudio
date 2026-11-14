@@ -1187,6 +1187,8 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         from .output_settings import save
         try:return save(store,data.get('path'))
         except ValueError as error:raise HTTPException(422,str(error))
+    from .drive_api import register_drive_routes
+    drive_storage=register_drive_routes(app,store,factory,same_origin,stop)
     from .story_api import register_story_routes
     register_story_routes(app,store,factory,pipeline,voices,same_origin)
 

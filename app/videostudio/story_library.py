@@ -33,7 +33,7 @@ DEFAULT_SETTINGS = {'speech_engine': 'vieneu', 'voice_id': 'Thiện Minh', 'spee
                     'khanh_steps': 32, 'speech_batch_size': 256}
 DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': True, 'vertical': True,
                   'burn_subtitles': True, 'export_srt': True, 'export_mp3': True, 'game_audio': False,
-                  'continue_gameplay': True, 'game_box': {}}
+                  'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc'}
 # Built-in backgrounds: gradients rendered by FFmpeg, no image files required.
 PRESET_BACKGROUNDS = {
     'preset:dem-xanh': {'name': 'Đêm xanh', 'top': '0x0b1a33', 'bottom': '0x1d3b63'},
@@ -134,6 +134,10 @@ class StoryLibrary:
             ''')
             # source_sha256 = the text as last imported from a file or the ChatGPT edit. When the chapter text differs
             # from it, the user has edited the chapter and a later import must never overwrite it.
+            columns = {r['name'] for r in db.execute('PRAGMA table_info(gameplay)')}
+            if 'drive_file_id' not in columns:
+                db.execute('ALTER TABLE gameplay ADD COLUMN drive_file_id TEXT')
+                db.execute('ALTER TABLE gameplay ADD COLUMN source_url TEXT')
             if 'source_sha256' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
                 db.execute('ALTER TABLE chapters ADD COLUMN source_sha256 TEXT')
                 db.execute('UPDATE chapters SET source_sha256=sha256')
@@ -413,9 +417,32 @@ class StoryLibrary:
 
     def _clip(self, row):
         path = Path(row['path'])
+        drive = row['drive_file_id'] if 'drive_file_id' in row.keys() else None
+        # A Drive clip stays usable when its cached copy was trimmed: it is downloaded again when a video needs it.
         return {'id': row['id'], 'sha256': row['sha256'], 'name': row['name'], 'duration': row['duration'], 'width': row['width'],
                 'height': row['height'], 'fps': row['fps'], 'has_audio': bool(row['has_audio']), 'size': row['size'],
-                'available': path.is_file(), 'thumbnail': f'/api/story/gameplay/{row["id"]}/thumbnail'}
+                'available': path.is_file() or bool(drive), 'cached': path.is_file(), 'drive_file_id': drive,
+                'source': 'drive' if drive else 'local', 'thumbnail': f'/api/story/gameplay/{row["id"]}/thumbnail'}
+
+    def add_gameplay_cached(self, path, name, sha, drive_file_id, url):
+        """A clip downloaded from a Drive link: the file stays in the cache (it may be trimmed and fetched again)."""
+        path = Path(path)
+        with self.db() as db:
+            old = db.execute('SELECT * FROM gameplay WHERE sha256=?', (sha,)).fetchone()
+        if old and not old['deleted']:
+            return {**self._clip(old), 'duplicate': True}
+        info = self.probe_video(path)
+        identifier = old['id'] if old else uuid.uuid4().hex
+        with self.db() as db:
+            db.execute('INSERT OR REPLACE INTO gameplay(id,sha256,name,path,duration,width,height,fps,has_audio,size,created,deleted,drive_file_id,source_url) '
+                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?)', (identifier, sha, Path(name).name[:200], str(path), info['duration'], info['width'],
+                       info['height'], info['fps'], int(info['has_audio']), path.stat().st_size, time.time(), drive_file_id, url[:500]))
+            for book in db.execute('SELECT id FROM books WHERE deleted=0').fetchall():
+                last = db.execute('SELECT COALESCE(MAX(position),-1) FROM book_gameplay WHERE book_id=?', (book['id'],)).fetchone()[0]
+                db.execute('INSERT OR IGNORE INTO book_gameplay VALUES(?,?,?,0,NULL)', (book['id'], identifier, last + 1))
+            row = db.execute('SELECT * FROM gameplay WHERE id=?', (identifier,)).fetchone()
+        self.thumbnail(identifier)  # made now, while the file is surely on disk
+        return self._clip(row)
 
     def gameplay(self, book_id=None):
         with self.db() as db:
@@ -465,9 +492,11 @@ class StoryLibrary:
     def thumbnail(self, clip_id):
         with self.db() as db:
             row = db.execute('SELECT * FROM gameplay WHERE id=?', (clip_id,)).fetchone()
-        if not row or not Path(row['path']).is_file():
+        if not row:
             raise KeyError('Không tìm thấy clip')
         target = self.root / 'previews' / f'thumb-{row["sha256"][:16]}.jpg'
+        if not target.is_file() and not Path(row['path']).is_file():
+            raise KeyError('Không tìm thấy clip')
         if not target.is_file():
             at = min(5.0, row['duration'] / 3)
             subprocess.run([self.ffmpeg, '-v', 'error', '-y', '-ss', f'{at:.2f}', '-i', row['path'], '-frames:v', '1',
@@ -531,6 +560,7 @@ class StoryLibrary:
                     'settings': book['settings'], 'layout': book['layout'],
                     'gameplay': [{'id': c['id'], 'sha256': c['sha256'], 'name': c['name'], 'path': self._clip_path(c['id']),
                                   'duration': c['duration'], 'start': c['start'], 'end': c['end'], 'has_audio': c['has_audio'],
+                                  'drive_file_id': c.get('drive_file_id'),
                                   'width': c['width'], 'height': c['height']} for c in playlist],
                     'background': self.background_path(book['layout'].get('background')) and str(self.background_path(book['layout']['background'])),
                     'background_preset': PRESET_BACKGROUNDS.get(book['layout'].get('background'), PRESET_BACKGROUNDS['preset:dem-xanh'])}
@@ -603,6 +633,8 @@ def validate_layout(value):
         raise ValueError('Ảnh nền không hợp lệ')
     if 'game_box' in result:
         result['game_box'] = validate_game_box(result['game_box'])
+    if 'video_codec' in result and result['video_codec'] not in ('hevc', 'h264'):
+        raise ValueError('Kiểu nén chỉ có HEVC hoặc H.264')
     return result
 
 

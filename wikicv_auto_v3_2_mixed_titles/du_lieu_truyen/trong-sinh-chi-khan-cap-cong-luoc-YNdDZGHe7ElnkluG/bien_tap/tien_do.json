@@ -1140,6 +1140,736 @@
    ],
    "seconds": 127,
    "at": 1794643851.970484
+  },
+  "27": {
+   "source_sha256": "910c914dcdf53ef92f8db69add70f79888a011aa58863482a815c608045e6ae7",
+   "title": "Chương 27: Đến Lúc Nói Chuyện Yêu Đương Rồi",
+   "chars_source": 12936,
+   "chars_edited": 14921,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tên chương convert có nghĩa là đã đến lúc nói về chuyện yêu đương. Biên tập thành Đến Lúc Nói Chuyện Yêu Đương Rồi, giữ giọng kể vui vẻ và phù hợp diễn biến tình cảm của Bạch Thù Văn.",
+    "Ứng dụng nhắn tin trong nguồn bị che bằng ký tự khuyết, nhưng các đoạn sau gọi tắt là q. Đã dùng ứng dụng nhắn tin trong nội dung, không tự khẳng định chính xác tên dịch vụ.",
+    "Cụm cầu nhảy trong đoạn Bạch Thù Văn và Nghiêu tranh tivi được hiểu theo ngữ cảnh là chuyển kênh. Đã biên tập thành định đổi kênh.",
+    "Phim cung đấu mà Nghiêu xem không có tên cụ thể. Giữ các chi tiết về Hoàng thượng, Quý phi bị hại đến sảy thai và việc Hoàng thượng tin lời nói dối, không tự bổ sung tên phim hay nhân vật.",
+    "Các câu thoại trong tin nhắn được tách thành từng lượt và thêm lời dẫn nhận diện La Hiểu Hiểu hoặc Bạch Thù Văn để khi nghe bằng TTS không nhầm người gửi.",
+    "Những hình biểu cảm và ký hiệu trang trí trong tin nhắn đã được chuyển thành cảm xúc diễn đạt bằng lời, không để ký hiệu cho giọng đọc máy.",
+    "Lời Nghiêu về thiên sư là quan điểm và hiểu biết của nhân vật. Giữ nguyên mâu thuẫn giữa thiên sư và người dẫn đường linh hồn, không biến lời giải thích thành quy luật siêu nhiên đã được kiểm chứng độc lập.",
+    "Câu biết mà không được nói ra diễn đạt giới hạn mà Nghiêu cho rằng các thiên sư phải chịu. Không tự xác định ai đặt ra giới hạn ấy hoặc hình phạt khi vi phạm.",
+    "Cụm dương nhung áo khoác được hiểu là áo khoác làm từ lông dê mềm. Không đổi thành áo khoác lông cừu hoặc tự bổ sung kiểu dáng.",
+    "Hai cụm bị che bằng ký tự khuyết trong cảnh Bạch Thù Văn nghịch má Liễu Mộ Thanh được hiểu từ hành động liền trước và liền sau là xoa nắn, véo má trêu chọc. Không tự thêm hành động thân mật khác.",
+    "Chi tiết Liễu Mộ Thanh vô thức dụi má vào tay Bạch Thù Văn, đỏ mặt và siết bàn tay đan ngón được giữ đúng hành động quan sát được. Không tự kết luận Mộ Thanh đã nhận ra tình cảm của Thù Văn hoặc chủ động tỏ tình.",
+    "Lời rủ ban đầu của La Hiểu Hiểu là đi hiệu sách mua sách bài tập. Cuối chương, bản nguồn lại ghi hai người đi về phía thư viện. Đã giữ cả hai chi tiết theo đúng vị trí xuất hiện, chưa tự đồng nhất hai địa điểm.",
+    "Cảnh nắm tay trong túi áo được giữ nguyên trình tự: Bạch Thù Văn tháo găng cho Liễu Mộ Thanh, cùng đút tay vào túi áo, nghịch những ngón tay, rồi lén đan mười ngón với nhau. Sự hồi hộp là cảm nhận của Bạch Thù Văn.",
+    "Mã Bộ Dao được giữ như tên riêng của bài hát trong lời tác giả. Không tự xác định người sáng tác, ca sĩ hoặc bản dịch tên bài hát khi nguồn chưa cung cấp."
+   ],
+   "seconds": 117,
+   "at": 1794643969.4464726
+  },
+  "28": {
+   "source_sha256": "db9075f5244cfa2ec6174ed03e7669853c112d6d85c7ecdeef00c059455bc4b1",
+   "title": "Chương 28: Vị Thiên Sư Kia",
+   "chars_source": 11503,
+   "chars_edited": 12762,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Nguồn dùng xen kẽ thư viện và hiệu sách. Đã giữ cách gọi theo từng đoạn để bảo toàn thông tin, chưa tự xác định đây là hai địa điểm khác nhau hay cùng một nơi.",
+    "Bùi Vân Du là nhân vật đã có trong hồ sơ, không thêm vào danh sách nhân vật mới. Giữ giọng nói văn vẻ và cách gọi tiểu hữu, nhưng biên tập cấu trúc câu cho dễ nghe.",
+    "Chi tiết Bùi Vân Du biết tên Bạch Thù Văn được giải thích bằng việc đã tìm hiểu về gia đình họ Diêu và nhận diện cô qua khí chất. Đây là lời Bùi Vân Du tự giải thích, chưa được xác minh độc lập.",
+    "Câu nói về những người đến chùa sau lễ cúng tổ có cách quy chiếu mơ hồ. Đã hiểu là Bùi Vân Du nghĩ đến gia đình Bạch Thù Văn khi tìm hiểu nhóm người tham dự, không khẳng định chỉ có gia đình Bạch đến ngôi chùa.",
+    "Cụm ngụy trang thành mèo thiếu niên được biên tập thành chàng thiếu niên giả dạng thành mèo, giữ đúng lời tiết lộ của Bùi Vân Du về Nghiêu. Không tự xác định cách Bùi Vân Du nhận ra thân phận ấy.",
+    "Bùi Vân Du nói Nghiêu không thể nghe thấy lời gọi trong đầu của Bạch Thù Văn, nhưng chưa giải thích nguyên nhân. Đã giữ nguyên bí ẩn, không bổ sung kết giới, thuật phong ấn hay bất kỳ năng lực cụ thể nào.",
+    "Chi tiết Bạch Thù Văn vô tình đá vào chân Bùi Vân Du dưới bàn được giữ là phản xạ vì kinh hãi, không chuyển thành hành động tấn công có chủ ý.",
+    "Đã giữ trình tự kể chuyện phi tuyến tính của bản nguồn: Liễu Mộ Thanh nhìn thấy Bạch Thù Văn ngồi cùng người đàn ông xa lạ, sau đó câu chuyện quay lại hai mươi phút trước.",
+    "Giữ dấu phân cảnh duy nhất dưới dạng ba dấu sao, tách riêng bằng dòng trống, đúng vị trí sau lời chào đầu tiên của Bùi Vân Du.",
+    "Đã thêm lời dẫn ngắn tại những đoạn dễ nhầm người nói và tách riêng các lượt thoại để phù hợp với giọng đọc máy."
+   ],
+   "seconds": 99,
+   "at": 1794644068.3697624
+  },
+  "29": {
+   "source_sha256": "bd5fe61a5f8af0f20ec9497d5773d43ae4b175c89a51f1be9a43ada9fc8c340f",
+   "title": "Chương 29: Một Góc Tảng Băng Trong Màn Sương",
+   "chars_source": 12144,
+   "chars_edited": 13809,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tiêu đề convert 'Băng sơn một góc sương mù' được biên tập thành 'Một Góc Tảng Băng Trong Màn Sương', giữ hình ảnh tảng băng và màn sương để gợi những bí mật mới hé lộ.",
+    "Cụm 'x lãnh đạm thanh âm' có một ký tự bị khuyết hoặc nhiễu. Đã giữ phần nghĩa chắc chắn là giọng lạnh nhạt của Bùi Vân Du, không tự suy đoán ký tự bị mất.",
+    "Cơ chế ngăn liên lạc giữa các linh hồn được thể hiện đúng theo lời Bùi Vân Du. Chưa tự bổ sung tên pháp thuật, phạm vi tác dụng hoặc cách hóa giải.",
+    "Ba câu hỏi đầu của Bùi Vân Du và câu hỏi cuối về việc thay đổi luân hồi được giữ đầy đủ, gồm cả quan điểm riêng của Bạch Thù Văn rằng linh hồn cuối cùng sẽ tan biến.",
+    "Cách Nghiêu giải thích việc linh hồn tan biến hoặc ngưng tụ qua những lần luân hồi được giữ là lời nhân vật thuật lại, không biến thành quy luật đã được chứng minh trong truyện.",
+    "Câu hỏi cuối của Bùi Vân Du có nội dung gần với thí nghiệm của Nghiêu, nhưng chưa đủ căn cứ xác nhận hai người có chung mục đích. Đã giữ nguyên sự nghi ngờ của Bạch Thù Văn.",
+    "Bùi Vân Du nhìn về phía sau Bạch Thù Văn trước khi rời đi, ngay sau đó Liễu Mộ Thanh xuất hiện. Đã giữ thứ tự này nhưng không tự khẳng định anh phát hiện, nhận ra hay tránh mặt Liễu Mộ Thanh.",
+    "Bạch Thù Văn cho Nghiêu xem ảnh Bùi Vân Du, từ đó Nghiêu xác nhận đây chính là thiên sư từng nhận ra thân phận mình. Đây là sự xác nhận nhân vật đã biết, không phải nhân vật mới.",
+    "Tiếng Nghiêu kêu meo meo trước cửa là âm thanh người bình thường có thể nghe thấy. Lời cãi nhau của nó với Bạch Thù Văn vẫn diễn ra trong đầu cô, nên hai hình thức giao tiếp đã được phân biệt rõ.",
+    "Giang Thự nghe tiếng mèo kêu và đến nhà Bạch Thù Văn, đồng thời có chuyện muốn trao đổi. Không tự khẳng định tiếng mèo là nguyên nhân duy nhất khiến anh đến.",
+    "Lời người đàn ông trong nhà giam rằng mình bị hãm hại và không phải kẻ đâm người mâu thuẫn với lời nhận tội trước đây. Đã giữ đây là lời khai mới, không tự xác nhận hắn vô tội hoặc xác định hung thủ thực sự.",
+    "Theo lời Giang Thự thuật lại, người phụ nữ bí ẩn sai người đàn ông đánh thuốc mê và đưa Bạch Thù Văn của thế giới năm 2011 ra hẻm sau quán bar. Không tự bổ sung tên, ngoại hình, động cơ hoặc vai trò thực sự của người phụ nữ.",
+    "Cách Bạch Thù Văn từng hiểu vụ án là người đàn ông đâm chết chủ nhân cũ khi cô gái chống cự. Đã thể hiện đó là suy nghĩ trước đây của nữ chính, không phải sự thật đã được xác minh.",
+    "Giang Thự đánh giá lời khai mới có lẽ đáng tin dựa trên kinh nghiệm của mình. Đã giữ mức độ phỏng đoán, không biến thành kết luận điều tra.",
+    "Câu nói của Đường Trưng về việc Giang Thự che giấu điều gì đó được nhắc lại như một manh mối chưa có lời giải. Không tự xác định bí mật hay động cơ của Giang Thự.",
+    "Lời tác giả nhắc đến việc mải chơi Sở Lưu Hương suốt ba tiếng đồng hồ. Đã giữ tên riêng và thời lượng, không tự xác định đây là một trò chơi cụ thể khi đoạn nguồn không nêu đầy đủ."
+   ],
+   "seconds": 105,
+   "at": 1794644173.1022038
+  },
+  "30": {
+   "source_sha256": "ea8f3418a9a6b3e2ef4e6cbec2ae27041c4b89ea4a6ccc0a312cbfc101c01f22",
+   "title": "Chương 30: Công Lược Thành Công",
+   "chars_source": 12359,
+   "chars_edited": 14034,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tiêu đề được giữ là 'Công Lược Thành Công', đúng với sự kiện và thông báo hệ thống cuối chương.",
+    "Thời điểm đầu chương là ngày cuối cùng trước khi khai giảng trở lại sau kỳ nghỉ, không tự thêm ngày tháng cụ thể.",
+    "Đường Trưng biết Bạch Thù Văn không phải chủ nhân cũ của thân thể, nhưng nguồn chưa cho thấy cậu hiểu đầy đủ cơ chế thế giới song song hay linh hồn. Đã giữ giới hạn hiểu biết này.",
+    "Câu nói về việc người xung quanh khó có khả năng hại Bạch Thù Văn là nhận định của Đường Trưng, không phải sự bảo đảm rằng cô đã an toàn.",
+    "Đường Trưng bất ngờ nhìn về một hướng rồi làm rơi thìa xuống cạnh tách trà. Nguồn không xác định cậu đã nhìn thấy ai hoặc điều gì, nên không tự liên hệ chắc chắn với Bùi Vân Du hay Nghiêu.",
+    "Bạch Thù Văn trông thấy Bùi Vân Du sau khi chia tay Đường Trưng, rồi quay lại quán cà phê để quan sát. Cuộc gặp giữa Bùi Vân Du và Nghiêu được giữ nguyên là một cuộc gặp mà cô tình cờ phát hiện, chưa xác định ai chủ động sắp xếp.",
+    "Nghiêu xuất hiện trong hình dạng con người và gọi thẳng tên Bùi Vân Du. Những lời trao đổi tiếp theo bị ngăn nghe, vì thế không bổ sung nội dung cuộc trò chuyện hoặc mục đích thật sự của hai người.",
+    "Sau cuộc gặp, Nghiêu không kể lại chuyện này với Bạch Thù Văn. Cô cảm thấy bị phản bội, nhưng chương chưa xác nhận Nghiêu có ý định hãm hại cô.",
+    "Liễu Mộ Thanh nhận ra Bạch Thù Văn buồn bã, nhiều lần hỏi han rồi đi cùng cô đến chỗ Đường Trưng. Hình ảnh vệ sĩ riêng chỉ là phép so sánh trong lời kể, không phải vai trò thực tế của Mộ Thanh.",
+    "Bản convert viết bài hát mới đã được phát hành rồi Đường Trưng mới báo cho Bạch Thù Văn. Đã giữ sự chậm trễ này và việc bài hát được chuẩn bị hơn nửa năm.",
+    "Ca từ bài Hành Trình Linh Hồn được biên tập thành tiếng Việt có nhịp điệu để đọc thành tiếng. Giữ đầy đủ các ý về cuộc gặp định mệnh, khách qua đường, linh hồn và mong ước gặp lại trên hành trình kế tiếp.",
+    "Bạch Thù Văn nhận ra bài hát từng nổi tiếng sau khi cô tốt nghiệp đại học ở thế giới trước. Không tự khẳng định Đường Trưng của hai thế giới có cùng số phận hoặc rằng sự nổi tiếng hiện tại đã xảy ra.",
+    "Đường Trưng ngã xuống ngay sau khi hoàn thành bài hát. Chương chưa xác định cậu ngất, chết, mất linh hồn hay gặp tác động siêu nhiên cụ thể nào, nên chỉ giữ hành động ngã xuống không báo trước.",
+    "Thông báo cuối chương là giá trị sức mạnh linh hồn nhận được bằng tám mươi, không phải câu thông báo trực tiếp rằng mức thiện cảm hiện tại bằng tám mươi. Đã tách rõ hai khái niệm.",
+    "Những tiếng gọi Đường Trưng và đại ca được tách riêng để người nghe nhận biết có nhiều người hoảng hốt. Giọng nữ hệ thống có lời dẫn riêng, tránh nhầm với lời người trong phòng karaoke.",
+    "Lời tác giả giữ các thông tin về dự định kết thúc ở chương ba mươi, khả năng kéo dài gần năm mươi chương và số lượt lưu truyện giảm. Biểu tượng cảm xúc và chuỗi ký tự kéo dài được thay bằng lời văn tự nhiên."
+   ],
+   "seconds": 6,
+   "at": 1794644275.385706
+  },
+  "31": {
+   "source_sha256": "c7c6ea3d27f0e423a967590db9e56be18f77db23547e2e52e63bb43df96c5161",
+   "title": "Chương 31: Đối Chất Với Nghiêu",
+   "chars_source": 12260,
+   "chars_edited": 14239,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Đường Trưng được kiểm tra toàn diện tại bệnh viện, nhưng không phát hiện tổn thương hay bệnh lý rõ ràng. Chẩn đoán kiệt sức chỉ là suy đoán của bác sĩ, chưa phải nguyên nhân được xác nhận.",
+    "Lăng Ương và Đường Trưng được xác nhận là bạn tốt nhiều năm. Cách gọi đại ca không chứng minh hai người có quan hệ huyết thống. Lăng Ương thường chăm sóc Đường Trưng vì cậu ấy kém khả năng tự lo liệu sinh hoạt.",
+    "Bạch Thù Văn khẳng định album của Đường Trưng sẽ nổi tiếng dựa trên ký ức từ thế giới trước. Đây là niềm tin của cô, không bảo đảm mọi diễn biến trong thế giới hiện tại sẽ giống hệt.",
+    "Mốc thời gian Đường Trưng nổi tiếng được đẩy sớm lên bảy năm so với ký ức của Bạch Thù Văn. Giữ nguyên con số bảy năm, không suy diễn thêm về thời điểm lịch cụ thể.",
+    "Giao diện hồ sơ Đường Trưng xuất hiện chỉ số hai trăm tám mươi điểm sức mạnh linh hồn. Đây là số liệu hiển thị trong chương này, khác với thông báo nhận được tám mươi ở cuối chương trước. Chưa có căn cứ xác định quan hệ tính toán giữa hai số.",
+    "Hai chức năng rút và bổ sung sức mạnh linh hồn được giữ dưới dạng mô tả giao diện, không viết thành lời thoại hệ thống. Bạch Thù Văn chưa kích hoạt chức năng nào.",
+    "Cách hiểu về việc sức mạnh linh hồn quyết định khả năng ngưng tụ linh hồn ban đầu là suy đoán của Bạch Thù Văn dựa trên lời Nghiêu. Không trình bày suy đoán ấy như kiến thức đã được chứng minh.",
+    "Liễu Mộ Thanh chỉ được Bạch Thù Văn vẫy tay chào trước khi cô trở về nhà tìm Nghiêu. Không tự thêm việc Mộ Thanh biết về chỉ số sức mạnh linh hồn hoặc nguyên nhân Đường Trưng nhập viện.",
+    "Sau khi nhìn Đường Trưng qua kính cửa phòng bệnh, Nghiêu im lặng và không giãy giụa nữa. Chỉ mô tả phản ứng này, không khẳng định cậu đã xác nhận nguyên nhân khiến Đường Trưng ngã xuống.",
+    "Câu Nghiêu nói rằng mọi điều cậu giấu đều không làm hại Bạch Thù Văn được giữ đúng phạm vi. Cậu không hứa những người khác sẽ không bị tổn thương.",
+    "Lời giải thích của Nghiêu xác nhận cậu đã mất ký ức quá khứ, sống đơn độc lâu dài và được huấn luyện phải đặt nhiệm vụ lên trên cảm xúc cá nhân. Không tự thêm nguồn gốc hoặc nguyên nhân mất trí nhớ.",
+    "Đoạn Nghiêu không còn hiểu rõ ý nghĩa tồn tại của bản thân là thông tin từ lời kể nội tâm, không phải điều cậu trực tiếp nói với Bạch Thù Văn. Đã giữ ranh giới này.",
+    "Nghiêu xác nhận các mục tiêu công lược là những người có sức mạnh linh hồn tương đối lớn. Khi công lược thành công, một phần sức mạnh được chuyển sang Bạch Thù Văn. Mục đích cuối cùng của việc chuyển sức mạnh vẫn chưa rõ.",
+    "Hậu quả Nghiêu nêu là các mục tiêu có thể không đủ sức mạnh ngưng tụ linh hồn và cuối cùng tiêu tán trong luân hồi. Giữ tính khả năng, không khẳng định Đường Trưng đã chết hoặc chắc chắn sẽ tiêu tán.",
+    "Nghiêu xác nhận hệ thống không do mình sáng tạo. Nguồn chưa xác định ai tạo ra hệ thống, nên không đồng nhất chắc chắn người tạo hệ thống với người ra lệnh và đặt lời nguyền.",
+    "Lời nguyền ràng buộc linh hồn được giữ là một cơ chế siêu nhiên trong truyện. Theo lời Nghiêu, nếu tiết lộ sự thật bị cấm, linh hồn cậu sẽ tan thành mây khói. Chưa biết toàn bộ phạm vi thông tin bị cấm tiết lộ.",
+    "Các lượt thoại giữa Bạch Thù Văn và Nghiêu được tách thành từng đoạn, giữ rõ sự chuyển biến từ giận dữ, đau khổ sang bình tĩnh, cảm thông và yêu cầu được biết sự thật.",
+    "Lời tác giả được chuyển từ tiếng lóng tiết lộ thân phận sang cách nói tự nhiên, giữ sắc thái vui vẻ và tiếng ngân nga ở cuối."
+   ],
+   "seconds": 112,
+   "at": 1794644387.239163
+  },
+  "32": {
+   "source_sha256": "5af411382305e6ec9ee3010574d1e254822cdaeaecef06f119c6c905dff9999f",
+   "title": "Chương 32: Quyết Định Của Bạch Thù Văn",
+   "chars_source": 13363,
+   "chars_edited": 15081,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Cảnh đầu chương tiếp nối trực tiếp cuộc đối chất giữa Bạch Thù Văn và Nghiêu. Giữ lời giải thích về mệnh lệnh cấp trên và lời nguyền ràng buộc linh hồn từ chương trước.",
+    "Bản convert miêu tả ánh trăng ngày rằm bị mây che khuất, dù cảnh sân thượng ở chương trước từng được miêu tả có ánh mặt trời. Đã giữ ánh trăng theo chính chương này, không tự bổ sung thời điểm chuyển từ ngày sang đêm.",
+    "Cụm thượng cấp mệnh lệnh được hiểu là mệnh lệnh của cấp trên mà Nghiêu không thể chống lại. Chưa xác nhận danh tính của người ra lệnh hoặc toàn bộ cơ cấu quyền lực liên quan.",
+    "Việc Bạch Thù Văn không tiếp tục trách Nghiêu xuất phát từ sự thấu hiểu của cô về hệ thống cấp bậc và kỷ luật. Không đồng nghĩa với việc cô chấp nhận hậu quả của nhiệm vụ công lược.",
+    "Nghiêu xác nhận hệ thống không thể sửa đổi hoặc kết thúc sau khi kích hoạt. Tuy nhiên, bản nguồn không nói Bạch Thù Văn bị buộc phải chủ động tiếp cận các mục tiêu mỗi ngày. Vì vậy, cô vẫn có thể ngừng cố ý tăng thiện cảm.",
+    "Việc bổ sung sức mạnh linh hồn cho mục tiêu sẽ khiến sức mạnh linh hồn của Bạch Thù Văn giảm tương ứng. Đây là quy tắc Nghiêu giải thích, chưa có thông tin về giới hạn an toàn hoặc khả năng hồi phục hoàn toàn.",
+    "Đoạn Bạch Thù Văn nói về hạnh phúc của người bình thường thể hiện quan điểm cá nhân của cô, không phủ nhận sự tồn tại của thế giới lớn hay các quy tắc linh hồn trong truyện.",
+    "Phần lịch sử nghề người dẫn đường linh hồn là lời kể cung cấp thêm thông tin về thế giới lớn. Đã giữ các chi tiết cư dân không có hôn nhân, không sinh sản như con người, sống lâu và coi trọng sự trở về của những linh hồn quen thuộc.",
+    "Chi tiết người thầy của Nghiêu có sức mạnh đủ giúp người khác ngưng tụ linh hồn qua nhiều lần luân hồi được giữ theo ý bản convert. Chưa tự xác định số lần luân hồi hoặc phương pháp thực hiện.",
+    "Câu Nghiêu thầm nghĩ rằng Bạch Thù Văn chưa bao giờ là một linh hồn bình thường được giữ như suy nghĩ riêng của cậu. Không biến thành lời thoại hay tiết lộ nguyên nhân bất thường khi bản nguồn chưa giải thích.",
+    "Bạch Thù Văn nghi ngờ cuộc gặp giữa Nghiêu và Bùi Vân Du có liên quan đến ân oán cá nhân hoặc thí nghiệm linh hồn. Đây chỉ là suy đoán của cô, chưa phải sự thật được xác nhận.",
+    "Đường Trưng vẫn có thể nói chuyện và đuổi Bạch Thù Văn ra khỏi quán bar. Không tự khẳng định sức mạnh linh hồn của cậu đã hoàn toàn hồi phục chỉ dựa vào biểu hiện sinh hoạt.",
+    "Bạch Thù Văn đã bổ sung đúng tám mươi điểm sức mạnh linh hồn cho Đường Trưng, sau đó ngất khoảng vài phút. Giữ nguyên hai dữ kiện và không tự kết luận rằng phần hao hụt đã được phục hồi hoàn toàn.",
+    "La Hiểu Hiểu ngất trong giờ thể dục khi học kỳ gần kết thúc. Bạch Thù Văn đã chủ động hạn chế tiếp xúc nhưng vẫn giữ tình bạn tốt đẹp. Không khẳng định cô cố tình khiến hệ thống hoàn thành công lược.",
+    "Đoạn cảm nhận khi cõng La Hiểu Hiểu và so sánh mái tóc của cô với Liễu Mộ Thanh được giữ đúng góc nhìn tinh nghịch của Bạch Thù Văn, không tự thêm hành động thân mật hoặc quan hệ tình cảm mới.",
+    "Cách ăn uống nhiều để giảm tác dụng phụ hao hụt sức mạnh linh hồn là thông tin Nghiêu cung cấp trong bối cảnh truyện. Không trình bày đó là phương pháp có hiệu quả được chứng minh bên ngoài thế giới hư cấu.",
+    "Người xuất hiện cuối chương được Bạch Thù Văn cảm thấy vô cùng quen thuộc, nhưng chưa được nêu tên hoặc xác định giới tính. Đã giữ cách gọi người ấy và lời chất vấn ngươi dành cho Nghiêu, không tự đồng nhất với bất kỳ nhân vật nào đã biết.",
+    "Nghiêu xuất hiện trong hình dạng con người ở cuối chương, nhưng bản nguồn không nói cậu biến hình vào chính xác thời điểm nào. Đã giữ sự bất ngờ này.",
+    "Câu cuối chương ngươi chính là như vậy làm việc được chuyển thành Đây là cách ngươi làm việc sao, giữ giọng lạnh lùng trách cứ và chưa xác định quan hệ cấp bậc giữa người nói với Nghiêu.",
+    "Lời tác giả được giữ đầy đủ về việc đẩy nhanh cốt truyện từ chương ba mươi, mối quan hệ nhân quả giữa các sự kiện và việc tác giả đưa quan điểm cá nhân vào nhân vật Bạch Thù Văn."
+   ],
+   "seconds": 111,
+   "at": 1794644497.993377
+  },
+  "33": {
+   "source_sha256": "9b867515356e28fad9cb97d164eeb53b4a5c064e3f61a6d8058a1b415d157ccf",
+   "title": "Chương 33: Mỗi Người Một Nỗi Hoài Nghi",
+   "chars_source": 13510,
+   "chars_edited": 14530,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Người bí ẩn xuất hiện cuối chương trước tiếp tục xuất hiện ở đầu chương này. Bản convert dùng đại từ chỉ nam giới, nhưng chưa tiết lộ tên, thân phận hoặc quan hệ thực sự với Bạch Thù Văn. Đã giữ cách gọi người ấy, không tự đồng nhất với Giang Thự, Bùi Vân Du hay người đứng sau hệ thống công lược.",
+    "Người bí ẩn thể hiện quyền uy đối với Nghiêu và có thể dùng hơi lạnh siêu nhiên để trừng phạt cậu. Chưa đủ căn cứ khẳng định người này chính là cấp trên đã ra lệnh hoặc đặt lời nguyền lên Nghiêu.",
+    "Cụm dùng dược lý che giấu nàng dời đi linh hồn lực được hiểu là Nghiêu mang dược liệu về vừa để giúp Bạch Thù Văn hồi phục, vừa để che giấu khí tức liên quan đến việc cô chuyển sức mạnh linh hồn. Không tự xác định loại dược liệu hoặc cách sử dụng.",
+    "Động tác đặt tay lên trán Bạch Thù Văn cùng luồng sáng trắng được Nghiêu nhận ra là chuyển sức mạnh linh hồn. Tuy nhiên, nguồn không nêu lượng sức mạnh được chuyển hoặc trạng thái sức mạnh linh hồn sau đó.",
+    "Người bí ẩn nói Bùi Vân Du tự nguyện giao ra sức mạnh linh hồn và có việc riêng muốn làm. Chưa xác định Bùi Vân Du giao cho ai, giao bao nhiêu hoặc mục đích cụ thể. Không đồng nhất hành động này với việc bị hệ thống công lược rút sức mạnh linh hồn.",
+    "Câu thời gian ta còn có thể tỉnh táo không nhiều nữa được giữ theo nghĩa người bí ẩn có thời gian tỉnh táo hạn chế. Bản nguồn không giải thích đây là do bệnh tật, phong ấn, luân hồi hay nguyên nhân nào khác.",
+    "Câu Nghiêu không biết còn có thể cảm nhận mùa hè và ở bên Bạch Thù Văn bao lâu là suy nghĩ lo lắng của nhân vật, chưa xác nhận một thời hạn hoặc kết cục cụ thể.",
+    "Nghiêu chỉ đáp ừ hử khi Bạch Thù Văn hỏi có phải cậu đã cõng hai người đến phòng y tế không. Đã giữ câu trả lời mập mờ, vì thực tế người bí ẩn cõng Bạch Thù Văn còn Nghiêu cõng La Hiểu Hiểu.",
+    "Lúc bổ sung sức mạnh linh hồn cho La Hiểu Hiểu, Bạch Thù Văn không bị mệt như lần trước. Nghiêu nói có lẽ cô đã quen nhưng tỏ ra không tự nhiên. Đã giữ nguyên lời giải thích ấy, không tự khẳng định đó là nguyên nhân thực sự.",
+    "Bạch Thù Văn giới thiệu Nghiêu là anh họ mình trước mặt Liễu Mộ Thanh. Đây là cách cô giới thiệu trong tình huống này, không phải xác nhận quan hệ huyết thống.",
+    "Khoảnh khắc môi Bạch Thù Văn sượt qua một bề mặt nhẵn mịn rất ngắn. Chính cô suy đoán mình đã hôn trúng cằm Liễu Mộ Thanh. Đã giữ sự phân biệt giữa cảm giác trực tiếp và suy nghĩ của nhân vật.",
+    "Hình ảnh con bướm lửa đỏ xuất hiện khi Bạch Thù Văn nhắm mắt là dấu hiệu siêu nhiên đã có trong hồ sơ. Không chuyển thành vật thể mà mọi người trong phòng đều nhìn thấy.",
+    "Liễu Mộ Thanh nói cô chỉ muốn kiểm tra xem trán Bạch Thù Văn có nóng không. Phản ứng tưởng mình sắp được hôn thuộc suy nghĩ và mong đợi riêng của Bạch Thù Văn, chưa xác nhận ý định tình cảm thật sự của Liễu Mộ Thanh.",
+    "Câu hỏi cuối chương cho thấy Liễu Mộ Thanh muốn biết Bạch Thù Văn và Nghiêu đã nói gì trong phòng y tế. Chưa xác nhận cô đã nghe được phần nào, biết về hệ thống công lược hay biết thân phận thật của Nghiêu.",
+    "Lời tác giả được giữ đầy đủ về cảm giác xấu hổ khi tự tưởng bở, sự khác biệt giữa tiểu thuyết và đời thực, cùng niềm vui khi độc giả bắt đầu đoán thân phận nhân vật. Các ký hiệu cảm xúc và chữ viết tắt được chuyển thành lời văn tự nhiên để đọc thành tiếng."
+   ],
+   "seconds": 124,
+   "at": 1794644621.6333802
+  },
+  "34": {
+   "source_sha256": "7d96b0646e2961e62293dc79fadd20e6a18dca5d41b274ce46da78c12924bde8",
+   "title": "Chương 34: Lại Gặp Bùi Vân Du",
+   "chars_source": 11930,
+   "chars_edited": 12994,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Câu hỏi mở đầu của Liễu Mộ Thanh nối trực tiếp với lời Nghiêu ở chương trước: tranh thủ lúc La Hiểu Hiểu chưa tỉnh, mau làm chuyện muốn làm. Đã thêm nội dung lời dẫn ngắn trong câu hỏi để người nghe hiểu rõ Mộ Thanh đang nhắc đến lời nào, không thêm sự kiện mới.",
+    "Lý do muốn chọc má La Hiểu Hiểu là lời Bạch Thù Văn đưa ra để che giấu chuyện bổ sung sức mạnh linh hồn. Không trình bày lời nói dối ấy như động cơ thực sự của cô.",
+    "Chi tiết ngực mang chảy xuống ở đầu vai được hiểu là dây áo ngực trượt xuống vai Liễu Mộ Thanh sau tiết thể dục. Đã giữ hành động Bạch Thù Văn kéo dây lên rồi nghịch ngợm kéo bật trở lại, dẫn đến dấu bàn tay đỏ trên cánh tay cô.",
+    "Trong câu nói về cảm giác chạm vào má, Bạch Thù Văn vẫn đang tiếp nối lời nói dối trước đó. Đã giữ sắc thái trêu chọc và sự thân thiết với Liễu Mộ Thanh, không tự xác nhận hai người đã có quan hệ yêu đương.",
+    "Thế Giới Nước được dùng như tên khu vui chơi mà nhóm bạn định đến, không tự xác định địa chỉ, thành phố hoặc đây là một thương hiệu có thật.",
+    "Cuộc gặp Bùi Vân Du trên xe buýt được chính anh khẳng định là tình cờ. Chưa có bằng chứng xác nhận hay bác bỏ lời này, nên không tự biến thành một cuộc theo dõi được sắp đặt.",
+    "Bùi Vân Du chuyển sang nói chuyện trực tiếp trong đầu Bạch Thù Văn sau khi đã quay về chỗ ngồi. Đã làm rõ đây là trao đổi bằng suy nghĩ, không phải lời nói phát ra thành tiếng trước mặt Liễu Mộ Thanh và Phượng Minh Mộng.",
+    "Câu mỉa mai ta tin ngươi tà được chuyển thành một câu đùa có chữ tà, để giữ màn đối đáp khi Bùi Vân Du nghiêm túc khẳng định mình không tu luyện tà thuật.",
+    "Bùi Vân Du nói chỉ nhìn thấy ánh sáng của dấu ấn linh hồn trên người Liễu Mộ Thanh, không nhìn rõ hình dạng. Bạch Thù Văn lại nói rõ đó là hình con bướm, khiến anh có cơ sở chất vấn năng lực của cô.",
+    "Câu hỏi của Bùi Vân Du về nguồn gốc năng lực nhìn thấy dấu ấn là bước thăm dò dựa trên những gì Bạch Thù Văn vừa tiết lộ. Đã giữ cảm giác cô bị gài vào lời nói, nhưng không tự kết luận anh có ý định bắt giữ hoặc tiêu diệt cô.",
+    "Không gian tinh thần trong đoạn hoảng loạn là cách Bạch Thù Văn hình dung phạm vi ý thức đang trao đổi với Bùi Vân Du. Nguồn không mô tả cô thật sự rời khỏi cơ thể hay có thể chạy trốn bằng cách ấy.",
+    "Việc thiên sư đánh tan vong hồn là hình ảnh trong những bộ phim Bạch Thù Văn nhớ lại khi sợ hãi. Không chuyển thành quy luật siêu nhiên đã được xác nhận trong thế giới truyện.",
+    "Cuối chương, Liễu Mộ Thanh nhìn về phía ghế ngồi của Bùi Vân Du và phát hiện chỗ ấy đã trống. Đã giữ nguyên hành động cùng vẻ mặt lặng lẽ của cô, không tự xác nhận Mộ Thanh biết được cuộc trao đổi trong đầu hai người hoặc biết Bùi Vân Du đã đi đâu.",
+    "Lời tác giả giữ mốc một giờ rưỡi đi ngủ, cảm giác mệt mỏi vào sáng hôm sau và câu tự trêu mình là heo thối nếu tiếp tục thức khuya."
+   ],
+   "seconds": 127,
+   "at": 1794644748.8803933
+  },
+  "35": {
+   "source_sha256": "29deb9dff6bc5504075b8c9729703f75f3447197f206a038cd148a1c22727591",
+   "title": "Chương 35: Các Cô Gái, Tha Hồ Đổ Mồ Hôi Dưới Nước Đi!",
+   "chars_source": 12488,
+   "chars_edited": 14346,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Cụm chọc chọc mông lộ ở bên ngoài tiểu ba lô trong bản convert có cấu trúc mơ hồ. Đã hiểu là Bạch Thù Văn chọc vào chiếc ba lô nhỏ đang thò ra ngoài ngăn tủ, không tự thêm hành động đụng chạm cơ thể Phượng Minh Mộng.",
+    "Trang phục bơi của Liễu Mộ Thanh được giữ đủ các chi tiết chính: dải vải sọc, nơ bướm ở phần áo, dây buộc quanh cổ và váy xếp tầng giống bánh kem.",
+    "Hai lần Bạch Thù Văn bị đánh do nghịch ngợm được giữ riêng biệt theo trình tự: lần đầu sau khi vén váy Liễu Mộ Thanh, lần thứ hai cô phản đòn bằng cách kéo bật phần dây áo bơi ngang hông Mộ Thanh.",
+    "Chi tiết hai cô gái chọc ghẹo nhau khi thay đồ giữ đúng tính chất đùa nghịch và phản ứng xấu hổ của nguồn. Không tự xác nhận đây là một hành động tỏ tình.",
+    "Phượng Minh Mộng cảm thấy hơi cô đơn khi chứng kiến Bạch Thù Văn thân thiết với bạn mới, nhưng đồng thời vui mừng cho cô. Đã giữ cả hai cảm xúc, không tự suy diễn thành ghen tuông tình cảm.",
+    "Trò bóng nước được hiểu là người chơi điều khiển quả bóng bơm hơi lớn trên mặt nước. Câu ngôi nhà to đùng là cách Liễu Mộ Thanh trêu quả bóng của Bạch Thù Văn, không phải địa điểm mới.",
+    "Cụm linh áp lực giải quyết xong Phượng Minh Mộng được hiểu là giải quyết đối thủ mà không tốn bao nhiêu sức. Đã giữ sắc thái hài hước và sự hiếu thắng của Bạch Thù Văn.",
+    "Mốc ba giờ chiều là lúc ba cô gái đến xếp hàng ở trò chơi cuối cùng, không phải lúc họ rời khu vui chơi.",
+    "Người đẩy Bạch Thù Văn xuống máng trượt là nhân viên phụ trách, do tưởng cô đã sẵn sàng. Nguồn không xác định giới tính, nên không tự gọi là anh hoặc chị.",
+    "Bạch Thù Văn bị chóng mặt, mềm chân và sợ độ cao bất thường ngay trên đỉnh máng trượt. Đến cuối chương, Bùi Vân Du thừa nhận đã dùng một mẹo nhỏ gây ra tình trạng ấy, nhưng không giải thích cụ thể cách thực hiện.",
+    "Hình ảnh Biển Chết được giữ như phép ví von về việc nổi và bơi trong nước. Đây không phải địa điểm Bạch Thù Văn đang vui chơi.",
+    "Bàn tay cứu Bạch Thù Văn dưới nước thuộc về Bùi Vân Du. Đã giữ trình tự anh nắm tay kéo cô bơi lên, hai người cùng vào bờ rồi anh mới lộ mặt.",
+    "Bùi Vân Du nhận lỗi bằng giọng vui vẻ và đề nghị đưa cả nhóm đi nghỉ ngơi, nhưng ngay sau đó lại nhắc đến bí mật trên người Liễu Mộ Thanh. Chưa tự khẳng định anh biết toàn bộ bí mật ấy hoặc xác định động cơ của lời đề nghị.",
+    "Lời tác giả nhắc đến Nhị Mộc Tử Bố như một tài khoản mạng xã hội. Đã giữ cách đọc tên riêng và nội dung tác giả vui mừng vì được xem nhiều nội dung bách hợp, không tự xác định danh tính ngoài đời của chủ tài khoản."
+   ],
+   "seconds": 123,
+   "at": 1794644871.9383965
+  },
+  "36": {
+   "source_sha256": "8566c52e5cf12c6f8d31c804bdcb2ebc5abe03bb7da161d77c60bb49eb743a21",
+   "title": "Chương 36: Đi Tìm Lời Giải",
+   "chars_source": 12435,
+   "chars_edited": 14365,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Hai tên nhà hàng x đức gà và x thắng khách bị che một phần. Đã dùng cửa hàng gà rán và nhà hàng pizza để giữ thông tin về loại hình, không tự khôi phục thương hiệu chính xác.",
+    "Câu nơi này đồ ăn không ăn xong là không chuẩn rời đi được giữ như lời Bùi Vân Du nói để cảnh báo Bạch Thù Văn. Chưa tự xác nhận đó là nội quy có thật của nhà hàng.",
+    "Lời Bạch Thù Văn hỏi có thể gọi thêm nếu chưa no là cách cô đáp trả lời cảnh báo của Bùi Vân Du. Đã giữ sắc thái tự tin và tinh nghịch, không biến thành lời xin phép rụt rè.",
+    "Chi tiết súc miệng, lau dao nĩa và phong thái tao nhã của Bùi Vân Du được giữ nguyên. Nhân viên đứng bên cạnh được xác định là nữ theo cách gọi tiểu tỷ tỷ trong bản convert.",
+    "Cảnh ăn uống giữ đủ trình tự món được mang lên liên tục, món chính đến chậm nhất, Bạch Thù Văn liên tục trả đĩa hoặc ly đã dùng xong, và cả ba người còn lại cuối cùng chỉ ngồi nhìn cô ăn.",
+    "Bạch Thù Văn không ăn uống luộm thuộm hay ngấu nghiến. Bản convert nhấn mạnh tư thế đoan trang, động tác chuẩn mực và tốc độ nhìn qua có vẻ bình thường dù cô ăn hết rất nhiều món.",
+    "Liễu Mộ Thanh và Phượng Minh Mộng đã biết sức ăn của Bạch Thù Văn từ những trải nghiệm trước đó. Đã giữ sự khác biệt giữa hiểu biết từ nhỏ của Minh Mộng và trải nghiệm ăn tiệc tự chọn của Mộ Thanh.",
+    "Cá khô nhỏ Nghiêu đòi là loại mới làm trong ngày, trong khi tủ lạnh vẫn còn cá khô cũ. Đã giữ sự kén chọn này, không đổi thành cá tươi thông thường.",
+    "Cụm Chu Công triệu hoán là lời ví von hài hước về cơn buồn ngủ. Đã chuyển thành ông thần giấc ngủ để người nghe hiểu ngay mà không cần chú thích trong nội dung.",
+    "Bùi Vân Du bất ngờ tham gia cuộc trò chuyện bằng suy nghĩ giữa Bạch Thù Văn và Nghiêu, giống như gia nhập nhóm trò chuyện. Không đồng nhất năng lực ấy với thuật đọc suy nghĩ có điều kiện của Bạch Thù Văn.",
+    "Ở cảnh tranh cãi, người có thể cắt đứt liên lạc là Bùi Vân Du, còn người bị đe dọa mất kết nối là Nghiêu. Lời thoại được dẫn rõ để tránh nhầm người nói.",
+    "Câu về tín hiệu yếu là lời Bùi Vân Du cố tình trêu Nghiêu khi hai người ở cách xa nhau, không phải lời xác nhận rằng liên lạc linh hồn thực sự hoạt động bằng sóng điện thoại.",
+    "Trong câu Nghiêu hỏi Bùi Vân Du tại sao mất công tiếp cận chúng ta, Nghiêu vô tình để lộ rằng cả hai có điều đáng để che giấu. Bùi Vân Du lợi dụng đúng sơ hở ấy để hỏi ngược.",
+    "Câu hỏi trung tâm của Bùi Vân Du là liệu hành động chủ động của con người có thể thay đổi quỹ đạo lịch sử vốn được định sẵn hay không. Đã giữ đây là câu hỏi chưa có lời giải, không chuyển thành một sự thật siêu nhiên đã được chứng minh.",
+    "Tên và chức vị Bùi Vân Du tự giới thiệu được giữ nguyên: tộc trưởng đời thứ hai mươi ba của nhà họ Bùi, thuộc dòng tộc thiên sư. Đây là lời tự thuật của nhân vật, chưa có xác nhận độc lập từ người khác.",
+    "Người xuất hiện trong giấc mơ của Bùi Vân Du chưa rõ giới tính. Bản convert dùng người nọ, vì vậy đã thống nhất gọi người ấy, không tự suy đoán là nam hay nữ.",
+    "Giấc mơ của dòng tộc thiên sư được Bùi Vân Du mô tả là có khả năng dự báo tương lai. Đó là niềm tin và lời giải thích trong truyện, không phải nhận định khoa học ngoài đời.",
+    "Bùi Vân Du đã cố thay đổi hành động của mình ngay trong giấc mơ nhưng vẫn không thay đổi được cảnh người ấy chết. Đã giữ rõ sự thất bại của những lần thử trong mơ, không viết thành các lần thay đổi lịch sử ngoài hiện thực.",
+    "Bùi Vân Du nói mình xuống núi đã mấy tháng, tìm kiếm nhiều năm và tình cờ gặp Nghiêu. Đã giữ các mốc thời gian tương đối, không tự bổ sung ngày tháng.",
+    "Lời Bùi Vân Du nói không có ý đồ gì khác được giữ dưới dạng lời tự khẳng định. Không tự kết luận nhân vật hoàn toàn thành thật hoặc có âm mưu.",
+    "Câu cuối chương hỏi hai người đã từng thử thay đổi điều gì và có thu được kết quả hay không. Đây là câu hỏi trực tiếp về trải nghiệm của Bạch Thù Văn và Nghiêu, chưa có câu trả lời trong phần nguồn.",
+    "Lời tác giả được giữ lại đầy đủ, bao gồm việc gần đây tìm hiểu thêm về bách hợp và học được nhiều thuật ngữ mới."
+   ],
+   "seconds": 129,
+   "at": 1794645000.5392323
+  },
+  "37": {
+   "source_sha256": "8878393045876da9fd1cdcc935dc0db9e67298f965f2be5d70028430cf759cca",
+   "title": "Chương 37: Nghi Vấn Lớn Nhất",
+   "chars_source": 13120,
+   "chars_edited": 15258,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Câu mở đầu của Bùi Vân Du ở chương trước hỏi hai người đã từng thử thay đổi lịch sử và có thu được kết quả hay chưa. Chương này tiếp nối trực tiếp bằng phản ứng nghi ngờ của Bạch Thù Văn và Nghiêu.",
+    "Ở đầu chương, Nghiêu hỏi Bùi Vân Du tại sao biết nhiều chuyện. Câu đáp xem ra mọi chuyện không khác suy đoán của ta là bao cho thấy Bùi Vân Du tiếp tục lợi dụng phản ứng của họ để kiểm chứng phỏng đoán, không phải anh đã biết chắc mọi bí mật từ trước.",
+    "Đoạn nói về thiên sư phân biệt khả năng của Bùi Vân Du với năng lực thông thường của cả dòng tộc. Bạch Thù Văn nhận định anh đặc biệt thông minh và có trực giác mạnh, không khẳng định thiên sư nào cũng có sức mạnh tương tự.",
+    "Bản convert viết mệnh cắt tóc sinh thay đổi, là cụm bị lỗi chữ. Dựa trên mạch truyện về vận mệnh Đường Trưng, đã hiểu là mệnh cách phát sinh thay đổi, nghĩa là số mệnh hoặc đường đời đã biến chuyển.",
+    "Chi tiết Bùi Vân Du phát hiện Nghiêu khoảng một năm trước và Nghiêu mãi nửa năm sau mới biết mình bị phát hiện có mốc thời gian chưa thật rõ so với diễn biến các chương trước. Đã giữ đúng thông tin nguồn, không tự sửa thành những khoảng thời gian khác.",
+    "Bùi Vân Du nói Đường Trưng vốn phải gần ba mươi tuổi mới thành danh và chỉ có bạn bè tri kỷ sau khi nổi tiếng. Đây là thông tin theo khả năng xem vận mệnh của anh, không phải sự kiện đã diễn ra trong thế giới hiện tại.",
+    "Đã giữ rõ Bạch Thù Văn nhớ lại cuộc đời Đường Trưng ở thế giới trước, rồi liên hệ việc mình kết thân với cậu đã khiến con đường thành danh của cậu thay đổi.",
+    "Bạch Thù Văn xác nhận mình và Nghiêu đang tiến hành thí nghiệm thay đổi lịch sử, nhưng không bảo đảm những thay đổi cá nhân có thể tác động đến hướng phát triển chung của lịch sử. Bùi Vân Du xem trường hợp Đường Trưng là bằng chứng về sự thay đổi vận mệnh cá nhân.",
+    "Câu hệ thống Nghiêu cho hắn trong bản convert có lỗi quy chiếu đại từ. Đã sửa thành hệ thống Nghiêu đưa cho Bạch Thù Văn, không phải hệ thống anh trao cho Bùi Vân Du.",
+    "Nghiêu ngăn Bạch Thù Văn tiết lộ cơ chế hệ thống vì nguyên nhân chưa được xác định trong đoạn này. Không tự giải thích rằng cậu làm thế để bảo vệ ai hoặc cố tình che giấu một âm mưu.",
+    "Bùi Vân Du tiếp tục sử dụng khả năng ngăn liên lạc linh hồn để loại Nghiêu khỏi cuộc trò chuyện. Đã giữ sự khác biệt giữa cuộc đối thoại bằng suy nghĩ và những lời nói ngoài đời trên xe buýt.",
+    "Lời Bùi Vân Du nói về người liên tục chết trong giấc mơ là nguyên nhân khiến Bạch Thù Văn mềm lòng. Đã giữ cảm xúc buồn bã trong giọng anh nhưng không tự khẳng định anh hoàn toàn thành thật.",
+    "Việc Bùi Vân Du là một mục tiêu công lược đã có trong hồ sơ trước. Đây không phải một nhân vật mới hoặc bằng chứng hai người có quan hệ tình cảm.",
+    "Cụm thân cận được xử lý thành thân thiết, gần gũi, giữ cách Bùi Vân Du cố tình nói mập mờ khiến Bạch Thù Văn ngượng ngùng. Cô chỉ miễn cưỡng thừa nhận anh là người mình cần tiếp cận để tăng thiện cảm.",
+    "Câu nói tủi thân của Bùi Vân Du về việc Bạch Thù Văn luôn muốn tránh mặt anh được giữ với sắc thái trêu chọc. Phản ứng của cô là bối rối vì sự thay đổi hình tượng bất ngờ, chưa xác nhận anh thật sự bị tổn thương tình cảm.",
+    "Bùi Vân Du nhắc rõ Nghiêu từng nói hệ thống không phải do cậu tạo ra. Những câu hỏi tiếp theo về tác giả hệ thống và mục đích của nó đều là suy luận, chưa có lời giải chính thức.",
+    "Đã phân biệt việc công lược thành công với phần thưởng sức mạnh linh hồn. Nghi vấn của Bùi Vân Du là tại sao hệ thống thưởng cho Bạch Thù Văn bằng sức mạnh lấy từ mục tiêu, khiến mục tiêu chịu tổn thương.",
+    "Câu hỏi Bùi Vân Du từng chơi trò chơi công lược hay chưa là lời Bạch Thù Văn bất ngờ chen ngang để gây hài, không phải tình tiết xác nhận anh từng chơi loại trò chơi ấy.",
+    "Điểm nghi vấn quan trọng nhất là tại sao hệ thống được thiết lập trước lại biết những mục tiêu nào sẽ xuất hiện bên cạnh Bạch Thù Văn, và vì sao chính cô phải thu nhận sức mạnh linh hồn. Không tự kết luận cô là người được chọn vì một thân phận cụ thể.",
+    "Đã giữ đầy đủ dòng suy nghĩ trước đây của Bạch Thù Văn: nghi ngờ từ khi nhận sức mạnh linh hồn của Đường Trưng, không có người giải đáp, Nghiêu bị lời nguyền ràng buộc và cô chủ động làm chậm hoặc ngừng công lược để tránh gây thêm tổn thương.",
+    "Cảm giác nhẹ nhõm khi có người giúp đặt câu hỏi không đồng nghĩa Bạch Thù Văn đã biết sự thật. Suy nghĩ Bùi Vân Du có lẽ được ông trời đưa đến là nhận định chủ quan của cô.",
+    "Bùi Vân Du thừa nhận không thể nhìn rõ đường đời Bạch Thù Văn dù có khả năng xem số mệnh. Nguyên nhân chưa được xác định, nên không quy về hệ thống, sức mạnh linh hồn hoặc thân phận xuyên thế giới.",
+    "Đề xuất tiếp tục công lược là ý kiến của Bùi Vân Du trong lúc chưa có manh mối mới. Không viết thành kết luận rằng việc rút sức mạnh linh hồn từ mục tiêu đã được chứng minh là vô hại.",
+    "Câu ta rất dễ công lược của Bùi Vân Du mang sắc thái đùa cợt, nhưng cũng khiến Bạch Thù Văn bất an. Không coi đó là cam kết hệ thống chắc chắn sẽ tăng thiện cảm hoặc hoàn thành nhiệm vụ.",
+    "Khi xe dừng, Bùi Vân Du đã biến mất khỏi hàng ghế phía trước. Bản convert không cho biết anh rời đi lúc nào hay bằng cách gì, nên không tự thêm cảnh anh xuống xe hoặc sử dụng thuật pháp.",
+    "Liễu Mộ Thanh nhắc người ở thư viện lần trước, cho thấy cô vẫn nhớ cuộc gặp liên quan đến Bùi Vân Du. Đã giữ nguyên chi tiết này, không tự bổ sung những gì cô đã chứng kiến ở thư viện.",
+    "Cảm giác lạnh sau gáy và suy đoán Liễu Mộ Thanh không thích Bùi Vân Du đều thuộc cảm nhận của Bạch Thù Văn. Giọng điệu Mộ Thanh vẫn dịu dàng như thường, chưa đủ căn cứ khẳng định cô có ác cảm hoặc biết bí mật của anh.",
+    "Ký hiệu www ở lời tác giả là cách biểu đạt tiếng khóc trên mạng, đã chuyển thành Hu hu để giọng đọc máy diễn đạt được cảm xúc.",
+    "Lời tác giả nói tối qua đã viết xong chương cuối và truyện kết thúc ở chương bốn mươi lăm. Đây là thông tin về tiến độ sáng tác do tác giả công bố, không có nghĩa chương ba mươi bảy là chương kết thúc."
+   ],
+   "seconds": 125,
+   "at": 1794645125.5908499
+  },
+  "38": {
+   "source_sha256": "e8cfbcb73134ad6fd21100ed586cfd258d80edd4961d624dc5d57914e860d0ff",
+   "title": "Chương 38: Mê Say",
+   "chars_source": 12423,
+   "chars_edited": 14326,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tiêu đề Mê ly được biên tập thành Mê Say để giữ đồng thời hai tầng nghĩa: Liễu Mộ Thanh say rượu và Bạch Thù Văn bị sự gần gũi, vẻ đẹp của cô cuốn hút. Không hiểu tiêu đề là trạng thái mất ý thức hoàn toàn.",
+    "Cao nhị và cao một được chuyển thống nhất thành lớp mười một và lớp mười. Chương này xác nhận nhân vật đã bước sang năm học lớp mười một, không còn ở giai đoạn lớp mười như những chương trước.",
+    "Bạch Thù Văn chọn ban xã hội do học không tốt các môn tự nhiên. Giang Thự và La Hiểu Hiểu chọn ban tự nhiên. Liễu Mộ Thanh cũng theo ban xã hội nên có nhiều thời gian ở cạnh Bạch Thù Văn.",
+    "Câu đây là lần đầu tiên cô và Giang Thự không cùng lớp được giữ theo ký ức về quỹ đạo cuộc đời trước kia. Không suy ra rằng họ đã chấm dứt toàn bộ quan hệ bạn bè hoặc hôn ước.",
+    "Nhận định ban tự nhiên có cơ hội nghề nghiệp tốt hơn là quan niệm của phần lớn mọi người trong bối cảnh truyện, không phải kết luận khách quan về thị trường lao động.",
+    "La Hiểu Hiểu cảm thấy học thuộc lòng thiếu thử thách, trái ngược với việc Bạch Thù Văn phải mất nửa ngày mới thuộc một bài khóa tiếng Anh. Đã giữ sự đối lập hài hước này.",
+    "Giang Thự không vui mỗi khi Liễu Mộ Thanh ở cạnh Bạch Thù Văn, nhưng nguyên nhân chưa được văn bản xác nhận. Cách giải thích hai người không hợp tính là suy đoán chủ quan của Bạch Thù Văn.",
+    "Diêu Tấn chuyển giao chức vụ trong Hội Học Sinh cho La Hiểu Hiểu để tập trung chuẩn bị kỳ thi đại học. Bản convert không nêu cụ thể tên chức vụ mới trong câu này, nên không bổ sung một quyết định bổ nhiệm chi tiết.",
+    "Bạch Thù Văn chủ động hạn chế tiếp xúc với nhân vật mới vì lo họ sẽ trở thành mục tiêu công lược. Đây là phản ứng tiếp nối nghi vấn ở chương ba mươi bảy về việc công lược thành công có thể khiến mục tiêu mất sức mạnh linh hồn.",
+    "Quan hệ giữa Giang Thự và La Hiểu Hiểu trở nên thân thiết hơn vì học cùng lớp trọng điểm. Không tự khẳng định hai người đã yêu nhau hoặc có quan hệ tình cảm tại thời điểm này.",
+    "Suy nghĩ La Hiểu Hiểu và Giang Thự có lẽ mới là người nên đến với nhau chỉ là sự tự vấn của Bạch Thù Văn. Nó cho thấy cô dần buông bỏ mối oán hận cũ, nhưng không xác nhận một kết cục đã được định sẵn.",
+    "Đã giữ sự phân biệt giữa quá khứ ở thế giới ban đầu và lịch sử của thế giới song song hiện tại. Bạch Thù Văn không biết chắc những thay đổi của mình đã ảnh hưởng tới toàn bộ lịch sử đến mức nào.",
+    "Đến dịp Tết tiếp theo, Bạch Xu Diệp thay Bạch Thù Văn về nhà họ Diêu. Việc cô hứa sẽ đưa Phượng Minh Mộng đến ở chơi vài ngày được hiểu là cách thuyết phục anh trai, không tự xác nhận anh đã nói lời đồng ý.",
+    "Chi tiết Bạch Thù Văn ngủ đến mười giờ mà không ai đánh thức là dấu hiệu khiến cô hiểu anh trai đã chấp nhận sắp xếp. Đã giữ cách bộc lộ sự đồng ý gián tiếp này.",
+    "Ba người đi tìm Đường Trưng vào đêm ba mươi Tết là Bạch Thù Văn, Giang Thự và Liễu Mộ Thanh. Phượng Minh Mộng không được nhắc là có mặt trong nhóm đến quán bar, nên không tự đưa nhân vật vào cảnh.",
+    "Đường Trưng đã phát hành album và trở nên nổi tiếng, không còn thường xuyên biểu diễn ở quán bar. Đêm ba mươi Tết, cậu trở lại sân khấu theo lời đề nghị của mọi người và hát những ca khúc mới phát hành.",
+    "Rượu nho do mẹ Lăng Ương tự ủ. Theo lời Lăng Ương, gia đình cậu thích các loại rượu có độ cồn cao nhưng vẫn trong mức hợp lý. Đây là lời nhân vật, không bổ sung tỷ lệ cồn hay khẳng định mức độ an toàn.",
+    "Giang Thự cất chai rượu vào túi thay vì uống. Bạch Thù Văn chỉ thử một ngụm, còn Liễu Mộ Thanh đã uống hết khoảng một phần ba chai và bắt đầu có biểu hiện say.",
+    "Cụm một ly đảo được hiểu là người có tửu lượng kém, chỉ uống một lượng rượu nhỏ đã say. Bạch Thù Văn nhớ lại đặc điểm này của Liễu Mộ Thanh từ những lần trước.",
+    "Giang Thự nói đã nghe anh trai Liễu Mộ Thanh là quản lý quán bar. Lăng Ương trả lời quản lý ngoài ba mươi tuổi, đang làm việc tại chi nhánh khác và cậu chưa từng nghe người ấy có em gái. Thông tin này chưa xác nhận quan hệ anh em là thật.",
+    "Hồ sơ trước có chi tiết liên quan đến chị gái Liễu Mộ Thanh và người quản lý quán bar. Chương này lại dùng anh trai và người quản lý là nam. Đã giữ nguyên lời Giang Thự và Lăng Ương để bảo toàn mâu thuẫn nguồn, không tự đổi anh trai thành chị gái hoặc đồng nhất những người này.",
+    "Sau khi Giang Thự và Lăng Ương lần lượt ra ngoài, chỉ còn Bạch Thù Văn và Liễu Mộ Thanh trong phòng nghỉ. Không bổ sung người thứ ba chứng kiến diễn biến tiếp theo.",
+    "Căn phòng nghỉ rộng chưa đến ba mươi mét vuông, có bàn ghế, sô pha, giá nhạc cụ, tủ lạnh và màn hình lớn. Đã giữ đủ những vật dụng được nguồn liệt kê.",
+    "Bạch Thù Văn đắp áo khoác cho Liễu Mộ Thanh, vuốt tóc và chọc má bạn trước khi đứng dậy quan sát căn phòng. Những hành động chăm sóc này diễn ra khi Mộ Thanh đang ngủ.",
+    "Liễu Mộ Thanh tỉnh dậy rồi bất ngờ ôm Bạch Thù Văn từ phía sau. Bạch Thù Văn nhận ra bạn qua cảm giác quen thuộc khi được ôm, trước khi quay đầu nhìn.",
+    "Khi Bạch Thù Văn xin được quay người lại, Liễu Mộ Thanh đã nới lỏng vòng tay. Sau khi Thù Văn xoay người, Mộ Thanh mới bất ngờ đẩy bạn áp sát vào tường. Đã giữ đúng trình tự hành động.",
+    "Chi tiết từ năm lớp mười một hai cô gái đều cao thêm, nhưng Liễu Mộ Thanh vẫn cao hơn Bạch Thù Văn khoảng nửa cái đầu, được giữ nguyên.",
+    "Liễu Mộ Thanh đang trong trạng thái say rượu, hành động được người kể mô tả như xuất phát từ bản năng. Không tự xác định cô hoàn toàn tỉnh táo, có kế hoạch từ trước hoặc đang cố tình thực hiện một âm mưu.",
+    "Trong tư thế áp sát tường, Liễu Mộ Thanh ban đầu đặt một tay ở eo Bạch Thù Văn và tay kia chống lên tường gần tai cô. Sau đó, bàn tay ở eo chuyển lên cằm. Đã giữ thứ tự và vị trí các hành động.",
+    "Chi tiết nâng cằm khiến đôi môi Bạch Thù Văn hé mở được diễn đạt nhẹ nhàng theo nguồn, không thêm hành động cưỡng ép hoặc mức độ thân mật chưa xảy ra.",
+    "Khi đôi môi hai người còn cách nhau chưa đến một xăng-ti-mét, Liễu Mộ Thanh dừng lại. Nguồn không xác nhận một nụ hôn đã diễn ra, nên bản biên tập cũng không tự thêm nụ hôn.",
+    "Bạch Thù Văn nắm chiếc khăn quàng ở phía trước ngực Liễu Mộ Thanh. Bản convert không nói rõ cô kéo khăn, kéo người lại hay làm gì tiếp theo, nên chỉ giữ hành động nắm chặt.",
+    "Phép so sánh Liễu Mộ Thanh với rượu nho là hình ảnh xuyên suốt đoạn cuối. Đã giữ sự đối lập giữa tình yêu rượu của Bạch Thù Văn và cảm giác bị vẻ đẹp của Mộ Thanh cuốn hút mạnh mẽ hơn cả rượu ngon.",
+    "Đoạn cuối chương dừng ở trạng thái cảm xúc và hành động còn dang dở. Không tự xác nhận kết quả của sự gần gũi, không bổ sung lời tỏ tình hay xác lập quan hệ yêu đương.",
+    "Lời tác giả được giữ đầy đủ: tác giả thắc mắc độc giả tìm thấy truyện bằng cách nào khi chưa ký hợp đồng và chưa được lên bảng xếp hạng, đồng thời xem việc độc giả tìm thấy truyện là một mối duyên."
+   ],
+   "seconds": 126,
+   "at": 1794645251.4606435
+  },
+  "39": {
+   "source_sha256": "83292d02f3588c1aefbcac769437820eb31f9afe271e904e02750657959fff69",
+   "title": "Chương 39: Tình Ý",
+   "chars_source": 12870,
+   "chars_edited": 14607,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tiêu đề Tình tố được biên tập thành Tình Ý, nhấn mạnh tình cảm chưa nói rõ của các nhân vật và những lựa chọn đầy day dứt trong chương.",
+    "Ngay đầu chương, Bạch Thù Văn nhận ra môi mình vừa rời khỏi môi Liễu Mộ Thanh. Đây là dữ kiện xác nhận hai người đã hôn nhau trong khoảng chuyển tiếp từ cuối chương ba mươi tám sang đầu chương ba mươi chín. Không tự bổ sung thời lượng hoặc diễn biến cụ thể của nụ hôn.",
+    "Sau nụ hôn, Liễu Mộ Thanh đưa tay chạm vào môi mình. Vẻ mặt cô vừa như có ý cười, vừa chứa đựng cảm xúc nặng nề. Không tự xác định cô đã hoàn toàn tỉnh rượu hay còn say.",
+    "Suy nghĩ Bạch Thù Văn và Liễu Mộ Thanh có thể đã quen biết từ lâu vẫn là một nghi vấn của nữ chính. Chưa có bằng chứng xác nhận ký ức chung hoặc mối quan hệ ở một thế giới khác.",
+    "Giang Thự chưa bước vào phòng khi Liễu Mộ Thanh bắt đầu nói về nụ hôn. Bạch Thù Văn nghe thấy tiếng bước chân quen thuộc, còn Mộ Thanh thu tay khỏi tường trước khi cửa mở. Đã giữ nguyên trình tự.",
+    "Lời giải thích con gái thân nhau vẫn thường làm thế là phản ứng lúng túng của Bạch Thù Văn, không phải một sự phủ nhận tình cảm đã được cô suy nghĩ thấu đáo.",
+    "Câu của Liễu Mộ Thanh, Ừ, chắc là vậy, được giữ giọng nhẹ và khó đoán. Cảm giác đau nhói sau câu nói này thuộc về Bạch Thù Văn, chưa được tác giả giải thích rõ nguyên nhân.",
+    "Trong phòng nghỉ, Giang Thự cảm thấy bầu không khí khác lạ và quan sát Liễu Mộ Thanh. Không khẳng định cậu đã phát hiện nụ hôn.",
+    "Lời độc thoại của Liễu Mộ Thanh về giấc mộng và số mệnh được giữ ở dạng mơ hồ. Chưa xác định cô đang nhắc đến số mệnh của ai, cũng không tự diễn giải thành một lời tiên tri.",
+    "Sau khi đưa Bạch Thù Văn và Giang Thự ra ngoài tìm Đường Trưng, câu chuyện quay lại phòng nghỉ rồi mới chuyển sang cảnh đám đông. Không có dấu phân cảnh trong nguồn ở vị trí này nên không tự thêm.",
+    "Đường Trưng được nhiều người tặng hoa và đòi ôm hôn. Chi tiết cậu cố giữ sự trong sạch được diễn đạt theo sắc thái hài hước của nguồn, không hiểu thành một vụ xâm hại đã được mô tả cụ thể.",
+    "Các vết son môi xuất hiện trên cổ áo và cổ tay áo Đường Trưng. Không tự chuyển thành dấu hôn trên da hoặc khẳng định có người đã hôn được cậu.",
+    "Đường Trưng chưa chính thức ký kết với công ty âm nhạc nào. Album cá nhân được phát hành nhờ danh tiếng hiện có, không tự bổ sung hãng đĩa, hợp đồng hoặc người đại diện thực tế.",
+    "Người phụ nữ đi theo Lăng Ương có gương mặt tương tự cậu và được xác định qua lời thoại sau đó là chị gái Lăng Ương. Nhân vật này đã có trong hồ sơ nên không đưa vào nhan_vat_moi.",
+    "Địa điểm đốt pháo hoa là sân biệt thự của chị gái Lăng Ương, không phải sân quán bar. Nguồn chỉ nói có thể đốt tại đó, nên không tự bổ sung giấy phép hoặc quy định riêng.",
+    "Lăng Ương tự tay quàng khăn, đội mũ và đeo kính cho Đường Trưng trước khi ra ngoài. Đã giữ đủ ba hành động theo thứ tự.",
+    "Câu đùa chị gái Lăng Ương nói Đường Trưng không cần người đại diện là lời trêu sự chu đáo của Lăng Ương. Không xác nhận Lăng Ương đã được nhận làm người đại diện.",
+    "Lăng Ương muốn theo Đường Trưng lâu dài và liệt kê các việc mình biết làm, gồm nấu cơm, nấu ăn, giặt quần áo và sự trung thành. Đường Trưng vẫn chưa đồng ý nhận cậu.",
+    "Bạch Thù Văn lay Liễu Mộ Thanh dậy để cùng đi đốt pháo hoa, nhưng vì ngượng ngùng nên vội bỏ đi trước. Nỗi đau trong mắt Mộ Thanh là chi tiết thuộc lời kể, không được Thù Văn nhìn thấy.",
+    "Trên đường đi, Lăng Ương và chị gái dẫn đầu, Bạch Thù Văn đi cùng Đường Trưng, còn Giang Thự và Liễu Mộ Thanh đi cuối. Cả hai người đi cuối đều dõi mắt theo Bạch Thù Văn.",
+    "Hồi tưởng của Liễu Mộ Thanh về việc đan tay trong túi áo diễn ra vào mùa đông năm trước, nối với cảnh hai cô gái cùng đi trong giá rét ở chương trước đó. Không đổi thành sự kiện xảy ra ngay đêm nay.",
+    "Thời gian đi xe từ quán bar đến biệt thự là chưa đến mười lăm phút. Xe được mô tả là Bentley phiên bản kéo dài và có tài xế nhà chị gái Lăng Ương điều khiển.",
+    "Bạch Thù Văn ngạc nhiên trước sự giàu có của nhà Lăng Ương, do cô lớn lên trong gia đình cán bộ đảng viên thanh liêm. Đây là lời kể từ góc nhìn nhân vật, không suy diễn về toàn bộ tài sản gia đình Bạch.",
+    "Khuôn viên biệt thự có cả bãi cát và hồ bơi. Các nhân vật vui chơi và đốt pháo hoa ở đó, không tự xác định đây là bãi biển tự nhiên.",
+    "Giang Thự nói với Liễu Mộ Thanh rằng lần này cô cũng đã đến, còn Mộ Thanh đáp rằng đây là lời hẹn giữa cô và Bạch Thù Văn. Nội dung cụ thể của lời hẹn chưa được nhắc lại trong chương, nên không bổ sung.",
+    "Lời Giang Thự nhận xét Bạch Thù Văn vẫn trẻ con như ngày nào là nhận xét về tính cách thích náo nhiệt của cô, không mang ý xác nhận ký ức siêu nhiên.",
+    "Giang Thự nói Liễu Mộ Thanh rất có sức hút. Không tự hiểu câu ấy là lời tỏ tình hoặc xác lập tình cảm giữa Giang Thự và Liễu Mộ Thanh.",
+    "Hai câu Đây là lần cuối cùng và Lần cuối cùng này, chúng ta hãy cùng tôn trọng lựa chọn của cậu ấy mang hàm ý bí ẩn. Chưa xác định cuối cùng là lần cuối của sự kiện nào hoặc lựa chọn cụ thể nào của Bạch Thù Văn.",
+    "Câu Cậu đã hồi phục rồi sao do Liễu Mộ Thanh hỏi Giang Thự. Nguồn không giải thích cậu hồi phục khỏi bệnh, thương tích, ký ức hay trạng thái nào, vì vậy chỉ giữ từ hồi phục và ghi nhận sự chưa rõ ràng.",
+    "Câu Vậy thì tốt do Liễu Mộ Thanh nói với Giang Thự. Giọng được giữ nhẹ và kín đáo, không tự thêm thái độ vui mừng hoặc thất vọng.",
+    "Sau cuộc trò chuyện, Giang Thự rời đi nhập nhóm chơi pháo hoa, còn Liễu Mộ Thanh tiếp tục đứng riêng. Không tự thêm lời đối thoại hoặc hành động hòa giải giữa hai người.",
+    "Bạch Thù Văn và Lăng Ương cầm pháo hoa que, lần lượt đuổi theo Đường Trưng và Giang Thự. Đã giữ sự tương ứng giữa hai cặp trong câu nguồn.",
+    "Chị gái Lăng Ương đứng riêng trong gió lạnh, cảm thán về tuổi trẻ trước khi bước đến nói chuyện với Liễu Mộ Thanh ở ban công cạnh hồ bơi.",
+    "Trong cuộc trò chuyện với chị gái Lăng Ương, Liễu Mộ Thanh xác nhận mình là bạn của cô gái trong nhóm, tức Bạch Thù Văn. Không tự xác lập quan hệ yêu đương chính thức.",
+    "Câu hỏi cuối chương của Liễu Mộ Thanh mô tả một tình huống: chỉ mình có thể giúp người mình quan tâm, nhưng việc giúp ấy sẽ khiến cả hai cùng chịu tổn thương, dù xét đến tận cùng vẫn là điều tốt nhất cho người ấy.",
+    "Tình huống ở câu hỏi cuối chưa được xác nhận là một sự kiện đã xảy ra, kế hoạch chắc chắn sẽ thực hiện hay nhiệm vụ cụ thể của Liễu Mộ Thanh. Giữ nguyên tính giả định và sự mơ hồ.",
+    "Bản convert lời tác giả có ký hiệu tx và p liên quan đến kiểu nhân vật trong truyện bách hợp. Do ngữ cảnh không đủ để diễn giải chắc chắn toàn bộ phân loại, phần nội dung chỉ chuyển thành các đặc điểm nhân vật được mô tả rõ, tránh để TTS đọc các chữ cái rời.",
+    "Trong lời tác giả, tình tiết người cứng nhắc không hiểu chuyện trang điểm được giữ đầy đủ: hỏi về kem nền, hỏi về má hồng, rồi hiểu nhầm việc đánh má hồng là tô lại phần mặt vừa che.",
+    "Lời tác giả còn cho biết tác giả đã bắt đầu viết truyện mới vào tối hôm trước, dự định tích lũy bản thảo vài ngày rồi đăng sau khi bộ truyện hiện tại kết thúc.",
+    "Không có nhân vật mới chưa được hồ sơ ghi nhận xuất hiện trong chương này. Các lời thoại đã được bổ sung lời dẫn ngắn và tách lượt để phân biệt người nói khi nghe bằng giọng đọc máy."
+   ],
+   "seconds": 133,
+   "at": 1794645385.0695987
+  },
+  "40": {
+   "source_sha256": "eb912c096b0d977445ac4dbc7e59124e41ae572ddb16cf9e663aedac94d3b582",
+   "title": "Chương 40: Mối Tình Đơn Phương Chết Yểu",
+   "chars_source": 12842,
+   "chars_edited": 14889,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tên lăng đêm trong bản convert được chuẩn hóa thành Lăng Dạ. Đây là tên riêng của chị gái Lăng Ương, không dịch thành Lăng Đêm. Câu tự giới thiệu được giữ để người nghe hiểu ý nghĩa chữ Dạ.",
+    "Nhan đề convert Thai chết trong bụng yêu đơn phương là cách nói hình tượng về mối tình đơn phương kết thúc ngay khi mới nảy nở. Biên tập thành Mối Tình Đơn Phương Chết Yểu để tự nhiên và giữ sắc thái hài hước, tiếc nuối.",
+    "Lăng Dạ sinh trước Lăng Ương mười năm, đã gần ba mươi tuổi, có sự nghiệp thành công và chưa từng hẹn hò. Không tự bổ sung tuổi chính xác hay chức danh cụ thể trong doanh nghiệp.",
+    "Phần đầu chương hồi tưởng cuộc trò chuyện giữa Lăng Dạ và Liễu Mộ Thanh vào đêm giao thừa ở biệt thự. Đã giữ nguyên nội dung trao đổi về việc chấp nhận gây tổn thương tạm thời vì lợi ích lâu dài của người mình quan tâm.",
+    "Trong hồi tưởng, Liễu Mộ Thanh hỏi liệu người đưa ra quyết định có cảm thấy khó chịu đựng hay không. Lăng Dạ trả lời bằng quan điểm của mình, không phải bằng kinh nghiệm đã được xác nhận.",
+    "Lời Mộ Thanh nói chị quyết đoán còn em không làm được phản ánh sự do dự của nhân vật vào thời điểm ấy. Chưa xác định quyết định cụ thể mà Mộ Thanh đang cân nhắc.",
+    "Sự thu hút và tình cảm của Lăng Dạ dành cho Liễu Mộ Thanh được kể trực tiếp từ góc nhìn Lăng Dạ, không phải tình cảm hai chiều.",
+    "Trong cuộc điện thoại mùa hè, Bạch Thù Văn đang chơi điện tử cùng các bạn. Câu trách Đường Trưng đánh lén là tiếng Bạch Thù Văn, còn câu nhắc Thù Văn đừng chạy lung tung để được hồi máu là lời Liễu Mộ Thanh.",
+    "Bản convert có đại từ chưa thật rõ trong câu miêu tả người nhức đầu khi nghe tiếng chơi điện tử và người thấy dễ chịu khi nghe giọng Mộ Thanh. Bản biên tập giữ Lăng Ương là người nhức đầu vì tiếng ồn, đồng thời làm rõ Lăng Dạ nghe giọng Mộ Thanh qua điện thoại và cảm thấy dễ chịu.",
+    "Lăng Dạ nhấn mạnh rằng những người khác có đến hay không không quan trọng, nhưng nhất định phải mời Liễu Mộ Thanh. Lăng Ương nhận thấy điều này bất thường, chưa xác định cậu đã đoán đúng tình cảm của chị.",
+    "Đã giữ chuyển cảnh duy nhất của nguồn bằng một dòng ba dấu sao, đặt giữa cảnh gọi điện mời khách và cảnh vài ngày sau chuẩn bị đón khách.",
+    "Chiếc xe đến đón cả nhóm vẫn là Bentley phiên bản kéo dài từng xuất hiện ở chương trước. Không thêm người lái xe mới hoặc phương tiện khác.",
+    "Trong xe, Bạch Thù Văn vô tình ngồi đè lên dây thắt lưng của chiếc váy Liễu Mộ Thanh, làm nút thắt bung ra. Lăng Dạ giúp buộc lại thành chiếc nơ bướm, rồi ghé tai khen Mộ Thanh đẹp.",
+    "Liễu Mộ Thanh đáp lời khen của Lăng Dạ một cách lịch sự, sau đó kín đáo dịch lại gần Bạch Thù Văn. Chi tiết dịch chuyển được giữ đúng như nguồn, không thêm lời giải thích động cơ.",
+    "Lăng Ương ngồi ghế phụ phía trước, quan sát cảnh chị gái tiếp xúc với Mộ Thanh qua gương chiếu hậu và nảy sinh nghi ngờ. Không tự kết luận cậu đã biết chắc Lăng Dạ đang yêu.",
+    "Sau nụ hôn ở chương ba mươi tám và ba mươi chín, Bạch Thù Văn thường suy nghĩ về Liễu Mộ Thanh, còn Mộ Thanh vẫn cư xử tự nhiên như trước. Hai người chưa có cuộc trao đổi trực tiếp làm rõ tình cảm.",
+    "Trò thiết dưa hấu được biên tập thành bịt mắt bổ dưa hấu. Lăng Ương có đeo khăn bịt mắt và kể lại chuyện Đường Trưng từng cầm dao không vững, ngã nhào lên quả dưa khi còn nhỏ.",
+    "Chuyện Đường Trưng từng gặp tai nạn với quả dưa là lời kể của Lăng Ương, không bổ sung vết thương hoặc hậu quả mà nguồn không đề cập.",
+    "Bạch Thù Văn đã mang đồ bơi đến biệt thự cùng các bạn. Tuy nhiên, Lăng Dạ lại mua riêng một bộ khác cho Liễu Mộ Thanh, dẫn đến cảnh Mộ Thanh thay thử đồ.",
+    "Trong phòng thay đồ, Lăng Dạ lấy lý do giúp cài khuy, vòng tay ôm eo Liễu Mộ Thanh. Sau khi cài xong, cô vẫn giữ Mộ Thanh lại và tự ý hôn lên cổ cô gái. Đã giữ rõ tính bất ngờ và phản ứng đẩy ra của Mộ Thanh, không mô tả hành động như đã được đồng ý.",
+    "Lăng Dạ chủ động bày tỏ rằng mình thích Liễu Mộ Thanh. Mộ Thanh chưa kịp trả lời thì Bạch Thù Văn mở cửa bước vào.",
+    "Bạch Thù Văn nhìn thấy dấu son môi trên cổ Liễu Mộ Thanh và nhận ra cảnh vừa thấy không phải do hoa mắt. Cô hoảng loạn, nói hai người cứ tiếp tục rồi bỏ chạy. Đây là lời nói trong lúc bối rối, không phải sự đồng ý thay cho Mộ Thanh.",
+    "Sau khi Bạch Thù Văn rời đi, Liễu Mộ Thanh lạnh lùng gạt tay Lăng Dạ, tuyên bố sẽ hạn chế tiếp xúc. Không thêm hành động giằng co hoặc tranh cãi khác.",
+    "Liễu Mộ Thanh thay lại quần áo của mình và trả bộ đồ bơi Lăng Dạ đã mua, đặt gọn trên bàn. Đã giữ đầy đủ trình tự hành động này.",
+    "Lăng Dạ nhận lỗi vì quá nóng vội và định xin lỗi, nhưng Liễu Mộ Thanh ngắt lời, từ chối tất cả những người khác. Câu nói trái tim mãi mãi chỉ hướng về một người không nêu tên người ấy, vì vậy không tự xác nhận danh tính trong lời thoại.",
+    "Lăng Dạ là nhân vật đã xuất hiện ở chương trước dưới cách gọi chị gái Lăng Ương, nên mục nhan_vat_moi ghi rõ đây là lần xác nhận tên thật, không phải một nhân vật hoàn toàn mới.",
+    "Lời tác giả được giữ lại sau kết thúc truyện: tác giả than thở việc viết tiểu thuyết khó, tự trách hồi đi học không chăm viết văn nhưng khẳng định sẽ không bỏ cuộc."
+   ],
+   "seconds": 134,
+   "at": 1794645519.2347295
+  },
+  "41": {
+   "source_sha256": "865b3248814d8fb161a667d5442dba98b031544346eefc92accd096db53fd3c6",
+   "title": "Chương 41: Tôi Đến Xin Được Công Lược!",
+   "chars_source": 12007,
+   "chars_edited": 13869,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Nhan đề Ta tới cầu công lược! được biên tập thành Tôi Đến Xin Được Công Lược!, giữ giọng đùa chủ động của Bùi Vân Du. Đây không phải lời thông báo nhiệm vụ mới từ hệ thống.",
+    "Mở đầu chương nối trực tiếp cảnh Bạch Thù Văn chạy khỏi phòng thay đồ ở biệt thự Lăng Dạ sau khi chứng kiến Lăng Dạ hôn cổ Liễu Mộ Thanh. Cảm giác trống rỗng của Thù Văn được giữ nguyên, không tự kết luận nguyên nhân là ghen tuông.",
+    "Nghiêu liên lạc với Bạch Thù Văn bằng suy nghĩ. Đã thêm lời dẫn rõ giọng nói vang lên trong đầu, để người nghe không nhầm với nhân vật đứng cạnh cô.",
+    "Câu buổi sáng hiếm khi tỉnh táo của Nghiêu được giữ như lời tự nhận về trạng thái của cậu, không tự xác định nguyên nhân gây ra trạng thái ấy.",
+    "Nghiêu báo Bùi Vân Du đang ở dưới nhà Bạch Thù Văn. Khi cô trở về, cả hai xuất hiện trong sân khu tập thể quân đội, dưới gốc cây lớn. Không coi đây là hai địa điểm khác nhau.",
+    "Bạch Thù Văn rời biệt thự mà không dám nhìn Liễu Mộ Thanh. Giang Thự có đề nghị về cùng nhưng bị từ chối. Mộ Thanh sau đó cũng xin về và từ chối đề nghị đưa đi của Lăng Dạ.",
+    "Giang Thự nhìn thấy dấu vết trên cổ Liễu Mộ Thanh và suy đoán đã có chuyện xảy ra. Không khẳng định anh biết đầy đủ về nụ hôn hay lời tỏ tình của Lăng Dạ.",
+    "Lăng Dạ xuất hiện trong chương này với phản ứng nắm chặt tay, thở dài và đỡ trán. Không thêm lời thoại xin lỗi hoặc hành động đuổi theo Liễu Mộ Thanh.",
+    "Chiếc xe đưa Bạch Thù Văn về dừng trên phố thương mại cách khu tập thể quân đội không xa. Đã giữ lý do cô tránh những hành động có thể ảnh hưởng đến gia đình ở khu vực gần nhà.",
+    "Nghiêu xuất hiện trong hình dạng con người, thấp hơn Bùi Vân Du một cái đầu. Bản nguồn không mô tả tuổi, kiểu tóc hay trang phục cụ thể của cậu trong cảnh này, nên không bổ sung.",
+    "Đã giữ chi tiết Nghiêu khoanh tay, giậm chân khi cáu giận, tương ứng với hành động quất đuôi khi còn mang hình dạng mèo.",
+    "Bùi Vân Du nói mình giữ những bức ảnh chụp lần đầu gặp Nghiêu. Không tự xác định nội dung các bức ảnh, tư thế của Nghiêu hoặc lý do khiến cậu xấu hổ.",
+    "Sự phản đối dữ dội của Nghiêu trước việc Bùi Vân Du giữ ảnh được giữ nguyên. Bùi Vân Du hứa không cho người khác xem, nhưng từ chối xóa ảnh.",
+    "Bạch Thù Văn chỉ có một tệ, dùng để mua một que kem cho mình. Sau đó Bùi Vân Du dẫn cả hai đến tiệm kem, nên Nghiêu mới được ăn thỏa thích.",
+    "Đã giữ chi tiết Bùi Vân Du lấy viên kem cuối cùng trong bát Nghiêu, rồi ăn ngay trước ánh mắt tức giận của cậu. Sau đó Nghiêu giành đồ uống của Bùi Vân Du và bị sặc khi nghe lời đề nghị công lược.",
+    "Chỉ số sáu mươi là mức thiện cảm hiện tại của Bùi Vân Du trên giao diện hệ thống. Không đồng nhất con số này với sức mạnh linh hồn hoặc ngưỡng hoàn thành nhiệm vụ.",
+    "Bùi Vân Du cho biết đã tìm hiểu Bạch Thù Văn qua nhiều nguồn, có sự hỗ trợ của Nghiêu. Nghiêu mô tả việc bị kéo lên sân thượng tầng mười tám giữa đêm để trả lời câu hỏi. Không tự bổ sung nội dung các cuộc hỏi đáp.",
+    "Cụm p/y giao dịch trong bản convert bị viết tắt và không rõ nghĩa gốc. Đã chuyển thành giao dịch mờ ám để giữ sắc thái trêu ghẹo, đồng thời tránh tự gán một loại giao dịch cụ thể.",
+    "Bùi Vân Du muốn gặp gã đàn ông bị giam từng khai có một người phụ nữ thuê hắn. Anh nói có thể phác họa đôi nét về người phụ nữ và cảm giác đã từng gặp cô ta. Đây mới là nhận định của Bùi Vân Du, chưa phải phát hiện được xác nhận.",
+    "Bạch Thù Văn liên lạc với Diêu Tấn và sắp xếp cuộc gặp người bị giam vào ngày hôm sau. Không thêm tên nhà giam, giờ hẹn, giấy tờ hay thủ tục không có trong nguồn.",
+    "Cụm Vương Bá chi khí được chuyển thành khí thế bá đạo, giữ lối kể cố tình khoa trương và mỉa mai về tư thế của Bùi Vân Du. Không coi đây là năng lực siêu nhiên được xác nhận.",
+    "Đã thêm các lời dẫn ngắn nhằm phân biệt người nói trong cuộc trò chuyện tại tiệm kem, nhất là khi Nghiêu và Bùi Vân Du liên tục chen lời và trêu chọc nhau.",
+    "Bạch Thù Văn nhớ lại cảnh ở biệt thự khi nhắc tới Lăng Dạ, rồi cảm thấy đau nhói ở ngực. Bản biên tập giữ trạng thái cảm xúc ấy mà không tự xác định quan hệ tình cảm giữa cô và Liễu Mộ Thanh.",
+    "Tên phim Trong lòng có đại mộng tưởng miêu! được chuyển thành Chú Mèo Mang Giấc Mơ Lớn để nghe tự nhiên. Không tự xác định đây là phim hoạt hình, phim điện ảnh có thật hoặc một nhan đề chính thức ngoài tác phẩm.",
+    "Lời Nghiêu đạo hữu của Bùi Vân Du được giữ nguyên sắc thái cổ kính, còn câu nhắc Nghiêu vẫn là con người được hiểu như lời trêu việc cậu quá mê mèo.",
+    "Ở cuối chương, một người bí ẩn đứng từ xa quan sát cả nhóm. Bùi Vân Du dường như phát hiện ra nhưng chỉ ngoảnh đầu nhìn rồi quay lại trêu Nghiêu. Không khẳng định người theo dõi là ai hoặc Bùi Vân Du đã nhận ra danh tính.",
+    "Trong lời tác giả, Ảnh Hậu Thành Đôi được giữ như tên một tác phẩm được tác giả yêu thích. Chưa có đủ căn cứ để xác định chính xác loại hình hoặc tên gốc của tác phẩm đó.",
+    "Lời tác giả cho biết còn bốn chương nữa sẽ kết thúc và cảm ơn sự bao dung của độc giả. Đây là phát biểu của tác giả tại thời điểm viết, không tự dùng làm bằng chứng xác nhận tổng số chương của bản truyện hiện có."
+   ],
+   "seconds": 129,
+   "at": 1794645648.7074049
+  },
+  "42": {
+   "source_sha256": "95834aa79c1186400a3e1707e9a9a57bcaf6a60265cea62c74d85ab2a780b280",
+   "title": "Chương 42: Bí Mật Bị Phơi Bày",
+   "chars_source": 11206,
+   "chars_edited": 12517,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Nhan đề convert Công bố được biên tập thành Bí Mật Bị Phơi Bày. Tiêu đề không khẳng định mọi lời suy luận của Bùi Vân Du đều đã được kiểm chứng độc lập.",
+    "Ở đầu chương, nhân viên cảnh vụ thông báo rằng phạm nhân đã bị chuyển đi theo yêu cầu của người nhà họ Bạch. Đây chỉ là thông tin người nhân viên nhận được, chưa được xác minh là mệnh lệnh thực sự của nhà họ Bạch.",
+    "Bùi Vân Du suy đoán có người biết trước kế hoạch của nhóm và can thiệp đúng thời điểm. Đã giữ đây là suy luận ban đầu của anh, không biến thành sự thật được xác nhận ngay ở cảnh mở đầu.",
+    "Câu của Bùi Vân Du về việc đối phương phản ứng chứng tỏ nhóm đã điều tra đúng hướng được diễn đạt tự nhiên, không thêm địa điểm hoặc nguồn tin cụ thể.",
+    "Trong đoạn bàn về các mục tiêu công lược, Bạch Thù Văn nói mức thiện cảm của họ đã đạt yêu cầu và nhắc đến một người bạn nam chưa đạt. Đã giữ nguyên chi tiết này, không tự xác định người bạn đó là ai.",
+    "Câu hỏi của Bùi Vân Du về khả năng bạn tốt gây hại là lời cảnh báo mang tính nghi vấn. Không chuyển thành kết luận rằng tất cả bạn bè Bạch Thù Văn đều có ý đồ xấu.",
+    "Nghiêu xác nhận điểm chung của các mục tiêu là có sức mạnh linh hồn tương đối lớn. Đã giữ riêng cơ chế này với mức thiện cảm và không suy diễn thêm về tác dụng của hệ thống.",
+    "Cụm một hai năm bị theo dõi được giữ nguyên theo lời Bùi Vân Du. Đây là khoảng thời gian anh nêu ra, chưa có mốc bắt đầu chính xác để đối chiếu.",
+    "Bùi Vân Du nói đã nghi ngờ có người theo dõi từ trước, nhưng chỉ phát hiện khí tức của người ấy hôm qua tại tiệm kem. Đã bảo toàn sự khác biệt giữa nghi ngờ và phát hiện dấu hiệu.",
+    "Câu về em gái quản lý quán bar được hiểu là Bùi Vân Du đã xác minh rằng quản lý thực sự có em gái, nhưng người này sang Mỹ du học ba năm trước và chưa trở về. Không tự suy diễn toàn bộ cách Liễu Mộ Thanh sử dụng thân phận ấy.",
+    "Đoạn nơi ở chỉ có một người và người Bạch Thù Văn thường gặp là kẻ được tìm đến thay thế có quy chiếu khó hiểu trong bản convert. Đã hiểu Bùi Vân Du đang nói trực tiếp với người ẩn sau tán cây về nơi ở của người ấy và một người đóng thế. Không xác định danh tính người đóng thế hoặc thời điểm từng lần thay thế.",
+    "Bản convert nói Bùi Vân Du gặp người bí ẩn trong thư viện và nhận thấy đối phương đặc biệt đề phòng mình. Đã giữ nguyên địa điểm thư viện, không thay bằng nhà sách hay nhà hàng từng xuất hiện ở những chương trước.",
+    "Màn thi triển thuật pháp được giữ theo trình tự: ánh mắt Bùi Vân Du sắc lạnh, gió nổi lên, bùa tung bay, anh niệm chú rồi phóng bùa, bùa chuyển động theo quỹ đạo kỳ lạ, trói người ẩn nấp và kéo người ấy lại bằng động tác hai ngón tay.",
+    "Bùi Vân Du quật người bị bắt xuống đất mà không nương tay. Không thêm thương tích, máu hoặc hậu quả thể chất mà bản nguồn không mô tả.",
+    "Người bị bắt được xác định là Liễu Mộ Thanh, nhân vật đã có trong hồ sơ. Vì vậy nhan_vat_moi để trống; cần cập nhật thông tin thân phận của cô trong hồ sơ nhân vật hiện có.",
+    "Khi Bạch Thù Văn định cởi trói cho Liễu Mộ Thanh, cả Nghiêu và Bùi Vân Du cùng ngăn cản. Đã tách lời thoại của từng người để người nghe xác định rõ ai nói.",
+    "Nghiêu cảm nhận một luồng lạnh buốt khi giữ tay Bạch Thù Văn, rồi quay lại thấy Liễu Mộ Thanh đang nhìn mình. Bản nguồn chưa xác định rõ bản chất luồng lạnh, nên không tự gọi đó là sát khí, hàn khí hay một đòn tấn công.",
+    "Bùi Vân Du giải trừ bùa trói sau khi Bạch Thù Văn yêu cầu. Liễu Mộ Thanh lập tức tránh xa vài mét khi Thù Văn tiến đến. Đã thể hiện là động tác bật người lùi ra, không tự biến thành dịch chuyển tức thời bằng thuật pháp.",
+    "Bùi Vân Du cáo buộc Liễu Mộ Thanh chính là người phụ nữ đã thuê gã đàn ông đưa chủ nhân thân thể năm 2011 đi và tự tay đâm chết người ấy. Đã làm rõ đây là thân thể trước khi linh hồn Bạch Thù Văn từ thế giới ban đầu nhập vào, tránh khiến người nghe hiểu nhầm nữ chính hiện tại đã bị đâm chết thêm lần nữa.",
+    "Phần Bùi Vân Du giải thích Liễu Mộ Thanh tiếp cận Bạch Thù Văn, theo dõi cô ở quán bar, lợi dụng chuyện mất trí nhớ và can thiệp cuộc gặp phạm nhân được giữ dưới dạng lời cáo buộc và suy luận của anh.",
+    "Ở cuối phần cáo buộc, Bùi Vân Du nghi ngờ gã đàn ông vẫn chưa thật sự bị chuyển đi và người nhân viên trả lời họ là người được Liễu Mộ Thanh sắp xếp. Đã giữ hai câu này ở dạng nghi vấn, không xác nhận việc giả mạo nhân viên cảnh vụ.",
+    "Câu tiết lộ Liễu Mộ Thanh cũng là người dẫn đường linh hồn được giữ đúng là lời khẳng định của Bùi Vân Du. Nghiêu lập tức phản đối vì chưa từng cảm nhận được khí tức tương ứng từ cô.",
+    "Bùi Vân Du chê bản lĩnh Nghiêu còn non kém, giải thích bằng lời châm chọc ngắn, không thêm thuật pháp hoặc lý do che giấu khí tức chưa được tác giả công bố.",
+    "Liễu Mộ Thanh cuối cùng nói những chuyện ấy đều là sự thật và không đưa ra lời giải thích. Đã giữ nguyên sự lạnh nhạt, không thêm động cơ, lời xin lỗi hoặc suy nghĩ nội tâm của cô.",
+    "Đã duy trì cách xưng hô tớ và cậu của Liễu Mộ Thanh trong lời đáp cuối, dù thái độ cô trở nên lạnh lùng, để không tự tạo thêm sự thay đổi quan hệ ngoài văn bản.",
+    "Lời tác giả chỉ có nội dung Đếm ngược, được chuyển thành Bắt đầu đếm ngược. Không tự thêm số chương còn lại, ngày hoàn thành hoặc thông tin kết thúc truyện."
+   ],
+   "seconds": 112,
+   "at": 1794645773.2092445
+  },
+  "43": {
+   "source_sha256": "4ef6a931e31fdde1f8d96e49e34a9a42132d0601542bd95d317c4126ff8a8dd4",
+   "title": "Chương 43: Tìm Kiếm Lời Giải",
+   "chars_source": 12389,
+   "chars_edited": 13580,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Nhan đề được biên tập thành Tìm Kiếm Lời Giải, giữ đúng ý nghĩa tìm kiếm câu trả lời của bản convert.",
+    "Liễu Mộ Thanh xác nhận nhiệm vụ của mình là giết Bạch Thù Văn, đồng thời nói đã giết những phiên bản Bạch Thù Văn mà cô tìm được ở các thế giới khác nhau. Không tự mở rộng thành khẳng định cô đã giết tất cả phiên bản tồn tại trong mọi thế giới.",
+    "Bạch Thù Văn nhớ lại cô gái đẩy mình vào dòng xe ở thế giới ban đầu và liên hệ đôi mắt ấy với Liễu Mộ Thanh. Đã giữ sự nhận ra này theo góc nhìn của Bạch Thù Văn, không bổ sung những tình tiết về cách Liễu Mộ Thanh thực hiện vụ việc.",
+    "Câu Bạch Thù Văn hỏi liệu Liễu Mộ Thanh có đứng sau hệ thống hay không chưa được trả lời ngay. Về sau, Liễu Mộ Thanh phủ nhận liên quan đến hệ thống. Đã giữ nguyên trình tự tiết lộ.",
+    "Liễu Mộ Thanh nói nhiệm vụ đã hoàn thành và việc ở lại là vì lòng riêng. Sau đó, cô xác nhận những lần gần gũi Bạch Thù Văn không phải vì nhiệm vụ. Đã giữ nguyên lời nói còn bỏ dở, không tự thêm lời tỏ tình hoặc xác nhận quan hệ yêu đương.",
+    "Bạch Thù Văn suy đoán có người bắt Liễu Mộ Thanh thực hiện việc giết mình, và Mộ Thanh gật đầu xác nhận. Chưa xác định người ra lệnh là ai.",
+    "Lời Liễu Mộ Thanh về việc Bạch Thù Văn từng nhờ cô giết mình trước khi bước vào các thế giới nhỏ được giữ nguyên. Không suy diễn nguyên nhân của lời nhờ vả hay tình trạng linh hồn của Bạch Thù Văn trước khi luân hồi.",
+    "Cách xưng hô của Liễu Mộ Thanh với Bạch Thù Văn tiếp tục dùng tớ và cậu. Khi đối thoại với Bùi Vân Du và Nghiêu, sử dụng tôi và anh hoặc cậu để thể hiện thái độ lạnh nhạt, đối đầu.",
+    "Bùi Vân Du nói đùa rằng bản thân có thể từng là người dẫn đường linh hồn và hiện tại chỉ là người bình thường. Đã giữ đây là lời tự nhận mang sắc thái trêu chọc, không biến thành xác nhận thân phận trước kia của anh.",
+    "Liễu Mộ Thanh châm chọc Nghiêu về việc mất trí nhớ. Phản ứng tái mặt của Nghiêu được giữ nguyên, chưa kết luận cô biết chính xác toàn bộ tình trạng hoặc quá khứ của cậu.",
+    "Đã giữ sự khác biệt giữa người tạo ra hệ thống, người ra lệnh cho Nghiêu và Liễu Mộ Thanh. Chương này chưa đủ căn cứ để đồng nhất ba vai trò ấy.",
+    "Việc hệ thống được thay đổi thành công cụ kiểm tra mức thiện cảm là thông tin do Liễu Mộ Thanh công bố. Nghiêu không hề biết trước sự thay đổi đó.",
+    "Trong đoạn Bùi Vân Du châm chọc Nghiêu rồi nói không còn phải lo bị hút sức mạnh linh hồn, đã xác định Bùi Vân Du tiếp tục là người phát biểu. Điều này phù hợp với việc anh là một mục tiêu công lược và đang lo ảnh hưởng đến sức mạnh linh hồn của mình.",
+    "Câu Bùi Vân Du nói nếu rời đi thì Bạch Thù Văn không thể công lược anh thành công là lời gây sức ép với Nghiêu. Đã giữ rõ đây là đe dọa liên quan đến dữ liệu thí nghiệm, không phải lời tuyên bố hệ thống sẽ lập tức ngừng hoạt động.",
+    "Liễu Mộ Thanh cho rằng thầy của Nghiêu có thể đã suy đoán ra nguyên nhân và hậu quả của mọi chuyện. Đây là nhận định của cô, chưa được người thầy xác nhận trực tiếp.",
+    "Liễu Mộ Thanh nói điều Bùi Vân Du theo đuổi nhiều năm là không thể thực hiện. Chưa xác định chính xác điều đó là gì, dù cô nói mình hiểu sau khi nhìn thấy Nghiêu.",
+    "Đã giữ nguyên việc Liễu Mộ Thanh khuyên Bạch Thù Văn không cần tìm hiểu sự thật vì mọi chuyện đã kết thúc, trong khi Bạch Thù Văn và Bùi Vân Du vẫn muốn biết rõ đầu đuôi.",
+    "Chi tiết mục đích ban đầu của hệ thống là bổ sung sức mạnh linh hồn cho Bạch Thù Văn được giữ theo lời Liễu Mộ Thanh. Nguyên nhân khiến Bạch Thù Văn cần được bổ sung vẫn chưa được giải thích trong chương này.",
+    "Câu cuối Liễu Mộ Thanh nói chuyện thiếu hụt sức mạnh linh hồn có liên quan đến mình được giữ nguyên làm điểm kết thúc chương, không tự tiết lộ nguyên nhân.",
+    "Lời tác giả còn có hai chương được giữ trong nội dung, không chuyển thành dữ kiện độc lập về tổng số chương của truyện."
+   ],
+   "seconds": 131,
+   "at": 1794645904.14209
+  },
+  "44": {
+   "source_sha256": "f8b71d0aa92e120b6acf55af5a3be1849b4b61ba5a2ae9141a617750228c75e6",
+   "title": "Chương 44: Thuở Trước",
+   "chars_source": 12692,
+   "chars_edited": 14372,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Tiêu đề convert Từ trước được biên tập thành Thuở Trước, phù hợp với chương hồi tưởng về nguồn gốc người dẫn đường linh hồn và quá khứ của Bạch Thù Văn.",
+    "Đã giữ nguyên cơ chế ví von sức mạnh linh hồn như nước và hình thể như vật chứa. Linh hồn đầu tiên có thể giữ sức mạnh trong hình thể ban đầu hoặc phân tán sang những vật chứa khác, bao gồm các thế giới nhỏ.",
+    "Bản convert dùng đại từ nam cho linh hồn đầu tiên. Chưa có xác nhận giới tính rõ ràng nên trong nội dung ưu tiên gọi người ấy, không tự xác định nam hay nữ.",
+    "Cụm người dẫn đường linh hồn có sức mạnh lớn nhất và ổn định nhất được giao ghi chép lịch sử đã được diễn đạt thành công việc ghi chép từng sự kiện để các linh hồn biết lịch sử thế giới mình sinh ra.",
+    "Đã giữ sự khác biệt giữa tình trạng linh hồn khi ngưng tụ ở Thế giới lớn và khi luân hồi ở thế giới nhỏ. Khi ngưng tụ, họ nhớ cả những lần luân hồi; khi bước vào luân hồi, họ quên ký ức trước kia.",
+    "Cụm đã vong nhân, vị vong nhân được chuyển thành Người đã khuất, kẻ còn ở lại để giữ ý nghĩa tự giễu về sự chia lìa, đồng thời tránh diễn đạt khó hiểu khi đọc thành tiếng.",
+    "Chương này xác nhận Bạch Thù Văn từng là người dẫn đường linh hồn có sức mạnh lớn và ổn định, đảm nhiệm công việc ghi chép lịch sử. Đây là quá khứ trước các lần luân hồi, không phải nghề nghiệp của Bạch Thù Văn ở thế giới hiện tại.",
+    "Người được gọi là nửa kia của Bạch Thù Văn được bản convert quy chiếu bằng đại từ nam. Đã dùng anh cho nhân vật này, nhưng không tự bổ sung tên hoặc đồng nhất với bất kỳ nhân vật nam nào đã xuất hiện.",
+    "Trong biến cố quá khứ, nửa kia của Bạch Thù Văn đang làm nhiệm vụ dẫn đường thì gặp nhóm người có khuynh hướng chống đối xã hội. Người anh bảo vệ chính là linh hồn mới sinh Liễu Mộ Thanh. Đã làm rõ quy chiếu này để người nghe không nhầm người bị thương với người được bảo vệ.",
+    "Cụm bị nghiền nát một chút linh hồn lực được hiểu là một phần sức mạnh linh hồn của Liễu Mộ Thanh bị phá hủy, không phải toàn bộ linh hồn đã tan biến. Cô vẫn được đưa về Thế giới lớn trong tình trạng nguy hiểm.",
+    "Bạch Thù Văn đã đưa cả nửa kia và Liễu Mộ Thanh trở về Thế giới lớn, sau đó âm thầm dùng sức mạnh của mình để bù đắp cho Mộ Thanh trong lúc người kia dưỡng thương. Không thêm phương thức chuyển giao hay số lượng sức mạnh vì nguồn không nêu.",
+    "Câu đến khi anh tỉnh lại thì mọi chuyện đã quá muộn được giữ ở mức khái quát. Chưa tự xác định chính xác thời điểm Bạch Thù Văn bước vào luân hồi hoặc những hành động cụ thể ngay sau khi anh tỉnh.",
+    "Liễu Mộ Thanh nói Bạch Thù Văn vốn có linh hồn ổn định đến mức gần như không thể phải luân hồi, nhưng tình trạng suy yếu sau khi bù đắp sức mạnh cho cô khiến Bạch Thù Văn không còn chống lại quy luật tự nhiên.",
+    "Hệ thống được xác nhận do nửa kia của Bạch Thù Văn tạo ra để bổ sung sức mạnh cho cô trong quá trình luân hồi. Liễu Mộ Thanh phủ nhận việc mình tạo hệ thống. Đã giữ nguyên khác biệt giữa người tạo hệ thống và người thực hiện yêu cầu giết Bạch Thù Văn.",
+    "Theo Liễu Mộ Thanh, Bạch Thù Văn không chấp nhận việc hệ thống gây tổn thương người khác, nên trước khi luân hồi đã nhờ cô ngăn việc hấp thụ sức mạnh linh hồn bằng cách nhanh chóng kết thúc mạng sống mình. Đã giữ đây là lời giải thích từ Liễu Mộ Thanh, không tự suy diễn thêm động cơ.",
+    "Trong câu Liễu Mộ Thanh phủ nhận việc người tạo hệ thống sắp xếp Nghiêu, đã giữ thông tin người ấy hiện đang luân hồi và không còn năng lực của người dẫn đường linh hồn. Nguyên nhân Nghiêu xuất hiện ở thế giới cuối cùng của Bạch Thù Văn vẫn chưa được giải thích.",
+    "Bùi Vân Du ôm Nghiêu và cười, nhưng trong mắt không có ý cười. Đã giữ sự tương phản này và không biến lời nói của anh thành một lời đe dọa trực tiếp không có trong nguồn.",
+    "Câu Nghiêu khó hiểu được suy nghĩ của con người được giữ theo góc nhìn của cậu, dù chương này đã xác nhận Bạch Thù Văn từng là người dẫn đường linh hồn.",
+    "Ở đoạn gần cuối, bản convert ghi Liễu Mộ Thanh gãi đầu khi nói mình không muốn trách người tạo ra hệ thống. Dựa trên nội dung hội thoại và lượt đáp trước sau, người nói phải là Bạch Thù Văn. Đã sửa người thực hiện động tác gãi đầu thành Bạch Thù Văn và giữ nguyên ý lời thoại.",
+    "Phản ứng muốn rút tay của Liễu Mộ Thanh khi Bạch Thù Văn hỏi về nửa kia, cùng câu hỏi cậu muốn đi tìm anh ấy sao, được giữ nguyên. Không tự giải thích đó là ghen tuông hay xác nhận quan hệ tình cảm, dù phản ứng có hàm ý cảm xúc.",
+    "Câu trả lời tại sao tớ phải đi tìm anh ấy của Bạch Thù Văn khiến Liễu Mộ Thanh bất ngờ vui vẻ. Đã giữ sự thay đổi cảm xúc theo đúng trình tự, không thêm lời tỏ tình.",
+    "Đã giữ việc Bùi Vân Du và Nghiêu rời đi không rõ thời điểm. Câu Liễu Mộ Thanh nói họ có vấn đề riêng cần giải quyết không được diễn giải thành hành trình hay kết quả cụ thể.",
+    "Lời tác giả xác nhận có độc giả đoán đúng thân phận Liễu Mộ Thanh và thông báo ngày mai là chương kết. Đã giữ nguyên nội dung này trong phần cuối chương."
+   ],
+   "seconds": 137,
+   "at": 1794646042.9286642
+  },
+  "45": {
+   "source_sha256": "c56dc8230bdc7e15c11a37b6c9c447e6992485dea1bbb9767f493b185b22c738",
+   "title": "Chương 45: Trở Về Quỹ Đạo",
+   "chars_source": 13217,
+   "chars_edited": 15168,
+   "problems": [],
+   "attempts": [
+    {
+     "problems": []
+    }
+   ],
+   "notes": [
+    "Bản convert chương 45 không có tiêu đề. Đã đặt tên Trở Về Quỹ Đạo dựa trên câu kết của chính chương, không coi đây là nhan đề gốc đã được xác nhận.",
+    "Thế giới lớn không có thành phố do con người xây dựng và không có chu kỳ mặt trời mọc, mặt trời lặn. Đã giữ bối cảnh sương mù quanh năm, sinh vật sống không can thiệp lẫn nhau và cư dân làm việc trong những căn phòng giản dị.",
+    "Cụm nhân loại tại trống trải bình trong phòng sinh hoạt công tác được hiểu theo ngữ cảnh là những người sinh sống tại Thế giới lớn, không khẳng định tất cả đều là con người bình thường. Đã dùng những người sống ở đây để tránh mâu thuẫn với thiết lập về cư dân là người dẫn đường linh hồn.",
+    "Bảo tàng Lịch sử được xác nhận là một trong số ít tòa nhà có năm tầng tại Thế giới lớn. Diện tích được so sánh với bảo tàng của con người là vài lần, thậm chí vài chục lần. Đã giữ nguyên cả hai mức so sánh.",
+    "Hàng chục nghìn thông tin được chuyển đến Cố Đông Thanh, cấp dưới sàng lọc trước khi bà tự sắp xếp trình tự và ghi vào sử sách. Không tự bổ sung hệ thống lưu trữ hoặc thiết bị xử lý thông tin.",
+    "Cố Đông Thanh được xác nhận chính là cô giáo cũ của Nghiêu. Bà có sức mạnh linh hồn ổn định, ký ức liên tục và là người duy nhất có thể đảm đương khối lượng công việc ghi chép lịch sử hiện tại.",
+    "Hồ sơ trước ghi Nghiêu gọi người dạy mình là thầy, nhưng chương này xác nhận Cố Đông Thanh là nữ. Trong hội thoại đã dùng cô để tiếng Việt hiện đại tự nhiên khi nghe, đồng thời giữ quan hệ thầy trò trong lời kể.",
+    "Nghiêu xuất hiện trước Cố Đông Thanh trong hình dạng có bàn tay và có thể ngồi xổm để bà vuốt đầu. Đã giữ hành động, không tự chuyển cậu về hình dạng mèo.",
+    "Những người dẫn đường linh hồn được nói là không thể sinh con. Vì vậy, Nghiêu được Cố Đông Thanh xem như con trai ruột về mặt tình cảm, không phải quan hệ huyết thống.",
+    "Cố Đông Thanh nhận ra Bùi Vân Du sau khi quan sát trong nửa giây. Chi tiết bà hướng mắt lên góc trái phía trên như đang hồi tưởng được giữ nguyên.",
+    "Bùi Vân Du tự giới thiệu là một thiên sư loài người không đáng kể, thể hiện thái độ khiêm tốn trước bậc trưởng bối. Đã giữ sắc thái kính trọng hiếm thấy của anh mà không tự thay đổi tính cách thường ngày.",
+    "Cố Đông Thanh cho rằng sức mạnh linh hồn của Bùi Vân Du đã lớn đến mức có thể sớm ngưng tụ thành hình và gia nhập Thế giới lớn. Đây là đánh giá của bà, chưa phải sự kiện đã xảy ra.",
+    "Cố Đông Thanh không tiết lộ trực tiếp danh tính người tạo hệ thống cho Nghiêu và Bùi Vân Du. Bà chỉ yêu cầu ngừng điều tra và nói nhiệm vụ của Nghiêu đã hoàn thành.",
+    "Việc Nghiêu bị mất ký ức vẫn chưa được giải thích đầy đủ trong chương. Cố Đông Thanh chỉ hứa cậu sẽ sớm khôi phục, không nêu thời điểm cụ thể.",
+    "Câu Cố Đông Thanh gửi gắm Nghiêu cho Bùi Vân Du được giữ đúng sắc thái hài hước của người lớn đang giao con cho người khác chăm sóc. Phản ứng nén cười của Bùi Vân Du và vẻ không thể tin nổi của Nghiêu đều được giữ.",
+    "Câu cảnh báo phải trân trọng những gì đang có, tôn trọng lịch sử và không cưỡng cầu được giữ nguyên ý nghĩa. Cố Đông Thanh lấy người tạo hệ thống cho Bạch Thù Văn làm ví dụ, nhưng chưa công bố danh tính ở thời điểm này.",
+    "Đảo Linh Giam được nhắc đến trước trong lời kể về việc Nghiêu nhiều năm sau mới hiểu lời cô giáo. Chỉ đến phần cuối chương, chức năng giam giữ của nơi này mới được xác nhận qua lệnh áp giải Giang Thự.",
+    "Đã chuyển đầy đủ hàng dấu sao ngăn cảnh thành một dòng ba dấu sao có dòng trống trước và sau.",
+    "Ở cảnh thứ hai, người đàn ông bước qua cánh cửa khác được giữ kín danh tính trong những câu đầu. Chỉ khi Cố Đông Thanh gọi Giang Thự mới xác nhận người ấy là Giang Thự.",
+    "Người đàn ông nói hệ thống đã bị chính mình phá hủy để tránh liên lụy Nghiêu và Bùi Vân Du. Đã giữ đây là lời anh công bố, không tự bổ sung phương thức phá hủy.",
+    "Câu đây là lần luân hồi cuối cùng của Văn Văn được giữ theo lời Giang Thự. Không tự giải thích liệu điều đó có nghĩa Bạch Thù Văn sẽ hoàn toàn không còn luân hồi nữa hay chỉ kết thúc giai đoạn hiện tại.",
+    "Đoạn cả Giang Thự và Liễu Mộ Thanh đều thay đổi đã được giữ rõ hai lựa chọn. Giang Thự quyết định không tiếp tục giữ Bạch Thù Văn bên mình, còn Liễu Mộ Thanh lần đầu chủ động đến gần cô.",
+    "Chương này xác nhận Giang Thự chính là nửa kia của Bạch Thù Văn và là người tạo hệ thống. Đây là thông tin mới làm sáng tỏ nhân vật đã được nhắc đến ở chương 44, không phải một người hoàn toàn khác.",
+    "Chương 44 thuật lại việc nửa kia của Bạch Thù Văn cảm thấy mình sơ suất và tạo hệ thống để bù đắp sức mạnh linh hồn. Chương 45 tiết lộ Giang Thự còn trực tiếp đánh tan linh hồn Bạch Thù Văn vì ghen tuông và cố chấp. Đã giữ cả hai lớp thông tin, không sửa ngược lời kể ở chương trước.",
+    "Cụm không có một cái là nàng nguyện ý đi Thượng Hải có dấu hiệu chuyển đổi sai âm hoặc sai chữ. Theo ngữ cảnh đang nói về những người bị tổn thương, đã hiểu là chẳng ai trong số họ đáng bị Bạch Thù Văn làm hại. Không giữ địa danh Thượng Hải vì không có căn cứ về một chuyến đi hoặc địa điểm trong câu này.",
+    "Giang Thự thừa nhận nhiều lần tìm cách làm hại người khác để bù đắp sức mạnh linh hồn cho Bạch Thù Văn, bao gồm những người dẫn đường linh hồn chống đối xã hội và những người gặp tai họa trong các thế giới nhỏ. Không giảm nhẹ hành vi này dù lời tác giả cuối chương nhận xét anh là người tốt.",
+    "Đã giữ đầy đủ lời thú nhận rằng Giang Thự ghen tuông khi Liễu Mộ Thanh xuất hiện, từng ở trong trạng thái gần như điên loạn và chủ động đánh tan linh hồn Bạch Thù Văn, khiến cô phân tán vào các thế giới nhỏ.",
+    "Cố Đông Thanh nói Bạch Thù Văn và Giang Thự là một đôi do trời định. Giang Thự lại phủ nhận việc số phận định sẵn luôn là lựa chọn tốt nhất. Hai quan điểm được giữ riêng, không gộp thành chân lý của người kể.",
+    "Giang Thự nói mình yên tâm khi Liễu Mộ Thanh ở bên Bạch Thù Văn, đồng thời thừa nhận cảm giác thua Mộ Thanh rất khó chịu. Đã giữ cả sự chấp nhận lẫn nỗi tiếc nuối.",
+    "Hình ảnh giọng Giang Thự giống một chiếc đĩa nhạc cũ trong nhà hàng được giữ theo cách diễn đạt tự nhiên, không tự thêm âm nhạc cụ thể hoặc lời bài hát.",
+    "Người mặc áo trắng xuất hiện từ những đốm sáng như đom đóm. Đã giữ áo choàng dài, mũ nhọn màu trắng, giọng lạnh lùng và các tội danh được công bố, nhưng không tự đặt tên hay chức vụ.",
+    "Các tội danh được đọc gồm âm mưu hãm hại người ghi chép lịch sử, sửa đổi lịch sử, tự ý xâm nhập thế giới nhỏ ngoài thời gian luân hồi, gây rối trật tự và trốn chạy nhiều năm. Không bổ sung bản án hoặc thời hạn giam giữ vì nguồn chưa nêu.",
+    "Giang Thự cầm chiếc bút lông vũ Bạch Thù Văn thường dùng và trân trọng cất vào túi trước khi bị áp giải. Cố Đông Thanh quay đi vì không đành lòng chứng kiến. Đã giữ nguyên toàn bộ chuỗi hành động.",
+    "Lời nhờ Cố Đông Thanh chăm sóc Bạch Thù Văn khi cô trở về được giữ theo cách xưng hô con - cô, phù hợp thái độ kính trọng và quan hệ trưởng bối trong cảnh này.",
+    "Đã giữ chi tiết Giang Thự cúi người thật sâu trước Cố Đông Thanh rồi đi theo người mặc áo trắng, cả hai cùng tan biến trong không khí.",
+    "Lời tác giả gọi Giang Thự là người tốt được giữ như nhận xét riêng của tác giả. Không biến đánh giá này thành lời khẳng định khách quan hay xóa bỏ những hành vi anh đã thú nhận.",
+    "Từ đệm enmmm trong lời tác giả được chuyển thành Ừm. Chuỗi www mang sắc thái cười vui được chuyển thành ha ha, tránh để giọng đọc máy phát âm ký tự vô nghĩa.",
+    "Lời tác giả xác nhận Nghiêu và Bùi Vân Du thực sự là một đôi. Đây là thông tin trực tiếp từ phần lời tác giả, đã giữ nguyên và không tự thêm tình tiết tình cảm vào phần truyện chính.",
+    "Đã giữ thông báo còn có thể có ngoại truyện về chuyện tình cảm của các nhân vật chính, diễn biến tiếp theo của Giang Thự và quá khứ của Nghiêu cùng Bùi Vân Du. Tác giả chưa xác nhận chắc chắn thời điểm hoặc số lượng ngoại truyện."
+   ],
+   "seconds": 169,
+   "at": 1794646211.9435234
   }
  },
  "source_sha256": "c9ccd2743cd1c4751235d1a92c6310d6dbf34d722b0de0fd2f892c39ee2d9c72"

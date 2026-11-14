@@ -104,3 +104,4 @@
 .sw-game-edit:hover{border-color:#ffd36e}
 .sw-game-handle{position:absolute;right:-8px;bottom:-8px;width:18px;height:18px;border-radius:50%;background:#79c9ef;border:2px solid #0b2130;cursor:nwse-resize}
 .sw-frame-actions{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
+.sw-warning{color:#ffd36e;font-size:12px;line-height:1.45;border:1px solid #6b5a2a;background:#3a321a55;border-radius:7px;padding:7px 9px}

@@ -481,6 +481,35 @@
     const voiceSelect=$('#voice');if(voiceSelect&&global.MutationObserver)new MutationObserver(()=>{if(voiceOptions().length&&document.querySelector('.studio-batch-settings select option[value=""]'))renderBatchRows();}).observe(voiceSelect,{childList:true});
   }
 
+  async function renderDrive(card) {
+    // Settings → Google Drive: several accounts; finished videos move there (first account with room, then the next).
+    card.replaceChildren(el('h3','','Google Drive'),el('p','notice','Đang đọc…'));
+    let info;try{info=await request('/api/drive/status');}catch(error){card.replaceChildren(el('h3','','Google Drive'),el('p','studio-error',error.message));return;}
+    const parts=[el('h3','','Google Drive'),el('p','notice','Video xong được chuyển lên Drive theo thư mục Video/vu-an/<vụ án>, Video/truyen-doc/<tên truyện>…, kiểm tra khớp rồi mới xoá bản trên máy. Tài khoản đầu tiên còn chỗ được dùng trước; sắp đầy thì tự sang tài khoản kế tiếp. Không bao giờ xoá gì trên Drive.')];
+    if(!info.has_client){
+      const file=el('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
+      file.onchange=async()=>{try{const raw=JSON.parse(await file.files[0].text());await request('/api/drive/client',{method:'PUT',body:JSON.stringify(raw)});toast('Đã lưu OAuth client.');renderDrive(card);}catch(error){toast(error.message);}finally{file.value='';}};
+      parts.push(el('p','notice','Bước 1: tạo OAuth client trong Google Cloud Console (bật Google Drive API, thêm email của bạn vào Test users), tải tệp JSON về rồi chọn ở đây. Dùng từ điện thoại: chọn loại Web application, Authorized redirect URI là '+location.origin+'/api/drive/oauth/callback'),file,button('Chọn tệp OAuth client JSON',()=>file.click(),''));
+      card.replaceChildren(...parts);return;
+    }
+    const list=el('div','studio-drive-accounts');
+    for(const [i,a] of info.accounts.entries()){
+      const row=el('div','studio-drive-account');
+      row.append(el('strong','',`${i+1}. ${a.email}`),el('span','notice',a.ok?(a.free_gb!=null?`còn ${a.free_gb} GB / ${a.total_gb} GB`:'không giới hạn'):'lỗi: '+(a.error||'')));
+      const up=button('↑',async()=>{const ids=info.accounts.map(x=>x.id);ids.splice(i-1,0,ids.splice(i,1)[0]);await request('/api/drive/accounts/order',{method:'POST',body:JSON.stringify({ids})});renderDrive(card);},'secondary');up.disabled=i===0;up.title='Dùng trước';
+      const remove=button('Gỡ',async()=>{if(!confirm('Gỡ '+a.email+' khỏi tool? Tệp trên Drive vẫn giữ nguyên.'))return;await request('/api/drive/accounts/'+encodeURIComponent(a.id),{method:'DELETE'});renderDrive(card);},'secondary');
+      row.append(up,remove);list.append(row);
+    }
+    if(!info.accounts.length)list.append(el('p','notice','Chưa có tài khoản nào.'));
+    const add=button('+ Thêm tài khoản Google Drive',async()=>{try{const r=await request('/api/drive/accounts/start',{method:'POST',body:'{}'});window.open(r.url,'_blank','noopener');toast('Đăng nhập Google trong tab mới, xong quay lại đây và bấm Làm mới.');}catch(error){toast(error.message);}},'');
+    const toggle=(key,label)=>{const box=el('label','studio-drive-toggle');const c=el('input');c.type='checkbox';c.checked=info[key];c.onchange=async()=>{try{await request('/api/drive/settings',{method:'PATCH',body:JSON.stringify({[key]:c.checked})});}catch(error){toast(error.message);}};box.append(c,el('span','',label));return box;};
+    const sync=button('Đồng bộ ngay',async()=>{await request('/api/drive/sync',{method:'POST',body:'{}'});toast('Đã bắt đầu đưa video lên Drive.');setTimeout(()=>renderDrive(card),3000);},'secondary');
+    parts.push(list,add,toggle('auto_upload','Tự đưa video xong lên Drive'),toggle('delete_local','Xoá bản trên máy sau khi lên Drive (đã kiểm tra khớp)'),toggle('include_old','Đưa cả các video làm trước khi kết nối Drive'),sync,
+      el('p','notice',`Đã lưu ${info.uploaded_videos} video (${info.uploaded_gb} GB) lên Drive.`+(info.sync?.current?' Đang tải lên: '+info.sync.current:'')),
+      el('p','notice','Thêm tài khoản trên máy (http://127.0.0.1:8877) dùng OAuth client loại Desktop app. Thêm từ điện thoại qua địa chỉ online thì OAuth client phải là loại Web application, có Authorized redirect URI: '+location.origin+'/api/drive/oauth/callback'));
+    for(const f of info.failures||[])parts.push(el('p','studio-error','Chưa đưa được video lên Drive: '+f.message));
+    card.replaceChildren(...parts);
+  }
   async function renderOutputRoot(card) {
     // Settings → Nơi lưu video: new videos go to <folder>\<project>\…; earlier videos stay where they are.
     card.replaceChildren(el('h3','','Nơi lưu video'),el('p','notice','Đang đọc…'));
@@ -501,6 +530,7 @@
     const voices=el('section','card');append(voices,el('h3','','Giọng đọc'),el('p','notice','Chọn giọng có sẵn khi tạo video hoặc thêm giọng mới từ một bản thu.'),button('Tạo giọng từ bản thu',()=>{const pane=$('#paneClone');pane.hidden=!pane.hidden;pane.scrollIntoView({behavior:'smooth',block:'start'});}));grid.append(voices);
     const channels=el('section','card');channels.id='studioSettingsChannels';channels.append(el('h3','','Tài khoản đăng video'));grid.append(channels);
     const storage=el('section','card studio-output-root');storage.id='studioSettingsOutput';grid.append(storage);renderOutputRoot(storage);
+    const driveCard=el('section','card studio-drive');driveCard.id='studioSettingsDrive';grid.append(driveCard);renderDrive(driveCard);
     const tools=el('section','card');append(tools,el('h3','','Công cụ & trợ giúp'),el('p','notice','Dùng bảng kết nối nổi để kết nối tài khoản tạo nội dung. Khi gặp lỗi, kiểm tra điều kiện chạy và thử lại.'));const resourceLink=el('a','','Mở kho tài nguyên →');resourceLink.href='/resources';tools.append(resourceLink,document.createElement('br'),button('Xem nhật ký khi cần',()=>{$('#inlineConsole').hidden=false;navigate('projects',false);if($('#viewWorkspace').hidden&&$('#galleryContainer .project-card'))$('#galleryContainer .project-card').click();global.loadConsoleLogs?.();$('#inlineConsole').scrollIntoView({behavior:'smooth'});}));grid.append(tools);root.append(grid);
   }
 
@@ -650,7 +680,7 @@
       if(focusName){const replacement=root.querySelector('[name="'+focusName+'"]');replacement?.focus();if(selection!=null)replacement?.setSelectionRange?.(selection,selection);}
     }catch(error){if(ticket===state.request){libraryHeader(root);const message=el('p','studio-error',error.message);message.setAttribute('role','alert');root.append(message,button('Thử lại',()=>loadLibrary()));}}}
   document.addEventListener('click',event=>{for(const menu of document.querySelectorAll('details.studio-more[open]'))if(!menu.contains(event.target))menu.open=false;});
-  function versionFileURL(video,version) {return '/api/factory/videos/'+encodeURIComponent(video.job_id||video.id)+'/versions/'+encodeURIComponent(version.version_id||version.id)+'/file';}
+  function versionFileURL(video,version) {if(version?.drive)return version.url;return '/api/factory/videos/'+encodeURIComponent(video.job_id||video.id)+'/versions/'+encodeURIComponent(version.version_id||version.id)+'/file';}
   function openVideo(video,version) {
     const modal=dialog(video.title||'Video');modal.box.classList.add('studio-dialog-wide','studio-video-dialog');
     const portrait=version?versionFileURL(video,version):localURL(video.output_url),wide=video.wide_url&&localURL(video.wide_url);
@@ -664,6 +694,7 @@
     for(const format of formats){const tab=button(format.label,()=>choose(format),'secondary');tab.dataset.format=format.cls;tabs.append(tab);}
     if(formats.length>1)preview.append(tabs);if(formats.length){preview.append(figure);choose(formats[0]);}
     modal.onClose=()=>player.pause();modal.box.append(preview);
+    if(video.drive_files?.length){const drive=el('div','studio-drive-files');drive.append(el('p','notice','Video đã lưu trên Google Drive (đã xoá khỏi máy). Tải về hoặc mở trên Drive:'));for(const file of video.drive_files){const row=el('div','studio-drive-row');const get=el('a','button secondary','Tải '+file.name);get.href=file.download;get.download=file.name;row.append(get);if(file.link){const open=el('a','button secondary','Mở trên Drive');open.href=file.link;open.target='_blank';open.rel='noopener';row.append(open);}drive.append(row);}modal.box.append(drive);}
     if(typeof global.socialPanel==='function')modal.box.append(global.socialPanel({id:video.job_id||video.id}));
     modal.box.append(button('Đã đăng & dọn',()=>{modal.close();openPostedCleanup(video);}));
   }
@@ -680,6 +711,7 @@
     const render=()=>{
       const approved=version?.approved===true;badge.className='studio-state '+(approved?'completed':'pending');badge.textContent=approved?'Đã duyệt':'Chưa duyệt';
       actions.replaceChildren(button('Xem',()=>openVideo(video,version)));
+      if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));return;}
       if(version&&!approved)actions.append(button('Duyệt',async()=>{try{await request('/api/factory/videos/'+encodeURIComponent(id)+'/approve',{method:'POST',body:JSON.stringify({version_id:version.version_id||version.id,sha256:version.sha256})});await loadLibrary();toast('Đã duyệt video.');}catch(error){toast(error.message);}},''));
       if(version&&approved)actions.append(button('Lên lịch',()=>openSchedule({job_id:id,version_id:version.version_id||version.id,approved,title:video.title}),''));
       actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));

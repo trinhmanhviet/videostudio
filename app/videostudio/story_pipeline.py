@@ -48,33 +48,39 @@ SENTENCE_END = re.compile(r'(?<=[.!?…])["”’»)]*\s+')
 # Video encoding runs on the GPU (NVENC) by default; libx264 on the CPU is only the fallback when NVENC is unavailable.
 NVENC = ['-c:v', 'h264_nvenc', '-preset', 'p5', '-tune', 'hq', '-rc', 'vbr', '-cq', '26', '-b:v', '0', '-maxrate', '8M', '-bufsize', '16M', '-profile:v', 'high']
 X264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20']
+# Finished story videos: HEVC on the GPU, about half the size of H.264 at the same look (measured on a 1080p chapter:
+# same encode time). hvc1 tag keeps it playable on Apple devices; platforms re-encode on upload anyway.
+HEVC = ['-c:v', 'hevc_nvenc', '-preset', 'p5', '-tune', 'hq', '-rc', 'vbr', '-cq', '28', '-b:v', '0', '-maxrate', '2M', '-bufsize', '4M',
+        '-profile:v', 'main', '-tag:v', 'hvc1']
 _ENCODER = {}
 
 
-def video_codec(ffmpeg):
-    """NVENC when this FFmpeg and driver can actually encode with it (checked once per process)."""
-    if ffmpeg not in _ENCODER:
+def video_codec(ffmpeg, kind='h264'):
+    """GPU encoder when this FFmpeg and driver can actually use it (checked once per process); CPU H.264 otherwise."""
+    key = (ffmpeg, kind)
+    if key not in _ENCODER:
         import subprocess
+        codec = HEVC if kind == 'hevc' else NVENC
         try:
-            subprocess.run([ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=30:d=0.5', '-c:v', 'h264_nvenc', '-f', 'null', '-'],
+            subprocess.run([ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=30:d=0.5', '-c:v', codec[1], '-f', 'null', '-'],
                            check=True, timeout=30, capture_output=True)
-            _ENCODER[ffmpeg] = NVENC
+            _ENCODER[key] = codec
         except Exception:
-            _ENCODER[ffmpeg] = X264
-    return _ENCODER[ffmpeg]
+            _ENCODER[key] = video_codec(ffmpeg) if kind == 'hevc' else X264
+    return _ENCODER[key]
 
 
-def encode(pipeline, job, build, check, timeout, folder=None):
+def encode(pipeline, job, build, check, timeout, folder=None, kind='h264'):
     """build(codec_args) -> FFmpeg argument list. Runs on NVENC; if that fails, retries once on the CPU and says so."""
     from .media import _run_in
-    codec = video_codec(pipeline.ffmpeg)
+    codec = video_codec(pipeline.ffmpeg, kind)
     runner = (lambda args: _run_in(folder, args, check, timeout=timeout)) if folder else (lambda args: run(args, check, timeout=timeout))
     try:
         return runner(build(codec))
     except Exception as error:
-        if codec is not NVENC or 'Cancelled' in type(error).__name__:
+        if codec is X264 or 'Cancelled' in type(error).__name__:
             raise
-        _ENCODER[pipeline.ffmpeg] = X264
+        _ENCODER[(pipeline.ffmpeg, kind)] = X264
         if job:
             _log(pipeline, job, 'render', 'GPU (NVENC) không mã hoá được, chuyển sang CPU: ' + str(error)[-200:])
         return runner(build(X264))
@@ -147,7 +153,7 @@ def preflight_for_request(status, pipeline, request):
               for c in status['checks']]
     try:
         snapshot = StoryLibrary().snapshot(request.get('story_snapshot'))
-        missing = [c['name'] for c in snapshot['gameplay'] if not Path(c['path']).is_file()]
+        missing = [c['name'] for c in snapshot['gameplay'] if not Path(c['path']).is_file() and not c.get('drive_file_id')]
         ok = bool(snapshot['gameplay']) and not missing
         detail = ('Có ' + str(len(snapshot['gameplay'])) + ' clip gameplay') if ok else (
             'Chưa có clip gameplay cho truyện này' if not snapshot['gameplay'] else 'Không thấy tệp gameplay: ' + ', '.join(missing))
@@ -465,7 +471,8 @@ def cut_plan(clips, cursor, seconds):
         length = min(remaining, clip['end'] - start)
         if length >= .2:
             segments.append({'clip': index, 'id': clip['id'], 'sha256': clip['sha256'], 'path': clip['path'], 'name': clip['name'],
-                             'start': round(start, 3), 'length': round(length, 3), 'has_audio': clip.get('has_audio', False)})
+                             'start': round(start, 3), 'length': round(length, 3), 'has_audio': clip.get('has_audio', False),
+                             'drive_file_id': clip.get('drive_file_id')})
             remaining -= length
         end_offset = start + length
         if remaining > .01 or end_offset >= clip['end'] - .5:
@@ -495,7 +502,7 @@ def images(pipeline, job, check):
     if plan_path.is_file():
         plan_data = _read(plan_path)  # frozen on retry: never consumes the cursor twice
     else:
-        missing = [c['name'] for c in snapshot['gameplay'] if not Path(c['path']).is_file()]
+        missing = [c['name'] for c in snapshot['gameplay'] if not Path(c['path']).is_file() and not c.get('drive_file_id')]
         if missing:
             raise PermanentError('Không thấy tệp gameplay: ' + ', '.join(missing) + '. Nạp lại clip trong Kể truyện → Gameplay rồi thử lại; lời đọc đã có được giữ nguyên.')
         cursor = library.cursor(book_id) if layout.get('continue_gameplay', True) else {'clip': 0, 'offset': 0.0}
@@ -535,6 +542,12 @@ def build_master(pipeline, job, plan_path, check):
         target = folder / f'seg-{index:03d}.mp4'
         part_receipt = target.with_suffix('.json')
         if not (target.is_file() and part_receipt.is_file() and _read(part_receipt).get('identity') == part_identity):
+            if not Path(segment['path']).is_file() and segment.get('drive_file_id') and getattr(pipeline, 'store', None):
+                # Gameplay from a Drive link whose cached copy was trimmed: fetch it again (same file id).
+                from .drive_storage import DriveStorage, cache_trim
+                _log(pipeline, job, 'images', f'Tải lại gameplay từ Google Drive: {segment["name"]}…')
+                DriveStorage(pipeline.store).download(segment['drive_file_id'], segment['path'], check)
+                cache_trim(keep=[s['path'] for s in plan_data['segments']])
             if not Path(segment['path']).is_file():
                 raise PermanentError(f'Không thấy tệp gameplay {segment["name"]}. Nạp lại clip rồi thử lại; lời đọc đã có được giữ nguyên.')
             _log(pipeline, job, 'images', f'Chuẩn bị gameplay: đoạn {index + 1}/{len(plan_data["segments"])} ({segment["name"]}).')
@@ -632,7 +645,8 @@ def compose(pipeline, job, orientation, snapshot, master, audio, cues, seconds, 
     target = folder / f'story-out-{orientation}.mp4'
     identity = _identity({'algorithm': ALGORITHM, 'orientation': orientation, 'layout': layout, 'master': _file_id(master),
                           'audio': _file_id(audio), 'ass': hashlib.sha256(ass.read_bytes()).hexdigest(), 'game_audio': game_audio,
-                          'background': snapshot.get('background') and _file_id(snapshot['background']), 'preset': snapshot.get('background_preset')})
+                          'background': snapshot.get('background') and _file_id(snapshot['background']), 'preset': snapshot.get('background_preset'),
+                          'codec': snapshot['layout'].get('video_codec', 'h264')})
     receipt = target.with_suffix('.json')
     if target.is_file() and receipt.is_file() and _read(receipt).get('identity') == identity:
         return target
@@ -647,7 +661,7 @@ def compose(pipeline, job, orientation, snapshot, master, audio, cues, seconds, 
     head = [pipeline.ffmpeg, '-v', 'error', '-y', *inputs, '-filter_complex', graph, '-map', '[v]', *audio_args, '-t', f'{seconds:.3f}', '-r', str(FPS)]
     _log(pipeline, job, 'render', f'Dựng bản {"ngang 1920×1080" if orientation == "ngang" else "dọc 1080×1920"} bằng GPU…')
     encode(pipeline, job, lambda codec: head + codec + ['-pix_fmt', 'yuv420p', '-movflags', '+faststart', target.name], check,
-           timeout=max(900, seconds * 4), folder=folder)
+           timeout=max(900, seconds * 4), folder=folder, kind=snapshot['layout'].get('video_codec', 'h264'))
     _write(receipt, {'identity': identity})
     return target
 

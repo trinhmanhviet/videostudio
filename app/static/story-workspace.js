@@ -549,7 +549,7 @@
         const up = iconBtn('up','Lên',()=>{items.splice(index-1,0,items.splice(index,1)[0]);return savePlaylist(items);}); up.disabled = index === 0;
         const down = iconBtn('down','Xuống',()=>{items.splice(index+1,0,items.splice(index,1)[0]);return savePlaylist(items);}); down.disabled = index === items.length-1;
         const remove = iconBtn('trash','Bỏ khỏi truyện này',()=>{items.splice(index,1);return savePlaylist(items);},'sw-danger');
-        add(row, img, add(el('div','sw-clip-info'), el('strong','',clip.name), el('span','sw-muted',`${fmtClock(clip.duration)} · ${clip.width}×${clip.height} · ${Math.round(clip.fps)}fps${clip.has_audio?'':' · không tiếng'}${clip.available?'':' · KHÔNG THẤY TỆP'}`),
+        add(row, img, add(el('div','sw-clip-info'), el('strong','',(clip.source==='drive'?'☁ ':'')+clip.name), el('span','sw-muted',`${fmtClock(clip.duration)} · ${clip.width}×${clip.height} · ${Math.round(clip.fps)}fps${clip.has_audio?'':' · không tiếng'}${clip.source==='drive'?(clip.cached?' · Drive, đã tải sẵn':' · Drive, tải lại khi cần'):''}${clip.available?'':' · KHÔNG THẤY TỆP'}`),
           add(el('div','sw-clip-range'), el('span','sw-muted','Dùng từ'), start, el('span','sw-muted','đến'), end, el('span','sw-muted','giây'))),
           add(el('div','sw-row-actions'), up, down, remove));
         list.append(row);
@@ -557,8 +557,27 @@
       if (!items.length) list.append(el('p','sw-muted','Chưa có clip. Thêm video gameplay bạn đã quay (MP4/MKV/MOV/WebM). Clip được lưu một lần trong thư viện chung, dùng cho mọi truyện.'));
       const audio = el('input'); audio.type='checkbox'; audio.checked = Boolean(l.game_audio); audio.onchange = () => patchBook({layout:{game_audio:audio.checked}});
       const resume = el('input'); resume.type='checkbox'; resume.checked = l.continue_gameplay !== false; resume.onchange = () => patchBook({layout:{continue_gameplay:resume.checked}});
-      add(box, summary, list, state.upload ? el('p','sw-muted',`Đang tải lên ${state.upload}`) : null,
-        btn('Thêm clip gameplay',()=>clipInput.click(),'sw-wide','upload'), clipInput,
+      const link = el('input'); link.type = 'text'; link.placeholder = 'Dán link Google Drive của video gameplay';
+      const addLink = btn('Thêm từ Drive', async () => {
+        const task = await api('/api/story/gameplay/link', json('POST', {url: link.value}));
+        link.value = '';
+        const poll = async () => {
+          const t = await api('/api/story/gameplay/link/' + task.id);
+          state.upload = t.state === 'running' ? `${t.name}: tải từ Drive ${t.size ? Math.round(t.received / t.size * 100) : Math.round(t.received / 2**20)}${t.size ? '%' : ' MB'}` : '';
+          if (t.state === 'running') {renderSettings(); setTimeout(poll, 2000); return;}
+          if (t.state === 'failed') toast(t.error); else toast('Đã thêm clip từ Drive.');
+          await loadGameplay(); renderSettings(); renderFooter();
+        };
+        poll();
+      }, '', 'upload');
+      const avgWords = state.total ? state.totalWords / state.total : 0;
+      const chapterSeconds = avgWords ? estimateWords(avgWords) : 0;
+      const covered = chapterSeconds ? Math.floor(state.gameplay.total_seconds / chapterSeconds) : 0;
+      const warning = items.length && chapterSeconds && covered < state.total
+        ? el('p','sw-warning', covered < 1 ? `Gameplay (${fmtClock(state.gameplay.total_seconds)}) ngắn hơn một chương (khoảng ${fmtMinutes(chapterSeconds)}): mỗi chương sẽ lặp lại cảnh cũ. Thêm clip để tránh lặp.`
+          : `Gameplay đủ cho khoảng ${covered} chương; từ chương ${covered + 1} sẽ lặp lại cảnh cũ. Thêm clip để tránh lặp.`) : null;
+      add(box, summary, warning, list, state.upload ? el('p','sw-muted',`Đang tải: ${state.upload}`) : null,
+        btn('Thêm clip gameplay từ máy',()=>clipInput.click(),'sw-wide','upload'), add(el('div','sw-inline'), link, addLink), clipInput,
         add(el('label','sw-check'), audio, icon(l.game_audio?'sound':'mute'), el('span','',l.game_audio?'Tiếng game: Bật (nhỏ, dưới lời kể)':'Tiếng game: Tắt')),
         add(el('label','sw-check'), resume, el('span','','Chương sau tiếp tục từ chỗ gameplay chương trước dừng')),
         el('p','sw-muted','Clip ngắn hơn lời kể sẽ nối clip tiếp theo, hết danh sách thì lặp lại. Không tăng tốc game, không kéo khung hình đứng.'));
@@ -572,7 +591,9 @@
       const bgInput = el('input'); bgInput.type='file'; bgInput.accept='.png,.jpg,.jpeg,.webp'; bgInput.hidden=true;
       bgInput.onchange = async () => {const f=bgInput.files[0];if(!f)return;try{const r=await api('/api/story/backgrounds?name='+encodeURIComponent(f.name),{method:'PUT',body:f,raw:true});state.backgrounds=(await api('/api/story/backgrounds')).items;await patchBook({layout:{background:r.id}},'Đã thêm ảnh nền.');}catch(e){toast(e.message);}finally{bgInput.value='';}};
       const check = (key, label) => {const c=el('input');c.type='checkbox';c.checked=l[key]!==false;c.onchange=()=>{l[key]=c.checked;};return add(el('label','sw-check'),c,el('span','',label));};
+      const codec = select([['hevc','HEVC · nhẹ khoảng một nửa (mặc định)'],['h264','H.264 · mở được trên mọi máy']], l.video_codec || 'hevc', v=>{l.video_codec=v;});
       add(box, field('Tên kênh', channel), field('Ảnh nền', add(el('div','sw-inline'), background, iconBtn('upload','Tải ảnh nền lên',()=>bgInput.click()))), bgInput,
+        field('Nén video', codec),
         el('h3','','Đầu ra'), add(el('div','sw-checks'), check('horizontal','Ngang 16:9'), check('vertical','Dọc 9:16'), check('burn_subtitles','Hiện phụ đề trên video'), check('export_srt','Xuất phụ đề SRT'), check('export_mp3','MP3 lời kể')),
         btn('Lưu khung hình cho truyện',()=>patchBook({layout:{...l, channel:channel.value}},'Đã lưu khung hình cho truyện.'),'sw-wide','save'),
         btn('Xem bố cục ngang / dọc',openLayout,'sw-wide sw-accent'));

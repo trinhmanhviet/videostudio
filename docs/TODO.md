@@ -60,9 +60,9 @@ Ghi nhận ngày 2026-11-03 từ đề xuất “Code-Driven Animation bằng Hy
 5. [ ] **Tích hợp editor/workflow tùy chọn.** Inspector chọn motion/intensity/FX, xem khả năng asset, preview play/pause/seek/cảnh trước-sau; tận dụng UI hiện có. Phiên bản schema mới phải có migration, không thêm field không hỗ trợ vào v1. Nhánh preview và export dùng chung motion manifest/thư viện; đóng băng engine/preset/version/seed/source cho bản xuất.
 6. [ ] **Phục hồi và nghiệm thu trước khi bật rộng.** Cache theo scene/asset hash/motion/engine version/fps/canvas; chỉ render lại cảnh thay đổi, giới hạn bộ nhớ/worker. Khi tự động gặp engine lỗi/thiếu asset, dùng kiểu dựng đơn giản đã định trước và ghi rõ fallback; export manual giữ nguyên cam kết snapshot. Kiểm tra resume/hủy, không gửi lại tác vụ Flow chưa rõ kết quả, không sinh lại TTS/nhạc/ảnh hợp lệ. Nghiệm thu video hỗn hợp 30–100+ cảnh, lỗi giữa chừng và hồi quy UI cũ. AI-video cho hành động phức tạp là nhánh để sau, chỉ dùng khi user bật và provider đã tích hợp; không tự tải model hay mặc định chuyển sang Wan/LTX/Hunyuan.
 
-## Đã chốt, chưa làm — Lưu trữ qua Google Drive (người dùng, 2026-11-14)
+## Đã triển khai, chưa thử với tài khoản thật — Lưu trữ qua Google Drive (2026-11-14)
 
-Mục tiêu: máy ít tốn dung lượng. Làm sau khi usage reset.
+Mục tiêu: máy ít tốn dung lượng. Code: app/videostudio/drive_storage.py, drive_api.py; thẻ Cài đặt → Google Drive; Kể truyện → Gameplay → Thêm từ Drive. Cần OAuth client Desktop app (bật Drive API, thêm Test users).
 
 - **Tài khoản:** Cài đặt → Google Drive → Thêm tài khoản (OAuth như phần đăng YouTube trong `publishing.py`; không dùng CLI `gdrive` vì máy không còn). Nhiều tài khoản, hiện dung lượng trống từng tài khoản.
 - **Upload thành phẩm:** mặc định một tài khoản chính; sắp đầy thì tự chuyển sang tài khoản kế tiếp. Cây thư mục: `Video/vu-an/<tên vụ án>/…`, `Video/truyen-doc/<tên truyện>/chuong-NNN-…_ngang.mp4|_doc.mp4` (mỗi truyện một thư mục, không thư mục riêng từng chương). Kiểm tra kích thước + MD5 trên Drive khớp rồi mới xoá bản trên máy; lệch thì giữ file và báo lỗi. Kho video: nút Tải từ Drive / Mở trên Drive, xem trước phát từ Drive. Đăng bài/sửa cảnh/dựng lại cần file gốc thì tải tạm từ Drive rồi dọn.
