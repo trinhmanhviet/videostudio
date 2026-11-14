@@ -99,6 +99,9 @@ class Publishing:
             ''')
             if 'tags' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_schedules)')}:
                 db.execute("ALTER TABLE publishing_schedules ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
+            # ai_label: the video was made with AI (voice, pictures), declared to the platform when it allows it
+            if 'ai_label' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_schedules)')}:
+                db.execute('ALTER TABLE publishing_schedules ADD COLUMN ai_label INTEGER NOT NULL DEFAULT 1')
 
     def save_channel(self, identifier, platform, name, credentials):
         if platform not in self.adapters:
@@ -365,9 +368,14 @@ class Publishing:
         if any(not isinstance(v, str) or not v or len(v)>200 for v in normalized.values()):
             raise ValueError('Chọn video, phiên bản và kênh')
         tags = _tags(data.get('tags'))
+        ai_label = data.get('ai_label', True)
+        if type(ai_label) is not bool:
+            raise ValueError('Nhãn AI phải là bật/tắt')
         normalized.update(title=title, caption=caption, publish_at=at)
         if tags:
             normalized['tags'] = tags
+        if not ai_label:
+            normalized['ai_label'] = False
         fingerprint = hashlib.sha256(_json(normalized).encode()).hexdigest()
         with self.store.db() as db:
             prior = db.execute('SELECT id,fingerprint FROM publishing_schedules WHERE idem=?', (key,)).fetchone()
@@ -414,10 +422,10 @@ class Publishing:
                 if duplicate:
                     raise ValueError('Bản video này đã có lịch hoặc đã đăng trên kênh; không tạo trùng')
                 db.execute('''INSERT INTO publishing_schedules
-                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags,ai_label)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                     (identifier,key,fingerprint,normalized['job_id'],normalized['version_id'],str(path),sha,
-                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now,_json(tags)))
+                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now,_json(tags),int(ai_label)))
         return self.get_schedule(identifier)
 
     def _drive_source(self, job_id, youtube):
@@ -637,7 +645,8 @@ class Publishing:
         else:
             metadata = {'snippet':{'title':row['title'],'description':row['caption'],'categoryId':'22',
                                    **({'tags':json.loads(row.get('tags') or '[]')} if json.loads(row.get('tags') or '[]') else {})},
-                        'status':{'privacyStatus':'private','publishAt':_iso(row['publish_at']), 'selfDeclaredMadeForKids':False}}
+                        'status':{'privacyStatus':'private','publishAt':_iso(row['publish_at']), 'selfDeclaredMadeForKids':False,
+                                  'containsSyntheticMedia':bool(row.get('ai_label', 1))}}
             response = self._request('POST','https://www.googleapis.com/upload/youtube/v3/videos',
                                      params={'uploadType':'resumable','part':'snippet,status'},json=metadata,
                                      headers={**headers,'X-Upload-Content-Length':str(size),'X-Upload-Content-Type':'video/mp4'})

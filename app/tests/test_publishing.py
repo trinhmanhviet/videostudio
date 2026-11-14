@@ -189,10 +189,17 @@ class PublishingTests(unittest.TestCase):
         self.service.upload_youtube(raw, self.service.channel('youtube:one'), lambda **kw: None)
         snippet = calls[0][1]['json']['snippet']
         self.assertEqual((snippet['title'], snippet['tags']), ('Chương 1: Cánh cổng', ['truyện audio', 'ngôn tình']))
+        self.assertTrue(calls[0][1]['json']['status']['containsSyntheticMedia'])  # AI label is on unless switched off
         self.service.cancel(row['id'])
         untagged = self.service.create_schedule(dict(job_id='job', version_id='v1', channel_id='youtube:one', title='B', caption='',
                                                      publish_at=datetime.fromtimestamp(self.now+7200, timezone.utc).isoformat()), 'other-key')
         self.assertEqual(json.loads(self.service._raw_schedule(untagged['id'])['tags']), [])
+        self.service.cancel(untagged['id'])
+        plain = self.service.create_schedule(dict(job_id='job', version_id='v1', channel_id='youtube:one', title='C', caption='', ai_label=False,
+                                                  publish_at=datetime.fromtimestamp(self.now+9000, timezone.utc).isoformat()), 'third-key')
+        calls.clear()
+        self.service.upload_youtube(self.service._raw_schedule(plain['id']), self.service.channel('youtube:one'), lambda **kw: None)
+        self.assertFalse(calls[0][1]['json']['status']['containsSyntheticMedia'])
 
     def test_video_on_drive_is_downloaded_checked_posted_and_removed(self):
         import hashlib

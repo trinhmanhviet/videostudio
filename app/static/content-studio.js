@@ -88,7 +88,7 @@
   function schedulePayload(video, fields) {
     if (!video?.job_id || !video?.version_id || !(video.approved === true || video.review_state === 'approved')) throw Error('Hãy duyệt đúng bản video trước khi lên lịch.');
     if (!fields.channel_id || !fields.publish_at || !Number.isFinite(Date.parse(fields.publish_at))) throw Error('Chọn kênh và giờ đăng hợp lệ.');
-    return {job_id:video.job_id,version_id:video.version_id,channel_id:fields.channel_id,title:video.title || '',publish_at:fields.publish_at,caption:fields.caption || '',...(fields.tags?.length?{tags:fields.tags}:{})};
+    return {job_id:video.job_id,version_id:video.version_id,channel_id:fields.channel_id,title:video.title || '',publish_at:fields.publish_at,caption:fields.caption || '',...(fields.tags?.length?{tags:fields.tags}:{}),...(fields.ai_label===false?{ai_label:false}:{})};
   }
   const PUBLICATION_PLATFORMS = {youtube:'YouTube',facebook:'Facebook Page',tiktok:'TikTok',other:'Khác'};
   const postedReceiptKey = id => 'videostudio.posted-cleanup.v1.'+id;
@@ -1048,9 +1048,18 @@
     fbCaption.addEventListener('input',()=>{clearTimeout(fbTimer);fbTimer=setTimeout(runCheck,500);});
     const fbBox=append(el('fieldset','st-post-platform'),el('legend','','Facebook Reels · bản dọc'),field('Lời đăng',fbCaption),fbCheck);
     for(const node of [titleInput,ytDesc,tagsInput,fbCaption])node.addEventListener('input',event=>{if(event.isTrusted)node.dataset.edited='true';});
+    // Honest labelling: YouTube gets the "altered or synthetic content" flag (AI voice and pictures).
+    const aiLabel=el('input');aiLabel.type='checkbox';aiLabel.checked=true;
+    const aiBox=append(el('label','st-post-channel st-ai-label'),aiLabel,append(el('span'),el('strong','','Gắn nhãn nội dung AI'),
+      el('small','','YouTube: bật mục "Nội dung bị thay đổi hoặc tổng hợp".')));
+    // Facebook, case videos: a plain note that the post retells a case and does not glorify violence (placed before the hashtags).
+    const caseNote=video.style==='case'?'Bài đăng thuật lại vụ án, không cổ suý bạo lực. Khán thính giả vui lòng cân nhắc trước khi xem.':'';
+    const withAiNote=text=>{const clean=String(text||'').split('\n').filter(line=>!caseNote||line.trim()!==caseNote).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+      if(!caseNote)return clean;const parts=clean.split('\n\n');const tagsAtEnd=parts.length>1&&/^#/.test(parts[parts.length-1].trim());
+      if(tagsAtEnd)parts.splice(parts.length-1,0,caseNote);else parts.push(caseNote);return parts.join('\n\n');};
     const submit=el('button','','Lưu lịch đăng');submit.type='submit';
     append(form,el('span','st-post-label','Đăng lên'),channelBox,field('Thời gian đăng · Giờ Việt Nam (UTC+7)',append(el('div','studio-schedule-time'),time,soonest)),
-      field('Tiêu đề',titleInput),ytBox,fbBox,el('p','notice','Máy cần bật và tool cần chạy để gửi video đúng giờ.'),error,submit);
+      field('Tiêu đề',titleInput),aiBox,ytBox,fbBox,el('p','notice','Máy cần bật và tool cần chạy để gửi video đúng giờ.'),error,submit);
     let social=null;const boxes=[];
     const chosen=()=>boxes.filter(item=>item.input.checked).map(item=>item.channel);
     const sync=()=>{const platforms=new Set(chosen().map(c=>c.platform));ytBox.hidden=!platforms.has('youtube');const fbWasHidden=fbBox.hidden;fbBox.hidden=!platforms.has('facebook');if(fbWasHidden&&!fbBox.hidden)runCheck();
@@ -1059,7 +1068,7 @@
       if(!titleInput.dataset.edited&&yt.title)titleInput.value=yt.title;
       if(!tagsInput.dataset.edited)tagsInput.value=(yt.tags||[]).join(', ');
       if(!ytDesc.dataset.edited){const tags=(yt.tags||[]).map(t=>'#'+String(t).replace(/[\s#]+/g,'')).filter(h=>h.length>1&&!String(yt.description||'').includes(h)).slice(0,5).join(' ');ytDesc.value=[yt.description,tags].filter(Boolean).join('\n\n');}
-      if(!fbCaption.dataset.edited)fbCaption.value=[fb.caption,(fb.hashtags||[]).filter(h=>!String(fb.caption||'').includes(h)).join(' ')].filter(Boolean).join('\n\n');
+      if(!fbCaption.dataset.edited)fbCaption.value=withAiNote([fb.caption,(fb.hashtags||[]).filter(h=>!String(fb.caption||'').includes(h)).join(' ')].filter(Boolean).join('\n\n'));
       if(!fbBox.hidden)runCheck();};
     request('/api/jobs/'+encodeURIComponent(video.job_id)+'/social').then(data=>{social=data;fill();}).catch(()=>{});
     try{
@@ -1084,7 +1093,7 @@
         const youtube=channel.platform==='youtube';
         try{
           const tags=youtube?tagsInput.value.split(',').map(t=>t.replace(/#/g,'').trim()).filter(Boolean):[];
-          const payload=schedulePayload({...video,title:titleInput.value.trim()},{channel_id:channel.id,publish_at:time.value+':00+07:00',caption:youtube?ytDesc.value:fbCaption.value,tags});
+          const payload=schedulePayload({...video,title:titleInput.value.trim()},{channel_id:channel.id,publish_at:time.value+':00+07:00',caption:youtube?ytDesc.value:fbCaption.value,tags,ai_label:aiLabel.checked});
           const storage={getItem:()=>keys[channel.id]||null,setItem:(_key,value)=>{keys[channel.id]=value;}};const pending=pendingRequest(storage,payload);
           await request('/api/publishing/schedules',{method:'POST',headers:{'Idempotency-Key':pending.key},body:pending.identity});
           done.push(channel);const item=boxes.find(b=>b.channel===channel);item.input.checked=false;item.input.disabled=true;item.input.closest('label').classList.add('is-done');
