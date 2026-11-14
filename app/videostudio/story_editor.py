@@ -291,7 +291,7 @@ class StoryEditor:
         value['tieu_de'] = str(value.get('tieu_de') or '').strip()
         return value
 
-    def run(self, first=None, last=None):
+    def run(self, first=None, last=None, on_chapter=None):
         raw = self.source.read_text(encoding='utf-8')
         title, chapters = split_chapters(raw)
         progress = self._read(self.progress_path, {'chapters': {}})
@@ -322,9 +322,14 @@ class StoryEditor:
                                          'notes': answer.get('ghi_chu') or [], 'seconds': round(time.time() - started), 'at': time.time()}
             self._write(self.progress_path, progress)
             self.log(f'  xong sau {round(time.time() - started)} giây' + (' · CẦN XEM LẠI: ' + '; '.join(problems) if problems else ''))
+            # Each finished chapter is merged (and handed to the caller) at once, so it can be reviewed and queued
+            # while the rest of the book is still being edited.
+            self.merge(profile.get('ten_truyen') or title, chapters, progress, quiet=True)
+            if on_chapter:
+                on_chapter(chapter['number'])
         return self.merge(profile.get('ten_truyen') or title, chapters, progress)
 
-    def merge(self, title, chapters, progress):
+    def merge(self, title, chapters, progress, quiet=False):
         parts, missing = [title.strip()], []
         for chapter in chapters:
             path = self.out / f'chuong_{chapter["number"]:03d}.txt'
@@ -337,7 +342,8 @@ class StoryEditor:
         review = [int(k) for k, v in progress['chapters'].items() if v.get('problems')]
         summary = {'file': str(target), 'chapters_done': len(chapters) - len(missing), 'chapters_total': len(chapters),
                    'missing': missing, 'needs_review': sorted(review)}
-        self.log(f'Đã gộp {summary["chapters_done"]}/{len(chapters)} chương vào {target.name}'
+        if not quiet:
+            self.log(f'Đã gộp {summary["chapters_done"]}/{len(chapters)} chương vào {target.name}'
                  + (f'; chưa làm: {missing[:10]}{"…" if len(missing) > 10 else ""}' if missing else '')
                  + (f'; cần xem lại: {summary["needs_review"]}' if review else ''))
         return summary

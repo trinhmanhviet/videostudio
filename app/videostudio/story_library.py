@@ -129,7 +129,14 @@ class StoryLibrary:
                 job_id TEXT, updated REAL NOT NULL);
             CREATE TABLE IF NOT EXISTS episodes(id TEXT PRIMARY KEY, book_id TEXT NOT NULL, snapshot_sha256 TEXT NOT NULL,
                 chapter_ids TEXT NOT NULL, idem TEXT UNIQUE, created REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS chapter_history(chapter_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL,
+                text TEXT NOT NULL, sha256 TEXT NOT NULL, saved REAL NOT NULL, reason TEXT NOT NULL);
             ''')
+            # source_sha256 = the text as last imported from a file or the ChatGPT edit. When the chapter text differs
+            # from it, the user has edited the chapter and a later import must never overwrite it.
+            if 'source_sha256' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
+                db.execute('ALTER TABLE chapters ADD COLUMN source_sha256 TEXT')
+                db.execute('UPDATE chapters SET source_sha256=sha256')
 
     @contextmanager
     def db(self):
@@ -260,6 +267,7 @@ class StoryLibrary:
             read_title = int(bool(data.get('read_title', row['read_title'])))
             changed = (text, title, read_title) != (row['text'], row['title'], row['read_title'])
             if changed:
+                self._remember(db, row, 'trước khi lưu')
                 db.execute('UPDATE chapters SET title=?,text=?,read_title=?,sha256=?,revision=revision+1,updated=? WHERE id=?',
                            (title, text, read_title, sha256_text(text), time.time(), chapter_id))
                 db.execute('UPDATE books SET updated=? WHERE id=?', (time.time(), row['book_id']))
@@ -306,7 +314,7 @@ class StoryLibrary:
                 continue
             stem = Path(name).stem
             prepared.append({'source_name': name, 'number': number, 'title': title or stem, 'text': body})
-        added, updated, skipped = 0, 0, 0
+        added, updated, skipped, kept = 0, 0, 0, 0
         now = time.time()
         with self.db() as db:
             position = db.execute('SELECT COALESCE(MAX(position),-1) FROM chapters WHERE book_id=? AND deleted=0', (book_id,)).fetchone()[0]
@@ -316,21 +324,45 @@ class StoryLibrary:
                 digest = sha256_text(item['text'])
                 old = db.execute('SELECT * FROM chapters WHERE book_id=? AND source_name=? AND deleted=0', (book_id, item['source_name'])).fetchone()
                 if old and old['sha256'] == digest:
+                    if old['source_sha256'] != digest:
+                        db.execute('UPDATE chapters SET source_sha256=? WHERE id=?', (digest, old['id']))
                     skipped += 1
                     continue
+                if old and old['source_sha256'] and old['sha256'] != old['source_sha256']:
+                    kept += 1  # edited by the user since the last import: their text wins
+                    continue
                 if old:
-                    db.execute('UPDATE chapters SET text=?,sha256=?,revision=revision+1,updated=? WHERE id=?', (item['text'], digest, now, old['id']))
+                    self._remember(db, old, 'trước khi nhập bản mới')
+                    db.execute('UPDATE chapters SET text=?,sha256=?,source_sha256=?,revision=revision+1,updated=? WHERE id=?',
+                               (item['text'], digest, digest, now, old['id']))
                     updated += 1
                     continue
                 if db.execute('SELECT 1 FROM chapters WHERE book_id=? AND sha256=? AND deleted=0', (book_id, digest)).fetchone():
                     skipped += 1
                     continue
                 position += 1
-                db.execute('INSERT INTO chapters VALUES(?,?,?,?,?,1,?,?,?,1,?,?,0)', (uuid.uuid4().hex, book_id, position, item['number'],
-                           (item['title'] or f'Chương {position + 1}')[:300], item['text'], digest, item['source_name'], now, now))
+                db.execute('INSERT INTO chapters(id,book_id,position,number,title,read_title,text,sha256,source_name,revision,created,updated,deleted,source_sha256) '
+                           'VALUES(?,?,?,?,?,1,?,?,?,1,?,?,0,?)', (uuid.uuid4().hex, book_id, position, item['number'],
+                           (item['title'] or f'Chương {position + 1}')[:300], item['text'], digest, item['source_name'], now, now, digest))
                 added += 1
             db.execute('UPDATE books SET updated=? WHERE id=?', (now, book_id))
-        return {'added': added, 'updated': updated, 'skipped': skipped}
+        return {'added': added, 'updated': updated, 'skipped': skipped, 'kept': kept}
+
+    @staticmethod
+    def _remember(db, row, reason):
+        """Every replaced chapter text is kept, so an edit can always be recovered."""
+        db.execute('INSERT INTO chapter_history VALUES(?,?,?,?,?,?,?)', (row['id'], row['revision'], row['title'], row['text'], row['sha256'], time.time(), reason))
+
+    def history(self, chapter_id):
+        with self.db() as db:
+            return [dict(r) for r in db.execute('SELECT revision,title,sha256,saved,reason,LENGTH(text) characters FROM chapter_history WHERE chapter_id=? ORDER BY saved DESC', (chapter_id,))]
+
+    def restore(self, chapter_id, revision):
+        with self.db() as db:
+            old = db.execute('SELECT * FROM chapter_history WHERE chapter_id=? AND revision=? ORDER BY saved DESC LIMIT 1', (chapter_id, revision)).fetchone()
+        if not old:
+            raise KeyError('Không có bản cũ này')
+        return self.save_chapter(chapter_id, {'title': old['title'], 'text': old['text']})
 
     # --- gameplay ----------------------------------------------------------------------------------------
     def probe_video(self, path):

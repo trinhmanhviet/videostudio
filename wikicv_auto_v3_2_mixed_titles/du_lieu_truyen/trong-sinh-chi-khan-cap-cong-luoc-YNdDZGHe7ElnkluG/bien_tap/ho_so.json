@@ -231,6 +231,141 @@
    "gioi_tinh": "Chưa xác định",
    "ten": "Lớp trưởng của Bạch Thù Văn",
    "xung_ho": "Được Giang Thự nhắc đến khi muốn tìm người trao đổi cách giải bài toán cuối cùng trong phần tự luận. Chưa xuất hiện trực tiếp, chưa rõ tên, giới tính hoặc quan hệ cụ thể ngoài chức vụ lớp trưởng. Nếu xuất hiện trong chương sau, xác định cách xưng hô theo ngữ cảnh thực tế."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Phượng Minh Mộng",
+   "xung_ho": "Bạn thân từ nhỏ của Bạch Thù Văn và Giang Thự, có biệt danh Manh Manh. Với Bạch Thù Văn: tớ - cậu, giọng mềm mại, đáng yêu, thân thiết, đôi khi làm nũng và trêu chọc. Với Giang Thự: tớ - cậu, thân tình, có thể giả vờ giận dỗi. Trong lời kể dùng Phượng Minh Mộng, Minh Mộng, Manh Manh hoặc cô nàng. Theo học một trường cấp ba khác để có điều kiện tự do học nghệ thuật. Chưa xác định chiều cao chính xác, chỉ biết thấp hơn Bạch Thù Văn."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Nữ sinh đội mũ trong nhà ma",
+   "xung_ho": "Một nữ sinh chưa rõ danh tính, đội mũ, đứng cùng lượt với Bạch Thù Văn khi vào nhà ma. Có vẻ sợ hãi, vai run, giọng nói rất nhỏ, đôi mắt sáng nổi bật trong bóng tối. Với Bạch Thù Văn: tạm dùng tôi - cậu hoặc lược đại từ theo lời thoại thực tế. Chưa xác định tên, tuổi, trường học hoặc quan hệ với các nhân vật khác. Tuyệt đối không tự đồng nhất với cô gái bí ẩn xuất hiện ở chương đầu."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Mẹ Giang Thự",
+   "xung_ho": "Mẹ ruột của Giang Thự, xuất thân từ một gia đình có thế lực lớn bên bạch đạo. Là con gái duy nhất và con cả trong nhà theo bản convert. Từng bất chấp sự phản đối của gia đình để kết hôn với bố Giang Thự. Dịu dàng, nhân hậu, thường dạy con trai phải khoan dung và bảo vệ những người quan trọng. Từng tự tay may một chiếc váy dài cho Bạch Thù Văn nhân dịp kỷ niệm mười năm hai đứa trẻ quen biết. Qua đời sau khi chiếc xe chở bà bị giới hắc đạo phục kích. Trong lời kể dùng mẹ Giang Thự, mẹ anh, bà hoặc người mẹ đã khuất. Với Giang Thự khi còn nhỏ: mẹ - con. Với Bạch Thù Văn: chưa có lời thoại trực tiếp trong chương, tạm dùng bác - cháu nếu xuất hiện sau này và không có dữ kiện khác."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Bố Giang Thự",
+   "xung_ho": "Bố ruột của Giang Thự, từng học tiểu học cùng bố Bạch Thù Văn. Là người có tham vọng kinh doanh, ưa mạo hiểm và từng kiếm tiền bằng những phương thức không chính đáng, có liên hệ với cả hai phía bạch đạo và hắc đạo. Sau thời gian trốn tránh, từng chuyển đến làm hàng xóm nhà họ Bạch và bắt đầu kinh doanh đàng hoàng, nhưng về sau tiếp tục mở rộng quá mức, đắc tội với nhiều thế lực, bị kết án tù chung thân rồi được trả tự do theo thỏa thuận liên quan đến vợ. Trong lời kể dùng bố Giang Thự, bố anh hoặc ông. Với Giang Thự: bố - con. Chưa có lời thoại trực tiếp trong chương."
+  },
+  {
+   "gioi_tinh": "Chưa xác định rõ từ bản convert",
+   "ten": "Người có thế lực bên bạch đạo, thuộc gia đình mẹ Giang Thự",
+   "xung_ho": "Là người thuộc phía gia đình ruột của mẹ Giang Thự, có thế lực lớn bên bạch đạo và là tiền bối của bố Bạch Thù Văn. Có liên quan đến quyết định trừng trị bố Giang Thự và thỏa thuận trả tự do cho ông nếu mẹ Giang Thự trở về. Bản convert quy chiếu người này bằng từ bạch đạo nên chưa đủ căn cứ xác định chức danh, tên riêng hoặc toàn bộ quan hệ huyết thống. Trong lời kể ưu tiên người có thế lực bên bạch đạo hoặc phía gia đình mẹ Giang Thự."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Nam sinh lạ trong khoang đu quay",
+   "xung_ho": "Người ngồi cùng khoang vòng đu quay với Phượng Minh Mộng khi cô cố tình sắp xếp để Bạch Thù Văn ở riêng với Giang Thự. Hai người chưa quen biết. Chưa xác định tên, tuổi, ngoại hình, quan hệ hoặc lời thoại. Trong lời kể dùng nam sinh xa lạ hoặc chàng trai chưa quen biết."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Bạch Xu Diệp",
+   "xung_ho": "Anh trai ruột của Bạch Thù Văn, được xác nhận tên thật trong chương này. Là quân nhân, cao hơn một mét tám, có lông mày rậm, mắt lớn, sống mũi cao và đôi môi mỏng. Thường mặc quân phục màu xanh lục, có khả năng đánh nhau tốt, tính tình nghiêm khắc và hay bắt nạt em gái bằng lời nói. Trong chương này được nghỉ phép ba ngày dịp Quốc khánh. Được bố hỏi thăm về thành tích trong đội nghi lễ. Với Bạch Thù Văn: anh - em, thường nói năng cộc cằn, có thể trêu chọc hoặc dọa luyện võ. Với Phượng Minh Mộng: anh - em, nghiêm nghị nhưng quan tâm và có tình cảm đặc biệt. Với Giang Thự: anh - em. Với bố mẹ: con - bố/mẹ. Trong lời kể dùng Bạch Xu Diệp, anh trai Bạch Thù Văn, anh hoặc anh Bạch tùy ngữ cảnh. Đây là nhân vật anh trai đã có trong hồ sơ, nay được xác nhận tên, không phải người mới hoàn toàn."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Nam sinh quấy rối Phượng Minh Mộng",
+   "xung_ho": "Nam sinh xa lạ ngồi cùng khoang vòng đu quay với Phượng Minh Mộng. Khi vòng đu quay lên đến vị trí cao nhất, cậu ta nắm tay cô, đề nghị làm quen và muốn cô trở thành bạn gái mình. Sau khi bị từ chối, vẫn tiếp tục níu kéo, đến lúc xuống xe còn kéo rách áo khoác của cô. Bị Bạch Xu Diệp đá văng ra xa, sau đó bị Bạch Thù Văn quát đuổi và bỏ chạy. Chưa rõ tên, tuổi chính xác, trường học và thân phận. Trong lời kể dùng nam sinh xa lạ, gã nam sinh hoặc cậu ta. Với Phượng Minh Mộng: chưa có lời thoại trực tiếp được trích nguyên văn. Với Bạch Xu Diệp: tôi - anh khi giải thích."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Chú Diêu",
+   "xung_ho": "Người quen của gia đình Bạch, được bố Bạch Thù Văn nhắc đến khi yêu cầu Bạch Xu Diệp cùng đi thăm vào ngày kia. Theo lời bố Bạch, chú Diêu rất muốn gặp Bạch Xu Diệp. Chưa xuất hiện trực tiếp, chưa rõ tên đầy đủ, tuổi, nghề nghiệp và quan hệ cụ thể với gia đình. Bạch Xu Diệp gọi là chú Diêu, xưng cháu - chú nếu sau này xuất hiện và không có chỉ dẫn khác."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Quản lý quán bar Số Ba",
+   "xung_ho": "Người phụ trách điều hành quán bar Số Ba, được Lăng Ương nhắc đến. Trong dịp kỷ niệm ba năm thành lập, người này yêu cầu các ca sĩ biểu diễn phải trang điểm và xuất hiện với dáng vẻ đẹp trai nhất vì ánh đèn khác thường ngày. Chưa xuất hiện trực tiếp, chưa xác định tên, tuổi, giới tính hoặc quan hệ cụ thể với Đường Trưng và Lăng Ương. Trong lời kể dùng quản lý quán hoặc người quản lý. Chưa có lời thoại trực tiếp để xác định cách xưng hô."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Người trông cửa quán bar Số Ba",
+   "xung_ho": "Nhân viên phụ trách cửa ra vào quán bar, được Lăng Ương dặn rằng nếu nhìn thấy con mèo trắng Nghiêu thì cứ để nó đi vào. Chưa xuất hiện trực tiếp, chưa rõ tên, giới tính, tuổi hoặc lời thoại. Trong lời kể dùng người trông cửa hoặc nhân viên cửa quán."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Nữ nhân viên trang điểm cho Đường Trưng",
+   "xung_ho": "Người phụ nữ đang trang điểm cho Đường Trưng trong phòng nghỉ quán bar. Cô run tay vì áp lực từ thái độ đối đầu giữa Bạch Xu Diệp và Đường Trưng. Chưa xác định tên, tuổi hoặc vai trò cụ thể ngoài việc trang điểm. Không có lời thoại trực tiếp."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Gã đàn ông đội mũ đen trong quán bar",
+   "xung_ho": "Người đàn ông gầy gò, gò má cao, cằm nhọn, má hóp, mắt dài hẹp và gương mặt tái nhợt. Mặc áo khoác ngoài, đội mũ lưỡi trai đen. Lợi dụng đám đông trong quán bar để tìm cách bắt Phượng Minh Mộng đi. Khi bị hai anh em Bạch Thù Văn dùng bạo lực ép khai, hắn thừa nhận thường đến quán vào những hôm đông khách để dễ đưa phụ nữ đi mà không bị phát hiện. Hắn nhớ lại việc đã đâm chết một nữ sinh chống cự mình trong con hẻm phía sau quán một tháng trước. Chính Bạch Thù Văn nhận ra hắn nhờ dấu hiệu siêu nhiên do Nghiêu hướng dẫn. Chưa xác định tên, tuổi hoặc lai lịch. Với Bạch Thù Văn: tôi - cô khi chối tội; trong lời kể dùng gã đàn ông, hắn hoặc kẻ tấn công."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Ông chủ quán bar Số Ba",
+   "xung_ho": "Người đàn ông có vẻ ngoài quyến rũ, biểu diễn múa cột trên sân khấu quán bar. Được Lăng Ương xác nhận là ông chủ của quán. Trong lúc biểu diễn, trang phục trên người dần giảm xuống, cuối cùng chỉ còn quần đùi và cà vạt. Chưa xác định tên thật, tuổi hay quan hệ cụ thể với quản lý quán đã nhắc đến trước đó. Không có lời thoại trực tiếp."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Nữ sinh mang dấu hiệu con bướm lửa đỏ",
+   "xung_ho": "Nữ sinh chưa rõ danh tính, mặc áo khoác dáng dài màu đỏ sẫm với chiếc nơ bướm ở phía sau, quần bò, đội mũ đen có hoa văn giản dị, tóc đen thẳng dài chấm vai và đeo khuyên tai nhỏ đính đá. Xuất hiện tại lối ra quán bar, va phải Bạch Thù Văn và bị ngã. Trong khoảnh khắc nhắm mắt, Bạch Thù Văn nhìn thấy trên trán cô gái một ngọn lửa màu đỏ thẫm có hình con bướm. Chưa xác định tên, tuổi, thân phận, mối quan hệ với Bạch Thù Văn hoặc ý nghĩa dấu hiệu siêu nhiên. Không có lời thoại trực tiếp."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Liễu Mộ Thanh",
+   "xung_ho": "Nữ sinh từng được Bạch Thù Văn đỡ khi suýt ngã trong nhà ma ở công viên giải trí, sau đó gặp lại tại quán bar Số Ba. Đến chương này mới được xác nhận tên thật là Liễu Mộ Thanh. Có gương mặt trái xoan nhỏ nhắn, mắt to sáng, hàng mi dài, lông mày thanh mảnh, mắt hai mí và vẻ ngoài ngoan ngoãn, xinh đẹp. Lúc gặp ở quán bar mặc áo khoác đỏ sẫm, đội mũ đen và đeo khuyên tai nhỏ. Khi chuyển trường, mặc quần áo thường ngày gọn gàng, tóc đen buộc đuôi ngựa cao. Tính cách dịu dàng, trầm tĩnh, điềm đạm; có lúc tỏ ra căng thẳng nhưng giấu kín. Chuyển đến học cùng lớp 3 với Bạch Thù Văn, nói rằng gia đình vừa chuyển nhà đến gần trường. Trên trán có dấu hiệu lửa linh hồn màu đỏ thẫm hình con bướm, chỉ được Bạch Thù Văn nhìn thấy bằng cách đặc biệt. Với Bạch Thù Văn: tớ - cậu, giọng nhẹ nhàng, rõ ràng, lịch sự. Trong lời kể dùng Liễu Mộ Thanh, Mộ Thanh hoặc cô gái. Đây chính là nữ sinh từng xuất hiện ở nhà ma và ở cuối chương trước, không phải nhân vật hoàn toàn mới."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Diêu Tấn",
+   "xung_ho": "Hội trưởng Hội Học Sinh, con trai chú Diêu, một chiến hữu thân thiết của bố Bạch Thù Văn. Đeo kính, có vẻ ngoài lạnh nhạt, kiêu ngạo; cao ít nhất một mét bảy ở hiện tại. Từ nhỏ ít nói, sống khép kín, thích yên tĩnh, học giỏi và không thích gây chuyện. Từng bị bố thường xuyên đem so sánh với Bạch Xu Diệp, sau đó còn bị so sánh với Bạch Thù Văn về sự can đảm và mạnh mẽ. Vì vậy, quan hệ giữa Diêu Tấn và Bạch Thù Văn không tốt, gặp nhau thường coi như không thấy. Là mục tiêu công lược mới được hệ thống xác nhận, với sở thích được thông báo là thi cử. Với Bạch Thù Văn: tôi - cậu, giọng lạnh lùng, gay gắt, có thể trách mắng trực tiếp. Trong lời kể dùng Diêu Tấn hoặc cậu ta. Đây là nhân vật mới được nêu đích danh, không phải chú Diêu."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Chị khóa trên phụ trách tuyển thành viên Hội Học Sinh",
+   "xung_ho": "Nữ sinh khóa trên phụ trách tiếp nhận đơn đăng ký gia nhập Hội Học Sinh. Có mặt khi Bạch Thù Văn và Diêu Tấn cãi nhau. Ban đầu lịch sự hướng dẫn Bạch Thù Văn điền đơn, sau đó hoang mang và sợ hãi vì cơn giận của hội trưởng. Cuối cùng vẫn nhận đơn và mỉm cười đáp lại Bạch Thù Văn. Với Bạch Thù Văn: chị - em. Trong lời kể dùng chị khóa trên hoặc nữ sinh phụ trách tuyển thành viên. Chưa xác định tên, tuổi chính xác hay chức vụ cụ thể trong Hội Học Sinh."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Giáo viên trao đổi với Diêu Tấn về việc học bổ túc",
+   "xung_ho": "Giáo viên được nhắc đến khi việc Bạch Thù Văn liên tục tìm Diêu Tấn nhờ dạy Toán gây chú ý trong trường. Người này đã tìm Diêu Tấn trao đổi, sau đó hai ngày cậu đồng ý nhận kèm Bạch Thù Văn. Không có lời thoại trực tiếp, chưa rõ tên, giới tính, môn giảng dạy hoặc quan hệ cụ thể với hai học sinh. Trong lời kể dùng giáo viên hoặc thầy cô."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Chị gái Lăng Ương",
+   "xung_ho": "Chị gái của Lăng Ương, bị dị ứng với lông thú nuôi. Vì vậy Lăng Ương không thể đưa Nghiêu về nhà dù rất yêu thích nó. Chưa xuất hiện trực tiếp, chưa rõ tên, tuổi và cách xưng hô ngoài quan hệ chị em. Trong lời kể dùng chị gái Lăng Ương hoặc chị cậu."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Người bí ẩn theo dõi Đường Trưng",
+   "xung_ho": "Nhân vật chưa rõ danh tính, xuất hiện từ phía sau một gốc cây gần Đường Trưng vào đêm khuya. Được Đường Trưng nhận ra đang theo dõi mình và đáp lại lời cậu bằng thái độ bình thản. Chưa xác định giới tính, ngoại hình, tuổi, động cơ hay quan hệ với các nhân vật khác. Khi đối thoại với Đường Trưng, tạm dùng tôi - cậu. Trong lời kể dùng người bí ẩn hoặc bóng người."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Diêu Phong Nam",
+   "xung_ho": "Tên thật vừa được xác nhận của bố Diêu Tấn, chính là chú Diêu đã xuất hiện trong hồ sơ nhân vật trước. Ông có quan hệ họ hàng khác nhánh với mẹ Bạch Thù Văn và từng nâng đỡ bà trong sự nghiệp chính trị. Theo lời kể, ông từng được bố Bạch chắn đạn và mẹ Bạch phẫu thuật cứu trong thời kỳ kháng chiến. Về sau bị giáng chức giữa vụ bê bối do những lời đồn về quan hệ ngoài hôn nhân gây ra. Với Bạch Thù Văn và Bạch Xu Diệp: chú - cháu. Với Diêu Tấn: bố - con. Không xem đây là nhân vật mới hoàn toàn, mà là việc xác nhận tên của nhân vật đã biết."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Thiên sư phát hiện thân phận Nghiêu",
+   "xung_ho": "Một người chưa rõ danh tính mà Nghiêu gặp trong hai ngày đi điều tra dấu ấn trên trán Liễu Mộ Thanh. Người này đã phát hiện ra thân phận của Nghiêu và được xác nhận là thiên sư. Chưa rõ tuổi, giới tính, ngoại hình, động cơ và quan hệ với những nhân vật khác. Chưa có lời thoại trực tiếp, chưa xác định cách xưng hô."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Cô giáo cũ của Nghiêu",
+   "xung_ho": "Người từng dạy Nghiêu tại thế giới của những người dẫn đường linh hồn, đã lâu không gặp cậu. Khi nghe mô tả về dấu ấn lửa linh hồn màu đỏ, bà thay đổi sắc mặt, nghiêm túc yêu cầu Nghiêu ngừng điều tra và nói sẽ tự mình tìm hiểu. Chưa rõ tên, tuổi, địa vị, năng lực hoặc lý do phản ứng như vậy. Nghiêu gọi là thầy ta, trong lời kể dùng cô giáo cũ hoặc người thầy của Nghiêu. Chưa có lời thoại trực tiếp."
+  },
+  {
+   "gioi_tinh": "Chưa xác định",
+   "ten": "Phó chủ nhiệm Câu lạc bộ nhảy đường phố",
+   "xung_ho": "Thành viên ban phụ trách Câu lạc bộ nhảy đường phố, có vóc dáng thấp bé. Từ trong đám đông gọi Bạch Thù Văn trông chừng Liễu Mộ Thanh, giải thích rằng chủ nhiệm câu lạc bộ và những người khác vừa cho Mộ Thanh uống một ít rượu. Với Bạch Thù Văn: cậu - tôi hoặc lược đại từ tùy ngữ cảnh. Chưa rõ tên, tuổi và giới tính."
+  },
+  {
+   "gioi_tinh": "Nam",
+   "ten": "Bùi Vân Du",
+   "xung_ho": "Thiên sư được hệ thống xác nhận là mục tiêu công lược mới của Bạch Thù Văn. Tuổi và sở thích chưa rõ. Mặc áo khoác dài màu xám, đi bốt da kiểu Martens, có đôi lông mày sắc nét, mắt sáng và thần thái trầm tĩnh. Giọng nói trong trẻo, phong cách đối thoại văn vẻ, có phần cổ kính. Chủ động hỏi Bạch Thù Văn về những người và sự việc kỳ lạ cô từng gặp, rồi đưa danh thiếp có hình bát quái. Biết tên Bạch Thù Văn dù đây là lần đầu hai người trực tiếp gặp nhau. Với Bạch Thù Văn: xưng ta, gọi tiểu hữu hoặc người bạn trẻ. Trong lời kể dùng Bùi Vân Du, anh hoặc người đàn ông. Chưa xác định động cơ, nguồn gốc khả năng hay mối liên hệ với Nghiêu."
+  },
+  {
+   "gioi_tinh": "Nữ",
+   "ten": "Mẹ Diêu Tấn, dì Chu",
+   "xung_ho": "Vợ của Diêu Phong Nam, mẹ ruột Diêu Tấn. Họ Chu được thể hiện qua cách Bạch Thù Văn gọi là Chu a di. Quen Diêu Phong Nam tại một ngôi làng nhỏ khi ông được cử xuống cơ sở trải nghiệm cuộc sống. Rất coi trọng quan hệ dòng họ, phân biệt rạch ròi người trong tộc với người ngoài. Có mối bất hòa lâu năm với mẹ Bạch Thù Văn. Trong lễ cúng tổ, công khai châm chọc và mắng nhiếc mẹ Bạch, sau đó bị Bạch Thù Văn khống chế hai tay. Với Bạch Thù Văn: dì - cháu khi bình thường; trong lúc nổi giận có thể gọi cô, mày theo ngữ cảnh. Bạch Thù Văn gọi bà là dì Chu. Trong lời kể dùng mẹ Diêu Tấn hoặc bà Chu."
   }
  ],
  "ten_truyen": "Trọng Sinh: Công Lược Khẩn Cấp",
@@ -951,6 +1086,1138 @@
   {
    "goc": "Ban ngày sử",
    "dich": "Thiên sứ ban ngày, tên liên lạc mang sắc thái tự đề cao và trêu đùa"
+  },
+  {
+   "goc": "Hảo cảm không phải ngươi tưởng xoát, tưởng xoát là có thể xoát",
+   "dich": "Thiện Cảm Đâu Phải Cứ Muốn Là Tăng"
+  },
+  {
+   "goc": "Điều nghiên địa hình",
+   "dich": "Canh sát giờ mới đến, đến trường vừa đúng lúc chuông reo"
+  },
+  {
+   "goc": "Chạm đến nguyên tắc vấn đề",
+   "dich": "Chạm đến vấn đề mang tính nguyên tắc"
+  },
+  {
+   "goc": "Xét khấu phân",
+   "dich": "Xem xét trừ điểm"
+  },
+  {
+   "goc": "Nguyệt khảo",
+   "dich": "Kỳ kiểm tra tháng"
+  },
+  {
+   "goc": "Tiểu thái muội",
+   "dich": "Nữ sinh ngỗ nghịch, thích gây chuyện"
+  },
+  {
+   "goc": "Tri tâm hối cải",
+   "dich": "Biết hối cải, nhận ra lỗi lầm"
+  },
+  {
+   "goc": "Hút miêu",
+   "dich": "Ôm ấp, vuốt ve và hít hà mèo vì quá yêu thích"
+  },
+  {
+   "goc": "Mở ra tân thế giới đại môn",
+   "dich": "Mở ra cánh cửa dẫn đến một thế giới mới, cách nói ẩn dụ về một nhận thức mới"
+  },
+  {
+   "goc": "Tính dẻo",
+   "dich": "Khả năng thích nghi, khả năng thay đổi nhận thức hoặc cảm xúc"
+  },
+  {
+   "goc": "Nên tới tổng hội tới",
+   "dich": "Điều Gì Đến Rồi Cũng Sẽ Đến"
+  },
+  {
+   "goc": "Mười một, thập nhất",
+   "dich": "Ngày mùng một tháng mười, dịp Quốc khánh Trung Quốc"
+  },
+  {
+   "goc": "Thông báo",
+   "dich": "Tỏ tình, bày tỏ tình cảm"
+  },
+  {
+   "goc": "Thông đồng người khác",
+   "dich": "Tiếp cận, tán tỉnh hoặc tìm cách giành thiện cảm của người khác tùy ngữ cảnh"
+  },
+  {
+   "goc": "Cõng lão công trộm tanh",
+   "dich": "Lén chồng ra ngoài tán tỉnh người khác"
+  },
+  {
+   "goc": "Màn trời chiếu đất",
+   "dich": "Lang thang ngoài trời, lấy trời làm màn, lấy đất làm giường"
+  },
+  {
+   "goc": "Bạch mụ mụ",
+   "dich": "Mẹ Bạch"
+  },
+  {
+   "goc": "Dệt áo lông",
+   "dich": "Đan áo len"
+  },
+  {
+   "goc": "Thông tin lục",
+   "dich": "Danh bạ điện thoại"
+  },
+  {
+   "goc": "Phượng Minh Mộng",
+   "dich": "Phượng Minh Mộng"
+  },
+  {
+   "goc": "Manh manh",
+   "dich": "Manh Manh, biệt danh của Phượng Minh Mộng"
+  },
+  {
+   "goc": "Phượng hoàng minh xướng",
+   "dich": "Phượng hoàng cất tiếng hót"
+  },
+  {
+   "goc": "Khuê mật",
+   "dich": "Bạn thân, bạn gái thân thiết"
+  },
+  {
+   "goc": "Trung khảo",
+   "dich": "Kỳ thi vào cấp ba"
+  },
+  {
+   "goc": "Kê khai chí nguyện",
+   "dich": "Đăng ký nguyện vọng vào trường"
+  },
+  {
+   "goc": "Nhất kiến chung tình",
+   "dich": "Yêu từ cái nhìn đầu tiên"
+  },
+  {
+   "goc": "Gánh trách nhiệm",
+   "dich": "Làm lá chắn, chịu tiếng thay trong tình huống này"
+  },
+  {
+   "goc": "Giao thông công cộng trạm",
+   "dich": "Trạm xe buýt"
+  },
+  {
+   "goc": "Hai trạm lộ",
+   "dich": "Cách hai trạm xe"
+  },
+  {
+   "goc": "Nhà ma",
+   "dich": "Nhà ma, trò tham quan kinh dị tại công viên giải trí"
+  },
+  {
+   "goc": "Tâm lý chướng ngại",
+   "dich": "Nỗi sợ, trở ngại tâm lý"
+  },
+  {
+   "goc": "Âm phong",
+   "dich": "Luồng gió lạnh gây cảm giác rùng rợn"
+  },
+  {
+   "goc": "Sàn nhà ao hãm",
+   "dich": "Sàn nhà bất ngờ lún xuống"
+  },
+  {
+   "goc": "Có một số việc, vẫn luôn tồn tại",
+   "dich": "Có Những Điều Vẫn Luôn Tồn Tại"
+  },
+  {
+   "goc": "Đến gần thủ pháp",
+   "dich": "Chiêu làm quen, cách tiếp cận để bắt chuyện hoặc tán tỉnh"
+  },
+  {
+   "goc": "Đu quay ba chiều",
+   "dich": "Trò xoay ba chiều tại công viên giải trí"
+  },
+  {
+   "goc": "Bánh xe quay căn nhà nhỏ",
+   "dich": "Khoang đu quay, cabin dành cho khách ngồi"
+  },
+  {
+   "goc": "Lịch sử kinh người trùng hợp",
+   "dich": "Lịch sử trùng hợp đến mức đáng sợ, tình huống hiện tại giống với ký ức ở thế giới trước"
+  },
+  {
+   "goc": "Vẻ mặt tặc cười",
+   "dich": "Nụ cười gian xảo, đắc ý vì kế hoạch của mình"
+  },
+  {
+   "goc": "Rình coi",
+   "dich": "Cố nhìn trộm, lén quan sát"
+  },
+  {
+   "goc": "Lưu quang dật thải",
+   "dich": "Ánh sáng lung linh, rực rỡ"
+  },
+  {
+   "goc": "Hổ phách con ngươi",
+   "dich": "Đôi mắt màu hổ phách"
+  },
+  {
+   "goc": "Giấy ếch xanh",
+   "dich": "Con ếch gấp bằng giấy"
+  },
+  {
+   "goc": "Nam tử hán đỉnh thiên lập địa",
+   "dich": "Người đàn ông sống ngay thẳng, vững vàng và có trách nhiệm"
+  },
+  {
+   "goc": "Thuần thủ công váy dài",
+   "dich": "Chiếc váy dài được may hoàn toàn bằng tay"
+  },
+  {
+   "goc": "Chết không nhắm mắt",
+   "dich": "Ra đi trong oan khuất hoặc còn điều dang dở, không thể nhắm mắt thanh thản"
+  },
+  {
+   "goc": "Thời đại biến thiên",
+   "dich": "Thời kỳ xã hội thay đổi, chuyển mình"
+  },
+  {
+   "goc": "Thương cơ",
+   "dich": "Cơ hội kinh doanh"
+  },
+  {
+   "goc": "Vớt tiền",
+   "dich": "Kiếm được một khoản tiền lớn, thường mang sắc thái thu lợi bất chính"
+  },
+  {
+   "goc": "Chính quy thủ đoạn",
+   "dich": "Phương thức làm ăn chính đáng, hợp pháp"
+  },
+  {
+   "goc": "Hắc bạch lưỡng đạo",
+   "dich": "Hai phía bạch đạo và hắc đạo, tương ứng với các thế lực hợp pháp hoặc có quan hệ với chính quyền và thế giới ngầm trong bối cảnh truyện"
+  },
+  {
+   "goc": "Bạch đạo",
+   "dich": "Phe bạch đạo, giới có thế lực bên phía hợp pháp hoặc chính quyền"
+  },
+  {
+   "goc": "Hắc đạo",
+   "dich": "Giới hắc đạo, các thế lực ngầm hoặc tổ chức làm ăn phi pháp"
+  },
+  {
+   "goc": "Vượt tỉnh",
+   "dich": "Mở rộng hoạt động kinh doanh sang tỉnh khác"
+  },
+  {
+   "goc": "Chuyển biến tốt liền thu",
+   "dich": "Biết dừng đúng lúc, không tham lam mở rộng quá mức"
+  },
+  {
+   "goc": "Đè ép gồm thâu",
+   "dich": "Chèn ép và thâu tóm"
+  },
+  {
+   "goc": "Nhạ hỏa thượng thân",
+   "dich": "Tự rước họa vào thân"
+  },
+  {
+   "goc": "Khấu chậu phân",
+   "dich": "Vu thêm tội, đổ thêm những việc xấu lên đầu người khác"
+  },
+  {
+   "goc": "Nội ứng ngoại hợp",
+   "dich": "Hai phía phối hợp với nhau để gây sức ép"
+  },
+  {
+   "goc": "Ở tù chung thân",
+   "dich": "Nhận bản án tù chung thân"
+  },
+  {
+   "goc": "Huyết nhục",
+   "dich": "Máu mủ ruột thịt, con ruột"
+  },
+  {
+   "goc": "Lão đại",
+   "dich": "Người con cả trong gia đình, khi dùng để nói về thứ bậc anh chị em"
+  },
+  {
+   "goc": "Một lòng một dạ",
+   "dich": "Hết lòng tin tưởng, trước sau không thay đổi tình cảm"
+  },
+  {
+   "goc": "Mở một con mắt nhắm một con mắt",
+   "dich": "Biết nhưng làm ngơ, không can thiệp"
+  },
+  {
+   "goc": "Phạm nhiều người tức giận",
+   "dich": "Đắc tội với quá nhiều người, gây ra sự bất mãn trên diện rộng"
+  },
+  {
+   "goc": "Cửa nát nhà tan",
+   "dich": "Gia đình tan nát, mất người thân và chỗ dựa"
+  },
+  {
+   "goc": "Tìm chỗ khoan dung mà độ lượng",
+   "dich": "Khi có thể tha thứ thì hãy biết khoan dung"
+  },
+  {
+   "goc": "Dục vọng che mắt",
+   "dich": "Để ham muốn và tham vọng che mờ lý trí"
+  },
+  {
+   "goc": "Cưỡi ngựa xem hoa",
+   "dich": "Những hình ảnh và ký ức lần lượt lướt qua trước mắt"
+  },
+  {
+   "goc": "Độn đau",
+   "dich": "Đau âm ỉ, đau nhức âm thầm"
+  },
+  {
+   "goc": "Băng trùy",
+   "dich": "Mũi băng sắc nhọn"
+  },
+  {
+   "goc": "Bạch đại ca",
+   "dich": "Anh Bạch, cách Phượng Minh Mộng và Giang Thự gọi Bạch Xu Diệp"
+  },
+  {
+   "goc": "Bạch Xu Diệp",
+   "dich": "Bạch Xu Diệp, tên thật của anh trai Bạch Thù Văn"
+  },
+  {
+   "goc": "Quân lục sắc quân trang",
+   "dich": "Quân phục màu xanh lục"
+  },
+  {
+   "goc": "Chơi lưu manh",
+   "dich": "Giở trò lưu manh, quấy rối người khác"
+  },
+  {
+   "goc": "Một ngụm lão huyết tạp ở ngực",
+   "dich": "Tức nghẹn đến mức muốn hộc máu, cách nói hài hước về sự bất lực"
+  },
+  {
+   "goc": "Váy hai dây đường viền hoa",
+   "dich": "Váy hai dây viền ren"
+  },
+  {
+   "goc": "Tiểu áo khoác",
+   "dich": "Áo khoác mỏng mặc bên ngoài váy"
+  },
+  {
+   "goc": "Bị dọa đến tè ra quần",
+   "dich": "Sợ đến mức hồn vía lên mây, bỏ chạy thục mạng"
+  },
+  {
+   "goc": "Quân y",
+   "dich": "Áo quân phục, không phải trang phục của quân y trong ngữ cảnh này"
+  },
+  {
+   "goc": "Thao luyện",
+   "dich": "Rèn luyện, tập võ hoặc luyện tập thể lực theo ngữ cảnh"
+  },
+  {
+   "goc": "Người biết võ",
+   "dich": "Người có võ, người được rèn luyện võ thuật"
+  },
+  {
+   "goc": "KFC",
+   "dich": "Cửa hàng gà rán KFC"
+  },
+  {
+   "goc": "Rác rưởi thực phẩm",
+   "dich": "Đồ ăn nhanh không mấy lành mạnh"
+  },
+  {
+   "goc": "Rượu đủ cơm no",
+   "dich": "Ăn uống no nê"
+  },
+  {
+   "goc": "Kem dâu tây",
+   "dich": "Kem vị dâu"
+  },
+  {
+   "goc": "Trung khuyển",
+   "dich": "Chú chó trung thành, cách ví von hài hước về người đàn ông ngoan ngoãn và tận tụy trước người mình thích"
+  },
+  {
+   "goc": "Sét đánh không kịp bưng tai trộm linh chi thế",
+   "dich": "Lao tới nhanh như chớp, hành động bất ngờ với tốc độ rất nhanh"
+  },
+  {
+   "goc": "Miêu mễ",
+   "dich": "Mèo, mèo con hoặc chú mèo tùy ngữ cảnh"
+  },
+  {
+   "goc": "Cuộn len",
+   "dich": "Cuộn len dùng để đan áo hoặc chơi với mèo"
+  },
+  {
+   "goc": "Ưu tú đội quân danh dự",
+   "dich": "Chiến sĩ xuất sắc của đội nghi lễ, cách hiểu tạm thời về thành tích trong đơn vị quân đội"
+  },
+  {
+   "goc": "Diêu thúc thúc",
+   "dich": "Chú Diêu, người quen của gia đình Bạch"
+  },
+  {
+   "goc": "Nhìn đến trên người nàng quân y",
+   "dich": "Nhìn thấy áo quân phục của Bạch Xu Diệp đang khoác trên người Phượng Minh Mộng"
+  },
+  {
+   "goc": "Đột đột đột",
+   "dich": "Giật liên hồi, dùng để tả gân xanh trên trán nổi lên khi tức giận"
+  },
+  {
+   "goc": "Bốn người hành",
+   "dich": "Bốn Người Đồng Hành"
+  },
+  {
+   "goc": "Ba vòng năm lễ kỷ niệm",
+   "dich": "Lễ kỷ niệm ba năm thành lập"
+  },
+  {
+   "goc": "Rượu tam chiết",
+   "dich": "Rượu bán với giá bằng ba phần mười giá gốc, tương đương giảm bảy mươi phần trăm"
+  },
+  {
+   "goc": "3 hào quán bar",
+   "dich": "Quán bar Số Ba"
+  },
+  {
+   "goc": "Quán bar trú xướng dàn nhạc",
+   "dich": "Ban nhạc biểu diễn thường xuyên tại quán bar"
+  },
+  {
+   "goc": "Chủ xướng, trú xướng ca sĩ",
+   "dich": "Ca sĩ biểu diễn thường xuyên tại quán"
+  },
+  {
+   "goc": "Tân ca",
+   "dich": "Bài hát mới"
+  },
+  {
+   "goc": "Treo điểm màu",
+   "dich": "Bị thương trong lúc đánh nhau"
+  },
+  {
+   "goc": "Thử thời vận",
+   "dich": "Thử vận may"
+  },
+  {
+   "goc": "Hoá trang",
+   "dich": "Trang điểm"
+  },
+  {
+   "goc": "Cửa hàng trưởng",
+   "dich": "Quản lý quán bar"
+  },
+  {
+   "goc": "Phi chủ lưu bất lương",
+   "dich": "Phong cách nổi loạn, khác thường, bị nhìn nhận là không giống học sinh ngoan"
+  },
+  {
+   "goc": "Tương ái tương sát",
+   "dich": "Vừa gặp đã đối đầu, không ai chịu nhường ai"
+  },
+  {
+   "goc": "Lão ca",
+   "dich": "Anh trai, ông anh"
+  },
+  {
+   "goc": "Nhà người khác nam hài đương bảo",
+   "dich": "Nhà người ta nâng niu con trai như báu vật"
+  },
+  {
+   "goc": "Ghét bỏ",
+   "dich": "Khinh thường, chê bai hoặc tỏ vẻ khó chịu tùy ngữ cảnh"
+  },
+  {
+   "goc": "Nghiên cứu miêu mễ",
+   "dich": "Tò mò quan sát và tìm hiểu về mèo"
+  },
+  {
+   "goc": "Công",
+   "dich": "Giống đực, mèo đực"
+  },
+  {
+   "goc": "Nho nhỏ, quái hảo ngoạn",
+   "dich": "Nhỏ xíu, cũng thú vị thật"
+  },
+  {
+   "goc": "Ngươi khóc lóc đối ta nói, đồng thoại đều là gạt người",
+   "dich": "Em khóc và nói với anh rằng, chuyện cổ tích toàn là dối trá"
+  },
+  {
+   "goc": "Bảo vệ hai nữ sinh",
+   "dich": "Trông chừng và bảo vệ hai cô gái"
+  },
+  {
+   "goc": "Tới quán bar thử thời vận",
+   "dich": "Đến quán bar xem có nhận ra người từng gây thương tích cho mình hay không"
+  },
+  {
+   "goc": "Tìm được rồi",
+   "dich": "Tìm Được Rồi"
+  },
+  {
+   "goc": "Quân nhân thế gia",
+   "dich": "Gia đình có truyền thống quân nhân"
+  },
+  {
+   "goc": "Tiểu bạch kiểm",
+   "dich": "Loại mặt trắng, chàng trai bị coi là chỉ biết dựa vào vẻ ngoài để thu hút phụ nữ"
+  },
+  {
+   "goc": "Vỗ mông ngựa",
+   "dich": "Tâng bốc, nịnh nọt"
+  },
+  {
+   "goc": "Tiểu lão thử",
+   "dich": "Chú chuột nhỏ, cách Nghiêu gọi Lăng Ương"
+  },
+  {
+   "goc": "Nguyên chủ trước khi chết oán niệm",
+   "dich": "Oán niệm còn sót lại của chủ nhân thân thể trước khi chết"
+  },
+  {
+   "goc": "Mỏng manh màu lam ngọn lửa",
+   "dich": "Đốm lửa xanh lam rất mờ nhạt, dấu hiệu siêu nhiên Bạch Thù Văn nhìn thấy khi nhắm mắt"
+  },
+  {
+   "goc": "Xoát hảo cảm",
+   "dich": "Tăng mức thiện cảm"
+  },
+  {
+   "goc": "Trang miêu dưỡng lão",
+   "dich": "Giả làm mèo để sống nhàn nhã và được người khác chăm sóc"
+  },
+  {
+   "goc": "Phi lễ",
+   "dich": "Sờ soạng, đụng chạm thiếu tế nhị"
+  },
+  {
+   "goc": "Áo khoác sam",
+   "dich": "Áo khoác ngoài, chưa xác định kiểu dáng cụ thể"
+  },
+  {
+   "goc": "Đi vị",
+   "dich": "Di chuyển khéo léo, lợi dụng vị trí và dòng người"
+  },
+  {
+   "goc": "Lắng tai hầu má",
+   "dich": "Gương mặt gầy gò, má hóp và nét mặt giống khỉ"
+  },
+  {
+   "goc": "Sống không bằng chết",
+   "dich": "Phải chịu đau khổ đến mức sống còn khổ hơn chết"
+  },
+  {
+   "goc": "Xương cốt vỡ vụn",
+   "dich": "Xương bị bẻ gãy, phát ra tiếng răng rắc"
+  },
+  {
+   "goc": "Xa hoa truỵ lạc",
+   "dich": "Khung cảnh đèn đuốc rực rỡ của khu phố ăn chơi"
+  },
+  {
+   "goc": "Chiến hỏa bay tán loạn khu vực",
+   "dich": "Vùng đất đang chìm trong khói lửa chiến tranh"
+  },
+  {
+   "goc": "Sở Lưu Hương",
+   "dich": "Sở Lưu Hương, nhân vật được tác giả nhắc đến trong lời cuối chương"
+  },
+  {
+   "goc": "Tô Dung Dung",
+   "dich": "Tô Dung Dung, nhân vật được tác giả bày tỏ sự xót xa"
+  },
+  {
+   "goc": "Lão Hồ",
+   "dich": "Lão Hồ, cách gọi thân mật một nhân vật được nhắc cùng Sở Lưu Hương"
+  },
+  {
+   "goc": "Lưu lạc thiên nhai",
+   "dich": "Phiêu bạt chân trời"
+  },
+  {
+   "goc": "Con bướm",
+   "dich": "Con Bướm"
+  },
+  {
+   "goc": "Múa cột biểu diễn",
+   "dich": "Tiết mục múa cột"
+  },
+  {
+   "goc": "Sắt thép thẳng nam",
+   "dich": "Người đàn ông cứng nhắc, thẳng tính và không biết mềm mỏng"
+  },
+  {
+   "goc": "Xoát máy nội bộ sẽ",
+   "dich": "Cơ hội tăng mức thiện cảm"
+  },
+  {
+   "goc": "Phóng ta bồ câu",
+   "dich": "Cố tình thất hẹn"
+  },
+  {
+   "goc": "Phản nghịch kỳ",
+   "dich": "Giai đoạn nổi loạn ở tuổi mới lớn"
+  },
+  {
+   "goc": "Mất trí nhớ sau tính tình biến hóa",
+   "dich": "Thay đổi tính cách sau khi mất trí nhớ"
+  },
+  {
+   "goc": "Hồng sắc ngọn lửa",
+   "dich": "Ngọn lửa màu đỏ thẫm"
+  },
+  {
+   "goc": "Con bướm hình dạng ngọn lửa",
+   "dich": "Ngọn lửa mang hình con bướm trên trán nữ sinh bí ẩn"
+  },
+  {
+   "goc": "Màu đỏ thẫm trường quái",
+   "dich": "Áo khoác dáng dài màu đỏ sẫm"
+  },
+  {
+   "goc": "Nơ con bướm",
+   "dich": "Nơ bướm"
+  },
+  {
+   "goc": "Nạm toản tiểu xảo khuyên tai",
+   "dich": "Khuyên tai nhỏ đính đá lấp lánh"
+  },
+  {
+   "goc": "Bác nhiều heo cốt mì sợi",
+   "dich": "Mì Xương Heo Hakata, tên bộ phim hoạt hình được tác giả nhắc đến"
+  },
+  {
+   "goc": "Nữ trang đại lão",
+   "dich": "Cao thủ giả gái"
+  },
+  {
+   "goc": "Lâm lâm",
+   "dich": "Lâm Lâm, nhân vật được tác giả yêu thích trong bộ phim hoạt hình"
+  },
+  {
+   "goc": "Đánh call",
+   "dich": "Cổ vũ hết mình"
+  },
+  {
+   "goc": "Đào hố",
+   "dich": "Cài những chi tiết và bí ẩn để dành cho diễn biến sau"
+  },
+  {
+   "goc": "Nữ nhị",
+   "dich": "Nhân vật nữ thứ hai, chưa xác định danh tính từ lời tác giả"
+  },
+  {
+   "goc": "Vừa lộ ra manh mối",
+   "dich": "Manh Mối Dần Hé Lộ"
+  },
+  {
+   "goc": "Liễu Mộ Thanh",
+   "dich": "Liễu Mộ Thanh"
+  },
+  {
+   "goc": "Linh hồn chi hỏa",
+   "dich": "Lửa linh hồn"
+  },
+  {
+   "goc": "Đánh dấu",
+   "dich": "Dấu ấn do người có năng lực đặc biệt lưu lại bằng lửa linh hồn"
+  },
+  {
+   "goc": "Quan trọng ký ức",
+   "dich": "Ký ức quan trọng có thể mở khóa khi đạt ngưỡng thiện cảm"
+  },
+  {
+   "goc": "Bình thường bạn tốt thành tựu",
+   "dich": "Thành tựu bạn tốt thông thường"
+  },
+  {
+   "goc": "Hảo cảm độ: 40",
+   "dich": "Mức thiện cảm: Bốn mươi"
+  },
+  {
+   "goc": "Hảo cảm độ đạt tới 50",
+   "dich": "Khi mức thiện cảm đạt năm mươi"
+  },
+  {
+   "goc": "Giải khóa hai người quan trọng ký ức",
+   "dich": "Mở khóa ký ức quan trọng giữa hai người"
+  },
+  {
+   "goc": "Oán sau khi chết người",
+   "dich": "Người chết oan, có thể để lại một phần lửa linh hồn trên người khác"
+  },
+  {
+   "goc": "Chịu người sai sử",
+   "dich": "Làm theo lệnh người khác"
+  },
+  {
+   "goc": "Diêu thúc bên kia ngục giam",
+   "dich": "Nhà giam bên phía chú Diêu, chưa xác định tên cơ sở giam giữ"
+  },
+  {
+   "goc": "Mười một kỳ nghỉ",
+   "dich": "Kỳ nghỉ Quốc khánh Trung Quốc đầu tháng mười"
+  },
+  {
+   "goc": "Ba điểm một đường",
+   "dich": "Nhịp sinh hoạt lặp lại giữa ba địa điểm cố định"
+  },
+  {
+   "goc": "Phòng Giáo Vụ",
+   "dich": "Phòng giáo vụ"
+  },
+  {
+   "goc": "Chuyển trường thủ tục",
+   "dich": "Thủ tục chuyển trường"
+  },
+  {
+   "goc": "3 ban",
+   "dich": "Lớp 3"
+  },
+  {
+   "goc": "Chủ nhiệm lớp là xxx",
+   "dich": "Thông tin giáo viên chủ nhiệm bị khuyết tên trong bản nguồn"
+  },
+  {
+   "goc": "Thái dương dù",
+   "dich": "Ô che nắng"
+  },
+  {
+   "goc": "Đuôi ngựa biện",
+   "dich": "Tóc đuôi ngựa buộc cao"
+  },
+  {
+   "goc": "Hôn gió",
+   "dich": "Nụ hôn gió"
+  },
+  {
+   "goc": "Người sống chớ gần, vưu ở thiên ngoại",
+   "dich": "Dáng vẻ trầm lặng, xa cách, như thể chẳng bận tâm đến những chuyện xung quanh"
+  },
+  {
+   "goc": "Trải chăn",
+   "dich": "Xây dựng nền tảng cho diễn biến về sau"
+  },
+  {
+   "goc": "Kịch thấu",
+   "dich": "Tiết lộ trước nội dung hoặc tình tiết quan trọng"
+  },
+  {
+   "goc": "Cốt truyện cao hơn nói chuyện yêu đương",
+   "dich": "Chú trọng cốt truyện hơn chuyện yêu đương"
+  },
+  {
+   "goc": "Hội trưởng Hội Học Sinh giá lâm",
+   "dich": "Hội Trưởng Hội Học Sinh Giá Lâm!"
+  },
+  {
+   "goc": "Xã đoàn",
+   "dich": "Câu lạc bộ"
+  },
+  {
+   "goc": "Xã đoàn khai triển cùng chiêu tân",
+   "dich": "Tổ chức hoạt động và tuyển thành viên mới cho các câu lạc bộ"
+  },
+  {
+   "goc": "Chiêu tân hội",
+   "dich": "Ngày hội tuyển thành viên"
+  },
+  {
+   "goc": "Đại hội thể thao",
+   "dich": "Đại hội thể thao"
+  },
+  {
+   "goc": "Văn nghệ tiết",
+   "dich": "Lễ hội văn nghệ"
+  },
+  {
+   "goc": "Street Dance xã",
+   "dich": "Câu lạc bộ nhảy đường phố"
+  },
+  {
+   "goc": "Bóng rổ xã",
+   "dich": "Câu lạc bộ bóng rổ"
+  },
+  {
+   "goc": "Cung Thiếu Niên",
+   "dich": "Cung Thiếu nhi"
+  },
+  {
+   "goc": "Ba lê",
+   "dich": "Múa ba lê"
+  },
+  {
+   "goc": "Diêu Tấn",
+   "dich": "Diêu Tấn"
+  },
+  {
+   "goc": "Học sinh hội hội trưởng",
+   "dich": "Hội trưởng Hội Học Sinh"
+  },
+  {
+   "goc": "Hứng thú yêu thích: Khảo thí",
+   "dich": "Sở thích: Thi cử"
+  },
+  {
+   "goc": "Con nhà người ta",
+   "dich": "Đứa con nhà người ta, cách gọi người thường được phụ huynh lấy làm tấm gương so sánh"
+  },
+  {
+   "goc": "Tứ chi phát đạt đầu óc đơn giản",
+   "dich": "Chỉ được cái khỏe, đầu óc đơn giản"
+  },
+  {
+   "goc": "Công lược đối tượng: Diêu Tấn",
+   "dich": "Đối tượng công lược: Diêu Tấn"
+  },
+  {
+   "goc": "Chúng ta mục tiêu là —— tức chết hội trưởng! ( không )",
+   "dich": "Mục Tiêu Của Chúng Ta Là Chọc Hội Trưởng Tức Chết! À Không."
+  },
+  {
+   "goc": "Trạm quân tư",
+   "dich": "Đứng nghiêm theo tư thế quân đội"
+  },
+  {
+   "goc": "Lấy quyền mưu tư",
+   "dich": "Lạm dụng chức quyền vì lợi ích hoặc ân oán cá nhân"
+  },
+  {
+   "goc": "Công báo tư thù",
+   "dich": "Lấy việc công trả thù riêng"
+  },
+  {
+   "goc": "Học tỷ",
+   "dich": "Chị khóa trên"
+  },
+  {
+   "goc": "Con sâu làm rầu nồi canh",
+   "dich": "Người khiến tập thể bị ảnh hưởng xấu"
+  },
+  {
+   "goc": "Tiểu công tử",
+   "dich": "Cậu chủ, cách gọi mang ý châm chọc trong ngữ cảnh này"
+  },
+  {
+   "goc": "Nguyệt khảo sau gia trưởng ký tên",
+   "dich": "Bài kiểm tra tháng được gửi về để phụ huynh ký tên xác nhận"
+  },
+  {
+   "goc": "Học bổ túc",
+   "dich": "Học thêm để củng cố kiến thức còn yếu"
+  },
+  {
+   "goc": "xx công thức đại nhập",
+   "dich": "Áp dụng công thức thích hợp rồi thay vào, tên công thức không được xác định trong nguồn"
+  },
+  {
+   "goc": "Niên cấp đệ nhất",
+   "dich": "Học sinh đứng đầu khối"
+  },
+  {
+   "goc": "Ta liền cùng ngươi họ",
+   "dich": "Tôi sẽ đổi sang họ của cậu, lời đánh cược thể hiện sự tự tin"
+  },
+  {
+   "goc": "Bạch Tấn",
+   "dich": "Bạch Tấn, cách Bạch Thù Văn trêu tên Diêu Tấn nếu cậu đổi sang họ Bạch"
+  },
+  {
+   "goc": "Một cái V",
+   "dich": "Giơ hai ngón tay ra hiệu chiến thắng"
+  },
+  {
+   "goc": "Bất cận nhân tình",
+   "dich": "Không nể tình, không nhân nhượng"
+  },
+  {
+   "goc": "Một sự quy một sự",
+   "dich": "Công tư phân minh, xét từng việc rõ ràng"
+  },
+  {
+   "goc": "Đồ có này biểu",
+   "dich": "Chỉ có vẻ ngoài mà không có năng lực thực sự"
+  },
+  {
+   "goc": "Xung đột",
+   "dich": "Xung Đột"
+  },
+  {
+   "goc": "Tuyên truyền bộ",
+   "dich": "Bộ phận tuyên truyền của Hội Học Sinh"
+  },
+  {
+   "goc": "Tuyên truyền bộ bộ trưởng",
+   "dich": "Trưởng bộ phận tuyên truyền"
+  },
+  {
+   "goc": "Nhân tế kết giao",
+   "dich": "Giao tiếp và xây dựng các mối quan hệ"
+  },
+  {
+   "goc": "Sự thành do người",
+   "dich": "Các mối quan hệ tốt đẹp phần lớn do chính mình vun đắp"
+  },
+  {
+   "goc": "Nhân cách mị lực siêu tiêu",
+   "dich": "Sức hút cá nhân lớn đến mức vượt cả giới hạn, lời khoe khoang hài hước"
+  },
+  {
+   "goc": "Văn nghệ tiết hội diễn",
+   "dich": "Chương trình biểu diễn của lễ hội văn nghệ"
+  },
+  {
+   "goc": "Tiết mục tập luyện",
+   "dich": "Các buổi tập luyện chuẩn bị cho tiết mục biểu diễn"
+  },
+  {
+   "goc": "Ngoại giáo học sinh",
+   "dich": "Học sinh trường khác"
+  },
+  {
+   "goc": "Vườn trường văn hóa giao lưu",
+   "dich": "Giao lưu văn hóa giữa các trường"
+  },
+  {
+   "goc": "Tỉnh trọng điểm",
+   "dich": "Trường trọng điểm cấp tỉnh"
+  },
+  {
+   "goc": "Thị cấp trọng điểm",
+   "dich": "Trường trọng điểm cấp thành phố"
+  },
+  {
+   "goc": "Không làm việc đàng hoàng học sinh",
+   "dich": "Học sinh không chịu học hành tử tế, theo lời chê bai của Diêu Tấn"
+  },
+  {
+   "goc": "Học sinh hội huy chương",
+   "dich": "Huy hiệu Hội Học Sinh"
+  },
+  {
+   "goc": "Vong ân phụ nghĩa",
+   "dich": "Vong ân bội nghĩa, không biết ơn người từng giúp đỡ mình"
+  },
+  {
+   "goc": "Dùng cái dạng gì ánh mắt đối đãi thế giới",
+   "dich": "Nhìn thế giới bằng ánh mắt thế nào, thế giới cũng sẽ nhìn lại mình bằng ánh mắt ấy"
+  },
+  {
+   "goc": "Tưới, tưới hoa",
+   "dich": "Lượt tưới tặng cho tác phẩm trên nền tảng đăng truyện, cách thể hiện sự ủng hộ của độc giả"
+  },
+  {
+   "goc": "Bị tú vẻ mặt",
+   "dich": "Bị người khác khoe tình cảm ngay trước mặt, cách nói hài hước"
+  },
+  {
+   "goc": "Qua đi",
+   "dich": "Quá Khứ"
+  },
+  {
+   "goc": "Ca khúc xuyến thiêu",
+   "dich": "Tiết mục liên khúc, kết hợp nhiều bài hát thành một màn biểu diễn"
+  },
+  {
+   "goc": "Ngoại tràng cứu viện",
+   "dich": "Nhờ người từ ngoài trường đến hỗ trợ biểu diễn"
+  },
+  {
+   "goc": "Nghệ thuật sinh",
+   "dich": "Học sinh theo hướng nghệ thuật"
+  },
+  {
+   "goc": "Hai giáo giao lưu cho phép",
+   "dich": "Sự cho phép tổ chức hoạt động giao lưu giữa hai trường"
+  },
+  {
+   "goc": "Tái nhập trong hồi ức",
+   "dich": "Đang tải ký ức"
+  },
+  {
+   "goc": "Chỉ định hảo cảm độ",
+   "dich": "Mức thiện cảm quy định để mở khóa nội dung"
+  },
+  {
+   "goc": "Hồi ức",
+   "dich": "Ký ức quá khứ được hệ thống cho phép xem lại"
+  },
+  {
+   "goc": "Hát rong người",
+   "dich": "Người biểu diễn hát rong trên đường phố"
+  },
+  {
+   "goc": "Bán nghệ",
+   "dich": "Biểu diễn nghệ thuật để kiếm tiền"
+  },
+  {
+   "goc": "Thể chế nội người",
+   "dich": "Người thuộc một hệ thống hoặc tổ chức nhất định, chưa rõ phạm vi cụ thể trong ngữ cảnh"
+  },
+  {
+   "goc": "Hoa mắng",
+   "dich": "Phần lời nói bị nhiễu hoặc khuyết trong ký ức, không thể xác định nội dung"
+  },
+  {
+   "goc": "Văn án",
+   "dich": "Phần giới thiệu nội dung truyện"
+  },
+  {
+   "goc": "Theo dõi cuồng",
+   "dich": "Kẻ chuyên rình rập hoặc theo dõi người khác"
+  },
+  {
+   "goc": "Hương vị ẩm ướt bên cạnh ao hồ",
+   "dich": "Hơi ẩm từ hồ nước gần đó"
+  },
+  {
+   "goc": "Cá nhân tư liệu hồ sơ bảng biểu",
+   "dich": "Mẫu đăng ký thông tin cá nhân"
+  },
+  {
+   "goc": "Dự tuyển",
+   "dich": "Vòng tuyển chọn sơ bộ"
+  },
+  {
+   "goc": "Dùng heo kính",
+   "dich": "Dùng sức quá mạnh, khỏe như trâu"
+  },
+  {
+   "goc": "Tay trói gà không chặt",
+   "dich": "Yếu đến mức trói gà không chặt, lời nói đùa cố tình trái ngược với sức mạnh thực tế"
+  },
+  {
+   "goc": "Bóng rổ biểu diễn hạng mục",
+   "dich": "Tiết mục biểu diễn bóng rổ"
+  },
+  {
+   "goc": "Chi thứ thân thích",
+   "dich": "Họ hàng thuộc các nhánh khác nhau trong cùng một gia tộc"
+  },
+  {
+   "goc": "Bình bộ thanh vân",
+   "dich": "Sự nghiệp thuận buồm xuôi gió, liên tục được thăng chức"
+  },
+  {
+   "goc": "Không giữ phụ đạo",
+   "dich": "Không đứng đắn, bị vu cáo có quan hệ ngoài hôn nhân"
+  },
+  {
+   "goc": "Đội nón xanh",
+   "dich": "Bị cắm sừng, bị vợ hoặc chồng phản bội"
+  },
+  {
+   "goc": "Hết đường chối cãi",
+   "dich": "Khó lòng thanh minh, dù bản thân không làm điều bị cáo buộc"
+  },
+  {
+   "goc": "Bỏ đá xuống giếng",
+   "dich": "Thừa lúc người khác gặp khó khăn để tiếp tục hãm hại"
+  },
+  {
+   "goc": "Nguyên khí đại thương",
+   "dich": "Chịu tổn thất nặng nề, phải mất thời gian dài mới hồi phục"
+  },
+  {
+   "goc": "Một mình đảm đương một phía",
+   "dich": "Đủ bản lĩnh tự mình gánh vác trách nhiệm"
+  },
+  {
+   "goc": "Dương mi thổ khí",
+   "dich": "Có thể ngẩng cao đầu, lấy lại danh dự và vị thế"
+  },
+  {
+   "goc": "Hiền thê lương mẫu",
+   "dich": "Người vợ hiền, người mẹ tốt"
+  },
+  {
+   "goc": "Giúp chồng dạy con",
+   "dich": "Chăm lo cho chồng con, vun vén gia đình"
+  },
+  {
+   "goc": "Giẫm lên vết xe đổ",
+   "dich": "Lặp lại sai lầm hoặc bi kịch đã từng xảy ra"
+  },
+  {
+   "goc": "Diêu Phong Nam",
+   "dich": "Diêu Phong Nam, tên thật của bố Diêu Tấn"
+  },
+  {
+   "goc": "Học lệch, thiên khoa nghiêm trọng",
+   "dich": "Học lực chênh lệch nhiều giữa các môn, yếu rõ rệt ở một số môn"
+  },
+  {
+   "goc": "Cầu mới, tân hố",
+   "dich": "Dự án truyện mới mà tác giả dự định bắt đầu viết"
+  },
+  {
+   "goc": "BG",
+   "dich": "Truyện tình cảm nam nữ"
+  },
+  {
+   "goc": "Huyền huyễn tu tiên",
+   "dich": "Thể loại giả tưởng về thế giới tu luyện, phép thuật và những người tu tiên"
+  },
+  {
+   "goc": "Sư tỷ sư muội",
+   "dich": "Chị khóa trên và em khóa dưới trong cùng môn phái tu luyện, giữ cách gọi sư tỷ và sư muội trong bối cảnh tu tiên"
+  },
+  {
+   "goc": "Thiên sư",
+   "dich": "Thiên sư, người có năng lực hoặc thuật pháp đặc biệt, được Nghiêu xem là mối đe dọa lớn nhất đối với những người dẫn đường linh hồn"
+  },
+  {
+   "goc": "Vọng thê thạch",
+   "dich": "Hòn đá ngóng vợ, cách tác giả trêu Bạch Thù Văn vì quá mê mải dõi theo Liễu Mộ Thanh"
+  },
+  {
+   "goc": "Tiểu kê tiểu kê",
+   "dich": "Gà Con, Gà Con, tên bài hát vui nhộn mở đầu tiết mục liên khúc của Đường Trưng"
+  },
+  {
+   "goc": "Bình thường disco",
+   "dich": "Nhạc Sàn Bình Thường, tên một bài hát trong tiết mục liên khúc"
+  },
+  {
+   "goc": "Người kéo thuyền ái",
+   "dich": "Tình Yêu Người Kéo Thuyền, tên một bài hát trong tiết mục liên khúc"
+  },
+  {
+   "goc": "Cưỡi ngựa vũ",
+   "dich": "Điệu Nhảy Ngựa, tên một tiết mục âm nhạc và vũ đạo được nhắc đến trong liên khúc"
+  },
+  {
+   "goc": "Thượng tầng quản lý thế giới",
+   "dich": "Thế giới quản lý cấp cao, nơi Nghiêu trở về để tra cứu tài liệu về lửa linh hồn"
+  },
+  {
+   "goc": "Tương đồng linh hồn chi hỏa",
+   "dich": "Những ngọn lửa linh hồn hoàn toàn tương đồng, theo truyền thuyết ở thế giới của Nghiêu có thể giúp nhận ra hai nửa của một linh hồn"
+  },
+  {
+   "goc": "KTV tay cầm cổ lục lạc",
+   "dich": "Lục lạc cầm tay trong phòng karaoke, nhạc cụ tạo âm thanh leng keng khi lắc"
+  },
+  {
+   "goc": "Tết Âm Lịch, Tết Nguyên Đán",
+   "dich": "Tết Nguyên Đán, dịp lễ đầu năm theo âm lịch"
+  },
+  {
+   "goc": "Tế tổ, tế bái",
+   "dich": "Lễ cúng tổ tiên của dòng họ, trong chương này là lễ bên gia tộc họ Diêu"
+  },
+  {
+   "goc": "Tiểu hữu",
+   "dich": "Tiểu hữu, cách xưng hô có phần cổ kính của Bùi Vân Du dành cho Bạch Thù Văn, mang nghĩa người bạn trẻ"
+  },
+  {
+   "goc": "Bát quái trận",
+   "dich": "Đồ hình bát quái, biểu tượng được in trên danh thiếp của Bùi Vân Du"
+  },
+  {
+   "goc": "Hữu duyên thiên lí năng tương ngộ",
+   "dich": "Hữu duyên thiên lý năng tương ngộ, có duyên thì dù cách xa nghìn dặm vẫn có thể gặp nhau"
   }
  ],
  "van_phong": "Văn xuôi tiếng Việt hiện đại, tự nhiên, linh hoạt, giàu nhịp điệu, ưu tiên khả năng nghe hiểu khi đọc thành tiếng. Ngôi kể thứ ba, chủ yếu bám theo nhận thức, cảm xúc và suy nghĩ của Bạch Thù Văn. Giọng kể trẻ trung, dí dỏm, đôi lúc châm biếm và tinh nghịch, nhưng không biến mọi tình huống thành trò đùa. Giữ sự nóng nảy, bộc trực và những phản ứng hơi khoa trương của nữ chính. Khi nhân vật tức giận, sử dụng câu ngắn, dồn dập, lời nói sắc bén. Khi nhân vật hoang mang hoặc tự vấn, giảm tốc độ kể, làm rõ dòng suy nghĩ bằng những câu văn mạch lạc. Khi xuất hiện bí ẩn, tai nạn hoặc nguy hiểm, chuyển sang giọng căng thẳng, trực diện, tránh bình luận phá vỡ không khí. Lời thoại phải giống tiếng Việt giao tiếp thật, không mang cú pháp dịch sát tiếng Trung. Giữ nét ngạo kiều, tự mãn và đôi khi trẻ con của mèo trắng. Giữ sự đối lập hài hước giữa nữ chính ngang ngược và những tình huống khiến cô bất lực. Hạn chế lời kể toàn tri vượt quá những điều văn bản đã xác nhận. Không thêm suy đoán về động cơ, danh tính hoặc quan hệ nhân vật. Mỗi câu văn phải rõ nghĩa khi người nghe không nhìn thấy chữ viết. Duy trì nhất quán tên riêng, đại từ, thuật ngữ và giọng nói xuyên suốt toàn bộ tác phẩm."

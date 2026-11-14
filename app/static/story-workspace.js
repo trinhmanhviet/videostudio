@@ -83,7 +83,7 @@
     const previewBox = el('div','sw-preview');
     add(middle, add(el('div','sw-editor-head'), editorTitle, editorSub), field('Tên chương', chapterName), field('Nội dung lời kể', text, 'sw-text-field'),
       add(el('div','sw-meta-row'), meta, add(el('label','sw-check'), readTitle, el('span','','Đọc tên chương'))),
-      add(el('div','sw-editor-actions'), btn('Lưu chương',()=>saveChapter(true),'','save'), btn('Đọc thử khoảng 1 phút',previewVoice,'sw-accent','play')),
+      add(el('div','sw-editor-actions'), btn('Lưu chương',()=>saveChapter(true),'','save'), btn('Đọc thử khoảng 1 phút',previewVoice,'sw-accent','play'), btn('Bản cũ',openHistory,'')),
       previewBox, el('p','sw-muted sw-note','ⓘ Nghe thử là tuỳ chọn; hàng đợi không dừng để chờ duyệt từng chương.'));
 
     // right: settings tabs
@@ -234,6 +234,23 @@
       for (const id of ids) state.selected.delete(id);
       if (ids.includes(state.chapter?.id)) state.chapter = null;
       await loadChapters(true);
+    }
+
+    async function openHistory() {
+      if (!state.chapter) return;
+      await saveChapter(false);
+      const data = await api(`/api/story/chapters/${state.chapter.id}/history`);
+      const dialog = el('dialog','sw-dialog sw-history-dialog');
+      const close = () => {dialog.close(); dialog.remove();};
+      const list = el('div','sw-source-list');
+      for (const item of data.items) {
+        const when = new Date(item.saved*1000).toLocaleString('vi-VN');
+        list.append(add(el('article','sw-source'), add(el('div','sw-source-info'), el('strong','',`Bản ${item.revision} · ${item.title}`), el('span','sw-muted',`${when} · ${item.reason} · ${item.characters.toLocaleString('vi-VN')} ký tự`)),
+          btn('Khôi phục bản này', async () => {const saved = await api(`/api/story/chapters/${state.chapter.id}/restore`, json('POST', {revision:item.revision})); close(); state.dirty = false; await openChapter(saved.id); toast('Đã khôi phục. Bản đang có trước đó cũng được cất lại trong Bản cũ.');}, 'sw-accent')));
+      }
+      if (!data.items.length) list.append(el('p','sw-muted','Chương này chưa có bản cũ nào.'));
+      add(dialog, add(el('div','sw-layout-head'), add(el('div'), el('h2','','Bản cũ của chương'), el('p','sw-muted','Mỗi lần lưu hoặc nhập bản mới, tool cất lại bản trước đó.')), iconBtn('close','Đóng',close)), list);
+      doc.body.append(dialog); dialog.showModal(); dialog.addEventListener('cancel', () => dialog.remove());
     }
 
     // --- voice preview (uses Phòng thử giọng tasks) ---------------------------------------------------------
@@ -390,7 +407,7 @@
             source.log.length ? el('pre','sw-source-log',source.log.join('\n')) : null, source.error ? el('p','sw-error',source.error) : null),
             add(el('div','sw-source-actions'),
               (()=>{const b=btn(source.edited&&source.edited<source.chapters?'Biên tập tiếp':'Biên tập bằng ChatGPT',async()=>{await api(`/api/story/sources/${encodeURIComponent(source.name)}/edit`, json('POST',{}));toast('Đã bắt đầu biên tập. Có thể đóng cửa sổ này; tool vẫn chạy.');refresh();},'');b.disabled=source.running||(source.edited>=source.chapters&&source.chapters>0);return b;})(),
-              (()=>{const b=btn(source.book_id?'Cập nhật vào Kể truyện':'Nhập vào Kể truyện',async()=>{const r=await api(`/api/story/sources/${encodeURIComponent(source.name)}/import`, json('POST',{}),120000);toast(`Đã nhập: thêm ${r.added}, cập nhật ${r.updated} chương.`);close();await loadBooks(r.book.id);},'sw-accent');b.disabled=!source.merged;b.title=source.merged?'':'Biên tập trước để có bản đọc được';return b;})()));
+              (()=>{const b=btn(source.book_id?'Cập nhật vào Kể truyện':'Nhập vào Kể truyện',async()=>{const r=await api(`/api/story/sources/${encodeURIComponent(source.name)}/import`, json('POST',{}),120000);toast(`Đã nhập: thêm ${r.added}, cập nhật ${r.updated} chương`+(r.kept?`, giữ nguyên ${r.kept} chương bạn đã sửa.`:'.'));close();await loadBooks(r.book.id);},'sw-accent');b.disabled=!source.merged;b.title=source.merged?'':'Biên tập trước để có bản đọc được';return b;})()));
           return row;
         }));
       }

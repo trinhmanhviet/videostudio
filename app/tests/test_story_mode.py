@@ -44,6 +44,19 @@ class StoryLibraryTests(unittest.TestCase):
             self.library.save_chapter(chapter['id'], {'text': 'Cũ', 'expected_revision': chapter['revision']})
         self.assertEqual(saved['revision'], chapter['revision'] + 1)
 
+    def test_reimport_never_overwrites_a_chapter_the_user_edited(self):
+        book = self.library.create_book('Truyện thử')
+        self.library.import_files(book['id'], [{'name': 'gop.txt', 'text': 'Chương 1: A\n\nBản máy.\n\nChương 2: B\n\nHai.'}])
+        first = self.library.chapters(book['id'])['items'][0]
+        self.library.save_chapter(first['id'], {'text': 'Bản người dùng sửa.'})
+        result = self.library.import_files(book['id'], [{'name': 'gop.txt', 'text': 'Chương 1: A\n\nBản máy mới.\n\nChương 2: B\n\nHai, mới.'}])
+        self.assertEqual((result['kept'], result['updated']), (1, 1))
+        self.assertEqual(self.library.chapter(first['id'])['text'], 'Bản người dùng sửa.')
+        history = self.library.history(first['id'])
+        self.assertEqual(history[0]['reason'], 'trước khi lưu')
+        restored = self.library.restore(first['id'], history[0]['revision'])
+        self.assertEqual(restored['text'], 'Bản máy.')
+
     def test_freeze_is_immutable_and_idempotent(self):
         book = self.library.create_book('Truyện thử')
         self.library.import_files(book['id'], [{'name': '1.txt', 'text': 'Một câu.'}])

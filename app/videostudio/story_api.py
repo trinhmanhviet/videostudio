@@ -88,6 +88,16 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         same_origin(request)
         return call(library.save_chapter, chapter_id, data)
 
+    @app.get('/api/story/chapters/{chapter_id}/history')
+    def chapter_history(chapter_id: str):
+        call(library.chapter, chapter_id)
+        return {'items': library.history(chapter_id)}
+
+    @app.post('/api/story/chapters/{chapter_id}/restore')
+    def restore_chapter(chapter_id: str, data: dict, request: Request):
+        same_origin(request)
+        return call(library.restore, chapter_id, data.get('revision'))
+
     # --- gameplay ------------------------------------------------------------------------------------------
     @app.get('/api/story/gameplay')
     def gameplay(book_id: str = ''):
@@ -293,23 +303,36 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         folders = sorted((p for p in SOURCES_ROOT.iterdir() if p.is_dir() and (p / 'truyen_gop.txt').is_file()), key=lambda p: natural_key(p.name))
         return {'items': [source_info(p) for p in folders]}
 
-    @app.post('/api/story/sources/{name}/edit')
-    def edit_source(name: str, data: dict, request: Request):
-        """Start (or continue) the chapter-by-chapter ChatGPT edit in the background; finished chapters are never resent."""
-        same_origin(request)
-        path = source_dir(name)
-        state = editing.get(name)
-        if state and state['thread'].is_alive():
-            return source_info(path)
-        if any(s['thread'].is_alive() for s in editing.values()):
-            raise HTTPException(409, 'Đang biên tập một truyện khác. Chờ xong rồi chạy tiếp truyện này.')
-        first, last = data.get('from'), data.get('to')
+    def import_edited(path):
+        """Bring the edited merged file into the library (one book per source); unchanged chapters are skipped."""
+        merged = path / 'truyen_gop_bien_tap.txt'
+        if not merged.is_file():
+            return None
+        info = source_info(path)
+        book_data = library.create_book(info['title'], source='source:' + path.name)
+        result = library.import_files(book_data['id'], [{'name': path.name + '.txt', 'text': merged.read_text(encoding='utf-8')}], True)
+        return {'book': library.book(book_data['id']), **result}
+
+    def start_edit(path, first=None, last=None):
+        name = path.name
+        marker = path / 'bien_tap' / '.dang-bien-tap'
+        marker.parent.mkdir(exist_ok=True)
+        marker.write_text(json.dumps({'from': first, 'to': last}), encoding='utf-8')
         log = []
+
+        def chapter_done(number):
+            try:
+                result = import_edited(path)
+                if result and (result['added'] or result['updated']):
+                    log.append(time.strftime('%H:%M ') + f'  Chương {number} đã vào Kể truyện, có thể duyệt và tạo video.')
+            except Exception as error:
+                log.append('Chưa thêm được chương vào Kể truyện: ' + str(error)[:200])
 
         def work():
             from .story_editor import StoryEditor
             try:
-                StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line))).run(first, last)
+                StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line))).run(first, last, on_chapter=chapter_done)
+                marker.unlink(missing_ok=True)  # finished: nothing to resume
             except Exception as error:
                 editing[name]['error'] = str(error)[:500]
                 log.append('Dừng: ' + str(error)[:300])
@@ -317,7 +340,30 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         thread = threading.Thread(target=work, name='story-edit-' + name, daemon=True)
         editing[name] = {'thread': thread, 'log': log, 'error': None}
         thread.start()
+
+    @app.post('/api/story/sources/{name}/edit')
+    def edit_source(name: str, data: dict, request: Request):
+        """Start (or continue) the chapter-by-chapter ChatGPT edit in the background; finished chapters are never resent.
+        Every finished chapter is added to the book at once, so it can be reviewed and queued while the rest runs."""
+        same_origin(request)
+        path = source_dir(name)
+        state = editing.get(name)
+        if state and state['thread'].is_alive():
+            return source_info(path)
+        if any(s['thread'].is_alive() for s in editing.values()):
+            raise HTTPException(409, 'Đang biên tập một truyện khác. Chờ xong rồi chạy tiếp truyện này.')
+        start_edit(path, data.get('from'), data.get('to'))
         return source_info(path)
+
+    # An edit interrupted by a server restart continues by itself (the daemon journal prevents resending a chapter).
+    if SOURCES_ROOT.is_dir():
+        for marker in SOURCES_ROOT.glob('*/bien_tap/.dang-bien-tap'):
+            try:
+                saved = json.loads(marker.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                saved = {}
+            if not editing:
+                start_edit(marker.parent.parent, saved.get('from'), saved.get('to'))
 
     @app.get('/api/story/sources/{name}')
     def source_status(name: str):
@@ -328,12 +374,12 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         """Bring the edited merged file into the library as a book (once); importing again only updates changed chapters."""
         same_origin(request)
         path = source_dir(name)
-        merged = path / 'truyen_gop_bien_tap.txt'
-        if not merged.is_file():
+        try:
+            result = import_edited(path)
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+        if result is None:
             raise HTTPException(422, 'Truyện này chưa có bản biên tập. Bấm Biên tập bằng ChatGPT trước.')
-        info = source_info(path)
-        book_data = call(library.create_book, info['title'], source='source:' + name)
-        result = call(library.import_files, book_data['id'], [{'name': name + '.txt', 'text': merged.read_text(encoding='utf-8')}], True)
-        return {'book': library.book(book_data['id']), **result}
+        return result
 
     return library
