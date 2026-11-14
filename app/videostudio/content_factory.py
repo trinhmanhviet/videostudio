@@ -611,6 +611,9 @@ class ContentFactory:
     def get_video_version(self, job_id, version_id=None):
         job = self.store.get(job_id)
         versions = self._discover_versions(job)
+        if not versions and getattr(self, 'drive_versions', None):
+            drive = self.drive_versions(job)  # files moved to Google Drive can still be reviewed and posted
+            versions = drive['versions'] if drive else []
         selected = next((item for item in versions if item['version_id'] == version_id), None) if version_id else next((item for item in versions if item['latest']), None)
         if not selected:
             raise ValueError('Bản video chưa được xác minh, không tồn tại hoặc đã thay đổi')

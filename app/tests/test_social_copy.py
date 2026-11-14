@@ -34,7 +34,7 @@ class SocialCopyTests(unittest.TestCase):
 
     def test_validate_normalises_tags_and_limits(self):
         result = social_copy.validate(GOOD)
-        self.assertEqual(result['youtube']['tags'], ['vụán', 'bíẩn'])
+        self.assertEqual(result['youtube']['tags'], ['vụ án', 'bí ẩn'])
         self.assertEqual(result['facebook']['hashtags'], ['#vuan', '#bianhay'])
         self.assertEqual(len(result['tiktok']['hashtags']), 6)
         with self.assertRaises(ValueError):

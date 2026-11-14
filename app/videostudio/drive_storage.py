@@ -64,6 +64,9 @@ class DriveStorage:
                 web_link TEXT, uploaded REAL NOT NULL, local_deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(job_id, kind));
             CREATE TABLE IF NOT EXISTS drive_failures(job_id TEXT PRIMARY KEY, message TEXT NOT NULL, attempts INTEGER NOT NULL, next_at REAL NOT NULL);
             ''')
+            # trashed: moved to Drive's Thùng rác after the video was posted (recoverable there for 30 days).
+            if 'trashed' not in {r[1] for r in db.execute('PRAGMA table_info(drive_files)')}:
+                db.execute('ALTER TABLE drive_files ADD COLUMN trashed INTEGER NOT NULL DEFAULT 0')
 
     # --- settings & client -------------------------------------------------------------------------------
     def setting(self, key, default=None):
@@ -195,7 +198,7 @@ class DriveStorage:
             uploaded = db.execute('SELECT COUNT(DISTINCT job_id), COALESCE(SUM(size),0) FROM drive_files').fetchone()
             failures = [dict(r) for r in db.execute('SELECT * FROM drive_failures ORDER BY next_at LIMIT 5')]
         return {'has_client': has_client, 'accounts': accounts, 'auto_upload': self.setting('auto_upload', True),
-                'include_old': self.setting('include_old', False),
+                'include_old': self.setting('include_old', False), 'delete_after_post': self.setting('delete_after_post', False),
                 'delete_local': self.setting('delete_local', True), 'uploaded_videos': uploaded[0],
                 'uploaded_gb': round(uploaded[1] / 2**30, 1), 'failures': failures}
 
@@ -239,8 +242,9 @@ class DriveStorage:
                 problems.append(account['email'] + ': ' + str(error)[:80])
         raise DriveError('Không còn tài khoản Drive đủ chỗ' + (' (' + '; '.join(problems) + ')' if problems else '. Thêm tài khoản trong Cài đặt.'))
 
-    def upload(self, account, path, folder_id, check=lambda: None):
-        """Resumable upload in 64 MB parts; returns Drive's id, size and md5Checksum."""
+    def upload(self, account, path, folder_id, check=lambda: None, progress=None):
+        """Resumable upload in 64 MB parts; returns Drive's id, size and md5Checksum.
+        progress(sent) is called with the bytes sent so far, about every megabyte."""
         path = Path(path)
         size = path.stat().st_size
         start = httpx.post(UPLOAD, params={'uploadType': 'resumable', 'fields': 'id,size,md5Checksum,webViewLink'}, timeout=60,
@@ -255,7 +259,9 @@ class DriveStorage:
                 handle.seek(offset)
                 chunk = handle.read(CHUNK)
                 end = offset + len(chunk) - 1
-                response = httpx.put(session, content=chunk, timeout=600,
+                if progress:
+                    progress(offset)
+                response = httpx.put(session, content=_pieces(chunk, offset, progress) if progress and chunk else chunk, timeout=600,
                                      headers={'Content-Length': str(len(chunk)), 'Content-Range': f'bytes {offset}-{end}/{size}' if chunk else f'bytes */{size}'})
                 if response.status_code in (200, 201):
                     return response.json()
@@ -264,6 +270,16 @@ class DriveStorage:
                     offset = int(received.split('-')[1]) + 1 if received else 0
                     continue
                 raise DriveError(f'Tải lên bị ngắt ({response.status_code}): {response.text[:200]}')
+
+    def trash(self, account, file_id):
+        """Move one of the tool's own files to Drive's trash (Google keeps it there 30 days); never a hard delete."""
+        response = httpx.patch(f'{API}/files/{file_id}', headers=self._headers(account), json={'trashed': True},
+                               params={'fields': 'id,trashed'}, timeout=30)
+        if response.status_code == 404:
+            return False  # already gone
+        if response.status_code >= 300 or not response.json().get('trashed'):
+            raise DriveError(f'Drive không cho chuyển vào thùng rác (mã {response.status_code})')
+        return True
 
     # --- download (gameplay links, streaming finished videos) -------------------------------------------------
     def metadata(self, file_id):
@@ -308,11 +324,22 @@ class DriveStorage:
         return client, response
 
 
-def local_md5(path):
-    digest = hashlib.md5()
+def _pieces(chunk, offset, progress, step=1024 * 1024):
+    """Send one upload part in 1 MB slices so the progress bar moves while the part is on the wire."""
+    view = memoryview(chunk)
+    for start in range(0, len(chunk), step):
+        yield bytes(view[start:start + step])
+        progress(offset + min(len(chunk), start + step))
+
+
+def local_md5(path, progress=None):
+    digest, done = hashlib.md5(), 0
     with open(path, 'rb') as handle:
         for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b''):
             digest.update(chunk)
+            done += len(chunk)
+            if progress:
+                progress(done)
     return digest.hexdigest()
 
 

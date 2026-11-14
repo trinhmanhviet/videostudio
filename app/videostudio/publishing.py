@@ -22,6 +22,28 @@ import httpx
 from .core import digest
 
 
+
+def _tags(value):
+    """YouTube tags: up to 30, each up to 100 characters, about 500 characters in total; '#' and commas removed."""
+    if value in (None, '', []):
+        return []
+    if isinstance(value, str):
+        value = value.split(',')
+    if not isinstance(value, list):
+        raise ValueError('Tag phải là danh sách')
+    tags, total = [], 0
+    for item in value:
+        tag = re.sub(r'[<>,#]', ' ', str(item)).strip()
+        tag = re.sub(r'\s+', ' ', tag)[:100]
+        if not tag or tag.casefold() in (t.casefold() for t in tags):
+            continue
+        cost = len(tag) + (2 if ' ' in tag else 0) + (1 if tags else 0)
+        if total + cost > 480 or len(tags) >= 30:
+            break
+        tags.append(tag)
+        total += cost
+    return tags
+
 class PublishBlocked(Exception):
     pass
 
@@ -75,6 +97,8 @@ class Publishing:
                     lease_until REAL NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
                     created REAL NOT NULL, updated REAL NOT NULL);
             ''')
+            if 'tags' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_schedules)')}:
+                db.execute("ALTER TABLE publishing_schedules ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
 
     def save_channel(self, identifier, platform, name, credentials):
         if platform not in self.adapters:
@@ -88,11 +112,52 @@ class Publishing:
         with self.store.db() as db:
             rows = db.execute('SELECT id,platform,name,connected,error FROM publishing_channels ORDER BY platform,name').fetchall()
             configured = db.execute("SELECT 1 FROM publishing_settings WHERE key='youtube_client'").fetchone() is not None
+        configured = configured or self._drive_client() is not None
         items = [dict(row, connected=bool(row['connected']), setup_required=not bool(row['connected'])) for row in rows]
         for platform, name in [('youtube', 'YouTube'), ('facebook', 'Facebook Page')]:
             if not any(row['platform'] == platform for row in items):
                 items.append(dict(id=platform, platform=platform, name=name, connected=False, setup_required=True))
-        return {'items': items, 'youtube_configured': configured}
+        return {'items': items, 'youtube_configured': configured, 'defaults': self.default_channels()}
+
+    # --- which channel each kind of video goes to (vụ án → kênh A, kể truyện → kênh B) ---------------------
+    STYLES = ('case', 'story', 'news', 'meme')
+
+    def default_channels(self):
+        with self.store.db() as db:
+            row = db.execute("SELECT value FROM publishing_settings WHERE key='default_channels'").fetchone()
+            known = {r['id'] for r in db.execute('SELECT id FROM publishing_channels WHERE connected=1')}
+        saved = json.loads(row['value']) if row else {}
+        return {style: channel for style, channel in saved.items() if style in self.STYLES and channel in known}
+
+    def set_default_channels(self, data):
+        if not isinstance(data, dict):
+            raise ValueError('Chọn kênh cho từng loại video')
+        with self.store.db() as db:
+            known = {r['id'] for r in db.execute('SELECT id FROM publishing_channels WHERE connected=1')}
+        result = {}
+        for style, channel in data.items():
+            if style not in self.STYLES:
+                raise ValueError('Loại video không hợp lệ')
+            if channel in (None, ''):
+                continue
+            if channel not in known:
+                raise ValueError('Kênh chưa kết nối')
+            result[style] = channel
+        with self.store.db() as db:
+            db.execute("INSERT OR REPLACE INTO publishing_settings VALUES('default_channels',?)", (_json(result),))
+        return {'defaults': self.default_channels()}
+
+    def remove_channel(self, identifier):
+        """Forget a connected channel in this tool (nothing is deleted on YouTube/Facebook)."""
+        with self.store.db() as db:
+            if db.execute('SELECT 1 FROM publishing_channels WHERE id=?', (identifier,)).fetchone() is None:
+                raise KeyError(identifier)
+            busy = db.execute("""SELECT COUNT(*) FROM publishing_schedules WHERE channel_id=?
+                AND state NOT IN ('published','cancelled')""", (identifier,)).fetchone()[0]
+            if busy:
+                raise ValueError(f'Kênh còn {busy} lịch đăng chưa xong; huỷ hoặc chờ đăng xong rồi gỡ')
+            db.execute('DELETE FROM publishing_channels WHERE id=?', (identifier,))
+        return {'removed': identifier, 'defaults': self.default_channels()}
 
     def channel(self, identifier):
         with self.store.db() as db:
@@ -126,8 +191,19 @@ class Publishing:
         with self.store.db() as db:
             row = db.execute("SELECT value FROM publishing_settings WHERE key='youtube_client'").fetchone()
         if row is None:
-            raise ValueError('Tải tệp OAuth client JSON trước')
+            client = self._drive_client()  # one Google OAuth client serves Drive and YouTube
+            if client is None:
+                raise ValueError('Tải tệp OAuth client JSON trước')
+            return client
         return json.loads(row['value'])
+
+    def _drive_client(self):
+        with self.store.db() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='drive_settings'").fetchone():
+                return None
+            row = db.execute("SELECT value FROM drive_settings WHERE key='client'").fetchone()
+        client = json.loads(row['value']) if row else None
+        return client if isinstance(client, dict) and client.get('client_id') and client.get('client_secret') else None
 
     def oauth_start(self, callback):
         client = self.youtube_config()
@@ -141,7 +217,7 @@ class Publishing:
         return {'url': 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode(dict(
             client_id=client['client_id'], redirect_uri=callback, response_type='code', state=state,
             scope='https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
-            access_type='offline', prompt='consent'))}
+            access_type='offline', prompt='select_account consent'))}
 
     def oauth_finish(self, state, code):
         with self.store.db() as db:
@@ -161,7 +237,8 @@ class Publishing:
         if not items:
             raise PublishBlocked('Tài khoản chưa có kênh YouTube')
         item = items[0]
-        return self.save_channel('youtube:'+item['id'], 'youtube', item['snippet']['title'],
+        handle = item['snippet'].get('customUrl') or ''
+        return self.save_channel('youtube:'+item['id'], 'youtube', item['snippet']['title'] + (' · ' + handle if handle else ''),
                                  {'refresh_token':tokens['refresh_token'], 'channel_id':item['id']})
 
     def connect_facebook(self, data):
@@ -192,7 +269,10 @@ class Publishing:
         normalized = {k:data.get(k) for k in ('job_id','version_id','channel_id')}
         if any(not isinstance(v, str) or not v or len(v)>200 for v in normalized.values()):
             raise ValueError('Chọn video, phiên bản và kênh')
+        tags = _tags(data.get('tags'))
         normalized.update(title=title, caption=caption, publish_at=at)
+        if tags:
+            normalized['tags'] = tags
         fingerprint = hashlib.sha256(_json(normalized).encode()).hexdigest()
         with self.store.db() as db:
             prior = db.execute('SELECT id,fingerprint FROM publishing_schedules WHERE idem=?', (key,)).fetchone()
@@ -208,17 +288,21 @@ class Publishing:
         approved = self.versions.approved_version(normalized['job_id'])
         if not approved or approved['version_id'] != normalized['version_id']:
             raise ValueError('Duyệt đúng phiên bản video trước khi lên lịch')
-        path = Path(approved['path'])
-        if not path.is_file() or digest(path) != approved['sha256']:
-            raise ValueError('Video đã thay đổi; cần duyệt lại')
-        sha = approved['sha256']
-        try:
-            render = self.store.get(normalized['job_id'])['checkpoints'].get('render', {})
-        except KeyError:
-            render = {}
-        wide = (render.get('story_outputs') or {}).get('ngang')
-        if channel['platform'] == 'youtube' and wide and Path(wide).is_file():
-            path, sha = Path(wide), digest(wide)
+        if str(approved['version_id']).startswith('drive-'):
+            # The video now lives on Google Drive: post from there (downloaded just before the upload, checked by MD5).
+            path, sha = self._drive_source(normalized['job_id'], channel['platform'] == 'youtube')
+        else:
+            path = Path(approved['path'])
+            if not path.is_file() or digest(path) != approved['sha256']:
+                raise ValueError('Video đã thay đổi; cần duyệt lại')
+            sha = approved['sha256']
+            try:
+                render = self.store.get(normalized['job_id'])['checkpoints'].get('render', {})
+            except KeyError:
+                render = {}
+            wide = (render.get('story_outputs') or {}).get('ngang')
+            if channel['platform'] == 'youtube' and wide and Path(wide).is_file():
+                path, sha = Path(wide), digest(wide)
         identifier, now = str(uuid.uuid4()), self.clock()
         with self.store.db() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -235,11 +319,53 @@ class Publishing:
                 if duplicate:
                     raise ValueError('Bản video này đã có lịch hoặc đã đăng trên kênh; không tạo trùng')
                 db.execute('''INSERT INTO publishing_schedules
-                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                     (identifier,key,fingerprint,normalized['job_id'],normalized['version_id'],str(path),sha,
-                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now))
+                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now,_json(tags)))
         return self.get_schedule(identifier)
+
+    def _drive_source(self, job_id, youtube):
+        with self.store.db() as db:
+            rows = [dict(r) for r in db.execute("SELECT * FROM drive_files WHERE job_id=? AND local_deleted=1 AND trashed=0 AND name LIKE '%.mp4'", (job_id,))]
+        pick = (next((r for r in rows if r['name'].endswith('_ngang.mp4')), None) if youtube else None) \
+            or next((r for r in rows if r['name'].endswith('_doc.mp4')), None) or (rows[0] if rows else None)
+        if pick is None:
+            raise ValueError('Không còn bản video trên Drive để đăng')
+        return 'drive:' + job_id + '/' + pick['name'], pick['md5']
+
+    @contextmanager
+    def _drive_download(self, row, save=None):
+        """Fetch the Drive copy to a temporary file, check its MD5 against the scheduled one, and remove it afterwards."""
+        from .drive_storage import DriveStorage, local_md5
+        job_id, name = row['path'][len('drive:'):].split('/', 1)
+        with self.store.db() as db:
+            record = db.execute('SELECT * FROM drive_files WHERE job_id=? AND name=?', (job_id, name)).fetchone()
+        if record is None or record['trashed']:
+            raise PublishBlocked('Bản video trên Drive không còn; không đăng được')
+        folder = Path(tempfile.mkdtemp(prefix='vs-post-'))
+        target = folder / name
+        renewed = [self.clock()]
+
+        def keep_lease():
+            if save and self.clock() - renewed[0] >= 60:
+                save(phase='download')
+                renewed[0] = self.clock()
+        try:
+            try:
+                DriveStorage(self.store).download(record['file_id'], target, check=keep_lease, account=record['account'])
+            except Exception as error:
+                raise PublishBlocked('Chưa tải được video từ Drive về để đăng: ' + str(error)[:160])
+            if local_md5(target) != row['sha256']:
+                raise PublishBlocked('Bản tải từ Drive không khớp mã kiểm tra; không đăng')
+            with open(target, 'rb') as handle:
+                yield handle, target.stat().st_size
+        finally:
+            target.unlink(missing_ok=True)
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
 
     def _raw_schedule(self, identifier):
         with self.store.db() as db:
@@ -335,7 +461,7 @@ class Publishing:
                 raise PublishBlocked('Kênh đã ngắt kết nối; kết nối lại để tiếp tục')
             if uploading:
                 path = Path(row['path'])
-                if not path.is_file() or digest(path) != row['sha256']:
+                if not str(row['path']).startswith('drive:') and (not path.is_file() or digest(path) != row['sha256']):
                     raise PublishBlocked('Tệp video đã thay đổi; duyệt lại trước khi đăng')
                 if (row['platform']=='youtube' and row['publish_at'] < now+120) or (row['platform']=='facebook' and row['publish_at'] < now-1800):
                     raise PublishBlocked('Giờ đăng đã qua hoặc quá sát; chọn lịch mới để tránh đăng ngoài ý muốn')
@@ -381,9 +507,13 @@ class Publishing:
         return url
 
     @contextmanager
-    def upload_source(self,row):
+    def upload_source(self,row,save=None):
         # Validate the exact bytes that will be sent before authentication/network.
         # Spooling keeps large videos off RAM and isolates a concurrent re-export.
+        if str(row['path']).startswith('drive:'):
+            with self._drive_download(row, save) as source:
+                yield source
+            return
         with tempfile.SpooledTemporaryFile(max_size=8*1024*1024,mode='w+b') as snapshot:
             sha=hashlib.sha256();size=0
             with open(row['path'],'rb') as source:
@@ -394,7 +524,7 @@ class Publishing:
             yield snapshot,size
 
     def upload_youtube(self,row,channel,save):
-        with self.upload_source(row) as (source,size):
+        with self.upload_source(row,save) as (source,size):
             return self._upload_youtube(row,channel,save,source,size)
 
     def _upload_youtube(self, row, channel, save, source, size):
@@ -410,7 +540,8 @@ class Publishing:
             received=status.headers.get('Range')
             offset=int(received.split('-')[-1])+1 if received else 0
         else:
-            metadata = {'snippet':{'title':row['title'],'description':row['caption'],'categoryId':'22'},
+            metadata = {'snippet':{'title':row['title'],'description':row['caption'],'categoryId':'22',
+                                   **({'tags':json.loads(row.get('tags') or '[]')} if json.loads(row.get('tags') or '[]') else {})},
                         'status':{'privacyStatus':'private','publishAt':_iso(row['publish_at']), 'selfDeclaredMadeForKids':False}}
             response = self._request('POST','https://www.googleapis.com/upload/youtube/v3/videos',
                                      params={'uploadType':'resumable','part':'snippet,status'},json=metadata,
@@ -442,7 +573,7 @@ class Publishing:
         raise PublishUncertain('YouTube chưa xác nhận hoàn tất; giữ receipt, không upload bản khác')
 
     def upload_facebook(self,row,channel,save):
-        with self.upload_source(row) as (source,size):
+        with self.upload_source(row,save) as (source,size):
             return self._upload_facebook(row,channel,save,source,size)
 
     def _upload_facebook(self, row, channel, save, source, size):

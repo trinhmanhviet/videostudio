@@ -56,6 +56,21 @@ def register_publishing_routes(app, store, versions, same_origin, local_request)
         local_request(request); same_origin(request)
         return call(service.disconnect, channel_id)
 
+    @app.post('/api/publishing/channels/{channel_id}/remove')
+    def remove_channel(channel_id: str, request: Request):
+        local_request(request); same_origin(request)
+        try:
+            return service.remove_channel(channel_id)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy kênh')
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+
+    @app.put('/api/publishing/default-channels')
+    def default_channels(data: dict, request: Request):
+        local_request(request); same_origin(request)
+        return call(service.set_default_channels, data)
+
     @app.get('/api/publishing/schedules')
     def schedules():
         return service.schedules()

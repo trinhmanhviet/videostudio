@@ -20,6 +20,22 @@ SOURCES_ROOT = Path(os.getenv('VS_STORY_SOURCES', str(APP_ROOT.parent / 'wikicv_
 MAX_UPLOAD = 20 * 1024 ** 3
 
 
+def group_by_length(chapter_ids, words, target_minutes, speed=1.0, rate=4.2):
+    """Consecutive chapters fill an episode until adding the next would pass the target by more than half of that
+    chapter (estimated from word count), so episodes land near the target without splitting a chapter."""
+    groups, current, length = [], [], 0.0
+    for chapter_id in chapter_ids:
+        seconds = words.get(chapter_id, 0) / (rate * speed)
+        if current and length + seconds / 2 > target_minutes * 60:
+            groups.append(current)
+            current, length = [], 0.0
+        current.append(chapter_id)
+        length += seconds
+    if current:
+        groups.append(current)
+    return groups
+
+
 def register_story_routes(app, store, factory, pipeline, voices, same_origin, resume_editing=True):
     library = StoryLibrary(ffprobe=getattr(pipeline, 'ffprobe', 'ffprobe'), ffmpeg=getattr(pipeline, 'ffmpeg', 'ffmpeg'))
     editing = {}  # source name -> {'thread', 'log': [...], 'error', 'done'}
@@ -273,14 +289,20 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             raise HTTPException(422, 'Idempotency-Key required')
         chapter_ids = data.get('chapter_ids')
         mode = data.get('mode', 'each')
-        if not isinstance(chapter_ids, list) or not chapter_ids or len(chapter_ids) > 100 or mode not in ('each', 'merge'):
-            raise HTTPException(422, 'Chọn 1–100 chương và cách tạo video')
+        target = data.get('target_minutes', 30)
+        if not isinstance(chapter_ids, list) or not chapter_ids or len(chapter_ids) > 500 or mode not in ('each', 'merge', 'group'):
+            raise HTTPException(422, 'Chọn 1–500 chương và cách tạo video')
+        if mode == 'group' and (type(target) is not int or not 5 <= target <= 180):
+            raise HTTPException(422, 'Độ dài mỗi tập từ 5 đến 180 phút')
+        audio_only = data.get('audio_only', False)
+        if type(audio_only) is not bool:
+            raise HTTPException(422, 'audio_only phải là bật/tắt')
         book_data = call(library.book, book_id)
         settings, layout = book_data['settings'], book_data['layout']
-        if not layout.get('horizontal', True) and not layout.get('vertical', True):
+        if not audio_only and not layout.get('horizontal', True) and not layout.get('vertical', True):
             raise HTTPException(422, 'Chọn ít nhất một định dạng: ngang hoặc dọc')
         clips = [c for c in library.gameplay(book_id)['items'] if c['available']]
-        if not clips:
+        if not clips and not audio_only:
             raise HTTPException(422, 'Chưa có clip gameplay cho truyện này. Mở Gameplay → Thêm clip trước khi xếp hàng (nghe thử giọng vẫn dùng được).')
         import shutil
         free = shutil.disk_usage(store.outputs).free
@@ -293,17 +315,23 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         listing = {c['id']: c['words'] for c in index}
         biggest = max(listing.get(c, 0) for c in chapter_ids) if mode == 'each' else sum(listing.get(c, 0) for c in chapter_ids)
         minutes = biggest / 4.2 / 60
-        need = (300 + minutes * (45 + 25 * outputs + 5)) * 1024 * 1024
+        from .story_pipeline import space_needed
+        need = space_needed(minutes * 60, 0 if audio_only else outputs)
         if free < need:
             raise HTTPException(422, f'Ổ lưu video ({store.outputs}) chỉ còn {free / 2**30:.1f} GB, cần khoảng {need / 2**30:.1f} GB cho một video. Giải phóng ổ trước khi xếp hàng.')
-        groups = [[c] for c in chapter_ids] if mode == 'each' else [chapter_ids]
+        if mode == 'group':
+            groups = group_by_length(chapter_ids, listing, target, float(settings.get('speech_speed', 1) or 1))
+        else:
+            groups = [[c] for c in chapter_ids] if mode == 'each' else [chapter_ids]
+        if len(groups) > 100:
+            raise HTTPException(422, 'Tối đa 100 video mỗi lần xếp hàng; chọn ít chương hơn')
         items = []
         for index, group in enumerate(groups):
-            snapshot = call(library.freeze, book_id, group, f'{idempotency_key}:{index}:{",".join(group)}')
+            snapshot = call(library.freeze, book_id, group, f'{idempotency_key}:{index}:{"audio:" if audio_only else ""}{",".join(group)}', audio_only)
             words = sum(len(c['text'].split()) for c in snapshot['chapters'])
             seconds = estimate_seconds(' '.join(c['text'] for c in snapshot['chapters']), speed=settings.get('speech_speed', 1))
             from .story_pipeline import episode_title
-            title = f'{book_data["title"]} · {episode_title(snapshot)}'
+            title = f'{book_data["title"]} · {episode_title(snapshot)}' + (' (lời đọc)' if audio_only else '')
             request_body = {'idea': f'Kể truyện · {title} · {words} từ', 'voice_id': settings['voice_id'],
                             'duration_seconds': int(min(7200, max(8, round(seconds)))), 'project': book_data['title'],
                             'content_style': 'story', 'workflow_mode': 'story_narration', 'story_snapshot': snapshot['sha256'],
@@ -320,6 +348,35 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         except ValueError as error:
             raise HTTPException(409 if 'already used' in str(error) else 422, str(error))
         return {'batch': batch, 'videos': len(items)}
+
+    @app.post('/api/story/jobs/{job_id}/rerender')
+    def rerender(job_id: str, request: Request):
+        """Re-make a finished chapter video with the book's current look: same text, voice and gameplay footage."""
+        same_origin(request)
+        try:
+            job = store.get(job_id)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy video')
+        if job['request'].get('workflow_mode') != 'story_narration' or job['state'] != 'completed':
+            raise HTTPException(422, 'Chỉ dựng lại được video Kể truyện đã xong')
+        folder = Path(job['output'])
+        try:
+            old = json.loads((folder / 'story-snapshot.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            raise HTTPException(409, 'Không còn dữ liệu nội dung của video này')
+        plan_file = folder / 'story-gameplay' / 'plan.json'
+        plan = json.loads(plan_file.read_text(encoding='utf-8')) if plan_file.is_file() else None
+        snapshot = call(library.freeze_rerender, old, f'rerender:{job_id}:{time.time_ns()}', plan)
+        from .story_pipeline import episode_title
+        title = f'{snapshot["book"]["title"]} · {episode_title(snapshot)} (dựng lại)'
+        body = {**{k: v for k, v in job['request'].items() if k not in ('story_snapshot', 'idea')}, 'idea': f'Kể truyện · {title}', 'story_snapshot': snapshot['sha256']}
+        try:
+            batch = factory.create_prepared_batch(job['request'].get('project') or snapshot['book']['title'], 'story',
+                                                  [{'title': title, 'content': f'{title}\nsnapshot {snapshot["sha256"][:12]}', 'request': body}],
+                                                  'story-rerender:' + snapshot['sha256'])
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+        return {'batch': batch, 'videos': 1}
 
     # --- crawled sources + ChatGPT editing ----------------------------------------------------------------------
     def source_dir(name):

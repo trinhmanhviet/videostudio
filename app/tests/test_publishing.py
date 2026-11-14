@@ -172,6 +172,76 @@ class PublishingTests(unittest.TestCase):
         self.assertEqual([call[0] for call in calls],['GET','POST'])
         self.assertEqual(calls[1][1]['data']['video_id'],'123')
 
+    def youtube_http(self, calls, upload_status=201):
+        def http(method, url, **kwargs):
+            calls.append((method, kwargs))
+            if method == 'POST':
+                return httpx.Response(200, headers={'Location': 'https://www.googleapis.com/upload/session'})
+            return httpx.Response(upload_status, json={'id': 'vid'})
+        return http
+
+    def test_youtube_upload_sends_title_and_tags(self):
+        row = self.schedule(title='Chương 1: Cánh cổng', tags=['truyện audio', '#ngôn tình', 'truyện audio'])
+        raw = self.service._raw_schedule(row['id'])
+        self.service._yt_headers = lambda channel: {'Authorization': 'Bearer fixture'}
+        calls = []
+        self.service._request = self.youtube_http(calls)
+        self.service.upload_youtube(raw, self.service.channel('youtube:one'), lambda **kw: None)
+        snippet = calls[0][1]['json']['snippet']
+        self.assertEqual((snippet['title'], snippet['tags']), ('Chương 1: Cánh cổng', ['truyện audio', 'ngôn tình']))
+        self.service.cancel(row['id'])
+        untagged = self.service.create_schedule(dict(job_id='job', version_id='v1', channel_id='youtube:one', title='B', caption='',
+                                                     publish_at=datetime.fromtimestamp(self.now+7200, timezone.utc).isoformat()), 'other-key')
+        self.assertEqual(json.loads(self.service._raw_schedule(untagged['id'])['tags']), [])
+
+    def test_video_on_drive_is_downloaded_checked_posted_and_removed(self):
+        import hashlib
+        from unittest import mock
+        from videostudio.drive_storage import DriveStorage
+        DriveStorage(self.store)  # creates the drive tables
+        wide = b'wide-video-on-drive'
+        with self.store.db() as db:
+            for name, data in (('ep_doc.mp4', b'tall'), ('ep_ngang.mp4', wide)):
+                db.execute('INSERT INTO drive_files(job_id,kind,name,local_path,account,file_id,size,md5,uploaded,local_deleted) VALUES(?,?,?,?,?,?,?,?,?,1)',
+                           ('job', name, name, str(self.root / name), 'a@x', 'id-' + name, len(data), hashlib.md5(data).hexdigest(), 1))
+        self.versions.record = dict(self.versions.record, version_id='drive-abc', path=str(self.root / 'ep_doc.mp4'))
+        row = self.schedule(version_id='drive-abc')
+        raw = self.service._raw_schedule(row['id'])
+        self.assertEqual(raw['path'], 'drive:job/ep_ngang.mp4')  # YouTube gets the landscape copy
+        fetched = []
+
+        def download(self_, file_id, target, check=None, account=None, progress=None):
+            fetched.append((file_id, account, Path(target)))
+            Path(target).write_bytes(wide)
+        self.service._yt_headers = lambda channel: {'Authorization': 'Bearer fixture'}
+        calls = []
+        self.service._request = self.youtube_http(calls)
+        with mock.patch.object(DriveStorage, 'download', download):
+            result = self.service.upload_youtube(raw, self.service.channel('youtube:one'), lambda **kw: None)
+        self.assertEqual(result['remote_id'], 'vid')
+        self.assertEqual(calls[1][1]['content'], wide)
+        self.assertEqual(fetched[0][:2], ('id-ep_ngang.mp4', 'a@x'))
+        self.assertFalse(fetched[0][2].exists())  # the temporary copy is gone
+        with mock.patch.object(DriveStorage, 'download', lambda *a, **k: Path(a[2]).write_bytes(b'other')):
+            with self.assertRaises(PublishBlocked):
+                self.service.upload_youtube(dict(raw, upload_url=None), self.service.channel('youtube:one'), lambda **kw: None)
+
+    def test_default_channel_per_kind_and_removing_a_channel(self):
+        self.service.save_channel('youtube:two', 'youtube', 'Story channel', {'refresh_token': 'x'})
+        self.service.set_default_channels({'case': 'youtube:one', 'story': 'youtube:two', 'news': ''})
+        self.assertEqual(self.service.channels()['defaults'], {'case': 'youtube:one', 'story': 'youtube:two'})
+        with self.assertRaises(ValueError):
+            self.service.set_default_channels({'story': 'youtube:missing'})
+        row = self.schedule()  # on youtube:one, not posted yet
+        with self.assertRaises(ValueError):
+            self.service.remove_channel('youtube:one')
+        self.service.cancel(row['id'])
+        self.service.remove_channel('youtube:one')
+        self.assertEqual(self.service.channels()['defaults'], {'story': 'youtube:two'})
+        self.assertNotIn('youtube:one', [c['id'] for c in self.service.channels()['items']])
+        with self.assertRaises(KeyError):
+            self.service.remove_channel('youtube:one')
+
 
 if __name__ == '__main__':
     unittest.main()

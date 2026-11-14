@@ -33,7 +33,8 @@ DEFAULT_SETTINGS = {'speech_engine': 'vieneu', 'voice_id': 'Thiện Minh', 'spee
                     'khanh_steps': 32, 'speech_batch_size': 256}
 DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': True, 'vertical': True,
                   'burn_subtitles': True, 'export_srt': True, 'export_mp3': True, 'game_audio': False,
-                  'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc'}
+                  'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc',
+                  'cover_source': 'game', 'cover_image': '', 'cover_at': 0.3, 'cover_text': True}
 # Built-in backgrounds: gradients rendered by FFmpeg, no image files required.
 PRESET_BACKGROUNDS = {
     'preset:dem-xanh': {'name': 'Đêm xanh', 'top': '0x0b1a33', 'bottom': '0x1d3b63'},
@@ -229,8 +230,12 @@ class StoryLibrary:
                  'read_title': bool(row['read_title']), 'sha256': row['sha256'], 'source_name': row['source_name'],
                  'revision': row['revision'], 'words': words(row['text']), 'characters': len(row['text']), 'updated': row['updated'],
                  'reviewed': bool(row['reviewed']) if 'reviewed' in row.keys() else False}
+        from .story_lint import lint
+        issues = lint(row['text'], row['sha256'])
+        value['issues'] = len(issues)
         if text:
             value['text'] = row['text']
+            value['lint'] = issues
         return value
 
     def chapters(self, book_id, q='', page=1, page_size=50, status=''):
@@ -246,6 +251,8 @@ class StoryLibrary:
             items = [i for i in items if needle in slug(i['title'], 200).replace('-', ' ') or needle == str(i['order'])]
         if status in ('reviewed', 'pending'):
             items = [i for i in items if i['reviewed'] == (status == 'reviewed')]
+        elif status == 'issues':
+            items = [i for i in items if i['issues']]
         total_words = sum(i['words'] for i in items)
         start = (page - 1) * page_size
         return {'items': items[start:start + page_size], 'total': len(items), 'page': page, 'page_size': page_size,
@@ -559,7 +566,7 @@ class StoryLibrary:
         return None
 
     # --- episodes ----------------------------------------------------------------------------------------
-    def freeze(self, book_id, chapter_ids, idem):
+    def freeze(self, book_id, chapter_ids, idem, audio_only=False):
         """Immutable snapshot for one queued episode: text revisions, order, voice settings, layout and gameplay playlist."""
         book = self.book(book_id)
         with self.db() as db:
@@ -580,8 +587,34 @@ class StoryLibrary:
                                   'duration': c['duration'], 'start': c['start'], 'end': c['end'], 'has_audio': c['has_audio'],
                                   'drive_file_id': c.get('drive_file_id'),
                                   'width': c['width'], 'height': c['height']} for c in playlist],
-                    'background': self.background_path(book['layout'].get('background')) and str(self.background_path(book['layout']['background'])),
-                    'background_preset': PRESET_BACKGROUNDS.get(book['layout'].get('background'), PRESET_BACKGROUNDS['preset:dem-xanh'])}
+                    **self._look(book['layout'])}
+        if audio_only:
+            # Narration only (MP3 + subtitles) for listening first; the video later reuses the same voice from cache.
+            snapshot.update(audio_only=True, gameplay=[])
+        return self._store_snapshot(snapshot, book_id, chapter_ids, idem)
+
+    def _look(self, layout):
+        background = self.background_path(layout.get('background'))
+        cover = self.background_path(layout.get('cover_image')) if layout.get('cover_source') == 'image' else None
+        return {'background': str(background) if background else None,
+                'background_preset': PRESET_BACKGROUNDS.get(layout.get('background'), PRESET_BACKGROUNDS['preset:dem-xanh']),
+                'cover_path': str(cover) if cover else None}
+
+    def freeze_rerender(self, old, idem, plan=None):
+        """Same text, voice and gameplay as a finished episode, with the book's current look (layout, background,
+        cover, codec). The old gameplay plan is reused, so the book's gameplay position does not move."""
+        book = self.book(old['book']['id'])
+        with self.db() as db:
+            prior = db.execute('SELECT * FROM episodes WHERE idem=?', (idem,)).fetchone()
+        if prior:
+            return self.snapshot(prior['snapshot_sha256'])
+        snapshot = {key: value for key, value in old.items() if key != 'sha256'}
+        snapshot.update(layout=book['layout'], **self._look(book['layout']))
+        if plan:
+            snapshot['gameplay_plan'] = plan
+        return self._store_snapshot(snapshot, book['id'], [c['id'] for c in old['chapters']], idem)
+
+    def _store_snapshot(self, snapshot, book_id, chapter_ids, idem):
         raw = json.dumps(snapshot, ensure_ascii=False, sort_keys=True)
         digest = hashlib.sha256(raw.encode('utf-8')).hexdigest()
         path = self.root / 'snapshots' / f'{digest}.json'
@@ -614,7 +647,7 @@ class ConflictError(ValueError):
 def validate_settings(value):
     if not isinstance(value, dict):
         raise ValueError('Thiết lập giọng không hợp lệ')
-    allowed = {'speech_engine', 'voice_id', 'speech_rhythm', 'speech_speed', 'khanh_steps', 'speech_batch_size', 'speech_reference_text'}
+    allowed = {'speech_engine', 'voice_id', 'speech_rhythm', 'speech_speed', 'khanh_steps', 'speech_batch_size', 'speech_reference_text', 'pronunciations'}
     if set(value) - allowed:
         raise ValueError('Thiết lập giọng có trường lạ')
     result = dict(value)
@@ -633,6 +666,18 @@ def validate_settings(value):
         raise ValueError('Batch giọng đọc từ 1 đến 512')
     if 'voice_id' in result and (not isinstance(result['voice_id'], str) or not result['voice_id'].strip()):
         raise ValueError('Chọn giọng đọc')
+    if 'pronunciations' in result:
+        rules = result['pronunciations']
+        if not isinstance(rules, list) or len(rules) > 500:
+            raise ValueError('Từ điển phát âm tối đa 500 dòng')
+        clean = []
+        for rule in rules:
+            if not isinstance(rule, dict) or not isinstance(rule.get('from'), str) or not isinstance(rule.get('to'), str):
+                raise ValueError('Mỗi dòng từ điển cần "cách viết" và "cách đọc"')
+            written, spoken = rule['from'].strip()[:100], rule['to'].strip()[:100]
+            if written and spoken and written != spoken:
+                clean.append({'from': written, 'to': spoken})
+        result['pronunciations'] = clean
     return result
 
 
@@ -653,6 +698,17 @@ def validate_layout(value):
         result['game_box'] = validate_game_box(result['game_box'])
     if 'video_codec' in result and result['video_codec'] not in ('hevc', 'h264'):
         raise ValueError('Kiểu nén chỉ có HEVC hoặc H.264')
+    if 'cover_source' in result and result['cover_source'] not in ('game', 'image'):
+        raise ValueError('Ảnh bìa lấy từ khung game hoặc ảnh của bạn')
+    if 'cover_at' in result:
+        at = float(result['cover_at'])
+        if not 0.02 <= at <= 0.98:
+            raise ValueError('Vị trí khung ảnh bìa từ 2% đến 98% thời lượng')
+        result['cover_at'] = at
+    if 'cover_text' in result and type(result['cover_text']) is not bool:
+        raise ValueError('cover_text phải là bật/tắt')
+    if 'cover_image' in result and not isinstance(result['cover_image'], str):
+        raise ValueError('Ảnh bìa không hợp lệ')
     return result
 
 

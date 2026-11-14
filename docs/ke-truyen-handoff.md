@@ -348,3 +348,29 @@ Ghi lại: chỗ đọc sai/ngắt sai (giây), chỗ giao diện khó dùng, l�
 - Chuyển cảnh mờ 0,4 giây ở chỗ nối/lặp gameplay; ảnh nhỏ Kho video = ảnh bìa; Chi tiết video có tab Gameplay.
 - Câu lệnh ChatGPT cấm thêm miêu tả/cảm xúc không có trong nguồn; quá 130% độ dài thì nhờ sửa.
 - Cảnh báo ổ lưu thiếu chỗ ở thanh dưới Kể truyện; sửa lệch danh sách giọng trên điện thoại.
+
+## 14. Bổ sung ngày 2026-11-14 (tối)
+
+- Từ điển phát âm theo truyện (`settings.pronunciations`, tối đa 500 dòng "cách viết = cách đọc"): chỉ đổi lời đọc
+  (`unit['spoken']`), phụ đề giữ chữ gốc. Khớp nguyên từ, không phân biệt hoa thường, cụm dài trước. Câu bị đổi có
+  identity TTS mới nên chỉ những câu đó đọc lại.
+- "Dựng lại khung hình" (Kho video → ⋯, chỉ video Kể truyện đã xong): `POST /api/story/jobs/{id}/rerender`, snapshot
+  mới = nội dung + giọng cũ, khung hình/nền/ảnh bìa/kiểu nén hiện tại của truyện, kèm `gameplay_plan` cũ (con trỏ
+  gameplay của truyện không chạy tiếp). Lời đọc lấy lại từ TTS cache.
+- Gộp chương theo độ dài: chế độ `group` + `target_minutes` (15–90 trên giao diện, 5–180 ở API); chương liền nhau
+  dồn vào một tập tới khi vượt mục tiêu quá nửa chương tiếp theo (`story_api.group_by_length`). Tối đa 100 tập mỗi lần.
+- Bản gameplay trung gian (master) dựng bằng đúng cỡ khung game lớn nhất (mặc định 1152×648 thay vì 1920×1080).
+- Ảnh bìa: `cover_source` game|image, `cover_at` 2–98% thời lượng, `cover_image` (ảnh tải lên như ảnh nền),
+  `cover_text` bật/tắt chữ tên truyện và chương.
+
+## 15. Soát chữ, chỉ làm lời đọc, ổ đầy (2026-11-14)
+
+- `videostudio/story_lint.py`: soát máy theo PHẦN IV.1/IV.2 (dấu `~`, `?!` dồn, ngoặc 【】「」( ), □, emoji, dòng ký hiệu
+  chuyển cảnh khác `***`, `……` giữa cụm từ, dòng chỉ có `……`, số thập phân dấu chấm, link/dòng "Nguồn:", cụm in hoa,
+  chữ kéo dài, câu > 200 ký tự, đoạn > 150 từ). Một dấu `…` để ngập ngừng không bị báo. Danh sách chương có nhãn ⚠ n và
+  bộ lọc "Cần sửa chữ"; trình sửa có ô "Soát chữ", bấm một mục để chọn đúng chỗ trong chữ.
+- "Chỉ làm lời đọc (MP3)": snapshot `audio_only` (không gameplay), xuất `<stem>_loi-doc.mp3` + `.srt` vào thư mục truyện,
+  hiện trong Kho video. Dựng video sau dùng lại giọng từ TTS cache.
+- `ensure_space` trước bước gameplay và dựng: thiếu chỗ thì chờ tối đa 45 phút nếu Google Drive đang bật tự chuyển và xoá
+  bản trên máy; không thì tạm dừng hàng đợi và dừng video với thông báo rõ (Thử lại làm tiếp từ bước đã lưu).
+- TTS cache giới hạn 6 GB, xoá câu lâu không dùng nhất trước (dùng lại thì cập nhật thời gian).

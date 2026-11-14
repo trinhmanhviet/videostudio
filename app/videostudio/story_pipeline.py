@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import shutil
 import time
@@ -146,6 +147,82 @@ def episode_title(snapshot):
     return f'{label(first)}–{chapters[-1]["number"] or chapters[-1]["order"]}'
 
 
+WAIT_FOR_SPACE = 45 * 60      # how long a job waits for Google Drive to move finished videos off the disk
+TTS_CACHE_LIMIT = 6 * 2**30    # shared narration cache; least recently used sentences go first
+
+
+def space_needed(seconds, outputs, master=True):
+    """Bytes a story episode needs on the save drive. Measured on 1080p game recordings: master about 45 MB/min,
+    each finished video about 25 MB/min, narration about 5 MB/min, plus 300 MB working margin. Audio only
+    (outputs=0): about 3 MB/min plus 100 MB."""
+    minutes = float(seconds) / 60
+    if not outputs:
+        return int((100 + minutes * 3) * 2**20)
+    return int((300 + minutes * ((45 if master else 0) + 25 * outputs + 5)) * 2**20)
+
+
+def ensure_space(pipeline, job, need, check, stage):
+    """Before writing large files: if the save drive is short, wait while Google Drive moves finished videos away
+    (when Drive is connected and set to delete local copies); otherwise pause the queue so the next videos do not
+    fail half-way too, and stop this one with a clear message. Retry resumes from the saved steps."""
+    from .core import PermanentError
+    folder = Path(job['output'])
+    free = shutil.disk_usage(folder).free
+    if free >= need:
+        return
+    store = getattr(pipeline, 'store', None)
+    drive_ready = False
+    if store is not None:
+        try:
+            from .drive_storage import DriveStorage
+            drive = DriveStorage(store)
+            drive_ready = bool(drive.setting('auto_upload', True) and drive.setting('delete_local', True) and drive.accounts())
+        except Exception:
+            drive_ready = False
+    if drive_ready:
+        _log(pipeline, job, stage, f'Ổ lưu còn {free / 2**30:.1f} GB, cần khoảng {need / 2**30:.1f} GB. Chờ Google Drive chuyển video đã xong lên để lấy chỗ…')
+        deadline = time.monotonic() + WAIT_FOR_SPACE
+        while time.monotonic() < deadline:
+            check()
+            time.sleep(15)
+            free = shutil.disk_usage(folder).free
+            if free >= need:
+                _log(pipeline, job, stage, f'Đã đủ chỗ ({free / 2**30:.1f} GB trống), làm tiếp.')
+                return
+    if store is not None:
+        try:
+            with store.db() as db:
+                db.execute('UPDATE factory_settings SET paused=1 WHERE id=1')
+        except Exception:
+            pass
+    raise PermanentError(f'Ổ lưu chỉ còn {free / 2**30:.1f} GB, cần khoảng {need / 2**30:.1f} GB. Đã tạm dừng hàng đợi để các video sau không hỏng giữa chừng. '
+                         'Giải phóng ổ hoặc đổi nơi lưu (hay kết nối Google Drive), bấm Tiếp tục hàng đợi rồi Thử lại video này: lời đọc đã có được giữ.')
+
+
+def trim_tts_cache(cache, keep=(), limit=None):
+    """Keep the shared narration cache under the limit, oldest-used sentences first; never this job's own."""
+    limit = TTS_CACHE_LIMIT if limit is None else limit
+    try:
+        files = [(p, p.stat()) for p in Path(cache).glob('*.wav')]
+    except OSError:
+        return 0
+    total = sum(s.st_size for _, s in files)
+    keep = set(keep)
+    freed = 0
+    for path, stat in sorted(files, key=lambda item: item[1].st_mtime):
+        if total <= limit:
+            break
+        if path.stem in keep:
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            continue
+        total -= stat.st_size
+        freed += stat.st_size
+    return freed
+
+
 def preflight_for_request(status, pipeline, request):
     """Story needs only FFmpeg, the speech engine and its own inputs; ChatGPT/Flow/Comfy/OAuth checks do not apply."""
     if request.get('workflow_mode') != MODE:
@@ -155,17 +232,16 @@ def preflight_for_request(status, pipeline, request):
               for c in status['checks']]
     try:
         snapshot = StoryLibrary().snapshot(request.get('story_snapshot'))
+        audio_only = bool(snapshot.get('audio_only'))
         missing = [c['name'] for c in snapshot['gameplay'] if not Path(c['path']).is_file() and not c.get('drive_file_id')]
-        ok = bool(snapshot['gameplay']) and not missing
-        detail = ('Có ' + str(len(snapshot['gameplay'])) + ' clip gameplay') if ok else (
+        ok = audio_only or (bool(snapshot['gameplay']) and not missing)
+        detail = 'Chỉ làm lời đọc, không cần gameplay' if audio_only else ('Có ' + str(len(snapshot['gameplay'])) + ' clip gameplay') if ok else (
             'Chưa có clip gameplay cho truyện này' if not snapshot['gameplay'] else 'Không thấy tệp gameplay: ' + ', '.join(missing))
         checks.append({'name': 'story_gameplay', 'ok': ok, 'detail': detail})
         free = shutil.disk_usage(pipeline.store.outputs if getattr(pipeline, 'store', None) else '.').free
         words = sum(len(c['text'].split()) for c in snapshot['chapters'])
-        minutes = words / 4.2 / 60
-        outputs = int(bool(snapshot['layout'].get('horizontal', True))) + int(bool(snapshot['layout'].get('vertical', True)))
-        # Measured on a 1080p game recording: master about 45 MB/min, each output about 25 MB/min, plus working margin.
-        need = int((300 + minutes * (45 + 25 * outputs + 5)) * 1024 * 1024)
+        outputs = 0 if audio_only else int(bool(snapshot['layout'].get('horizontal', True))) + int(bool(snapshot['layout'].get('vertical', True)))
+        need = space_needed(words / 4.2, outputs)
         checks.append({'name': 'story_disk', 'ok': free > need, 'detail': f'Ổ lưu video còn trống {free / 2**30:.1f} GB, cần khoảng {need / 2**30:.1f} GB' + ('' if free > need else '. Giải phóng ổ hoặc đổi thư mục xuất trước khi chạy.')})
     except Exception as error:
         checks.append({'name': 'story_snapshot', 'ok': False, 'detail': 'Không đọc được nội dung truyện đã chốt: ' + str(error)[:200]})
@@ -234,10 +310,19 @@ def _groups(paragraph):
 def build_units(snapshot):
     units = []
 
+    rules = sorted((snapshot.get('settings') or {}).get('pronunciations') or [], key=lambda r: -len(r['from']))
+    patterns = [(re.compile(r'(?<!\w)' + re.escape(r['from']) + r'(?!\w)', re.IGNORECASE), r['to']) for r in rules]
+
     def add(text, kind, chapter, pause):
         text = text.strip()
         if text:
-            units.append({'id': f'u{len(units):05d}', 'text': text, 'kind': kind, 'chapter': chapter, 'pause': pause})
+            spoken = text
+            for pattern, replacement in patterns:
+                spoken = pattern.sub(replacement, spoken)
+            unit = {'id': f'u{len(units):05d}', 'text': text, 'kind': kind, 'chapter': chapter, 'pause': pause}
+            if spoken != text:
+                unit['spoken'] = spoken  # read aloud this way; subtitles keep the written text
+            units.append(unit)
 
     for chapter_index, chapter in enumerate(snapshot['chapters']):
         if chapter['read_title']:
@@ -295,7 +380,7 @@ def speech(pipeline, job, check):
     cache.mkdir(exist_ok=True)
     rhythm = request.get('speech_rhythm', 'natural')
     for unit in units:
-        unit['identity'] = speech_identity(unit['text'], voice, request, pipeline)
+        unit['identity'] = speech_identity(unit.get('spoken', unit['text']), voice, request, pipeline)
         unit['raw'] = str(folder / f'{unit["id"]}.raw.wav')
     # Reuse: this job's own receipts first, then the shared cache of earlier episodes (same text + voice + settings).
     missing = []
@@ -306,6 +391,10 @@ def speech(pipeline, job, check):
         cached = cache / f'{unit["identity"]}.wav'
         if cached.is_file() and cached.stat().st_size > 1000:
             shutil.copyfile(cached, raw)
+            try:
+                os.utime(cached)  # recently used: kept longest when the cache is trimmed
+            except OSError:
+                pass
             _write(receipt, {'identity': unit['identity'], 'sha256': digest(raw)})
             continue
         missing.append(unit)
@@ -328,7 +417,7 @@ def speech(pipeline, job, check):
                         shutil.copyfile(raw, part)
                         part.replace(target)
 
-                worker.write_lines([u['text'] for u in group], [Path(u['raw']) for u in group], on_complete=completed)
+                worker.write_lines([u.get('spoken', u['text']) for u in group], [Path(u['raw']) for u in group], on_complete=completed)
                 done += len(group)
                 _log(pipeline, job, 'speech', f'Đã đọc {done}/{len(missing)} cụm.')
     # Pauses: measure the silence the engine (and story rhythm) already left, then add only what is missing.
@@ -375,6 +464,7 @@ def speech(pipeline, job, check):
                 out.writeframes(b'\x00\x00' * channels * int(round(pad * rate)))
     Path(str(narration) + '.part').replace(narration)
     ledger_path = _write(Path(job['output']) / 'story-ledger.json', ledger)
+    trim_tts_cache(cache, keep={u['identity'] for u in units})
     total = cursor
     _log(pipeline, job, 'speech', f'Lời đọc dài {int(total // 60)} phút {int(total % 60)} giây.')
     return {'path': str(narration), 'duration_seconds': total, 'utterances': len(ledger), 'ledger': str(ledger_path),
@@ -498,9 +588,17 @@ def images(pipeline, job, check):
     folder = Path(job['output']) / 'story-gameplay'
     folder.mkdir(exist_ok=True)
     plan_path = folder / 'plan.json'
+    if snapshot.get('audio_only'):
+        _log(pipeline, job, 'images', 'Chỉ làm lời đọc: bỏ qua gameplay.')
+        return {'audio_only': True, 'segments': 0, 'seconds': seconds, 'scenes': [], 'assets': []}
+    layout = snapshot['layout']
+    wanted = int(bool(layout.get('horizontal', True))) + int(bool(layout.get('vertical', True)))
+    ensure_space(pipeline, job, space_needed(seconds, max(1, wanted)), check, 'images')
     library = StoryLibrary()
     book_id = snapshot['book']['id']
-    layout = snapshot['layout']
+    reused = snapshot.get('gameplay_plan')
+    if not plan_path.is_file() and reused and float(reused.get('seconds', 0)) >= seconds - 0.05:
+        _write(plan_path, reused)  # "Dựng lại khung hình": same footage as before, the book's cursor stays put
     if plan_path.is_file():
         plan_data = _read(plan_path)  # frozen on retry: never consumes the cursor twice
     else:
@@ -527,6 +625,20 @@ def images(pipeline, job, check):
             'segments_detail': detail, 'loops': plan_data['loops'], 'scenes': [], 'assets': [asset(plan_path)]}
 
 
+def master_size(job):
+    """The largest game box among the requested layouts: the master is made at that size (16:9, even numbers), so
+    every later frame is scaled less. Falls back to full 1080p when the layout is unknown."""
+    try:
+        snapshot = _snapshot(job)
+    except (OSError, ValueError):
+        return 1920, 1080
+    layout = snapshot.get('layout') or {}
+    wanted = [o for o, flag in (('ngang', layout.get('horizontal', True)), ('doc', layout.get('vertical', True))) if flag] or ['ngang']
+    width = max(layout_for(o, layout)['game'][2] for o in wanted)
+    width = min(1920, max(640, int(round(width / 2)) * 2))
+    return width, int(round(width * 9 / 16 / 2)) * 2
+
+
 def build_master(pipeline, job, plan_path, check):
     """One gameplay clip without text for the whole narration, from the frozen plan. Segment files are deleted as soon
     as they are joined, so the job folder never holds the same footage twice."""
@@ -534,7 +646,8 @@ def build_master(pipeline, job, plan_path, check):
     plan_data = _read(plan_path)
     folder = Path(plan_path).parent
     master, receipt = folder / 'master.mp4', folder / 'master.json'
-    identity = _identity({'algorithm': ALGORITHM, 'plan': plan_data, 'fps': FPS})
+    width, height = master_size(job)
+    identity = _identity({'algorithm': ALGORITHM, 'plan': plan_data, 'fps': FPS, 'size': [width, height]})
     if master.is_file() and receipt.is_file() and _read(receipt).get('identity') == identity:
         return master
     game_audio = plan_data['game_audio']
@@ -544,7 +657,8 @@ def build_master(pipeline, job, plan_path, check):
         check()
         # Joins (next clip, or the playlist looping) fade through the dark theme colour instead of cutting hard.
         fade_in, fade_out = index > 0, index < count - 1
-        part_identity = _identity({'algorithm': ALGORITHM, 'segment': segment, 'fps': FPS, 'audio': game_audio, 'fade': [fade_in, fade_out, FADE]})
+        part_identity = _identity({'algorithm': ALGORITHM, 'segment': segment, 'fps': FPS, 'audio': game_audio, 'fade': [fade_in, fade_out, FADE],
+                                   'size': [width, height]})
         target = folder / f'seg-{index:03d}.mp4'
         part_receipt = target.with_suffix('.json')
         if not (target.is_file() and part_receipt.is_file() and _read(part_receipt).get('identity') == part_identity):
@@ -558,8 +672,8 @@ def build_master(pipeline, job, plan_path, check):
                 raise PermanentError(f'Không thấy tệp gameplay {segment["name"]}. Nạp lại clip rồi thử lại; lời đọc đã có được giữ nguyên.')
             _log(pipeline, job, 'images', f'Chuẩn bị gameplay: đoạn {index + 1}/{len(plan_data["segments"])} ({segment["name"]}).')
             args = [pipeline.ffmpeg, '-v', 'error', '-y', '-ss', f'{segment["start"]:.3f}', '-t', f'{segment["length"]:.3f}', '-i', segment['path']]
-            video = (f'fps={FPS},scale=1920:1080:force_original_aspect_ratio=decrease,'
-                     'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x101827,setsar=1,format=yuv420p')
+            video = (f'fps={FPS},scale={width}:{height}:force_original_aspect_ratio=decrease,'
+                     f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=0x101827,setsar=1,format=yuv420p')
             if fade_in and segment['length'] > 2 * FADE:
                 video += f',fade=t=in:st=0:d={FADE}:color=0x101827'
             if fade_out and segment['length'] > 2 * FADE:
@@ -715,6 +829,8 @@ def render(pipeline, job, check):
     from .core import PermanentError
     check()
     snapshot = _snapshot(job)
+    if snapshot.get('audio_only'):
+        return render_audio(pipeline, job, snapshot, check)
     layout = snapshot['layout']
     wanted = [o for o, flag in (('ngang', layout.get('horizontal', True)), ('doc', layout.get('vertical', True))) if flag]
     if not wanted:
@@ -723,6 +839,7 @@ def render(pipeline, job, check):
     narration = Path(job['checkpoints']['speech']['path'])
     seconds = float(job['checkpoints']['speech']['duration_seconds'])
     master = Path(job['checkpoints']['images']['master'])
+    ensure_space(pipeline, job, space_needed(seconds, len(wanted), master=not master.is_file()), check, 'render')
     if not master.is_file():
         master = build_master(pipeline, job, Path(job['checkpoints']['images']['gameplay_plan']), check)
     # Narration is levelled once (speech loudness about -16 LUFS) and encoded once; both videos copy it.
@@ -769,7 +886,8 @@ def render(pipeline, job, check):
     kit.write_text(f'TIÊU ĐỀ\n{post["title"]}\n\nMÔ TẢ\n{post["description"]}\n\nHASHTAG\n{" ".join(post["hashtags"])}\n', encoding='utf-8')
     published.update(cover=str(cover), post=str(kit))
     from .social_copy import _write as write_social
-    plain = [h.lstrip('#') for h in post['hashtags']]
+    book = (snapshot.get('book') or {}).get('title') or ''
+    plain = [t for t in dict.fromkeys(['truyện audio', 'đọc truyện', 'kể chuyện', 'truyện hay', book, _unaccent(book)]) if t]
     write_social(job, {'state': 'ready', 'source': 'story',
                        'youtube': {'title': post['title'], 'description': post['description'] + '\n\n' + ' '.join(post['hashtags']), 'tags': plain},
                        'facebook': {'caption': post['title'] + '\n\n' + post['description'], 'hashtags': post['hashtags']},
@@ -782,6 +900,26 @@ def render(pipeline, job, check):
     if 'ngang' in published:
         result['video_ngang'] = published['ngang']
     return result
+
+
+def render_audio(pipeline, job, snapshot, check):
+    """Listening copy: levelled MP3 and the horizontal-width subtitles beside it, named like the video would be."""
+    narration = Path(job['checkpoints']['speech']['path'])
+    seconds = float(job['checkpoints']['speech']['duration_seconds'])
+    ensure_space(pipeline, job, space_needed(seconds, 0), check, 'render')
+    root, stem = _root(job), _stem(job, snapshot, getattr(pipeline, 'store', None))
+    mp3 = root / f'{stem}_loi-doc.mp3'
+    run([pipeline.ffmpeg, '-v', 'error', '-y', '-i', str(narration), '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+         '-ar', '44100', '-c:a', 'libmp3lame', '-q:a', '2', str(mp3)], check, timeout=max(600, seconds))
+    published, files = {'mp3': str(mp3)}, [mp3]
+    if snapshot['layout'].get('export_srt', True):
+        srt = root / f'{stem}_loi-doc.srt'
+        shutil.copyfile(job['checkpoints']['subtitles']['srt_ngang'], srt)
+        published['srt_ngang'] = str(srt)
+        files.append(srt)
+    _log(pipeline, job, 'render', f'Đã xuất lời đọc {mp3.name}. Khi dựng video cho các chương này, giọng đã đọc được dùng lại.')
+    return {'video': str(mp3), 'story_outputs': published, 'story_files': [str(f) for f in files], 'orientation': 'audio',
+            'duration_seconds': seconds, 'renderer': 'story-audio-v1', 'audio_only': True, 'assets': [asset(f) for f in files]}
 
 
 def verify(pipeline, job, check):
@@ -844,6 +982,14 @@ def _clock(seconds):
     return f'{h}:{m:02d}:{s:02d}' if h else f'{m:02d}:{s:02d}'
 
 
+def _unaccent(text):
+    """"Trọng Sinh" -> "trong sinh": the spelling many viewers type into search."""
+    import unicodedata
+    folded = unicodedata.normalize('NFD', str(text).replace('đ', 'd').replace('Đ', 'D'))
+    plain = ''.join(c if c.isalnum() else ' ' for c in folded if not unicodedata.combining(c))
+    return ' '.join(plain.lower().split())
+
+
 def post_text(snapshot, ledger):
     """Title, description and hashtags for YouTube/Facebook, made from the story itself (no AI, nothing invented).
     A merged episode lists where each chapter starts (YouTube turns these into chapters)."""
@@ -888,10 +1034,15 @@ def cover_image(pipeline, job, snapshot, master, seconds, check):
         events.append(f'Dialogue: 1,0:00:00.00,0:00:05.00,Channel,,0,0,0,,{{\\pos(640,40)}}{_ass_text(channel)}')
     ass = folder / 'story-thumb.ass'
     ass.write_text(_ass_header(1280, 720, styles) + '\n'.join(events) + '\n', encoding='utf-8')
-    at = max(0.0, min(seconds - 1, seconds * 0.3))
+    layout = snapshot.get('layout') or {}
+    at = max(0.0, min(seconds - 1, seconds * float(layout.get('cover_at', 0.3))))
+    text = layout.get('cover_text', True)
+    own = snapshot.get('cover_path') if layout.get('cover_source') == 'image' else None
+    source = ['-i', own] if own and Path(own).is_file() else ['-ss', f'{at:.2f}', '-i', str(master)]
+    look = ',eq=brightness=-0.22:saturation=1.1,drawbox=x=0:y=215:w=1280:h=300:color=0x0b1426@0.62:t=fill,ass=' + ass.name if text else ''
     from .media import _run_in
-    _run_in(folder, [pipeline.ffmpeg, '-v', 'error', '-y', '-ss', f'{at:.2f}', '-i', str(master), '-frames:v', '1',
-                     '-vf', f'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,eq=brightness=-0.22:saturation=1.1,drawbox=x=0:y=215:w=1280:h=300:color=0x0b1426@0.62:t=fill,ass={ass.name}',
+    _run_in(folder, [pipeline.ffmpeg, '-v', 'error', '-y', *source, '-frames:v', '1',
+                     '-vf', 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720' + look,
                      '-q:v', '3', target.name], check, timeout=120)
     ass.unlink(missing_ok=True)
     return target

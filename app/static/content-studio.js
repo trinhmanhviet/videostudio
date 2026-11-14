@@ -88,7 +88,7 @@
   function schedulePayload(video, fields) {
     if (!video?.job_id || !video?.version_id || !(video.approved === true || video.review_state === 'approved')) throw Error('Hãy duyệt đúng bản video trước khi lên lịch.');
     if (!fields.channel_id || !fields.publish_at || !Number.isFinite(Date.parse(fields.publish_at))) throw Error('Chọn kênh và giờ đăng hợp lệ.');
-    return {job_id:video.job_id,version_id:video.version_id,channel_id:fields.channel_id,title:video.title || '',publish_at:fields.publish_at,caption:fields.caption || ''};
+    return {job_id:video.job_id,version_id:video.version_id,channel_id:fields.channel_id,title:video.title || '',publish_at:fields.publish_at,caption:fields.caption || '',...(fields.tags?.length?{tags:fields.tags}:{})};
   }
   const PUBLICATION_PLATFORMS = {youtube:'YouTube',facebook:'Facebook Page',tiktok:'TikTok',other:'Khác'};
   const postedReceiptKey = id => 'videostudio.posted-cleanup.v1.'+id;
@@ -264,17 +264,16 @@
     const existingGlobalRefresh=$('#globalRefresh').onclick;$('#globalRefresh').onclick=()=>{existingGlobalRefresh?.();if(state.page==='details')state.details?.refresh(true);else refreshPage();};
     const existingOpenProject=global.openProject;
     // Top-level function declarations are shared with the existing classic script.
-    global.openProject=function(name,jobId=null){state.detailReturn=state.page==='queue'?'queue':'library';if(jobId&&global.StudioDetails){state.detailJobId=jobId;navigate('details',false);state.details?.destroy?.();state.details=global.StudioDetails.open($('#studio-details'),{jobId,request,onBack:()=>navigate(state.detailReturn),toast,openLegacySceneEditor:id=>{navigate('projects',false);existingOpenProject(name,id);global.openSceneEditor?.(id);},openEditWorkspace:id=>global.openOptionalWorkspace?.(id),openRecoveryWorkspace:(id,project)=>{navigate('projects',false);existingOpenProject(project||name,id);$('#studioNewVideo').hidden=true;}});return;}navigate('projects',false);existingOpenProject(name,jobId);$('#studioNewVideo').hidden=Boolean(jobId);if(jobId)$('#currentProjectTitle').textContent='Chi tiết video · '+name;};
+    global.openProject=function(name,jobId=null){state.detailReturn=state.page==='queue'?'queue':'library';if(jobId&&global.StudioDetails){state.detailJobId=jobId;navigate('details',false);state.details?.destroy?.();state.details=global.StudioDetails.open($('#studio-details'),{jobId,request,onBack:()=>navigate(state.detailReturn),toast,openEditWorkspace:id=>global.openOptionalWorkspace?.(id)});return;}navigate('library');};
     const back=$('#btnBackToGallery'),existingBack=back.onclick;back.textContent='← Quay lại';back.onclick=()=>{existingBack?.();$('#studioNewVideo').hidden=true;navigate(state.detailReturn||'library');};
     const projectHeader=$('#viewWorkspace').firstElementChild;const createButton=button('+ Tạo video',openDrawer);createButton.id='studioNewVideo';const headerActions=el('div','studio-project-actions');const workflowEntry=$('#optionalWorkflowEntry');const consoleToggle=$('#btnToggleInlineLog');append(headerActions,consoleToggle,workflowEntry,createButton);projectHeader.append(headerActions);
     const oldCreate=$('#btnConfirmProjectModal').onclick;$('#btnConfirmProjectModal').onclick=async()=>{await oldCreate();if($('#projectModal').hidden)openDrawer();};
     $('#tabProjects').onclick=()=>navigate('projects');$('#tabClone').onclick=()=>navigate('settings');
     $('#viewGallery h2').textContent='Dự án';$('#viewGallery p').textContent='Tiếp tục câu chuyện của bạn';
     installDrawer();installSettings();
-    $('#studio-settings .studio-settings-grid').lastElementChild.append(document.createElement('br'),button('Mở dữ liệu cũ',()=>navigate('projects')));
     const requested=new URLSearchParams(location.search).get('view');
     const initial=requested==='videos'?'library':requested;
-    navigate(['projects','batch','story','queue','library','calendar','settings'].includes(initial)?initial:'batch',true);
+    navigate(['batch','story','queue','library','calendar','settings'].includes(initial)?initial:'batch',true);
     let ticks=0;setInterval(()=>{if(!document.hidden&&['queue','calendar','details'].includes(state.page)&&!state.loading)refreshPage();updateSystemIndicator();if(!document.hidden&&++ticks%4===0)refreshQueueBadge();},5000);refreshQueueBadge();
     installGlobalStoryDrop();
     updateSystemIndicator();initializeConnection();loadReadingProfiles();
@@ -282,6 +281,7 @@
   let readingProfilesLoaded=0,readingProfilesRequest=null;
   async function loadReadingProfiles() {if(readingProfilesRequest||Date.now()-readingProfilesLoaded<60000)return readingProfilesRequest;readingProfilesRequest=(async()=>{try{const data=await request('/api/voices');setVoiceProfiles(data.voices||data.items||[]);readingProfilesLoaded=Date.now();renderBatchRows();syncAutoDuration();}catch{/* A labelled fallback keeps video creation available if timing metadata cannot load. */}finally{readingProfilesRequest=null;}})();return readingProfilesRequest;}
   function navigate(name, reload=true) {
+    if(name==='projects')name='library';  // the old project pages are gone
     if(state.page==='batch')state.createController?.save();
     if(state.page==='story'&&name!=='story')state.storyController?.save?.();
     state.details?.setVisible?.(name==='details');
@@ -489,65 +489,148 @@
     const detect=button('Lấy chat ID tự động',async()=>{try{await request('/api/notify/detect-chat',{method:'POST',body:'{}'});toast('Đã nhận chat ID.');renderNotify(card);}catch(error){toast(error.message);}},'secondary');
     const test=button('Gửi thử',async()=>{try{await request('/api/notify/test',{method:'POST',body:'{}'});toast('Đã gửi, xem Telegram trên điện thoại.');}catch(error){toast(error.message);}},'secondary');
     const on=el('input');on.type='checkbox';on.checked=info.enabled;on.onchange=async()=>{await request('/api/notify',{method:'PUT',body:JSON.stringify({enabled:on.checked})});};
-    card.replaceChildren(el('h3','','Báo qua Telegram'),
+    card.replaceChildren(stHead('Báo qua Telegram',info.configured?(info.enabled?'Đang bật':'Đang tắt'):'Chưa kết nối',info.configured&&info.enabled?'ok':'warn'),
       el('p','notice','Tool nhắn vào Telegram khi video làm xong hoặc bị lỗi, và khi biên tập xong một truyện.'),
-      el('p','notice','Cách lấy: trong Telegram mở @BotFather → /newbot → đặt tên → nhận token, dán vào đây và Lưu. Sau đó nhắn một chữ bất kỳ cho bot vừa tạo rồi bấm "Lấy chat ID tự động".'),
+      append(el('details','st-help'),el('summary','','Cách lấy token'),el('p','','Trong Telegram mở @BotFather → /newbot → đặt tên → nhận token, dán vào đây và Lưu. Sau đó nhắn một chữ bất kỳ cho bot vừa tạo rồi bấm "Lấy chat ID tự động".')),
       append(el('div','studio-output-row'),token,saveToken),append(el('div','studio-drive-row'),detect,test),
-      append(el('label','studio-drive-toggle'),on,el('span','','Bật thông báo')),
+      stSwitch(info.enabled,'Bật thông báo','Tắt thì tool không nhắn gì.',async(value,input)=>{try{await request('/api/notify',{method:'PUT',body:JSON.stringify({enabled:value})});renderNotify(card);}catch(error){input.checked=!value;toast(error.message);}}),
       el('p','notice',info.configured?'Đã kết nối, chat ID '+info.chat+'.':(info.has_token?'Đã có token, còn thiếu chat ID.':'Chưa kết nối.')));
+  }
+  function stHead(title,pill,tone){const head=el('div','st-head');head.append(el('h3','',title));if(pill)head.append(el('span','st-pill'+(tone?' is-'+tone:''),pill));return head;}
+  function stSize(bytes){bytes=Math.max(0,Number(bytes)||0);return bytes>=2**30?(bytes/2**30).toFixed(2).replace('.',',')+' GB':bytes>=10*2**20?Math.round(bytes/2**20)+' MB':bytes>=2**20?(bytes/2**20).toFixed(1).replace('.',',')+' MB':Math.round(bytes/1024)+' KB';}
+  function stWait(seconds){if(seconds==null)return '';const m=Math.round(seconds/60);return seconds<60?'còn dưới 1 phút':m<60?`còn khoảng ${m} phút`:`còn khoảng ${Math.floor(m/60)} giờ ${m%60} phút`;}
+  function stBar(value,total,cls){const bar=el('div','st-bar'+(cls?' '+cls:''));const fill=el('span');fill.style.width=(total>0?Math.min(100,value/total*100):0).toFixed(1)+'%';bar.append(fill);bar.setAttribute('role','progressbar');bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','100');bar.setAttribute('aria-valuenow',String(total>0?Math.round(value/total*100):0));return bar;}
+  function stSwitch(checked,label,hint,onchange){const box=el('label','st-switch');const input=el('input');input.type='checkbox';input.checked=!!checked;input.onchange=()=>onchange(input.checked,input);append(box,input,el('span','st-knob'),append(el('span','st-switch-text'),el('strong','',label),hint?el('small','',hint):null));return box;}
+  const drivePhases={scan:'Đang tìm video cần đưa lên',hash:'Đang tính mã kiểm tra',upload:'Đang tải lên',verify:'Đang so khớp với Drive',delete:'Đang xoá bản trên máy'};
+  function renderDriveSync(panel,sync,info){
+    // Live sync panel: overall bytes, the video and file in hand, step, speed and time left; then the last finished videos.
+    const parts=[];
+    if(sync?.running){
+      const pct=sync.bytes_total>0?Math.min(100,Math.round(sync.bytes_done/sync.bytes_total*100)):0;
+      parts.push(append(el('div','st-sync-top'),el('strong','','Đang đưa video lên Drive'),el('span','st-sync-pct',sync.phase==='scan'?'…':pct+'%')));
+      parts.push(stBar(sync.bytes_done,sync.bytes_total,'is-main'));
+      const facts=[sync.jobs_total?`Video ${Math.min(sync.jobs_done+1,sync.jobs_total)}/${sync.jobs_total}`:'',sync.bytes_total?`${stSize(sync.bytes_done)} / ${stSize(sync.bytes_total)}`:'',(sync.average||sync.speed)>1024?stSize(sync.average||sync.speed)+'/giây':'',stWait(sync.eta)].filter(Boolean);
+      parts.push(el('p','st-sync-facts',facts.join(' · ')||drivePhases[sync.phase]||''));
+      const file=sync.file;
+      if(file){
+        const box=el('div','st-sync-file');
+        append(box,append(el('div','st-sync-step'),el('span','st-dot'),el('span','',(drivePhases[sync.phase]||'Đang xử lý')+(file.count>1?` · tệp ${file.index}/${file.count}`:''))),
+          el('strong','st-sync-job',file.job||file.project),el('span','st-sync-name',file.name),
+          stBar(file.done,file.size,sync.phase==='hash'?'is-soft':''),el('small','',`${stSize(file.done)} / ${stSize(file.size)}`));
+        parts.push(box);
+      }else if(sync.phase){parts.push(el('p','st-muted',drivePhases[sync.phase]||''));}
+    }else{
+      const last=sync?.result;
+      parts.push(append(el('div','st-sync-top'),el('strong','','Đồng bộ'),el('span','st-pill is-ok','Đang chờ')));
+      parts.push(el('p','st-sync-facts',last?`Lần chạy gần nhất ${new Date((sync.last||0)*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'})}: đưa lên ${last.uploaded} video (${stSize(last.bytes)})${last.failed?`, ${last.failed} video lỗi`:''}.`:'Tool tự kiểm tra mỗi phút và đưa video mới làm xong lên Drive.'));
+    }
+    if(sync?.recent?.length){
+      const list=el('ul','st-recent');
+      for(const item of sync.recent)list.append(append(el('li'),el('span','st-check','✓'),el('span','st-recent-name',item.job),el('small','',stSize(item.size))));
+      parts.push(el('small','st-label','Vừa xong'),list);
+    }
+    for(const f of info?.failures||[])parts.push(el('p','studio-error',`Chưa đưa được ${f.title?'“'+f.title+'”':'một video'} lên Drive: ${f.message}`));
+    const run=button(sync?.running?'Đang chạy…':'Đồng bộ ngay',async()=>{run.disabled=true;try{await request('/api/drive/sync',{method:'POST',body:'{}'});pollDrive(panel,info,true);}catch(error){toast(error.message);run.disabled=false;}},'secondary');
+    run.disabled=!!sync?.running;
+    parts.push(append(el('div','st-actions'),run,el('span','st-muted',`Đã lưu ${info.uploaded_videos} video · ${String(info.uploaded_gb).replace('.',',')} GB trên Drive`)));
+    panel.replaceChildren(...parts);
+  }
+  function pollDrive(panel,info,soon){
+    clearTimeout(panel._timer);const token=panel._token=(panel._token||0)+1;
+    const tick=async()=>{
+      if(!panel.isConnected||token!==panel._token)return;
+      let sync;try{sync=await request('/api/drive/progress');}catch{panel._timer=setTimeout(tick,10000);return;}
+      if(token!==panel._token)return;
+      if(panel._wasRunning&&!sync.running){panel._wasRunning=false;const card=panel.closest('.studio-drive');if(card){renderDrive(card);return;}}
+      panel._wasRunning=sync.running;
+      renderDriveSync(panel,sync,info);
+      panel._timer=setTimeout(tick,sync.running?1200:document.hidden?30000:8000);
+    };
+    panel._timer=setTimeout(tick,soon?400:0);
   }
   async function renderDrive(card) {
     // Settings → Google Drive: several accounts; finished videos move there (first account with room, then the next).
-    card.replaceChildren(el('h3','','Google Drive'),el('p','notice','Đang đọc…'));
-    let info;try{info=await request('/api/drive/status');}catch(error){card.replaceChildren(el('h3','','Google Drive'),el('p','studio-error',error.message));return;}
-    const parts=[el('h3','','Google Drive'),el('p','notice','Video xong được chuyển lên Drive theo thư mục Video/vu-an/<vụ án>, Video/truyen-doc/<tên truyện>…, kiểm tra khớp rồi mới xoá bản trên máy. Tài khoản đầu tiên còn chỗ được dùng trước; sắp đầy thì tự sang tài khoản kế tiếp. Không bao giờ xoá gì trên Drive.')];
+    if(!card.childElementCount)card.replaceChildren(stHead('Google Drive'),el('p','st-muted','Đang đọc…'));
+    let info;try{info=await request('/api/drive/status');}catch(error){card.replaceChildren(stHead('Google Drive','Lỗi','bad'),el('p','studio-error',error.message));return;}
+    const help=append(el('details','st-help'),el('summary','','Cách hoạt động'),
+      el('p','','Video xong được đưa lên Drive vào thư mục Video/vu-an/<vụ án>, Video/truyen-doc/<tên truyện>… Tool so mã kiểm tra (MD5) với bản trên máy rồi mới xoá bản trên máy. Tool không bao giờ xoá gì trên Drive.'),
+      el('p','','Tài khoản đứng đầu danh sách được dùng trước; sắp đầy thì tự sang tài khoản kế tiếp.'),
+      el('p','','Địa chỉ chuyển hướng cần có trong OAuth client (Web application): '+location.origin+'/api/drive/oauth/callback'));
     if(!info.has_client){
       const file=el('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
       file.onchange=async()=>{try{const raw=JSON.parse(await file.files[0].text());await request('/api/drive/client',{method:'PUT',body:JSON.stringify(raw)});toast('Đã lưu OAuth client.');renderDrive(card);}catch(error){toast(error.message);}finally{file.value='';}};
-      parts.push(el('p','notice','Bước 1: tạo OAuth client trong Google Cloud Console (bật Google Drive API, thêm email của bạn vào Test users), tải tệp JSON về rồi chọn ở đây. Dùng từ điện thoại: chọn loại Web application, Authorized redirect URI là '+location.origin+'/api/drive/oauth/callback'),file,button('Chọn tệp OAuth client JSON',()=>file.click(),''));
-      card.replaceChildren(...parts);return;
+      card.replaceChildren(stHead('Google Drive','Chưa thiết lập','warn'),el('p','st-muted','Tải tệp OAuth client JSON tạo trong Google Cloud Console (đã bật Google Drive API).'),file,button('Chọn tệp OAuth client JSON',()=>file.click(),''),help);return;
     }
-    const list=el('div','studio-drive-accounts');
+    const n=info.accounts.length;
+    const list=el('div','st-accounts');
     for(const [i,a] of info.accounts.entries()){
-      const row=el('div','studio-drive-account');
-      row.append(el('strong','',`${i+1}. ${a.email}`),el('span','notice',a.ok?(a.free_gb!=null?`còn ${a.free_gb} GB / ${a.total_gb} GB`:'không giới hạn'):'lỗi: '+(a.error||'')));
-      const up=button('↑',async()=>{const ids=info.accounts.map(x=>x.id);ids.splice(i-1,0,ids.splice(i,1)[0]);await request('/api/drive/accounts/order',{method:'POST',body:JSON.stringify({ids})});renderDrive(card);},'secondary');up.disabled=i===0;up.title='Dùng trước';
-      const remove=button('Gỡ',async()=>{if(!confirm('Gỡ '+a.email+' khỏi tool? Tệp trên Drive vẫn giữ nguyên.'))return;await request('/api/drive/accounts/'+encodeURIComponent(a.id),{method:'DELETE'});renderDrive(card);},'secondary');
-      row.append(up,remove);list.append(row);
+      const row=el('div','st-account');
+      const used=a.total_gb?a.total_gb-a.free_gb:0;
+      const up=button('↑',async()=>{const ids=info.accounts.map(x=>x.id);ids.splice(i-1,0,ids.splice(i,1)[0]);await request('/api/drive/accounts/order',{method:'POST',body:JSON.stringify({ids})});renderDrive(card);},'st-icon');up.disabled=i===0;up.title='Dùng trước';up.setAttribute('aria-label','Đưa '+a.email+' lên đầu');
+      const remove=button('Gỡ',async()=>{if(!confirm('Gỡ '+a.email+' khỏi tool? Tệp trên Drive vẫn giữ nguyên.'))return;await request('/api/drive/accounts/'+encodeURIComponent(a.id),{method:'DELETE'});renderDrive(card);},'st-link');
+      append(row,append(el('div','st-account-top'),el('span','st-avatar',String(a.email||'?')[0].toUpperCase()),append(el('div','st-account-name'),el('strong','',a.email),el('small','',i===0?'Dùng trước':'Dự phòng '+i)),n>1?up:null,remove));
+      if(a.ok&&a.total_gb){row.append(stBar(used,a.total_gb,used/a.total_gb>.9?'is-warn':''),el('small','st-muted',`Còn trống ${String(a.free_gb).replace('.',',')} GB / ${String(a.total_gb).replace('.',',')} GB`));}
+      else row.append(el('small',a.ok?'st-muted':'studio-error',a.ok?'Dung lượng không giới hạn':'Lỗi: '+(a.error||'')));
+      list.append(row);
     }
-    if(!info.accounts.length)list.append(el('p','notice','Chưa có tài khoản nào.'));
-    const add=button('+ Thêm tài khoản Google Drive',async()=>{try{const r=await request('/api/drive/accounts/start',{method:'POST',body:'{}'});window.open(r.url,'_blank','noopener');toast('Đăng nhập Google trong tab mới, xong quay lại đây và bấm Làm mới.');}catch(error){toast(error.message);}},'');
-    const toggle=(key,label)=>{const box=el('label','studio-drive-toggle');const c=el('input');c.type='checkbox';c.checked=info[key];c.onchange=async()=>{try{await request('/api/drive/settings',{method:'PATCH',body:JSON.stringify({[key]:c.checked})});}catch(error){toast(error.message);}};box.append(c,el('span','',label));return box;};
-    const sync=button('Đồng bộ ngay',async()=>{await request('/api/drive/sync',{method:'POST',body:'{}'});toast('Đã bắt đầu đưa video lên Drive.');setTimeout(()=>renderDrive(card),3000);},'secondary');
-    parts.push(list,add,toggle('auto_upload','Tự đưa video xong lên Drive'),toggle('delete_local','Xoá bản trên máy sau khi lên Drive (đã kiểm tra khớp)'),toggle('include_old','Đưa cả các video làm trước khi kết nối Drive'),sync,
-      el('p','notice',`Đã lưu ${info.uploaded_videos} video (${info.uploaded_gb} GB) lên Drive.`+(info.sync?.current?' Đang tải lên: '+info.sync.current:'')),
-      el('p','notice','Thêm tài khoản trên máy (http://127.0.0.1:8877) dùng OAuth client loại Desktop app. Thêm từ điện thoại qua địa chỉ online thì OAuth client phải là loại Web application, có Authorized redirect URI: '+location.origin+'/api/drive/oauth/callback'));
-    for(const f of info.failures||[])parts.push(el('p','studio-error','Chưa đưa được video lên Drive: '+f.message));
-    card.replaceChildren(...parts);
+    if(!n)list.append(el('p','st-muted','Chưa có tài khoản nào. Thêm một tài khoản Google để bắt đầu.'));
+    const add=button('+ Thêm tài khoản',async()=>{try{const r=await request('/api/drive/accounts/start',{method:'POST',body:'{}'});window.open(r.url,'_blank','noopener');toast('Đăng nhập Google trong tab mới, xong quay lại đây.');}catch(error){toast(error.message);}},'secondary');
+    const set=(key)=>async(value,input)=>{try{await request('/api/drive/settings',{method:'PATCH',body:JSON.stringify({[key]:value})});}catch(error){input.checked=!value;toast(error.message);}};
+    const switches=append(el('div','st-switches'),
+      stSwitch(info.auto_upload,'Tự đưa video xong lên Drive','Video làm xong được đưa lên trong vòng một phút.',set('auto_upload')),
+      stSwitch(info.delete_local,'Xoá bản trên máy sau khi lên Drive','Chỉ xoá khi tệp trên Drive khớp mã kiểm tra.',set('delete_local')),
+      stSwitch(info.include_old,'Đưa cả video làm trước khi kết nối','Bật để dọn ổ đĩa: tool đưa dần cả video cũ lên.',set('include_old')),
+      stSwitch(info.delete_after_post,'Xoá trên Drive sau khi đăng xong','Khi mọi bài đăng của video đã công khai, tool chuyển bản trên Drive vào Thùng rác (khôi phục được trong 30 ngày).',set('delete_after_post')));
+    const panel=el('div','st-sync');
+    const columns=append(el('div','st-drive-cols'),append(el('div','st-drive-left'),el('small','st-label','Tài khoản'),list,add,el('small','st-label','Tự động'),switches),panel);
+    card.replaceChildren(stHead('Google Drive',n?`${n} tài khoản`:'Chưa có tài khoản',n?'ok':'warn'),columns,help);
+    renderDriveSync(panel,info.sync,info);pollDrive(panel,info);
   }
   async function renderOutputRoot(card) {
     // Settings → Nơi lưu video: new videos go to <folder>\<project>\…; earlier videos stay where they are.
-    card.replaceChildren(el('h3','','Nơi lưu video'),el('p','notice','Đang đọc…'));
+    card.replaceChildren(stHead('Nơi lưu video'),el('p','notice','Đang đọc…'));
     let info;try{info=await request('/api/settings/output-root');}catch(error){card.replaceChildren(el('h3','','Nơi lưu video'),el('p','studio-error',error.message));return;}
     const input=el('input');input.type='text';input.value=info.root;input.setAttribute('aria-label','Thư mục lưu video');input.placeholder='Ví dụ D:\\Videos';
     const drives=el('div','studio-drive-list');
     for(const drive of info.drives||[]){const chip=button(`${drive.drive} · ${drive.free_gb} GB trống`,()=>{input.value=drive.drive+'\\Videos';input.focus();},'secondary');chip.title=`Dùng ${drive.drive}\\Videos`;drives.append(chip);}
     const save=button('Lưu nơi lưu',async()=>{save.disabled=true;try{const next=await request('/api/settings/output-root',{method:'PUT',body:JSON.stringify({path:input.value})});toast('Video mới sẽ lưu vào '+next.root+'.');renderOutputRoot(card);}catch(error){toast(error.message);}finally{save.disabled=false;}},'');
     const free=info.free_gb==null?'':` · còn trống ${info.free_gb} GB / ${info.total_gb} GB`;
+    card.querySelector('.st-head').append(el('span','st-pill is-ok',info.free_gb==null?'Đã chọn':`còn ${info.free_gb} GB`));
     append(card,el('p','notice',`Đang lưu vào ${info.root}${free}.`),
       el('p','notice','Video mới lưu theo cấu trúc <thư mục>\\<tên dự án hoặc tên truyện>\\…, giống hiện tại. Video đã làm trước đó giữ nguyên chỗ cũ, vẫn xem, tải và xoá được trong Kho video.'),
       drives,append(el('div','studio-output-row'),input,save));
     card.querySelector('.notice').remove();
     if(info.previous?.length)card.append(el('p','notice','Thư mục cũ vẫn được theo dõi: '+info.previous.join(', ')));
   }
-  function installSettings() {const root=$('#studio-settings');root.append(pageHeader('Cài đặt','Kết nối công cụ, quản lý giọng đọc và tài khoản đăng video.'));const grid=el('div','studio-settings-grid');
-    const connection=$('#viewWorkspace>.layout>aside');connection.classList.add('studio-connection');connection.hidden=false;connection.querySelector('h2').textContent='Kết nối tạo video';grid.append(connection);
-    const voices=el('section','card');append(voices,el('h3','','Giọng đọc'),el('p','notice','Chọn giọng có sẵn khi tạo video hoặc thêm giọng mới từ một bản thu.'),button('Tạo giọng từ bản thu',()=>{const pane=$('#paneClone');pane.hidden=!pane.hidden;pane.scrollIntoView({behavior:'smooth',block:'start'});}));grid.append(voices);
-    const channels=el('section','card');channels.id='studioSettingsChannels';channels.append(el('h3','','Tài khoản đăng video'));grid.append(channels);
-    const storage=el('section','card studio-output-root');storage.id='studioSettingsOutput';grid.append(storage);renderOutputRoot(storage);
-    const driveCard=el('section','card studio-drive');driveCard.id='studioSettingsDrive';grid.append(driveCard);renderDrive(driveCard);
-    const notifyCard=el('section','card studio-notify');notifyCard.id='studioSettingsNotify';grid.append(notifyCard);renderNotify(notifyCard);
-    const tools=el('section','card');append(tools,el('h3','','Công cụ & trợ giúp'),el('p','notice','Dùng bảng kết nối nổi để kết nối tài khoản tạo nội dung. Khi gặp lỗi, kiểm tra điều kiện chạy và thử lại.'));const resourceLink=el('a','','Mở kho tài nguyên →');resourceLink.href='/resources';tools.append(resourceLink,document.createElement('br'),button('Xem nhật ký khi cần',()=>{$('#inlineConsole').hidden=false;navigate('projects',false);if($('#viewWorkspace').hidden&&$('#galleryContainer .project-card'))$('#galleryContainer .project-card').click();global.loadConsoleLogs?.();$('#inlineConsole').scrollIntoView({behavior:'smooth'});}));grid.append(tools);root.append(grid);
+  async function openLogs() {
+    // Latest job events (newest first) and the ComfyUI GPU log, read-only.
+    const modal=dialog('Nhật ký');const out=el('pre','st-log','Đang đọc…');const reload=button('Làm mới',()=>load(),'secondary');
+    append(modal.box,out,append(el('div','st-actions'),reload));
+    const load=async()=>{try{const d=await request('/api/system/logs');const lines=(d.events||[]).map(ev=>`[${new Date(ev.at*1000).toLocaleTimeString('vi-VN')}] ${String(ev.job||'').slice(0,8)} · ${ev.stage||'INIT'} · ${ev.event}: ${ev.detail??''}`);
+      out.textContent=(lines.length?lines.join('\n'):'Chưa có sự kiện nào.')+(d.comfy_log?'\n\n— ComfyUI —\n'+d.comfy_log:'');}catch(error){out.textContent='Không đọc được nhật ký: '+error.message;}};
+    load();
+  }
+  function installSettings() {const root=$('#studio-settings');root.classList.add('st-page');root.append(pageHeader('Cài đặt','Lưu trữ, đăng bài, thông báo và kết nối tạo video.'));
+    const group=(title,...cards)=>{const box=el('section','st-group');box.append(el('h2','st-group-title',title),append(el('div','st-grid'),...cards));root.append(box);return box;};
+    const connection=$('#viewWorkspace>.layout>aside');connection.classList.add('studio-connection','st-card');connection.hidden=false;connection.querySelector('h2').textContent='Kết nối tạo video';
+    // The long list of runtime checks folds into one line: "14/14 đạt"; it opens by itself when something fails.
+    const checks=$('#checks'),connector=$('#connectorStatus');
+    if(checks&&!checks.closest('.st-checks')){
+      const fold=el('details','st-checks st-help');const summary=el('summary','','Kiểm tra hệ thống');fold.append(summary);checks.before(fold);fold.append(checks);if(connector)fold.append(connector);
+      const count=()=>{const pass=checks.querySelectorAll('.check.pass').length,bad=checks.querySelectorAll('.check.error').length;
+        summary.textContent=pass+bad?(bad?`Kiểm tra hệ thống: ${bad} mục cần xử lý`:`Kiểm tra hệ thống: ${pass}/${pass} mục đạt`):'Kiểm tra hệ thống';fold.classList.toggle('is-bad',bad>0);if(bad)fold.open=true;};
+      new MutationObserver(count).observe(checks,{childList:true,subtree:true});count();
+      for(const note of connection.querySelectorAll(':scope>p.notice'))if(note!==connector)note.hidden=true;
+    }
+    const channels=el('section','card st-card st-wide');channels.id='studioSettingsChannels';channels.append(el('h3','','Tài khoản đăng video'));
+    const storage=el('section','card st-card studio-output-root');storage.id='studioSettingsOutput';renderOutputRoot(storage);
+    const driveCard=el('section','card st-card studio-drive st-wide');driveCard.id='studioSettingsDrive';renderDrive(driveCard);
+    const notifyCard=el('section','card st-card studio-notify');notifyCard.id='studioSettingsNotify';renderNotify(notifyCard);
+    const tools=el('section','card st-card');tools.id='studioSettingsTools';const resourceLink=el('a','','Mở kho tài nguyên →');resourceLink.href='/resources';
+    append(tools,stHead('Công cụ & trợ giúp'),el('p','notice','Khi gặp lỗi, xem nhật ký hoặc kiểm tra hệ thống trong thẻ Kết nối tạo video.'),append(el('div','st-actions'),resourceLink),append(el('div','st-actions'),button('Xem nhật ký',openLogs,'secondary')));
+    group('Lưu trữ video',driveCard,storage);
+    group('Đăng bài và thông báo',channels,notifyCard);
+    group('Tạo video',connection,tools);
   }
 
   function clock(seconds) {const s=Math.max(0,Math.round(Number(seconds)||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+r:String(m).padStart(2,'0')+':'+r;}
@@ -727,12 +810,23 @@
     const render=()=>{
       const approved=version?.approved===true;badge.className='studio-state '+(approved?'completed':'pending');badge.textContent=approved?'Đã duyệt':'Chưa duyệt';
       actions.replaceChildren(button('Xem',()=>openVideo(video,version)));
-      if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));return;}
-      if(version&&!approved)actions.append(button('Duyệt',async()=>{try{await request('/api/factory/videos/'+encodeURIComponent(id)+'/approve',{method:'POST',body:JSON.stringify({version_id:version.version_id||version.id,sha256:version.sha256})});await loadLibrary();toast('Đã duyệt video.');}catch(error){toast(error.message);}},''));
-      if(version&&approved)actions.append(button('Lên lịch',()=>openSchedule({job_id:id,version_id:version.version_id||version.id,approved,title:video.title}),''));
+      // "Đăng / hẹn giờ": opens the post form; a version not yet approved is approved first (posting it is the approval).
+      const post=version?button('Đăng / hẹn giờ',async()=>{
+        if(!version.approved){
+          if(!global.confirm('Đăng bản video này? Tool sẽ ghi bản này là bản đã duyệt để đăng.'))return;
+          try{await request('/api/factory/videos/'+encodeURIComponent(id)+'/approve',{method:'POST',body:JSON.stringify({version_id:version.version_id||version.id,sha256:version.sha256})});version.approved=true;render();}catch(error){toast(error.message);return;}
+        }
+        openSchedule({job_id:id,version_id:version.version_id||version.id,approved:true,title:video.title,style:video.style});
+      },''):null;
+      if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';actions.append(post);if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));return;}
+      if(post)actions.append(post);
       actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));
       const more=el('details','studio-more');const list=el('div','studio-more-list');more.append(el('summary','','⋯'),list);more.querySelector('summary').setAttribute('aria-label','Thao tác khác');
       list.append(button('Chi tiết',()=>global.openProject(video.project||'Dự án mặc định',id)));
+      if(isStory(video))list.append(button('Dựng lại khung hình',async()=>{
+        if(!global.confirm('Dựng lại video này với khung hình, ảnh nền, ảnh bìa và kiểu nén hiện tại của truyện?\nGiữ nguyên lời kể, giọng đọc đã có và đúng đoạn gameplay cũ; bản cũ vẫn giữ.'))return;
+        try{await request('/api/story/jobs/'+encodeURIComponent(id)+'/rerender',{method:'POST',body:'{}'});toast('Đã xếp hàng dựng lại. Xem ở Hàng đợi.');}catch(error){toast(error.message);}
+      }));
       if(version){const pack=el('a','button secondary','Tải trọn bộ (video + phụ đề)');pack.href='/api/factory/videos/'+encodeURIComponent(id)+'/pack?'+filterQuery({version_id:version.version_id||version.id,include:'video,captions,sidecar'});pack.download='';list.append(pack);}
       if(video.style==='meme'){const edit=el('a','button secondary','Chỉnh sửa');edit.href='/meme-editor?job='+encodeURIComponent(id);list.append(edit);}else list.append(button('Chỉnh sửa',()=>global.openOptionalWorkspace?.(id)));
       list.append(button('Xóa',()=>openDeleteVideo(video),'secondary studio-danger'));actions.append(more);
@@ -744,16 +838,36 @@
     if(!root)return;
     try {
       const data=await request('/api/publishing/channels');
-      state.channels=Array.isArray(data)?data:data.items||[];state.channelsAt=Date.now();state.calendarSignature=null;
+      state.channels=Array.isArray(data)?data:data.items||[];state.channelDefaults=data.defaults||{};state.channelsAt=Date.now();state.calendarSignature=null;
       root.replaceChildren(el('h3','','Tài khoản đăng video'));
       const grid=el('div','studio-channel-grid');
       for(const channel of state.channels) {
         const card=el('div','studio-channel');
         append(card,el('h3','',channel.name||channel.platform||'Kênh đăng'),stateBadge(channel.connected===true?'connected':'blocked'),el('p','',channel.error||channel.message||(channel.connected?'Tài khoản đã kết nối.':'Cần kết nối tài khoản và cấp quyền đăng video.')));
+        const real=String(channel.id||'').includes(':');
+        if(real&&channel.platform==='youtube')card.append(el('small','st-muted','Mã kênh: '+channel.id.split(':')[1]));
+        if(real&&root.id==='studioSettingsChannels')card.append(button('Gỡ kênh',async()=>{
+          if(!global.confirm('Gỡ kênh "'+(channel.name||channel.id)+'" khỏi tool?\nKhông xoá gì trên YouTube/Facebook; muốn dùng lại thì bấm Kết nối.'))return;
+          try{await request('/api/publishing/channels/'+encodeURIComponent(channel.id)+'/remove',{method:'POST',body:'{}'});toast('Đã gỡ kênh.');loadChannels(root);}catch(error){toast(error.message);}
+        },'st-link'));
         grid.append(card);
       }
       if(!state.channels.some(channel=>channel.connected))root.append(el('p','notice','Chưa có kênh sẵn sàng đăng. Kết nối YouTube hoặc Facebook Page để bắt đầu.'));
       root.append(grid);
+      const connected=state.channels.filter(channel=>channel.connected===true&&String(channel.id).includes(':'));
+      if(root.id==='studioSettingsChannels'&&connected.length){
+        // Each kind of video can go to its own channel: the post form picks it by itself (still changeable there).
+        const box=el('div','st-defaults');box.append(el('small','st-label','Kênh mặc định khi đăng'));
+        for(const [style,label] of Object.entries(filterStyleLabels)){
+          const select=el('select');select.setAttribute('aria-label','Kênh cho '+label);select.append(new Option('Tự chọn khi đăng',''));
+          for(const channel of connected)select.append(new Option(channel.name||channel.id,channel.id));
+          select.value=state.channelDefaults[style]||'';
+          select.onchange=async()=>{const next={...state.channelDefaults,[style]:select.value};try{const result=await request('/api/publishing/default-channels',{method:'PUT',body:JSON.stringify(next)});state.channelDefaults=result.defaults||{};toast('Đã lưu kênh cho '+label+'.');}catch(error){select.value=state.channelDefaults[style]||'';toast(error.message);}};
+          box.append(append(el('label','st-default-row'),el('span','',label),select));
+        }
+        box.append(el('p','st-muted','Kết nối thêm kênh: bấm Kết nối YouTube, khi Google hỏi thì chọn đúng kênh (tài khoản thương hiệu).'));
+        root.append(box);
+      }
       if(root.id==='studioSettingsChannels')renderPublishingSetup(root,data);
       else root.append(button('Quản lý kết nối YouTube / Facebook Page',()=>navigate('settings')));
     } catch(error) {root.replaceChildren(el('h3','','Tài khoản đăng video'),el('p','studio-error',error.message),button('Thử lại',()=>loadChannels(root)));}
@@ -802,7 +916,7 @@
       append(toolbar,controls,modes);root.append(toolbar);
       if(schedules.some(item=>['scheduled','publishing','blocked'].includes(item.state)&&Date.parse(item.publish_at||item.scheduled_at)>Date.now()))root.append(el('p','notice','Giữ máy bật và ứng dụng chạy để video được gửi đúng giờ.'));
       const filtered=schedules.filter(item=>{const key=localDay(item.scheduled_at||item.publish_at);return week.some(date=>dayKey(date)===key);});
-      const calendar=el('div','studio-calendar-week');calendar.hidden=state.scheduleView!=='week';for(const date of week){const day=el('section','studio-calendar-day'+(dayKey(date)===localDay(new Date().toISOString())?' today':''));append(day,append(el('h3'),el('span','',date.toLocaleDateString('vi-VN',{weekday:'short'})),el('strong','',date.getDate())));for(const item of filtered.filter(i=>localDay(i.scheduled_at||i.publish_at)===dayKey(date))){const event=button('',()=>scheduleDetail(item),'studio-calendar-event');append(event,el('time','',prettyDate(item.scheduled_at||item.publish_at).split(' ')[0]),el('span','',item.title||item.video_title||'Video'));day.append(event);}calendar.append(day);}root.append(calendar);
+      const calendar=el('div','studio-calendar-week');calendar.hidden=state.scheduleView!=='week';for(const date of week){const day=el('section','studio-calendar-day'+(dayKey(date)===localDay(new Date().toISOString())?' today':''));append(day,append(el('h3'),el('span','',date.toLocaleDateString('vi-VN',{weekday:'short'})),el('strong','',date.getDate())));for(const item of filtered.filter(i=>localDay(i.scheduled_at||i.publish_at)===dayKey(date))){const event=button('',()=>scheduleDetail(item),'studio-calendar-event');append(event,el('time','',prettyDate(item.scheduled_at||item.publish_at).split(' ')[0]),el('span','',item.title||item.video_title||'Video'),stateBadge(item.state||item.status));event.classList.add('is-'+(item.state||item.status||'scheduled'));day.append(event);}calendar.append(day);}root.append(calendar);
       const list=el('div','studio-schedule-list'+(state.scheduleView==='week'?' studio-calendar-list-mobile':''));if(state.scheduleView==='week')list.style.display='none';if(!filtered.length)list.append(empty('Tuần này chưa có lịch đăng','Duyệt một video trong Kho video rồi bấm Lên lịch.'));for(const item of filtered.sort((a,b)=>Date.parse(a.publish_at)-Date.parse(b.publish_at)))list.append(scheduleRow(item));root.append(list);
     }catch(error){errorNode(root,error);}}
   function dayKey(date) {return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
@@ -843,10 +957,13 @@
     append(modal.box,filesLabel,note,error,append(el('div','studio-dialog-actions'),button('Hủy',()=>modal.close()),confirm));}
   function dialog(title) {const backdrop=el('div','studio-dialog');const box=el('section','studio-dialog-box');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');const heading=el('h2','',title);heading.id='studioDialogTitle';box.setAttribute('aria-labelledby',heading.id);const focus=document.activeElement;const modal={box};const close=()=>{modal.onClose?.();backdrop.remove();document.removeEventListener('keydown',key);focus?.focus();};const key=event=>{if(event.key==='Escape')close();if(event.key==='Tab'){const nodes=[...box.querySelectorAll('button,input,select,textarea,a[href]')].filter(n=>!n.disabled);if(!nodes.length)return;const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};document.addEventListener('keydown',key);backdrop.onclick=event=>{if(event.target===backdrop)close();};const closeButton=button('×',close);closeButton.setAttribute('aria-label','Đóng');box.append(append(el('header'),heading,closeButton));backdrop.append(box);document.body.append(backdrop);closeButton.focus();modal.close=close;return modal;}
   async function openSchedule(video) {if(!video.approved){toast('Duyệt đúng bản video trước khi lên lịch.');return;}const modal=dialog('Lên lịch đăng video');modal.box.append(el('p','notice',video.title||'Bản video đã duyệt'));const form=el('form');const error=el('p','studio-error');error.setAttribute('role','alert');modal.box.append(form);
-    const channelLabel=el('label','','Kênh đăng · YouTube hoặc Facebook Page');channelLabel.htmlFor='studioScheduleChannel';const channel=el('select');channel.id='studioScheduleChannel';channel.required=true;const timeLabel=el('label','','Thời gian đăng · Giờ Việt Nam (UTC+7)');timeLabel.htmlFor='studioScheduleTime';const time=el('input');time.id='studioScheduleTime';time.type='datetime-local';time.required=true;const captionLabel=el('label','','Lời đăng');captionLabel.htmlFor='studioScheduleCaption';const caption=el('textarea');caption.id='studioScheduleCaption';caption.maxLength=5000;const preview=el('div','studio-create-note');const previewText=el('p','',video.title||'');append(preview,el('strong','','Xem trước lời đăng'),previewText);caption.oninput=()=>previewText.textContent=caption.value||video.title||'Chưa có lời đăng.';const submit=el('button','','Lưu lịch đăng');submit.type='submit';let social=null;caption.addEventListener('input',event=>{if(event.isTrusted)caption.dataset.edited='true';});const platform=()=>String(state.channels.find(item=>item.id===channel.value)?.platform||'').toLowerCase();const fill=()=>{if(!social||social.state!=='ready'||caption.dataset.edited)return;const youtube=platform().includes('youtube');caption.value=youtube?[social.youtube?.description,(social.youtube?.tags||[]).map(t=>'#'+t).join(' ')].filter(Boolean).join('\n\n'):[social.facebook?.caption,(social.facebook?.hashtags||[]).join(' ')].filter(Boolean).join('\n\n');caption.oninput();};channel.addEventListener('change',fill);request('/api/jobs/'+encodeURIComponent(video.job_id)+'/social').then(data=>{social=data;fill();}).catch(()=>{});append(form,channelLabel,channel,timeLabel,time,captionLabel,caption,preview,el('p','notice','Lịch giữ nguyên bản video bạn đã duyệt. Máy cần bật và ứng dụng cần chạy để gửi video đúng lịch. Nếu kênh chưa kết nối, lịch sẽ chờ bạn hoàn tất kết nối.'),error,submit);
-    try{const data=await request('/api/publishing/channels');state.channels=Array.isArray(data)?data:data.items||data.channels||[];for(const item of state.channels){const option=el('option','',(item.name||item.platform||item.id)+(item.connected===true?'':' · Cần kết nối'));option.value=item.id;channel.append(option);}fill();if(!state.channels.length){submit.disabled=true;error.textContent='Chưa có kênh đăng. Mở Cài đặt để kết nối tài khoản.';form.append(button('Mở cài đặt',()=>{modal.close();navigate('settings');}));}}catch(e){error.textContent=e.message;submit.disabled=true;}
+    const channelLabel=el('label','','Kênh đăng · YouTube hoặc Facebook Page');channelLabel.htmlFor='studioScheduleChannel';const channel=el('select');channel.id='studioScheduleChannel';channel.required=true;const timeLabel=el('label','','Thời gian đăng · Giờ Việt Nam (UTC+7)');timeLabel.htmlFor='studioScheduleTime';const time=el('input');time.id='studioScheduleTime';time.type='datetime-local';time.required=true;const titleLabel=el('label','','Tiêu đề');titleLabel.htmlFor='studioScheduleTitle';const titleInput=el('input');titleInput.id='studioScheduleTitle';titleInput.maxLength=100;titleInput.required=true;titleInput.value=video.title||'';titleInput.addEventListener('input',event=>{if(event.isTrusted)titleInput.dataset.edited='true';});
+    const tagsLabel=el('label','','Tag YouTube · cách nhau bằng dấu phẩy');tagsLabel.htmlFor='studioScheduleTags';const tagsInput=el('input');tagsInput.id='studioScheduleTags';tagsInput.placeholder='truyện audio, ngôn tình, trọng sinh';tagsInput.addEventListener('input',event=>{if(event.isTrusted)tagsInput.dataset.edited='true';});
+    const soonest=button('Sớm nhất',()=>{const d=new Date(Date.now()+10*60000);d.setSeconds(0,0);const p=n=>String(n).padStart(2,'0');time.value=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;},'secondary');soonest.title='Khoảng 10 phút nữa: tool gửi video ngay, YouTube công khai đúng giờ này.';
+    const captionLabel=el('label','','Mô tả (lời đăng)');captionLabel.htmlFor='studioScheduleCaption';const caption=el('textarea');caption.id='studioScheduleCaption';caption.maxLength=5000;const preview=el('div','studio-create-note');const previewText=el('p','',video.title||'');append(preview,el('strong','','Xem trước lời đăng'),previewText);caption.oninput=()=>previewText.textContent=caption.value||video.title||'Chưa có lời đăng.';const submit=el('button','','Lưu lịch đăng');submit.type='submit';let social=null;caption.addEventListener('input',event=>{if(event.isTrusted)caption.dataset.edited='true';});const platform=()=>String(state.channels.find(item=>item.id===channel.value)?.platform||'').toLowerCase();const fill=()=>{const youtube=platform().includes('youtube');tagsLabel.hidden=tagsInput.hidden=!youtube;if(!social||social.state!=='ready')return;if(youtube&&!titleInput.dataset.edited&&social.youtube?.title)titleInput.value=social.youtube.title;if(youtube&&!tagsInput.dataset.edited)tagsInput.value=(social.youtube?.tags||[]).join(', ');if(caption.dataset.edited)return;caption.value=youtube?[social.youtube?.description,(social.youtube?.tags||[]).map(t=>'#'+String(t).replace(/[\s#]+/g,'')).filter(h=>h.length>1&&!String(social.youtube?.description||'').includes(h)).slice(0,5).join(' ')].filter(Boolean).join('\n\n'):[social.facebook?.caption,(social.facebook?.hashtags||[]).join(' ')].filter(Boolean).join('\n\n');caption.oninput();};channel.addEventListener('change',fill);request('/api/jobs/'+encodeURIComponent(video.job_id)+'/social').then(data=>{social=data;fill();}).catch(()=>{});append(form,channelLabel,channel,timeLabel,append(el('div','studio-schedule-time'),time,soonest),titleLabel,titleInput,captionLabel,caption,tagsLabel,tagsInput,preview,el('p','notice','Lịch giữ nguyên bản video bạn đã duyệt. Máy cần bật và ứng dụng cần chạy để gửi video đúng lịch. Nếu kênh chưa kết nối, lịch sẽ chờ bạn hoàn tất kết nối.'),error,submit);
+    try{const data=await request('/api/publishing/channels');state.channels=Array.isArray(data)?data:data.items||data.channels||[];state.channelDefaults=data.defaults||{};for(const item of state.channels){const option=el('option','',(item.name||item.platform||item.id)+(item.connected===true?'':' · Cần kết nối'));option.value=item.id;channel.append(option);}const preferred=state.channelDefaults[video.style];if(preferred&&state.channels.some(item=>item.id===preferred))channel.value=preferred;else{const first=state.channels.find(item=>item.connected===true);if(first)channel.value=first.id;}fill();if(!state.channels.length){submit.disabled=true;error.textContent='Chưa có kênh đăng. Mở Cài đặt để kết nối tài khoản.';form.append(button('Mở cài đặt',()=>{modal.close();navigate('settings');}));}}catch(e){error.textContent=e.message;submit.disabled=true;}
     const scheduleStorage={getItem:()=>form.dataset.pendingSchedule||null,setItem:(_key,value)=>{form.dataset.pendingSchedule=value;}};
-    form.onsubmit=async event=>{event.preventDefault();if(form.dataset.sending==='true')return;error.textContent='';submit.disabled=true;form.dataset.sending='true';try{const youtubeTitle=platform().includes('youtube')&&social?.state==='ready'?social.youtube?.title:'';const payload=schedulePayload(youtubeTitle?{...video,title:youtubeTitle}:video,{channel_id:channel.value,publish_at:time.value+':00+07:00',caption:caption.value});const pending=pendingRequest(scheduleStorage,payload);await request('/api/publishing/schedules',{method:'POST',headers:{'Idempotency-Key':pending.key},body:pending.identity});modal.close();navigate('calendar');toast('Đã lưu lịch đăng.');}catch(e){error.textContent=e.message;}finally{delete form.dataset.sending;submit.disabled=false;}};
+    form.onsubmit=async event=>{event.preventDefault();if(form.dataset.sending==='true')return;error.textContent='';submit.disabled=true;form.dataset.sending='true';try{const youtube=platform().includes('youtube');const tags=youtube?tagsInput.value.split(',').map(t=>t.replace(/#/g,'').trim()).filter(Boolean):[];const payload=schedulePayload({...video,title:titleInput.value.trim()},{channel_id:channel.value,publish_at:time.value+':00+07:00',caption:caption.value,tags});const pending=pendingRequest(scheduleStorage,payload);await request('/api/publishing/schedules',{method:'POST',headers:{'Idempotency-Key':pending.key},body:pending.identity});modal.close();navigate('calendar');toast('Đã lưu lịch đăng.');}catch(e){error.textContent=e.message;}finally{delete form.dataset.sending;submit.disabled=false;}};
   }
   function scheduleDetail(item) {const modal=dialog(item.title||item.video_title||'Chi tiết lịch đăng');append(modal.box,el('p','notice',prettyDate(item.publish_at)+' · Giờ Việt Nam'),stateBadge(item.state||item.status),el('p','',item.caption||'Chưa có lời đăng.'));if(item.message||item.error)modal.box.append(el('p','studio-error',item.message||item.error));if(item.remote_url){try{const url=new URL(item.remote_url);if(url.protocol==='https:'&&/^(www\.)?(youtube\.com|youtu\.be|facebook\.com)$/.test(url.hostname)){const link=el('a','button secondary','Mở bài đã đăng');link.href=url.href;link.target='_blank';link.rel='noopener';modal.box.append(link);}}catch{}}if(['blocked','needs_attention'].includes(item.state))modal.box.append(button('Thử lại',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/retry',{method:'POST',body:'{}'});modal.close();loadCalendar();}catch(error){toast(error.message);}}));if(['scheduled','blocked'].includes(item.state))modal.box.append(button('Hủy lịch đăng',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id),{method:'DELETE'});modal.close();loadCalendar();toast('Đã hủy lịch đăng.');}catch(error){toast(error.message);}}));}
   labels.connected='Đã kết nối';

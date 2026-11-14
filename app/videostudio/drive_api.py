@@ -16,7 +16,20 @@ from .drive_storage import CATEGORIES, DriveError, DriveStorage, local_md5
 
 def register_drive_routes(app, store, factory, same_origin, stop_event=None, background=True):
     drive = DriveStorage(store)
-    state = {'running': False, 'last': None, 'current': None}
+    # Live progress of the sync, read by the Settings page every second or two.
+    state = {'running': False, 'last': None, 'current': None, 'phase': None, 'started': None, 'jobs_total': 0, 'jobs_done': 0,
+             'bytes_total': 0, 'bytes_done': 0, 'speed': 0.0, 'file': None, 'recent': [], 'result': None}
+    meter = {'samples': []}
+
+    def sent(total):
+        """Record bytes moved in this run; speed is averaged over the last ~10 seconds."""
+        now = time.time()
+        if not meter.get('first'):
+            meter['first'], meter['first_bytes'] = now, total
+        meter['samples'] = [s for s in meter['samples'] if now - s[0] <= 10] + [(now, total)]
+        first = meter['samples'][0]
+        if now - first[0] >= 1:
+            state['speed'] = (total - first[1]) / (now - first[0])
 
     def call(function, *args):
         try:
@@ -26,7 +39,26 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
 
     @app.get('/api/drive/status')
     def status():
-        return {**drive.status(), 'sync': {k: state[k] for k in ('running', 'last', 'current')}}
+        info = drive.status()
+        for failure in info.get('failures') or []:
+            try:
+                job = store.get(failure['job_id'])
+                failure['title'] = job['request'].get('title') or job['request'].get('project') or ''
+            except Exception:
+                failure['title'] = ''
+        return {**info, 'sync': progress()}
+
+    @app.get('/api/drive/progress')
+    def progress():
+        snapshot = json.loads(json.dumps(state))
+        left = max(0, snapshot['bytes_total'] - snapshot['bytes_done'])
+        # Time left from the average over the whole run: small subtitle files and per-file checks make the
+        # last-ten-seconds speed jump around, the run average does not.
+        elapsed = time.time() - (meter.get('first') or time.time())
+        average = (snapshot['bytes_done'] - meter.get('first_bytes', 0)) / elapsed if elapsed > 3 else 0
+        snapshot['average'] = average
+        snapshot['eta'] = round(left / average) if snapshot['running'] and average > 1024 else None
+        return snapshot
 
     @app.put('/api/drive/client')
     def client(data: dict, request: Request):
@@ -74,7 +106,7 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
     @app.patch('/api/drive/settings')
     def settings(data: dict, request: Request):
         same_origin(request)
-        for key in ('auto_upload', 'delete_local', 'include_old'):
+        for key in ('auto_upload', 'delete_local', 'include_old', 'delete_after_post'):
             if key in data:
                 if type(data[key]) is not bool:
                     raise HTTPException(422, key + ' phải là bật/tắt')
@@ -86,6 +118,8 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
         same_origin(request)
         with store.db() as db:
             db.execute('UPDATE drive_failures SET next_at=0')
+        if state['running']:
+            return {'started': False, 'running': True}
         threading.Thread(target=sync_once, daemon=True).start()
         return {'started': True}
 
@@ -117,7 +151,7 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
     def drive_versions(job):
         """Library entries for a job whose files were moved to Drive."""
         with store.db() as db:
-            rows = [dict(r) for r in db.execute('SELECT * FROM drive_files WHERE job_id=? AND local_deleted=1', (job['id'],))]
+            rows = [dict(r) for r in db.execute('SELECT * FROM drive_files WHERE job_id=? AND local_deleted=1 AND trashed=0', (job['id'],))]
         videos = [r for r in rows if r['name'].endswith('.mp4')]
         if not videos:
             return None
@@ -173,51 +207,115 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
 
     def upload_job(job, files):
         project = job['request'].get('project') or 'Dự án mặc định'
+        title = job['request'].get('title') or job.get('title') or project
         account = drive.pick_account(sum(p.stat().st_size for p in files))
         folder = drive.folder(account, ['Video', category(job), project])
-        for path in files:
+        base = state['bytes_done']  # bytes of earlier jobs in this run
+        for index, path in enumerate(files):
+            size = path.stat().st_size
+            info = {'job': title, 'project': project, 'name': path.name, 'index': index + 1, 'count': len(files), 'size': size, 'done': 0}
+            state.update(file=info, phase='hash', current=f'{project} · {path.name}')
             with store.db() as db:
                 old = db.execute('SELECT * FROM drive_files WHERE job_id=? AND kind=?', (job['id'], path.name)).fetchone()
-            md5 = local_md5(path)
-            if old and old['md5'] == md5 and old['size'] == path.stat().st_size:
-                continue  # already on Drive from an earlier attempt
-            state['current'] = f'{project} · {path.name}'
-            result = drive.upload(account, path, folder)
-            if int(result.get('size', -1)) != path.stat().st_size or result.get('md5Checksum') != md5:
+
+            def hashed(done, info=info):
+                info['done'] = done
+            md5 = local_md5(path, hashed)
+            if old and old['md5'] == md5 and old['size'] == size:
+                base += size  # already on Drive from an earlier attempt
+                state['bytes_done'] = base
+                continue
+            state['phase'] = 'upload'
+            info['done'] = 0
+
+            def moved(done, info=info, base=base):
+                info['done'] = done
+                state['bytes_done'] = base + done
+                sent(base + done)
+            result = drive.upload(account, path, folder, progress=moved)
+            state['phase'] = 'verify'
+            if int(result.get('size', -1)) != size or result.get('md5Checksum') != md5:
                 raise DriveError(f'{path.name}: tệp trên Drive không khớp bản trên máy; giữ nguyên bản trên máy')
             with store.db() as db:
-                db.execute('INSERT OR REPLACE INTO drive_files VALUES(?,?,?,?,?,?,?,?,?,?,?,0)', (job['id'], path.name, path.name, str(path), account,
-                           result['id'], path.stat().st_size, md5, duration(path), result.get('webViewLink'), time.time()))
+                db.execute('''INSERT OR REPLACE INTO drive_files(job_id,kind,name,local_path,account,file_id,size,md5,duration,web_link,uploaded,local_deleted)
+                              VALUES(?,?,?,?,?,?,?,?,?,?,?,0)''', (job['id'], path.name, path.name, str(path), account,
+                           result['id'], size, md5, duration(path), result.get('webViewLink'), time.time()))
+            base += size
+            state['bytes_done'] = base
         if drive.setting('delete_local', True):
+            state['phase'] = 'delete'
             for path in files:
                 path.unlink(missing_ok=True)
             with store.db() as db:
                 db.execute('UPDATE drive_files SET local_deleted=1 WHERE job_id=?', (job['id'],))
                 db.execute('DELETE FROM drive_failures WHERE job_id=?', (job['id'],))
+        return title
 
     def sync_once():
         if state['running'] or not drive.setting('auto_upload', True) or not drive.accounts():
             return
-        state['running'] = True
+        state.update(running=True, phase='scan', started=time.time(), jobs_total=0, jobs_done=0, bytes_total=0, bytes_done=0,
+                     speed=0.0, file=None, recent=[], result=None)
+        meter.clear()
+        meter['samples'] = []
+        uploaded = failed = 0
         try:
-            for job, files in candidates():
+            work = list(candidates())  # every waiting video, one after another; new ones are picked up next round
+            state['jobs_total'] = len(work)
+            state['bytes_total'] = sum(p.stat().st_size for _, files in work for p in files if p.exists())
+            for job, files in work:
+                if stop_event and stop_event.is_set():
+                    break
+                start = state['bytes_done']
                 try:
-                    upload_job(job, files)
+                    title = upload_job(job, files)
+                    uploaded += 1
+                    state['recent'] = ([{'job': title, 'files': [p.name for p in files], 'size': sum(p.stat().st_size for p in files if p.exists()) or state['bytes_done'] - start,
+                                         'at': time.time()}] + state['recent'])[:8]
                 except Exception as error:
+                    failed += 1
+                    state['bytes_total'] -= sum(p.stat().st_size for p in files if p.exists())  # a failed video leaves this run's totals
+                    state['bytes_done'] = start
                     with store.db() as db:
                         row = db.execute('SELECT attempts FROM drive_failures WHERE job_id=?', (job['id'],)).fetchone()
                         attempts = (row['attempts'] if row else 0) + 1
                         db.execute('INSERT OR REPLACE INTO drive_failures VALUES(?,?,?,?)', (job['id'], str(error)[:500], attempts, time.time() + min(3600, 60 * 2 ** attempts)))
-                break  # one job per round keeps uploads gentle; the loop comes back soon
+                state['jobs_done'] += 1
         finally:
-            state['running'] = False
-            state['current'] = None
-            state['last'] = time.time()
+            state['result'] = {'uploaded': uploaded, 'failed': failed, 'bytes': state['bytes_done'], 'seconds': round(time.time() - (state['started'] or time.time()))}
+            state.update(running=False, current=None, phase=None, file=None, speed=0.0, last=time.time())
+
+    def trash_posted():
+        """With "Xoá trên Drive sau khi đăng" on: once every post of a video is public, move its Drive copies to the trash."""
+        if not drive.setting('delete_after_post', False):
+            return 0
+        with store.db() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publishing_schedules'").fetchone():
+                return 0
+            rows = [dict(r) for r in db.execute('''SELECT f.* FROM drive_files f WHERE f.local_deleted=1 AND f.trashed=0
+                AND EXISTS(SELECT 1 FROM publishing_schedules s WHERE s.job_id=f.job_id AND s.state='published')
+                AND NOT EXISTS(SELECT 1 FROM publishing_schedules s WHERE s.job_id=f.job_id
+                               AND s.state NOT IN ('published','cancelled'))''')]
+        moved = 0
+        for row in rows:
+            try:
+                drive.trash(row['account'], row['file_id'])
+            except Exception:
+                continue  # tried again next minute
+            with store.db() as db:
+                db.execute('UPDATE drive_files SET trashed=1 WHERE job_id=? AND kind=?', (row['job_id'], row['kind']))
+            moved += 1
+        return moved
+    drive.trash_posted = trash_posted
 
     def loop():
         while not (stop_event and stop_event.is_set()):
             try:
                 sync_once()
+            except Exception:
+                pass
+            try:
+                trash_posted()
             except Exception:
                 pass
             time.sleep(60)

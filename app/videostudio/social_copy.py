@@ -49,7 +49,9 @@ def prompt(job):
             'Return JSON exactly {"youtube":{"title":str,"description":str,"tags":[str]},'
             '"facebook":{"caption":str,"hashtags":[str]},"tiktok":{"caption":str,"hashtags":[str]}}. '
             'youtube.title: at most 90 characters. youtube.description: 2-4 short paragraphs that summarise the story without giving away the ending. '
-            'youtube.tags: 5-12 short tags without #. facebook.caption: a hook line and 2-3 short paragraphs ending with a question for the audience. '
+            'youtube.tags: 5-12 short tags without #, written as normal Vietnamese words with diacritics and spaces '
+            '(for example "án mạng Thượng Hải", "vụ án có thật"), plus one or two of the main keywords again without diacritics '
+            '(for example "an mang thuong hai"). facebook.caption: a hook line and 2-3 short paragraphs ending with a question for the audience. '
             'facebook.hashtags: 3-6. tiktok.caption: one or two lines, at most 150 characters. tiktok.hashtags: 3-5. '
             'Hashtags start with # and contain no spaces.\n\n'
             f'Working title: {video_title(job)}\n\nNarration:\n{text}')
@@ -62,7 +64,9 @@ def _clean(value, limit):
 def _tags(values, limit, hashtag):
     result = []
     for value in values if isinstance(values, list) else []:
-        tag = re.sub(r'\s+', '', str(value or '').strip().lstrip('#'))
+        raw = str(value or '').strip().lstrip('#')
+        # Hashtags cannot hold spaces; YouTube tags read best as normal words ("án mạng Thượng Hải").
+        tag = re.sub(r'\s+', '' if hashtag else ' ', raw).strip(' ,')
         if not tag:
             continue
         tag = ('#' + tag if hashtag else tag)[:60]
