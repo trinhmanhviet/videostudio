@@ -67,9 +67,11 @@
     search.oninput = () => {clearTimeout(search.timer);search.timer=setTimeout(()=>{state.q=search.value;state.page=1;loadChapters();},250);};
     const selectAll = el('input');selectAll.type='checkbox';selectAll.onchange=()=>{state.selected=selectAll.checked?new Set(state.allIds):new Set();renderChapters();renderFooter();};
     const selectedCount = el('span');
+    const statusFilter = select([['','Mọi chương'],['pending','Chưa duyệt'],['reviewed','Đã duyệt']], '', v=>{state.status=v;state.page=1;loadChapters().catch(e=>toast(e.message));});
+    statusFilter.setAttribute('aria-label','Lọc theo trạng thái duyệt');
     const chapterList = el('div','sw-chapter-list');
     const pager = el('div','sw-pager');
-    add(left, el('h2','','Truyện & chương'), add(el('div','sw-search'),search),
+    add(left, el('h2','','Truyện & chương'), add(el('div','sw-search'),search,statusFilter),
       add(el('div','sw-select-row'), selectedCount, add(el('label','sw-check'), selectAll, el('span','','Chọn tất cả'))), chapterList, pager,
       el('p','sw-muted sw-hint','Kéo ⠿ hoặc dùng ↑ ↓ để đổi thứ tự đọc.'));
 
@@ -80,10 +82,26 @@
     const text = el('textarea','sw-text');text.spellcheck=false;text.oninput=()=>{markDirty();renderMeta();};
     const meta = el('span','sw-muted');
     const readTitle = el('input');readTitle.type='checkbox';readTitle.onchange=()=>markDirty();
+    const reviewed = el('input');reviewed.type='checkbox';
+    reviewed.onchange = async () => {
+      try {const saved = await api('/api/story/chapters/'+state.chapter.id, json('PUT', {reviewed:reviewed.checked}));
+        state.chapter.reviewed = saved.reviewed; const row = state.chapters.find(c=>c.id===saved.id); if (row) row.reviewed = saved.reviewed; renderChapters();
+        if (saved.reviewed && state.status !== 'reviewed') toast('Đã đánh dấu duyệt.');}
+      catch (error) {reviewed.checked = !reviewed.checked; toast(error.message);}
+    };
+    const sourceBox = el('textarea','sw-text sw-source-text'); sourceBox.readOnly = true; sourceBox.setAttribute('aria-label','Bản convert gốc');
+    const sourceField = field('Bản convert gốc (chỉ đọc)', sourceBox, 'sw-text-field sw-source-field'); sourceField.hidden = true;
+    const compare = btn('Xem bản convert', async () => {
+      if (!sourceField.hidden) {sourceField.hidden = true; compareWrap.classList.remove('is-compare'); compare.lastChild.textContent = 'Xem bản convert'; return;}
+      const source = await api('/api/story/chapters/'+state.chapter.id+'/source');
+      sourceBox.value = source.text; sourceField.hidden = false; compareWrap.classList.add('is-compare'); compare.lastChild.textContent = 'Ẩn bản convert';
+    }, '');
+    const compareWrap = el('div','sw-compare');
     const previewBox = el('div','sw-preview');
-    add(middle, add(el('div','sw-editor-head'), editorTitle, editorSub), field('Tên chương', chapterName), field('Nội dung lời kể', text, 'sw-text-field'),
-      add(el('div','sw-meta-row'), meta, add(el('label','sw-check'), readTitle, el('span','','Đọc tên chương'))),
-      add(el('div','sw-editor-actions'), btn('Lưu chương',()=>saveChapter(true),'','save'), btn('Đọc thử khoảng 1 phút',previewVoice,'sw-accent','play'), btn('Bản cũ',openHistory,'')),
+    add(compareWrap, sourceField, field('Nội dung lời kể', text, 'sw-text-field'));
+    add(middle, add(el('div','sw-editor-head'), editorTitle, editorSub), field('Tên chương', chapterName), compareWrap,
+      add(el('div','sw-meta-row'), meta, add(el('label','sw-check'), readTitle, el('span','','Đọc tên chương')), add(el('label','sw-check sw-reviewed'), reviewed, el('span','','Đã duyệt'))),
+      add(el('div','sw-editor-actions'), btn('Lưu chương',()=>saveChapter(true),'','save'), btn('Đọc thử khoảng 1 phút',previewVoice,'sw-accent','play'), compare, btn('Bản cũ',openHistory,'')),
       previewBox, el('p','sw-muted sw-note','ⓘ Nghe thử là tuỳ chọn; hàng đợi không dừng để chờ duyệt từng chương.'));
 
     // right: settings tabs
@@ -130,6 +148,7 @@
     async function loadBooks(selectId) {
       const [books, voices, backgrounds] = await Promise.all([api('/api/story/books'), state.voices.length?{voices:state.voices}:api('/api/voices').catch(()=>({voices:[]})), api('/api/story/backgrounds').catch(()=>({items:[]}))]);
       state.books = books.items; state.voices = (voices.voices||voices.items||[]).filter(v=>v.selectable!==false); state.backgrounds = backgrounds.items;
+      api('/api/settings/output-root').then(info => {state.disk = info; renderFooter();}).catch(() => {});
       bookSelect.replaceChildren(...state.books.map(b=>{const o=el('option','',`${b.title} · ${b.chapters} chương`);o.value=b.id;return o;}));
       const remembered = selectId || readLocal('book');
       const target = state.books.find(b=>b.id===remembered) || state.books[0];
@@ -157,7 +176,7 @@
     // --- chapters ----------------------------------------------------------------------------------------
     async function loadChapters(openFirst = false) {
       if (!state.book) return;
-      const data = await api(`/api/story/books/${state.book.id}/chapters?page=${state.page}&page_size=${PAGE_SIZE}&q=${encodeURIComponent(state.q)}`);
+      const data = await api(`/api/story/books/${state.book.id}/chapters?page=${state.page}&page_size=${PAGE_SIZE}&q=${encodeURIComponent(state.q)}&status=${state.status||''}`);
       state.chapters = data.items; state.total = data.total; state.totalWords = data.total_words; state.allIds = data.all_ids;
       state.wordsById = new Map(Object.entries(data.words_by_id || {}));
       state.selected = new Set([...state.selected].filter(id => state.allIds.includes(id)));
@@ -169,7 +188,8 @@
       const chapter = await api('/api/story/chapters/'+id);
       const draft = readLocal('chapter.'+id);
       state.chapter = chapter; state.dirty = false; state.saveError = '';
-      chapterName.value = chapter.title; text.value = chapter.text; readTitle.checked = chapter.read_title;
+      chapterName.value = chapter.title; text.value = chapter.text; readTitle.checked = chapter.read_title; reviewed.checked = Boolean(chapter.reviewed);
+      sourceField.hidden = true; compareWrap.classList.remove('is-compare'); compare.lastChild.textContent = 'Xem bản convert';
       if (draft && draft.base === chapter.revision && (draft.text !== chapter.text || draft.title !== chapter.title)) {
         chapterName.value = draft.title; text.value = draft.text; state.dirty = true; toast('Đã khôi phục phần bạn gõ dở chưa kịp lưu.'); scheduleSave();
       }
@@ -458,7 +478,7 @@
         const check = el('input'); check.type='checkbox'; check.checked = state.selected.has(chapter.id); check.setAttribute('aria-label','Chọn '+chapter.title);
         check.onchange = () => {if(check.checked)state.selected.add(chapter.id);else state.selected.delete(chapter.id);state.enqueueKey=null;renderChapters();renderFooter();};
         const open = el('button','sw-chapter-open'); open.type='button'; open.onclick = () => openChapter(chapter.id).catch(e=>toast(e.message));
-        add(open, add(el('strong'), el('span','sw-order',String(chapter.order).padStart(2,'0')), el('span','',chapter.title)), el('span','sw-muted',`${chapter.words.toLocaleString('vi-VN')} từ · khoảng ${fmtMinutes(estimateWords(chapter.words))}`));
+        add(open, add(el('strong'), el('span','sw-order',String(chapter.order).padStart(2,'0')), el('span','',chapter.title), chapter.reviewed ? el('span','sw-badge','✓ duyệt') : null), el('span','sw-muted',`${chapter.words.toLocaleString('vi-VN')} từ · khoảng ${fmtMinutes(estimateWords(chapter.words))}`));
         const position = state.allIds.indexOf(chapter.id);
         const up = iconBtn('up','Đưa lên',()=>moveChapter(chapter.id,-1)); up.disabled = position <= 0 || Boolean(state.q);
         const down = iconBtn('down','Đưa xuống',()=>moveChapter(chapter.id,1)); down.disabled = position >= state.allIds.length-1 || Boolean(state.q);
@@ -474,7 +494,7 @@
     }
     function renderEditor() {
       const has = Boolean(state.chapter);
-      for (const n of [chapterName, text, readTitle]) n.disabled = !has;
+      for (const n of [chapterName, text, readTitle, reviewed, compare]) n.disabled = !has;
       editorTitle.textContent = has ? `Chương ${String(orderOf(state.chapter.id)).padStart(2,'0')} · ${chapterName.value || state.chapter.title}` : 'Chọn một chương';
       renderMeta(); renderPreview();
     }
@@ -605,6 +625,12 @@
       const wordsSelected = ids.reduce((sum, id) => sum + (state.wordsById?.get(id) || 0), 0);
       const count = state.mode === 'merge' ? (ids.length ? 1 : 0) : ids.length;
       total.textContent = ids.length ? `${ids.length} chương đã chọn · khoảng ${fmtMinutes(estimateWords(wordsSelected))} lời kể` : 'Tick chọn chương để tạo video';
+      // Rough space need: finished videos (HEVC, both formats) plus the temporary gameplay master of one chapter.
+      const minutes = estimateWords(wordsSelected) / 60, needGb = (minutes * 35 + 600) / 1024;
+      if (state.disk?.free_gb != null && ids.length && state.disk.free_gb < needGb) {
+        const warn = el('span','sw-disk-warning',` · Ổ lưu ${state.disk.root} chỉ còn ${state.disk.free_gb} GB, cần khoảng ${needGb.toFixed(1)} GB. Đổi nơi lưu trong Cài đặt hoặc kết nối Google Drive.`);
+        total.append(warn);
+      }
       enqueueButton.disabled = !ids.length;
       enqueueButton.textContent = state.mode === 'merge' && ids.length > 1 ? `Gộp ${ids.length} chương thành 1 video →` : `Thêm ${count} chương vào hàng đợi →`;
       modeSelect.value = state.mode;

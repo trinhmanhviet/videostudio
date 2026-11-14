@@ -138,6 +138,8 @@ class StoryLibrary:
             if 'drive_file_id' not in columns:
                 db.execute('ALTER TABLE gameplay ADD COLUMN drive_file_id TEXT')
                 db.execute('ALTER TABLE gameplay ADD COLUMN source_url TEXT')
+            if 'reviewed' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
+                db.execute('ALTER TABLE chapters ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0')
             if 'source_sha256' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
                 db.execute('ALTER TABLE chapters ADD COLUMN source_sha256 TEXT')
                 db.execute('UPDATE chapters SET source_sha256=sha256')
@@ -225,12 +227,13 @@ class StoryLibrary:
     def _chapter(self, row, text=False):
         value = {'id': row['id'], 'book_id': row['book_id'], 'position': row['position'], 'number': row['number'], 'title': row['title'],
                  'read_title': bool(row['read_title']), 'sha256': row['sha256'], 'source_name': row['source_name'],
-                 'revision': row['revision'], 'words': words(row['text']), 'characters': len(row['text']), 'updated': row['updated']}
+                 'revision': row['revision'], 'words': words(row['text']), 'characters': len(row['text']), 'updated': row['updated'],
+                 'reviewed': bool(row['reviewed']) if 'reviewed' in row.keys() else False}
         if text:
             value['text'] = row['text']
         return value
 
-    def chapters(self, book_id, q='', page=1, page_size=50):
+    def chapters(self, book_id, q='', page=1, page_size=50, status=''):
         self.book(book_id)
         page, page_size = max(1, int(page)), min(200, max(1, int(page_size)))
         with self.db() as db:
@@ -241,6 +244,8 @@ class StoryLibrary:
         needle = slug(q, 200).replace('-', ' ') if q else ''
         if needle:
             items = [i for i in items if needle in slug(i['title'], 200).replace('-', ' ') or needle == str(i['order'])]
+        if status in ('reviewed', 'pending'):
+            items = [i for i in items if i['reviewed'] == (status == 'reviewed')]
         total_words = sum(i['words'] for i in items)
         start = (page - 1) * page_size
         return {'items': items[start:start + page_size], 'total': len(items), 'page': page, 'page_size': page_size,
@@ -261,8 +266,14 @@ class StoryLibrary:
         return self._chapter(row, text=True)
 
     def save_chapter(self, chapter_id, data):
-        if not isinstance(data, dict) or set(data) - {'title', 'text', 'read_title', 'expected_revision'}:
+        if not isinstance(data, dict) or set(data) - {'title', 'text', 'read_title', 'expected_revision', 'reviewed'}:
             raise ValueError('Trường chương không hợp lệ')
+        if set(data) == {'reviewed'}:
+            # Marking a chapter reviewed is not an edit: no revision bump, no conflict with an open editor.
+            with self.db() as db:
+                if not db.execute('UPDATE chapters SET reviewed=? WHERE id=? AND deleted=0', (int(bool(data['reviewed'])), chapter_id)).rowcount:
+                    raise KeyError('Không tìm thấy chương')
+            return self.chapter(chapter_id)
         with self.db() as db:
             row = db.execute('SELECT * FROM chapters WHERE id=? AND deleted=0', (chapter_id,)).fetchone()
             if not row:

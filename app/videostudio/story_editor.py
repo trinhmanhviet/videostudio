@@ -33,6 +33,8 @@ tương đương bản dịch người thật biên tập. Bản này sẽ đư�
 
 NGUYÊN TẮC NỘI DUNG
 1. Biên tập TOÀN VĂN: giữ mọi tình tiết, hành động, lời thoại, suy nghĩ, miêu tả, trình tự. Không tóm tắt, không cắt, không thêm chi tiết.
+   KHÔNG thêm cụm miêu tả, cảm xúc, hành động hay nhận xét mà bản convert không có (sai: "cô đứng chết lặng", "cố giữ bình tĩnh",
+   "một linh cảm chẳng lành" khi nguồn không nói). Độ dài bản biên tập nên xấp xỉ bản convert; chỉ dài hơn vì lời dẫn thoại ngắn.
 2. Bỏ văn phong convert: đảo lại trật tự câu kiểu tiếng Trung, bỏ "cái kia", "một cái", "đem… làm", "thực" (=rất), "cư nhiên"…
    Không lạm dụng Hán Việt khi có từ thuần Việt tự nhiên (trừ bối cảnh cổ trang, tiên hiệp cần giữ).
 3. Hiểu dụng ý (mỉa mai, trêu, đe dọa, làm nũng) rồi diễn đạt cho đúng sắc thái. Giữ nhịp: nhanh khi cao trào, chậm khi nội tâm.
@@ -173,8 +175,8 @@ def check_chapter(source: str, edited: str):
     ratio = len(edited) / max(1, len(source))
     if ratio < 0.72:
         problems.append(f'Bản biên tập chỉ dài {ratio:.0%} bản convert: có thể đã bị cắt hoặc tóm tắt. Phải biên tập toàn văn.')
-    if ratio > 1.45:
-        problems.append(f'Bản biên tập dài {ratio:.0%} bản convert: có thể đã thêm nội dung. Chỉ được thêm lời dẫn ngắn.')
+    if ratio > 1.3:
+        problems.append(f'Bản biên tập dài {ratio:.0%} bản convert: đã thêm cụm miêu tả/cảm xúc không có trong nguồn. Bỏ các phần thêm đó, chỉ giữ lời dẫn thoại ngắn.')
     long = [s for paragraph in body.split('\n') for s in SENTENCE.split(paragraph) if len(s) > MAX_SENTENCE]
     if long:
         problems.append('Câu quá dài (trên 200 ký tự), cần tách: ' + ' | '.join(s[:80] + '…' for s in long[:6]))

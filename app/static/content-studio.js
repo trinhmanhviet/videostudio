@@ -481,6 +481,21 @@
     const voiceSelect=$('#voice');if(voiceSelect&&global.MutationObserver)new MutationObserver(()=>{if(voiceOptions().length&&document.querySelector('.studio-batch-settings select option[value=""]'))renderBatchRows();}).observe(voiceSelect,{childList:true});
   }
 
+  async function renderNotify(card) {
+    // Settings → Báo qua Telegram: the user's own bot sends "video xong / lỗi" to their phone.
+    let info;try{info=await request('/api/notify');}catch(error){card.replaceChildren(el('h3','','Báo qua Telegram'),el('p','studio-error',error.message));return;}
+    const token=el('input');token.type='password';token.placeholder=info.has_token?'Đã lưu token (nhập lại để đổi)':'Token bot, dạng 123456789:ABC…';token.autocomplete='off';
+    const saveToken=button('Lưu token',async()=>{try{await request('/api/notify',{method:'PUT',body:JSON.stringify({token:token.value})});toast('Đã lưu token.');renderNotify(card);}catch(error){toast(error.message);}},'');
+    const detect=button('Lấy chat ID tự động',async()=>{try{await request('/api/notify/detect-chat',{method:'POST',body:'{}'});toast('Đã nhận chat ID.');renderNotify(card);}catch(error){toast(error.message);}},'secondary');
+    const test=button('Gửi thử',async()=>{try{await request('/api/notify/test',{method:'POST',body:'{}'});toast('Đã gửi, xem Telegram trên điện thoại.');}catch(error){toast(error.message);}},'secondary');
+    const on=el('input');on.type='checkbox';on.checked=info.enabled;on.onchange=async()=>{await request('/api/notify',{method:'PUT',body:JSON.stringify({enabled:on.checked})});};
+    card.replaceChildren(el('h3','','Báo qua Telegram'),
+      el('p','notice','Tool nhắn vào Telegram khi video làm xong hoặc bị lỗi, và khi biên tập xong một truyện.'),
+      el('p','notice','Cách lấy: trong Telegram mở @BotFather → /newbot → đặt tên → nhận token, dán vào đây và Lưu. Sau đó nhắn một chữ bất kỳ cho bot vừa tạo rồi bấm "Lấy chat ID tự động".'),
+      append(el('div','studio-output-row'),token,saveToken),append(el('div','studio-drive-row'),detect,test),
+      append(el('label','studio-drive-toggle'),on,el('span','','Bật thông báo')),
+      el('p','notice',info.configured?'Đã kết nối, chat ID '+info.chat+'.':(info.has_token?'Đã có token, còn thiếu chat ID.':'Chưa kết nối.')));
+  }
   async function renderDrive(card) {
     // Settings → Google Drive: several accounts; finished videos move there (first account with room, then the next).
     card.replaceChildren(el('h3','','Google Drive'),el('p','notice','Đang đọc…'));
@@ -531,6 +546,7 @@
     const channels=el('section','card');channels.id='studioSettingsChannels';channels.append(el('h3','','Tài khoản đăng video'));grid.append(channels);
     const storage=el('section','card studio-output-root');storage.id='studioSettingsOutput';grid.append(storage);renderOutputRoot(storage);
     const driveCard=el('section','card studio-drive');driveCard.id='studioSettingsDrive';grid.append(driveCard);renderDrive(driveCard);
+    const notifyCard=el('section','card studio-notify');notifyCard.id='studioSettingsNotify';grid.append(notifyCard);renderNotify(notifyCard);
     const tools=el('section','card');append(tools,el('h3','','Công cụ & trợ giúp'),el('p','notice','Dùng bảng kết nối nổi để kết nối tài khoản tạo nội dung. Khi gặp lỗi, kiểm tra điều kiện chạy và thử lại.'));const resourceLink=el('a','','Mở kho tài nguyên →');resourceLink.href='/resources';tools.append(resourceLink,document.createElement('br'),button('Xem nhật ký khi cần',()=>{$('#inlineConsole').hidden=false;navigate('projects',false);if($('#viewWorkspace').hidden&&$('#galleryContainer .project-card'))$('#galleryContainer .project-card').click();global.loadConsoleLogs?.();$('#inlineConsole').scrollIntoView({behavior:'smooth'});}));grid.append(tools);root.append(grid);
   }
 

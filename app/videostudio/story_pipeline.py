@@ -20,6 +20,7 @@ import json
 import math
 import re
 import shutil
+import time
 import wave
 from pathlib import Path
 
@@ -41,6 +42,7 @@ LAYOUTS = {
 }
 PAUSE = {'title': 1.0, 'paragraph': .6, 'scene': 1.5, 'end': 1.2}
 UNIT_CHARS = 220
+FADE = 0.4  # seconds of soft transition at gameplay joins
 SCENE_MARK = re.compile(r'^\s*(?:\*\s*){3,}$|^\s*([★☆◆◇■□●○#=~\-_·•])(?:\s*\1){2,}\s*$')
 SENTENCE_END = re.compile(r'(?<=[.!?…])["”’»)]*\s+')
 
@@ -520,8 +522,9 @@ def images(pipeline, job, check):
          + (f', lặp lại danh sách {plan_data["loops"]} lần.' if plan_data['loops'] else '.'))
     # The master is a rebuildable cache (from the frozen plan), so it is not an attested asset: it may be removed to
     # save disk after the videos are published, and render rebuilds it if a later re-render needs it.
+    detail = [{'name': s['name'], 'start': s['start'], 'length': s['length']} for s in plan_data['segments']][:500]
     return {'gameplay_plan': str(plan_path), 'master': str(master), 'segments': len(plan_data['segments']), 'seconds': seconds,
-            'scenes': [], 'assets': [asset(plan_path)]}
+            'segments_detail': detail, 'loops': plan_data['loops'], 'scenes': [], 'assets': [asset(plan_path)]}
 
 
 def build_master(pipeline, job, plan_path, check):
@@ -536,9 +539,12 @@ def build_master(pipeline, job, plan_path, check):
         return master
     game_audio = plan_data['game_audio']
     parts = []
+    count = len(plan_data['segments'])
     for index, segment in enumerate(plan_data['segments']):
         check()
-        part_identity = _identity({'algorithm': ALGORITHM, 'segment': segment, 'fps': FPS, 'audio': game_audio})
+        # Joins (next clip, or the playlist looping) fade through the dark theme colour instead of cutting hard.
+        fade_in, fade_out = index > 0, index < count - 1
+        part_identity = _identity({'algorithm': ALGORITHM, 'segment': segment, 'fps': FPS, 'audio': game_audio, 'fade': [fade_in, fade_out, FADE]})
         target = folder / f'seg-{index:03d}.mp4'
         part_receipt = target.with_suffix('.json')
         if not (target.is_file() and part_receipt.is_file() and _read(part_receipt).get('identity') == part_identity):
@@ -554,6 +560,10 @@ def build_master(pipeline, job, plan_path, check):
             args = [pipeline.ffmpeg, '-v', 'error', '-y', '-ss', f'{segment["start"]:.3f}', '-t', f'{segment["length"]:.3f}', '-i', segment['path']]
             video = (f'fps={FPS},scale=1920:1080:force_original_aspect_ratio=decrease,'
                      'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x101827,setsar=1,format=yuv420p')
+            if fade_in and segment['length'] > 2 * FADE:
+                video += f',fade=t=in:st=0:d={FADE}:color=0x101827'
+            if fade_out and segment['length'] > 2 * FADE:
+                video += f',fade=t=out:st={segment["length"] - FADE:.3f}:d={FADE}:color=0x101827'
             if game_audio:
                 if not segment['has_audio']:
                     args += ['-f', 'lavfi', '-t', f'{segment["length"]:.3f}', '-i', 'anullsrc=r=48000:cl=stereo']
@@ -750,10 +760,25 @@ def render(pipeline, job, check):
              '-ar', '44100', '-c:a', 'libmp3lame', '-q:a', '2', str(mp3)], check, timeout=max(600, seconds))
         published['mp3'] = str(mp3)
         files.append(mp3)
+    # Ready-to-post kit beside the videos: cover image (also the library thumbnail) and title/description/hashtags.
+    thumb = cover_image(pipeline, job, snapshot, master, seconds, check)
+    cover = root / f'{stem}_anh-bia.jpg'
+    shutil.copyfile(thumb, cover)
+    post = post_text(snapshot, _read(folder / 'story-ledger.json'))
+    kit = root / f'{stem}_dang-bai.txt'
+    kit.write_text(f'TIÊU ĐỀ\n{post["title"]}\n\nMÔ TẢ\n{post["description"]}\n\nHASHTAG\n{" ".join(post["hashtags"])}\n', encoding='utf-8')
+    published.update(cover=str(cover), post=str(kit))
+    from .social_copy import _write as write_social
+    plain = [h.lstrip('#') for h in post['hashtags']]
+    write_social(job, {'state': 'ready', 'source': 'story',
+                       'youtube': {'title': post['title'], 'description': post['description'] + '\n\n' + ' '.join(post['hashtags']), 'tags': plain},
+                       'facebook': {'caption': post['title'] + '\n\n' + post['description'], 'hashtags': post['hashtags']},
+                       'tiktok': {'caption': post['title'][:280], 'hashtags': post['hashtags'][:4]}, 'updated': time.time()})
+    files += [cover, kit]
     primary = published.get('doc') or published['ngang']
     result = {'video': primary, 'story_outputs': published, 'story_files': [str(f) for f in files],
               'orientation': 'both' if len(wanted) == 2 else wanted[0], 'duration_seconds': seconds, 'renderer': 'story-v1',
-              'assets': [asset(f) for f in files]}
+              'social': post, 'assets': [asset(f) for f in files] + [asset(thumb)]}
     if 'ngang' in published:
         result['video_ngang'] = published['ngang']
     return result
@@ -774,7 +799,7 @@ def verify(pipeline, job, check):
             assets += verify_video(path, seconds, pipeline.ffprobe, size=size)['assets']
         except Exception as error:
             raise PermanentError(f'Bản {orientation} chưa đạt: {error}')
-    for key in ('mp3', 'srt_ngang', 'srt_doc'):
+    for key in ('mp3', 'srt_ngang', 'srt_doc', 'cover', 'post'):
         path = render_cp['story_outputs'].get(key)
         if path:
             if not Path(path).is_file() or Path(path).stat().st_size == 0:
@@ -811,3 +836,63 @@ def tidy(job):
     except OSError:
         pass
     return freed
+
+
+def _clock(seconds):
+    seconds = int(seconds)
+    h, m, s = seconds // 3600, seconds // 60 % 60, seconds % 60
+    return f'{h}:{m:02d}:{s:02d}' if h else f'{m:02d}:{s:02d}'
+
+
+def post_text(snapshot, ledger):
+    """Title, description and hashtags for YouTube/Facebook, made from the story itself (no AI, nothing invented).
+    A merged episode lists where each chapter starts (YouTube turns these into chapters)."""
+    book = snapshot['book']['title']
+    title = f'{book} · {episode_title(snapshot)}'[:100]
+    first = snapshot['chapters'][0]
+    sentences = re.split(r'(?<=[.!?…])\s+', re.sub(r'\s+', ' ', first['text']).strip())
+    hook = ''
+    for sentence in sentences:
+        if len(hook) + len(sentence) > 280:
+            break
+        hook = f'{hook} {sentence}'.strip()
+    lines = [hook or sentences[0][:280]]
+    if len(snapshot['chapters']) > 1:
+        starts = {}
+        for unit in ledger:
+            starts.setdefault(unit['chapter'], unit['start'])
+        lines.append('')
+        for index, chapter in enumerate(snapshot['chapters']):
+            label = f'Chương {chapter["number"] or chapter["order"]}' + (f': {chapter["title"]}' if chapter['title'] else '')
+            lines.append(f'{_clock(starts.get(index, 0) if index else 0)} {label}')
+    channel = snapshot['layout'].get('channel')
+    if channel:
+        lines += ['', f'Nghe trọn bộ "{book}" trên kênh {channel}.']
+    tag = '#' + slug(book, 40).replace('-', '')
+    return {'title': title, 'description': '\n'.join(lines), 'hashtags': ['#truyenaudio', '#kechuyen', '#truyenhay', tag]}
+
+
+def cover_image(pipeline, job, snapshot, master, seconds, check):
+    """1280x720 cover: a gameplay frame, darkened, with the book title and the chapter in large type."""
+    folder = Path(job['output'])
+    target = folder / 'story-thumb.jpg'
+    book = snapshot['book']['title'].upper()
+    chapter = episode_title(snapshot)
+    channel = (snapshot['layout'].get('channel') or '').upper()
+    styles = [f'Book,Arial,{_fit(book, 84, 24)},&H00FFFFFF,&H00FFFFFF,&H00101010,&H00000000,1,0,0,0,100,100,0,0,1,6,2,5,70,70,0,1',
+              f'Chapter,Arial,{_fit(chapter, 54, 34)},&H0079C9EF,&H0079C9EF,&H00101010,&H00000000,1,0,0,0,100,100,0,0,1,4,2,5,70,70,0,1',
+              f'Channel,Arial,34,&H00EFC979,&H00EFC979,&H00101010,&H00000000,1,0,0,0,100,100,2,0,1,3,0,8,70,70,0,1']
+    events = [f'Dialogue: 1,0:00:00.00,0:00:05.00,Book,,0,0,0,,{{\\pos(640,300)}}{_ass_text(book)}',
+              f'Dialogue: 1,0:00:00.00,0:00:05.00,Chapter,,0,0,0,,{{\\pos(640,470)}}{_ass_text(chapter)}']
+    if channel:
+        events.append(f'Dialogue: 1,0:00:00.00,0:00:05.00,Channel,,0,0,0,,{{\\pos(640,40)}}{_ass_text(channel)}')
+    ass = folder / 'story-thumb.ass'
+    ass.write_text(_ass_header(1280, 720, styles) + '\n'.join(events) + '\n', encoding='utf-8')
+    at = max(0.0, min(seconds - 1, seconds * 0.3))
+    from .media import _run_in
+    _run_in(folder, [pipeline.ffmpeg, '-v', 'error', '-y', '-ss', f'{at:.2f}', '-i', str(master), '-frames:v', '1',
+                     '-vf', f'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,eq=brightness=-0.22:saturation=1.1,drawbox=x=0:y=215:w=1280:h=300:color=0x0b1426@0.62:t=fill,ass={ass.name}',
+                     '-q:v', '3', target.name], check, timeout=120)
+    ass.unlink(missing_ok=True)
+    return target
+

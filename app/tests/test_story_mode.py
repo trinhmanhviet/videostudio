@@ -159,8 +159,12 @@ class StoryRenderTests(unittest.TestCase):
                 story_pipeline.StoryLibrary = original
             self.assertTrue(result['verified'])
             names = sorted(p.name for p in (root / 'Book').iterdir() if p.is_file())
-            self.assertEqual(names, ['chuong-001-canh-cong-cu-v1.mp3', 'chuong-001-canh-cong-cu-v1_doc.mp4', 'chuong-001-canh-cong-cu-v1_doc.srt',
+            self.assertEqual(names, ['chuong-001-canh-cong-cu-v1.mp3', 'chuong-001-canh-cong-cu-v1_anh-bia.jpg', 'chuong-001-canh-cong-cu-v1_dang-bai.txt',
+                                     'chuong-001-canh-cong-cu-v1_doc.mp4', 'chuong-001-canh-cong-cu-v1_doc.srt',
                                      'chuong-001-canh-cong-cu-v1_ngang.mp4', 'chuong-001-canh-cong-cu-v1_ngang.srt'])
+            kit = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_dang-bai.txt').read_text(encoding='utf-8')
+            self.assertIn('Chuyến trở về · Chương 1: Cánh cổng cũ', kit)
+            self.assertIn('#truyenaudio', kit)
             plan = json.loads((output / 'story-gameplay' / 'plan.json').read_text(encoding='utf-8'))
             self.assertGreaterEqual(len(plan['segments']), 2)  # 3-second clip looped to cover 4.5 seconds
 

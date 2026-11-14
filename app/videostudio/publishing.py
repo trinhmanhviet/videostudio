@@ -211,6 +211,14 @@ class Publishing:
         path = Path(approved['path'])
         if not path.is_file() or digest(path) != approved['sha256']:
             raise ValueError('Video đã thay đổi; cần duyệt lại')
+        sha = approved['sha256']
+        try:
+            render = self.store.get(normalized['job_id'])['checkpoints'].get('render', {})
+        except KeyError:
+            render = {}
+        wide = (render.get('story_outputs') or {}).get('ngang')
+        if channel['platform'] == 'youtube' and wide and Path(wide).is_file():
+            path, sha = Path(wide), digest(wide)
         identifier, now = str(uuid.uuid4()), self.clock()
         with self.store.db() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -223,13 +231,13 @@ class Publishing:
                 if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_history'").fetchone():
                     if db.execute('SELECT 1 FROM publication_history WHERE job_id=?',(normalized['job_id'],)).fetchone() or not db.execute('SELECT 1 FROM jobs WHERE id=?',(normalized['job_id'],)).fetchone():
                         raise ValueError('Video đã được dọn hoặc không còn tồn tại; không tạo lịch đăng mới')
-                duplicate = db.execute("SELECT 1 FROM publishing_schedules WHERE channel_id=? AND sha256=? AND state!='cancelled'", (channel['id'],approved['sha256'])).fetchone()
+                duplicate = db.execute("SELECT 1 FROM publishing_schedules WHERE channel_id=? AND sha256=? AND state!='cancelled'", (channel['id'],sha)).fetchone()
                 if duplicate:
                     raise ValueError('Bản video này đã có lịch hoặc đã đăng trên kênh; không tạo trùng')
                 db.execute('''INSERT INTO publishing_schedules
                     (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                    (identifier,key,fingerprint,normalized['job_id'],normalized['version_id'],str(path),approved['sha256'],
+                    (identifier,key,fingerprint,normalized['job_id'],normalized['version_id'],str(path),sha,
                      channel['id'],channel['platform'],title,caption,at,'scheduled',now,now))
         return self.get_schedule(identifier)
 

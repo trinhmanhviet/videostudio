@@ -6,3 +6,4 @@
 @media(min-width:1201px){.vw-columns{height:calc(100vh - 150px);min-height:560px}.vw-panel{min-height:0;overflow:auto}.vw-library,.vw-history{overflow:hidden}.vw-voices,.vw-history-list{flex:1 1 0;min-height:0;overflow-y:auto;padding-right:4px}}
 @media(min-width:761px) and (max-width:1200px){.vw-voices{min-height:0;max-height:520px;overflow-y:auto}.vw-history-list{max-height:560px;overflow-y:auto}}
 .vw-controls{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.voice-workspace .vw-voice-select{justify-content:flex-start}

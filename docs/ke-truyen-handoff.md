@@ -339,3 +339,12 @@ Nghiệm thu menu Kể truyện của VideoStudio (http://127.0.0.1:8877/?view=s
 9. Kho video lọc “Kể truyện” thấy video; Tạo video, Phòng thử giọng, meme vẫn chạy như cũ.
 Ghi lại: chỗ đọc sai/ngắt sai (giây), chỗ giao diện khó dùng, lỗi hiện ra (chụp màn hình).
 ```
+
+## 13. Bổ sung ngày 2026-11-14 (chiều)
+
+- Báo qua Telegram (Cài đặt → Báo qua Telegram): video xong/lỗi, biên tập xong truyện. Người dùng tự tạo bot với @BotFather.
+- Duyệt chương: nút Xem bản convert (bản gốc cạnh bản biên tập), ô Đã duyệt, bộ lọc Chưa duyệt/Đã duyệt; không tô màu khác biệt vì bản dịch đổi gần hết câu chữ.
+- Bộ đăng bài mỗi chương: `_anh-bia.jpg` 1280×720 và `_dang-bai.txt` (tiêu đề, mô tả từ chính truyện, hashtag, mốc chương khi gộp); cùng nội dung ghi vào social.json để Lịch đăng điền sẵn. Đăng YouTube dùng bản ngang.
+- Chuyển cảnh mờ 0,4 giây ở chỗ nối/lặp gameplay; ảnh nhỏ Kho video = ảnh bìa; Chi tiết video có tab Gameplay.
+- Câu lệnh ChatGPT cấm thêm miêu tả/cảm xúc không có trong nguồn; quá 130% độ dài thì nhờ sửa.
+- Cảnh báo ổ lưu thiếu chỗ ở thanh dưới Kể truyện; sửa lệch danh sách giọng trên điện thoại.

@@ -59,8 +59,24 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         return call(library.delete_book, book_id)
 
     @app.get('/api/story/books/{book_id}/chapters')
-    def chapters(book_id: str, q: str = '', page: int = 1, page_size: int = 50):
-        return call(library.chapters, book_id, q, page, page_size)
+    def chapters(book_id: str, q: str = '', page: int = 1, page_size: int = 50, status: str = ''):
+        return call(library.chapters, book_id, q, page, page_size, status)
+
+    @app.get('/api/story/chapters/{chapter_id}/source')
+    def chapter_source(chapter_id: str):
+        """The machine-translated (convert) text of a chapter that came from a crawled source, for side-by-side review."""
+        chapter = call(library.chapter, chapter_id)
+        book = call(library.book, chapter['book_id'])
+        source = (book.get('source') or '')
+        if not source.startswith('source:') or not chapter.get('number'):
+            raise HTTPException(404, 'Chương này không có bản convert gốc (không nhập từ Truyện nguồn)')
+        path = source_dir(source[len('source:'):])
+        from .story_editor import split_chapters
+        _, raw = split_chapters((path / 'truyen_gop.txt').read_text(encoding='utf-8'))
+        match = next((c for c in raw if c['number'] == chapter['number']), None)
+        if not match:
+            raise HTTPException(404, 'Không tìm thấy chương này trong bản convert')
+        return {'number': match['number'], 'title': match['title'], 'text': match['text']}
 
     @app.post('/api/story/books/{book_id}/chapters/import')
     def import_chapters(book_id: str, data: dict, request: Request):
@@ -373,6 +389,11 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             try:
                 StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line))).run(first, last, on_chapter=chapter_done)
                 marker.unlink(missing_ok=True)  # finished: nothing to resume
+                try:
+                    from .notify import send
+                    send(store, f'📚 Đã biên tập xong truyện: {source_info(path)["title"]}')
+                except Exception:
+                    pass
             except Exception as error:
                 editing[name]['error'] = str(error)[:500]
                 log.append('Dừng: ' + str(error)[:300])
