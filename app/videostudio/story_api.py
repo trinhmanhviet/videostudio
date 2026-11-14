@@ -20,7 +20,7 @@ SOURCES_ROOT = Path(os.getenv('VS_STORY_SOURCES', str(APP_ROOT.parent / 'wikicv_
 MAX_UPLOAD = 20 * 1024 ** 3
 
 
-def register_story_routes(app, store, factory, pipeline, voices, same_origin):
+def register_story_routes(app, store, factory, pipeline, voices, same_origin, resume_editing=True):
     library = StoryLibrary(ffprobe=getattr(pipeline, 'ffprobe', 'ffprobe'), ffmpeg=getattr(pipeline, 'ffmpeg', 'ffmpeg'))
     editing = {}  # source name -> {'thread', 'log': [...], 'error', 'done'}
 
@@ -269,11 +269,12 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         import shutil
         free = shutil.disk_usage(store.outputs).free
         outputs = int(bool(layout.get('horizontal', True))) + int(bool(layout.get('vertical', True)))
-        order = {c: i for i, c in enumerate(library.chapters(book_id, page_size=200)['all_ids'])}
+        index = library.index(book_id)
+        order = {c['id']: c['order'] for c in index}
         if any(c not in order for c in chapter_ids):
             raise HTTPException(409, 'Có chương không còn trong truyện. Tải lại danh sách.')
         chapter_ids = sorted(dict.fromkeys(chapter_ids), key=order.get)
-        listing = {c['id']: c['words'] for c in library.chapters(book_id, page_size=200)['items']}
+        listing = {c['id']: c['words'] for c in index}
         biggest = max(listing.get(c, 0) for c in chapter_ids) if mode == 'each' else sum(listing.get(c, 0) for c in chapter_ids)
         minutes = biggest / 4.2 / 60
         need = (300 + minutes * (45 + 25 * outputs + 5)) * 1024 * 1024
@@ -395,7 +396,8 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin):
         return source_info(path)
 
     # An edit interrupted by a server restart continues by itself (the daemon journal prevents resending a chapter).
-    if SOURCES_ROOT.is_dir():
+    # Only the real server resumes (tests and helper apps must never start ChatGPT requests).
+    if resume_editing and SOURCES_ROOT.is_dir():
         for marker in SOURCES_ROOT.glob('*/bien_tap/.dang-bien-tap'):
             try:
                 saved = json.loads(marker.read_text(encoding='utf-8'))

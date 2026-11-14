@@ -159,7 +159,7 @@
       if (!state.book) return;
       const data = await api(`/api/story/books/${state.book.id}/chapters?page=${state.page}&page_size=${PAGE_SIZE}&q=${encodeURIComponent(state.q)}`);
       state.chapters = data.items; state.total = data.total; state.totalWords = data.total_words; state.allIds = data.all_ids;
-      state.wordsById = state.wordsById || new Map(); for (const c of data.items) state.wordsById.set(c.id, c.words);
+      state.wordsById = new Map(Object.entries(data.words_by_id || {}));
       state.selected = new Set([...state.selected].filter(id => state.allIds.includes(id)));
       if ((openFirst || !state.chapter) && data.items[0]) await openChapter(data.items[0].id);
       renderChapters(); renderFooter();

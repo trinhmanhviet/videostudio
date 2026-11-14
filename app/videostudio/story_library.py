@@ -244,7 +244,14 @@ class StoryLibrary:
         total_words = sum(i['words'] for i in items)
         start = (page - 1) * page_size
         return {'items': items[start:start + page_size], 'total': len(items), 'page': page, 'page_size': page_size,
-                'total_words': total_words, 'all_ids': [i['id'] for i in items]}
+                'total_words': total_words, 'all_ids': [i['id'] for i in items], 'words_by_id': {i['id']: i['words'] for i in items}}
+
+    def index(self, book_id):
+        """Every chapter of the book in reading order, without text (books may have thousands of chapters)."""
+        self.book(book_id)
+        with self.db() as db:
+            rows = db.execute('SELECT id,number,title,text FROM chapters WHERE book_id=? AND deleted=0 ORDER BY position', (book_id,)).fetchall()
+        return [{'id': r['id'], 'order': i, 'number': r['number'], 'title': r['title'], 'words': words(r['text'])} for i, r in enumerate(rows, 1)]
 
     def chapter(self, chapter_id):
         with self.db() as db:

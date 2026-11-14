@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from .drive_storage import CATEGORIES, DriveError, DriveStorage, local_md5
 
 
-def register_drive_routes(app, store, factory, same_origin, stop_event=None):
+def register_drive_routes(app, store, factory, same_origin, stop_event=None, background=True):
     drive = DriveStorage(store)
     state = {'running': False, 'last': None, 'current': None}
 
@@ -222,5 +222,6 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None):
                 pass
             time.sleep(60)
 
-    threading.Thread(target=loop, name='drive-sync', daemon=True).start()
+    if background:
+        threading.Thread(target=loop, name='drive-sync', daemon=True).start()
     return drive

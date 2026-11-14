@@ -17,10 +17,10 @@ from .story_pipeline import FPS, LAYOUTS, _background_input, layout_for, write_a
 
 def _context(library, book_id, chapter_id):
     book = library.book(book_id)
-    listing = library.chapters(book_id, page_size=200)
-    if not listing['items']:
+    listing = library.index(book_id)
+    if not listing:
         raise ValueError('Truyện chưa có chương nào')
-    chosen = next((c for c in listing['items'] if c['id'] == chapter_id), listing['items'][0])
+    chosen = next((c for c in listing if c['id'] == chapter_id), listing[0])
     chapter = library.chapter(chosen['id'])
     clips = [c for c in library.gameplay(book_id)['items'] if c['available']]
     if not clips:

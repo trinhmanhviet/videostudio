@@ -671,7 +671,7 @@ def _file_id(path):
     return f'{Path(path).name}:{stat.st_size}:{stat.st_mtime_ns}'
 
 
-def _stem(job, snapshot):
+def _stem(job, snapshot, store=None):
     record = Path(job['output']) / 'story-video-name.txt'
     if record.is_file() and record.read_text(encoding='utf-8').strip():
         return record.read_text(encoding='utf-8').strip()
@@ -683,7 +683,13 @@ def _stem(job, snapshot):
         base += '-' + slug(first['title'], 40)
     root = _root(job)
     version = 1
-    while any(root.glob(f'{base}-v{version}[._]*')):
+    on_drive = set()
+    if store is not None:
+        # Files already moved to Google Drive no longer exist here; keep their names taken so versions never repeat.
+        with store.db() as db:
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='drive_files'").fetchone():
+                on_drive = {r[0] for r in db.execute('SELECT name FROM drive_files WHERE name LIKE ?', (base + '-v%',))}
+    while any(root.glob(f'{base}-v{version}[._]*')) or any(n.startswith(f'{base}-v{version}_') or n.startswith(f'{base}-v{version}.') for n in on_drive):
         version += 1
     stem = f'{base}-v{version}'
     record.write_text(stem, encoding='utf-8')
@@ -724,7 +730,7 @@ def render(pipeline, job, check):
         outputs[orientation] = compose(pipeline, job, orientation, snapshot, master, levelled, cues, seconds, check,
                                        game_audio=bool(layout.get('game_audio')))
     # Publish beside each other in the book's folder: <stem>_ngang.mp4, <stem>_doc.mp4, <stem>.mp3, <stem>_<o>.srt
-    root, stem = _root(job), _stem(job, snapshot)
+    root, stem = _root(job), _stem(job, snapshot, getattr(pipeline, 'store', None))
     published, files = {}, []
     for orientation, source in outputs.items():
         target = root / f'{stem}_{orientation}.mp4'
