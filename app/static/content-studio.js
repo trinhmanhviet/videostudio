@@ -721,7 +721,52 @@
   function libraryHeader(root) {
     root.replaceChildren(pageHeader('Kho video','Xem video và lưu dấu bài đã đăng.'));
     const tabs=el('div','studio-calendar-toolbar');tabs.setAttribute('aria-label','Nội dung Kho video');
-    for(const [value,label] of [['videos','Video'],['history','Sổ đăng']]){const tab=button(label,()=>{state.libraryView=value;return loadLibrary();});tab.setAttribute('aria-pressed',String(state.libraryView===value));tabs.append(tab);}root.append(tabs);
+    for(const [value,label] of [['videos','Video'],['history','Sổ đăng'],['facebook','Facebook Reels']]){const tab=button(label,()=>{state.libraryView=value;return loadLibrary();});tab.setAttribute('aria-pressed',String(state.libraryView===value));tabs.append(tab);}root.append(tabs);
+  }
+  async function loadFacebookReels(refresh=false) {
+    // How the Page's Reels are doing: views, comments, likes, copyright check, the caption check and (with read_insights) reach.
+    const root=$('#studio-library'),ticket=++state.request;
+    if(!root.querySelector('.st-reels'))libraryHeader(root);
+    let box=root.querySelector('.st-reels');if(!box){box=el('section','st-reels');root.append(box);}
+    if(!box.childElementCount)box.append(el('div','studio-loading','Đang đọc Trang Facebook…'));
+    let data;try{data=await request('/api/publishing/facebook/reels'+(state.reelsChannel?'?channel_id='+encodeURIComponent(state.reelsChannel)+(refresh?'&refresh=true':''):(refresh?'?refresh=true':'')));}
+    catch(error){if(ticket!==state.request)return;box.replaceChildren(el('p','studio-error',error.message),button('Mở cài đặt',()=>navigate('settings'),'secondary'));return;}
+    if(ticket!==state.request)return;state.reelsChannel=data.channel_id;
+    const num=v=>typeof v==='number'?v.toLocaleString('vi-VN'):'—';
+    const when=new Date(data.checked_at*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+    const reload=button('Làm mới',()=>loadFacebookReels(true),'secondary');
+    const dashboard=el('a','button secondary','Xem kiếm tiền (Professional Dashboard)');dashboard.href='https://www.facebook.com/professional_dashboard';dashboard.target='_blank';dashboard.rel='noopener';
+    const head=append(el('div','st-reels-head'),append(el('div'),el('strong','',data.page.name),el('span','st-muted',` · ${num(data.page.followers)} người theo dõi · ${data.items.length} Reels gần nhất · đọc lúc ${when}`)),append(el('div','st-actions'),reload,dashboard));
+    const notes=[el('p','st-muted','Facebook không cho tool đọc trạng thái kiếm tiền: Reels nào bị gắn "nên xem" thì mở Professional Dashboard để kiểm tra.')];
+    if(!data.insights)notes.push(el('p','st-muted','Chưa có quyền read_insights nên chưa thấy lượt tiếp cận và thời gian xem.'));
+    const list=el('div','st-reels-list');
+    const verdictText={fix:'Lời đăng nên sửa',review:'Lời đăng nên xem lại',safe:'Lời đăng ổn'};
+    for(const item of data.items){
+      const card=el('article','st-reel'+(item.low?' is-low':''));
+      const thumb=el('a','st-reel-thumb');thumb.href=item.url||'#';thumb.target='_blank';thumb.rel='noopener';
+      if(item.picture){const img=el('img');img.src=item.picture;img.alt='';img.loading='lazy';img.referrerPolicy='no-referrer';thumb.append(img);}
+      if(item.length)thumb.append(el('span','studio-video-length',clock(item.length)));
+      const first=String(item.caption||'').split('\n').find(Boolean)||'(không có lời đăng)';
+      const stats=el('div','st-reel-stats');
+      const stat=(label,value)=>stats.append(append(el('span'),el('strong','',value),el('small','',label)));
+      stat('lượt xem',num(item.views));stat('người xem',num(item.post_views));stat('bình luận',num(item.comments));stat('thích',num(item.likes));
+      if(item.insights.reach!=null)stat('tiếp cận',num(item.insights.reach));
+      if(item.insights.avg_watch_ms!=null)stat('xem TB',clock(item.insights.avg_watch_ms/1000));
+      if(item.insights.new_followers!=null)stat('theo dõi mới',num(item.insights.new_followers));
+      const tags=el('div','st-reel-tags');
+      if(item.low)tags.append(el('span','st-pill is-warn','Lượt xem thấp hẳn so với Trang: nên xem trạng thái'));
+      tags.append(el('span','st-pill '+(item.check.verdict==='fix'?'is-bad':item.check.verdict==='review'?'is-warn':'is-ok'),verdictText[item.check.verdict]));
+      tags.append(el('span','st-pill '+(item.copyright==='match'?'is-bad':item.copyright==='clear'?'is-ok':''),item.copyright==='match'?'Trùng bản quyền':item.copyright==='clear'?'Bản quyền ổn':'Đang kiểm tra bản quyền'));
+      if(!item.published)tags.append(el('span','st-pill is-warn','Chưa công khai'));
+      if(item.tool)tags.append(el('span','st-pill','Đăng bằng tool'));
+      const body=append(el('div','st-reel-body'),el('strong','st-reel-title',first),el('small','st-muted',item.created?new Date(item.created).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'}):''),stats,tags);
+      const words=item.check.issues.filter(i=>i.level!=='note');
+      if(words.length){const more=el('details','st-help');more.append(el('summary','',`${words.length} chỗ trong lời đăng`));
+        for(const issue of words)more.append(el('p','',`“${issue.text}” · ${issue.label}`+(issue.replace?.length?` · thử: ${issue.replace.slice(0,2).join(', ')}`:'')));body.append(more);}
+      append(card,thumb,body);list.append(card);
+    }
+    if(!data.items.length)list.append(el('p','st-muted','Trang chưa có Reels nào.'));
+    box.replaceChildren(head,...notes,list);
   }
   async function loadPublicationHistory() {
     const root=$('#studio-library'),ticket=++state.request;
@@ -770,7 +815,7 @@
       const retry=button('Thử dọn job/tệp',async()=>{if(retry.disabled)return;retry.disabled=true;error.textContent='';try{await request('/api/publication-history/'+encodeURIComponent(entry.id)+'/cleanup',{method:'POST',body:JSON.stringify({confirm:true})});await loadLibrary();}catch(e){error.textContent=e.message;}finally{retry.disabled=false;}});row.append(retry);
     }return row;
   }
-  async function loadLibrary() {if(state.libraryView==='history')return loadPublicationHistory();const root=$('#studio-library');const ticket=++state.request;try{const data=await request('/api/factory/videos?'+filterQuery(state.library));if(ticket!==state.request)return;state.libraryData=data;
+  async function loadLibrary() {if(state.libraryView==='history')return loadPublicationHistory();if(state.libraryView==='facebook')return loadFacebookReels();const root=$('#studio-library');const ticket=++state.request;try{const data=await request('/api/factory/videos?'+filterQuery(state.library));if(ticket!==state.request)return;state.libraryData=data;
       const focused=document.activeElement;const focusName=root.contains(focused)?focused.name:null;const selection=focusName&&typeof focused.selectionStart==='number'?focused.selectionStart:null;
       libraryHeader(root);
       const filters=el('div','studio-filters');append(filters,filterControl('Tìm kiếm','q'),filterControl('Phong cách','style',[['','Mọi phong cách'],...Object.entries(filterStyleLabels)]),filterControl('Duyệt video','review_state',[['','Tất cả'],['pending','Chưa duyệt'],['approved','Đã duyệt']]));root.append(filters);
@@ -845,6 +890,7 @@
         const card=el('div','studio-channel');
         append(card,el('h3','',channel.name||channel.platform||'Kênh đăng'),stateBadge(channel.connected===true?'connected':'blocked'),el('p','',channel.error||channel.message||(channel.connected?'Tài khoản đã kết nối.':'Cần kết nối tài khoản và cấp quyền đăng video.')));
         const real=String(channel.id||'').includes(':');
+        card.querySelector('h3').before(el('small','st-label',channel.platform==='facebook'?'Facebook Page':channel.platform==='youtube'?'YouTube':channel.platform||''));
         if(real&&channel.platform==='youtube')card.append(el('small','st-muted','Mã kênh: '+channel.id.split(':')[1]));
         if(real&&root.id==='studioSettingsChannels')card.append(button('Gỡ kênh',async()=>{
           if(!global.confirm('Gỡ kênh "'+(channel.name||channel.id)+'" khỏi tool?\nKhông xoá gì trên YouTube/Facebook; muốn dùng lại thì bấm Kết nối.'))return;
@@ -858,14 +904,23 @@
       if(root.id==='studioSettingsChannels'&&connected.length){
         // Each kind of video can go to its own channel: the post form picks it by itself (still changeable there).
         const box=el('div','st-defaults');box.append(el('small','st-label','Kênh mặc định khi đăng'));
+        const platforms=[['youtube','YouTube · bản ngang'],['facebook','Facebook Reels · bản dọc']].filter(([p])=>connected.some(c=>c.platform===p));
+        const table=el('div','st-default-table');table.style.setProperty('--cols',platforms.length);
+        table.append(el('span',''),...platforms.map(([,label])=>el('small','st-muted',label)));
         for(const [style,label] of Object.entries(filterStyleLabels)){
-          const select=el('select');select.setAttribute('aria-label','Kênh cho '+label);select.append(new Option('Tự chọn khi đăng',''));
-          for(const channel of connected)select.append(new Option(channel.name||channel.id,channel.id));
-          select.value=state.channelDefaults[style]||'';
-          select.onchange=async()=>{const next={...state.channelDefaults,[style]:select.value};try{const result=await request('/api/publishing/default-channels',{method:'PUT',body:JSON.stringify(next)});state.channelDefaults=result.defaults||{};toast('Đã lưu kênh cho '+label+'.');}catch(error){select.value=state.channelDefaults[style]||'';toast(error.message);}};
-          box.append(append(el('label','st-default-row'),el('span','',label),select));
+          table.append(el('span','st-default-kind',label));
+          for(const [platform,platformLabel] of platforms){
+            const select=el('select');select.setAttribute('aria-label',platformLabel+' cho '+label);select.append(new Option('Không đăng',''));
+            for(const channel of connected.filter(c=>c.platform===platform))select.append(new Option(channel.name||channel.id,channel.id));
+            select.value=state.channelDefaults[style]?.[platform]||'';
+            select.onchange=async()=>{const next=JSON.parse(JSON.stringify(state.channelDefaults||{}));next[style]={...(next[style]||{}),[platform]:select.value};
+              try{const result=await request('/api/publishing/default-channels',{method:'PUT',body:JSON.stringify(next)});state.channelDefaults=result.defaults||{};toast('Đã lưu kênh cho '+label+'.');}
+              catch(error){select.value=state.channelDefaults[style]?.[platform]||'';toast(error.message);}};
+            table.append(select);
+          }
         }
-        box.append(el('p','st-muted','Kết nối thêm kênh: bấm Kết nối YouTube, khi Google hỏi thì chọn đúng kênh (tài khoản thương hiệu).'));
+        box.append(table,el('p','st-muted','Khi bấm "Đăng / hẹn giờ", tool tick sẵn các kênh này: YouTube nhận bản ngang 16:9, Facebook nhận bản dọc làm Reels. Bỏ tick trong form nếu lần đó không muốn đăng.'));
+        box.append(el('p','st-muted','Kết nối thêm kênh YouTube: bấm Kết nối YouTube, khi Google hỏi thì chọn đúng kênh (tài khoản thương hiệu).'));
         root.append(box);
       }
       if(root.id==='studioSettingsChannels')renderPublishingSetup(root,data);
@@ -956,14 +1011,89 @@
     files.onchange=()=>{confirm.textContent=files.checked?'Xóa video và tệp':'Xóa video';};
     append(modal.box,filesLabel,note,error,append(el('div','studio-dialog-actions'),button('Hủy',()=>modal.close()),confirm));}
   function dialog(title) {const backdrop=el('div','studio-dialog');const box=el('section','studio-dialog-box');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');const heading=el('h2','',title);heading.id='studioDialogTitle';box.setAttribute('aria-labelledby',heading.id);const focus=document.activeElement;const modal={box};const close=()=>{modal.onClose?.();backdrop.remove();document.removeEventListener('keydown',key);focus?.focus();};const key=event=>{if(event.key==='Escape')close();if(event.key==='Tab'){const nodes=[...box.querySelectorAll('button,input,select,textarea,a[href]')].filter(n=>!n.disabled);if(!nodes.length)return;const first=nodes[0],last=nodes.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};document.addEventListener('keydown',key);backdrop.onclick=event=>{if(event.target===backdrop)close();};const closeButton=button('×',close);closeButton.setAttribute('aria-label','Đóng');box.append(append(el('header'),heading,closeButton));backdrop.append(box);document.body.append(backdrop);closeButton.focus();modal.close=close;return modal;}
-  async function openSchedule(video) {if(!video.approved){toast('Duyệt đúng bản video trước khi lên lịch.');return;}const modal=dialog('Lên lịch đăng video');modal.box.append(el('p','notice',video.title||'Bản video đã duyệt'));const form=el('form');const error=el('p','studio-error');error.setAttribute('role','alert');modal.box.append(form);
-    const channelLabel=el('label','','Kênh đăng · YouTube hoặc Facebook Page');channelLabel.htmlFor='studioScheduleChannel';const channel=el('select');channel.id='studioScheduleChannel';channel.required=true;const timeLabel=el('label','','Thời gian đăng · Giờ Việt Nam (UTC+7)');timeLabel.htmlFor='studioScheduleTime';const time=el('input');time.id='studioScheduleTime';time.type='datetime-local';time.required=true;const titleLabel=el('label','','Tiêu đề');titleLabel.htmlFor='studioScheduleTitle';const titleInput=el('input');titleInput.id='studioScheduleTitle';titleInput.maxLength=100;titleInput.required=true;titleInput.value=video.title||'';titleInput.addEventListener('input',event=>{if(event.isTrusted)titleInput.dataset.edited='true';});
-    const tagsLabel=el('label','','Tag YouTube · cách nhau bằng dấu phẩy');tagsLabel.htmlFor='studioScheduleTags';const tagsInput=el('input');tagsInput.id='studioScheduleTags';tagsInput.placeholder='truyện audio, ngôn tình, trọng sinh';tagsInput.addEventListener('input',event=>{if(event.isTrusted)tagsInput.dataset.edited='true';});
-    const soonest=button('Sớm nhất',()=>{const d=new Date(Date.now()+10*60000);d.setSeconds(0,0);const p=n=>String(n).padStart(2,'0');time.value=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;},'secondary');soonest.title='Khoảng 10 phút nữa: tool gửi video ngay, YouTube công khai đúng giờ này.';
-    const captionLabel=el('label','','Mô tả (lời đăng)');captionLabel.htmlFor='studioScheduleCaption';const caption=el('textarea');caption.id='studioScheduleCaption';caption.maxLength=5000;const preview=el('div','studio-create-note');const previewText=el('p','',video.title||'');append(preview,el('strong','','Xem trước lời đăng'),previewText);caption.oninput=()=>previewText.textContent=caption.value||video.title||'Chưa có lời đăng.';const submit=el('button','','Lưu lịch đăng');submit.type='submit';let social=null;caption.addEventListener('input',event=>{if(event.isTrusted)caption.dataset.edited='true';});const platform=()=>String(state.channels.find(item=>item.id===channel.value)?.platform||'').toLowerCase();const fill=()=>{const youtube=platform().includes('youtube');tagsLabel.hidden=tagsInput.hidden=!youtube;if(!social||social.state!=='ready')return;if(youtube&&!titleInput.dataset.edited&&social.youtube?.title)titleInput.value=social.youtube.title;if(youtube&&!tagsInput.dataset.edited)tagsInput.value=(social.youtube?.tags||[]).join(', ');if(caption.dataset.edited)return;caption.value=youtube?[social.youtube?.description,(social.youtube?.tags||[]).map(t=>'#'+String(t).replace(/[\s#]+/g,'')).filter(h=>h.length>1&&!String(social.youtube?.description||'').includes(h)).slice(0,5).join(' ')].filter(Boolean).join('\n\n'):[social.facebook?.caption,(social.facebook?.hashtags||[]).join(' ')].filter(Boolean).join('\n\n');caption.oninput();};channel.addEventListener('change',fill);request('/api/jobs/'+encodeURIComponent(video.job_id)+'/social').then(data=>{social=data;fill();}).catch(()=>{});append(form,channelLabel,channel,timeLabel,append(el('div','studio-schedule-time'),time,soonest),titleLabel,titleInput,captionLabel,caption,tagsLabel,tagsInput,preview,el('p','notice','Lịch giữ nguyên bản video bạn đã duyệt. Máy cần bật và ứng dụng cần chạy để gửi video đúng lịch. Nếu kênh chưa kết nối, lịch sẽ chờ bạn hoàn tất kết nối.'),error,submit);
-    try{const data=await request('/api/publishing/channels');state.channels=Array.isArray(data)?data:data.items||data.channels||[];state.channelDefaults=data.defaults||{};for(const item of state.channels){const option=el('option','',(item.name||item.platform||item.id)+(item.connected===true?'':' · Cần kết nối'));option.value=item.id;channel.append(option);}const preferred=state.channelDefaults[video.style];if(preferred&&state.channels.some(item=>item.id===preferred))channel.value=preferred;else{const first=state.channels.find(item=>item.connected===true);if(first)channel.value=first.id;}fill();if(!state.channels.length){submit.disabled=true;error.textContent='Chưa có kênh đăng. Mở Cài đặt để kết nối tài khoản.';form.append(button('Mở cài đặt',()=>{modal.close();navigate('settings');}));}}catch(e){error.textContent=e.message;submit.disabled=true;}
-    const scheduleStorage={getItem:()=>form.dataset.pendingSchedule||null,setItem:(_key,value)=>{form.dataset.pendingSchedule=value;}};
-    form.onsubmit=async event=>{event.preventDefault();if(form.dataset.sending==='true')return;error.textContent='';submit.disabled=true;form.dataset.sending='true';try{const youtube=platform().includes('youtube');const tags=youtube?tagsInput.value.split(',').map(t=>t.replace(/#/g,'').trim()).filter(Boolean):[];const payload=schedulePayload({...video,title:titleInput.value.trim()},{channel_id:channel.value,publish_at:time.value+':00+07:00',caption:caption.value,tags});const pending=pendingRequest(scheduleStorage,payload);await request('/api/publishing/schedules',{method:'POST',headers:{'Idempotency-Key':pending.key},body:pending.identity});modal.close();navigate('calendar');toast('Đã lưu lịch đăng.');}catch(e){error.textContent=e.message;}finally{delete form.dataset.sending;submit.disabled=false;}};
+  async function openSchedule(video) {
+    // One form, several channels: each ticked channel gets its own schedule.
+    // YouTube receives the landscape 16:9 copy, a Facebook Page receives the vertical copy as a Reel.
+    if(!video.approved){toast('Duyệt đúng bản video trước khi lên lịch.');return;}
+    const modal=dialog('Đăng video');modal.box.append(el('p','notice',video.title||'Bản video đã duyệt'));
+    const form=el('form','st-post');const error=el('p','studio-error');error.setAttribute('role','alert');modal.box.append(form);
+    const field=(text,input)=>append(el('label','st-post-field'),el('span','',text),input);
+    const channelBox=el('div','st-post-channels');
+    const time=el('input');time.type='datetime-local';time.required=true;time.setAttribute('aria-label','Thời gian đăng');
+    const pad=n=>String(n).padStart(2,'0');
+    const soonest=button('Sớm nhất',()=>{const d=new Date(Date.now()+10*60000);d.setSeconds(0,0);time.value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;},'secondary');
+    soonest.title='Khoảng 10 phút nữa: tool gửi video ngay; YouTube công khai đúng giờ này, Facebook đăng khi tới giờ.';
+    const titleInput=el('input');titleInput.maxLength=100;titleInput.required=true;titleInput.value=video.title||'';
+    const ytDesc=el('textarea');ytDesc.maxLength=5000;ytDesc.rows=6;const tagsInput=el('input');tagsInput.placeholder='truyện audio, ngôn tình, trọng sinh';
+    const fbCaption=el('textarea');fbCaption.maxLength=5000;fbCaption.rows=6;
+    const ytBox=append(el('fieldset','st-post-platform'),el('legend','','YouTube · bản ngang 16:9'),field('Mô tả',ytDesc),field('Tag · cách nhau bằng dấu phẩy',tagsInput));
+    // Facebook check: words that can cost reach, monetisation or a strike, with softer phrases one click away.
+    const fbCheck=el('div','st-fbcheck');let fbVerdict='safe',fbTimer=null,fbSeq=0;
+    const levelText={fix:'Nên sửa',review:'Nên xem lại',note:'Lưu ý'};
+    const runCheck=async()=>{const seq=++fbSeq;let result;try{result=await request('/api/publishing/facebook-check',{method:'POST',body:JSON.stringify({text:fbCaption.value})});}catch{return;}
+      if(seq!==fbSeq)return;fbVerdict=result.verdict;
+      const head=el('div','st-fbcheck-head');head.append(el('span','st-pill '+(result.verdict==='fix'?'is-bad':result.verdict==='review'?'is-warn':'is-ok'),result.verdict==='fix'?'Nên sửa trước khi đăng':result.verdict==='review'?'Nên xem lại':'Ổn với Facebook'));
+      head.append(el('small','st-muted','Bảng từ tham khảo từ 2 bản nghiên cứu; Facebook xét cả ngữ cảnh.'));
+      const list=el('div','st-fbcheck-list');
+      for(const issue of result.issues){
+        const row=el('div','st-fbcheck-item is-'+issue.level);
+        row.append(append(el('div'),el('strong','',issue.text),el('span','st-muted',' · '+levelText[issue.level]+' · '+issue.label)));
+        if(issue.replace?.length){const fixes=el('div','st-fbcheck-fixes');for(const option of issue.replace){fixes.append(button(option,()=>{
+          const chars=[...fbCaption.value];const start=chars.slice(0,issue.start).join('').length,end=chars.slice(0,issue.end).join('').length;
+          if(fbCaption.value.slice(start,end)!==issue.text){runCheck();return;}
+          fbCaption.value=fbCaption.value.slice(0,start)+option+fbCaption.value.slice(end);fbCaption.dataset.edited='true';runCheck();},'secondary'));}row.append(fixes);}
+        list.append(row);
+      }
+      fbCheck.replaceChildren(head,list);};
+    fbCaption.addEventListener('input',()=>{clearTimeout(fbTimer);fbTimer=setTimeout(runCheck,500);});
+    const fbBox=append(el('fieldset','st-post-platform'),el('legend','','Facebook Reels · bản dọc'),field('Lời đăng',fbCaption),fbCheck);
+    for(const node of [titleInput,ytDesc,tagsInput,fbCaption])node.addEventListener('input',event=>{if(event.isTrusted)node.dataset.edited='true';});
+    const submit=el('button','','Lưu lịch đăng');submit.type='submit';
+    append(form,el('span','st-post-label','Đăng lên'),channelBox,field('Thời gian đăng · Giờ Việt Nam (UTC+7)',append(el('div','studio-schedule-time'),time,soonest)),
+      field('Tiêu đề',titleInput),ytBox,fbBox,el('p','notice','Máy cần bật và tool cần chạy để gửi video đúng giờ.'),error,submit);
+    let social=null;const boxes=[];
+    const chosen=()=>boxes.filter(item=>item.input.checked).map(item=>item.channel);
+    const sync=()=>{const platforms=new Set(chosen().map(c=>c.platform));ytBox.hidden=!platforms.has('youtube');const fbWasHidden=fbBox.hidden;fbBox.hidden=!platforms.has('facebook');if(fbWasHidden&&!fbBox.hidden)runCheck();
+      const count=chosen().length;submit.textContent=count>1?`Lưu ${count} lịch đăng`:'Lưu lịch đăng';};
+    const fill=()=>{if(!social||social.state!=='ready')return;const yt=social.youtube||{},fb=social.facebook||{};
+      if(!titleInput.dataset.edited&&yt.title)titleInput.value=yt.title;
+      if(!tagsInput.dataset.edited)tagsInput.value=(yt.tags||[]).join(', ');
+      if(!ytDesc.dataset.edited){const tags=(yt.tags||[]).map(t=>'#'+String(t).replace(/[\s#]+/g,'')).filter(h=>h.length>1&&!String(yt.description||'').includes(h)).slice(0,5).join(' ');ytDesc.value=[yt.description,tags].filter(Boolean).join('\n\n');}
+      if(!fbCaption.dataset.edited)fbCaption.value=[fb.caption,(fb.hashtags||[]).filter(h=>!String(fb.caption||'').includes(h)).join(' ')].filter(Boolean).join('\n\n');
+      if(!fbBox.hidden)runCheck();};
+    request('/api/jobs/'+encodeURIComponent(video.job_id)+'/social').then(data=>{social=data;fill();}).catch(()=>{});
+    try{
+      const data=await request('/api/publishing/channels');state.channels=Array.isArray(data)?data:data.items||data.channels||[];state.channelDefaults=data.defaults||{};
+      const preferred=Object.values(state.channelDefaults[video.style]||{});
+      for(const channel of state.channels.filter(c=>String(c.id).includes(':'))){
+        const input=el('input');input.type='checkbox';input.disabled=channel.connected!==true;input.checked=!input.disabled&&preferred.includes(channel.id);input.onchange=sync;
+        const kind=channel.connected!==true?'Cần kết nối lại':channel.platform==='youtube'?'YouTube · bản ngang 16:9':'Facebook Reels · bản dọc';
+        channelBox.append(append(el('label','st-post-channel'),input,append(el('span'),el('strong','',channel.name||channel.id),el('small','',kind))));boxes.push({input,channel});
+      }
+      if(!boxes.some(item=>item.input.checked)){const first=boxes.find(item=>!item.input.disabled);if(first)first.input.checked=true;}
+      if(!boxes.length){submit.disabled=true;error.textContent='Chưa có kênh đăng. Mở Cài đặt để kết nối tài khoản.';form.append(button('Mở cài đặt',()=>{modal.close();navigate('settings');}));}
+      sync();
+    }catch(e){error.textContent=e.message;submit.disabled=true;}
+    const keys={};
+    form.onsubmit=async event=>{
+      event.preventDefault();if(form.dataset.sending==='true')return;error.textContent='';
+      const targets=chosen();if(!targets.length){error.textContent='Tick ít nhất một kênh.';return;}
+      if(targets.some(c=>c.platform==='facebook')){await runCheck();if(fbVerdict==='fix'&&!global.confirm('Lời đăng Facebook còn chỗ "Nên sửa" (từ có thể bị gỡ bài hoặc chữ viết che). Vẫn lưu lịch đăng?'))return;}
+      submit.disabled=true;form.dataset.sending='true';const done=[],failed=[];
+      for(const channel of targets){
+        const youtube=channel.platform==='youtube';
+        try{
+          const tags=youtube?tagsInput.value.split(',').map(t=>t.replace(/#/g,'').trim()).filter(Boolean):[];
+          const payload=schedulePayload({...video,title:titleInput.value.trim()},{channel_id:channel.id,publish_at:time.value+':00+07:00',caption:youtube?ytDesc.value:fbCaption.value,tags});
+          const storage={getItem:()=>keys[channel.id]||null,setItem:(_key,value)=>{keys[channel.id]=value;}};const pending=pendingRequest(storage,payload);
+          await request('/api/publishing/schedules',{method:'POST',headers:{'Idempotency-Key':pending.key},body:pending.identity});
+          done.push(channel);const item=boxes.find(b=>b.channel===channel);item.input.checked=false;item.input.disabled=true;item.input.closest('label').classList.add('is-done');
+        }catch(e){failed.push((channel.name||channel.id)+': '+e.message);}
+      }
+      delete form.dataset.sending;submit.disabled=false;sync();
+      if(!failed.length){modal.close();navigate('calendar');toast(done.length>1?`Đã lưu ${done.length} lịch đăng.`:'Đã lưu lịch đăng.');}
+      else error.textContent=(done.length?`Đã lưu ${done.length} kênh. `:'')+'Chưa lưu được: '+failed.join(' · ');
+    };
   }
   function scheduleDetail(item) {const modal=dialog(item.title||item.video_title||'Chi tiết lịch đăng');append(modal.box,el('p','notice',prettyDate(item.publish_at)+' · Giờ Việt Nam'),stateBadge(item.state||item.status),el('p','',item.caption||'Chưa có lời đăng.'));if(item.message||item.error)modal.box.append(el('p','studio-error',item.message||item.error));if(item.remote_url){try{const url=new URL(item.remote_url);if(url.protocol==='https:'&&/^(www\.)?(youtube\.com|youtu\.be|facebook\.com)$/.test(url.hostname)){const link=el('a','button secondary','Mở bài đã đăng');link.href=url.href;link.target='_blank';link.rel='noopener';modal.box.append(link);}}catch{}}if(['blocked','needs_attention'].includes(item.state))modal.box.append(button('Thử lại',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/retry',{method:'POST',body:'{}'});modal.close();loadCalendar();}catch(error){toast(error.message);}}));if(['scheduled','blocked'].includes(item.state))modal.box.append(button('Hủy lịch đăng',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id),{method:'DELETE'});modal.close();loadCalendar();toast('Đã hủy lịch đăng.');}catch(error){toast(error.message);}}));}
   labels.connected='Đã kết nối';

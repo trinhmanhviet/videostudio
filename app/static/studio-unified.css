@@ -151,3 +151,34 @@ button.st-icon:disabled{opacity:.35;cursor:default}
 .st-default-row select{margin:0}.studio-channel .st-link{margin-top:6px;padding-left:0}.studio-channel small{display:block;margin-top:4px;font-size:11.5px;overflow-wrap:anywhere}
 .st-log{max-height:60vh;overflow:auto;white-space:pre-wrap;font:12px/1.5 Consolas,monospace;background:#0d1522;border:1px solid var(--line);border-radius:8px;padding:12px;margin:0}
 .studio-dialog-box:has(.st-log){width:min(900px,100%)}
+.st-default-table{display:grid;grid-template-columns:110px repeat(var(--cols,1),minmax(0,1fr));gap:8px 10px;align-items:center;font-size:13px}
+.st-default-table select{margin:0;min-width:0}.st-default-kind{font-weight:600}
+@media(max-width:620px){.st-default-table{grid-template-columns:1fr}.st-default-table>small{display:none}}
+.st-post{display:flex;flex-direction:column;gap:12px}.st-post-field{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600}
+.st-post-field input,.st-post-field textarea{margin:0;font-weight:400}.st-post-label{font-size:13px;font-weight:600}
+.st-post-channels{display:flex;flex-direction:column;gap:6px}
+.st-post-channel{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;cursor:pointer}
+.st-post-channel span{display:flex;flex-direction:column}.st-post-channel small{color:var(--muted);font-size:12px}
+.st-post-channel:has(input:checked){border-color:var(--accent);background:rgba(121,201,239,.08)}.st-post-channel.is-done{opacity:.6}
+.st-post-channel.is-done small::after{content:" · đã lưu lịch"}
+.st-post-platform{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0;display:flex;flex-direction:column;gap:10px}
+.st-post-platform legend{font-size:12.5px;font-weight:700;color:var(--accent);padding:0 6px}
+.studio-dialog-box:has(.st-post){width:min(640px,100%)}
+.st-fbcheck{display:flex;flex-direction:column;gap:8px}.st-fbcheck-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.st-fbcheck-list{display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto}
+.st-fbcheck-item{border-left:3px solid var(--line);padding:4px 0 4px 9px;font-size:12.5px}
+.st-fbcheck-item.is-fix{border-left-color:var(--bad)}.st-fbcheck-item.is-review{border-left-color:var(--warn)}.st-fbcheck-item.is-note{opacity:.75}
+.st-fbcheck-fixes{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.st-fbcheck-fixes button{min-height:26px;padding:2px 9px;font-size:12px}
+.st-reels{margin-top:6px}.st-reels-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.st-reels-head .st-actions{margin:0}.st-reels>p{margin:4px 0}
+.st-reels-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,460px),1fr));gap:14px;margin-top:14px}
+.st-reel{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.st-reel.is-low{border-color:var(--warn)}
+.st-reel-thumb{position:relative;display:block;aspect-ratio:9/16;border-radius:8px;overflow:hidden;background:#0d1522}
+.st-reel-thumb img{width:100%;height:100%;object-fit:cover}.st-reel-thumb .studio-video-length{position:absolute;right:4px;bottom:4px}
+.st-reel-body{display:flex;flex-direction:column;gap:6px;min-width:0}
+.st-reel-title{font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.st-reel-stats{display:flex;flex-wrap:wrap;gap:6px 14px}.st-reel-stats span{display:flex;flex-direction:column}
+.st-reel-stats strong{font-size:15px;font-variant-numeric:tabular-nums}.st-reel-stats small{font-size:11px;color:var(--muted)}
+.st-reel-tags{display:flex;flex-wrap:wrap;gap:5px}.st-reel .st-help{margin-top:2px;padding-top:6px}
+.studio-calendar-toolbar[aria-label="Nội dung Kho video"]{justify-content:flex-start}

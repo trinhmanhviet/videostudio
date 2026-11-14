@@ -228,19 +228,72 @@ class PublishingTests(unittest.TestCase):
 
     def test_default_channel_per_kind_and_removing_a_channel(self):
         self.service.save_channel('youtube:two', 'youtube', 'Story channel', {'refresh_token': 'x'})
-        self.service.set_default_channels({'case': 'youtube:one', 'story': 'youtube:two', 'news': ''})
-        self.assertEqual(self.service.channels()['defaults'], {'case': 'youtube:one', 'story': 'youtube:two'})
-        with self.assertRaises(ValueError):
-            self.service.set_default_channels({'story': 'youtube:missing'})
+        self.service.save_channel('facebook:9', 'facebook', 'Page', {'access_token': 'x', 'page_id': '9'})
+        self.service.set_default_channels({'case': {'youtube': 'youtube:one', 'facebook': 'facebook:9'},
+                                           'story': {'youtube': 'youtube:two', 'facebook': ''}, 'news': {}})
+        self.assertEqual(self.service.channels()['defaults'],
+                         {'case': {'youtube': 'youtube:one', 'facebook': 'facebook:9'}, 'story': {'youtube': 'youtube:two'}})
+        for wrong in ({'story': {'youtube': 'youtube:missing'}}, {'story': {'facebook': 'youtube:two'}}, {'story': 'youtube:two'}):
+            with self.assertRaises(ValueError):
+                self.service.set_default_channels(wrong)
+        with self.service.store.db() as db:  # the older one-channel-per-kind setting still reads
+            db.execute("INSERT OR REPLACE INTO publishing_settings VALUES('default_channels',?)", (json.dumps({'case': 'youtube:one'}),))
+        self.assertEqual(self.service.default_channels(), {'case': {'youtube': 'youtube:one'}})
+        self.service.set_default_channels({'case': {'youtube': 'youtube:one'}, 'story': {'youtube': 'youtube:two'}})
         row = self.schedule()  # on youtube:one, not posted yet
         with self.assertRaises(ValueError):
             self.service.remove_channel('youtube:one')
         self.service.cancel(row['id'])
         self.service.remove_channel('youtube:one')
-        self.assertEqual(self.service.channels()['defaults'], {'story': 'youtube:two'})
+        self.assertEqual(self.service.channels()['defaults'], {'story': {'youtube': 'youtube:two'}})
         self.assertNotIn('youtube:one', [c['id'] for c in self.service.channels()['items']])
         with self.assertRaises(KeyError):
             self.service.remove_channel('youtube:one')
+
+    def test_facebook_reels_report_views_checks_and_low_ones(self):
+        def handler(request):
+            path = request.url.path
+            if path.endswith('/video_insights'):
+                return httpx.Response(403, json={'error': {'message': 'read_insights permission missing'}})
+            if path.endswith('/video_reels'):
+                old = '2020-01-0{}T00:00:00+0000'
+                data = [{'id': str(n), 'description': caption, 'created_time': old.format(n), 'permalink_url': f'/reel/{n}/', 'views': views,
+                         'post_views': 1, 'length': 60.0, 'status': {'publishing_phase': {'publish_status': 'published'},
+                                                                     'copyright_check_status': {'status': 'complete', 'matches_found': n == 2}},
+                         'comments': {'summary': {'total_count': 3}}, 'likes': {'summary': {'total_count': 4}}}
+                        for n, views, caption in [(1, 500, 'Một căn phòng khóa kín.'), (2, 400, 'Cô ấy tự tử.'), (3, 450, 'Bí ẩn'),
+                                                  (4, 30, 'THITHỂ trong chuồng'), (5, 480, 'Lá thư')]]
+                return httpx.Response(200, json={'data': data})
+            return httpx.Response(200, json={'name': 'Trang', 'followers_count': 7})
+        service = Publishing(self.store, self.versions, clock=lambda: self.now, client=httpx.Client(transport=httpx.MockTransport(handler)))
+        service.save_channel('facebook:9', 'facebook', 'Trang', {'access_token': 'x', 'page_id': '9'})
+        result = service.facebook_reels('facebook:9')
+        self.assertEqual((result['page'], result['insights']), ({'name': 'Trang', 'followers': 7}, False))
+        by_id = {item['id']: item for item in result['items']}
+        self.assertEqual(by_id['1']['url'], 'https://www.facebook.com/reel/1/')
+        self.assertEqual((by_id['1']['comments'], by_id['1']['likes'], by_id['1']['check']['verdict']), (3, 4, 'safe'))
+        self.assertEqual((by_id['2']['copyright'], by_id['2']['check']['verdict']), ('match', 'fix'))
+        self.assertEqual(by_id['4']['check']['issues'][0]['kind'], 'masked')
+        self.assertEqual([i for i in by_id if by_id[i]['low']], ['4'])
+        with self.assertRaises(ValueError):
+            service.facebook_reels('youtube:one')
+
+    def test_facebook_reel_is_finished_once_the_upload_is_complete(self):
+        self.service.save_channel('facebook:1','facebook','Page',{'access_token':'secret','page_id':'1'})
+        row=self.schedule(channel_id='facebook:1')
+        self.now+=3601
+        self.service._save(row['id'],state='processing',phase='uploaded',remote_id='123')
+        calls=[]
+        def http(method,url,**kwargs):
+            calls.append(method)
+            if method=='GET':  # what Facebook really answers before "finish": processing has not started
+                return httpx.Response(200,json={'status':{'video_status':'upload_complete','uploading_phase':{'status':'complete'},
+                                                          'processing_phase':{'status':'not_started'},'publishing_phase':{'status':'not_started'}}})
+            return httpx.Response(200,json={'success':True})
+        self.service._request=http
+        changes=self.service.poll_remote(self.service._raw_schedule(row['id']),self.service.channel('facebook:1'))
+        self.assertEqual(calls,['GET','POST'])
+        self.assertEqual(changes,{'state':'processing','phase':'finished'})
 
 
 if __name__ == '__main__':

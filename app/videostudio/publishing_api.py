@@ -66,6 +66,22 @@ def register_publishing_routes(app, store, versions, same_origin, local_request)
         except ValueError as error:
             raise HTTPException(422, str(error))
 
+    @app.get('/api/publishing/facebook/reels')
+    def facebook_reels(channel_id: str = '', refresh: bool = False):
+        if not channel_id:
+            channel_id = next((c['id'] for c in service.channels()['items'] if c['platform'] == 'facebook' and c['connected']), '')
+        if not channel_id:
+            raise HTTPException(422, 'Chưa kết nối Facebook Page')
+        return call(service.facebook_reels, channel_id, refresh)
+
+    @app.post('/api/publishing/facebook-check')
+    def facebook_check(data: dict):
+        from .facebook_safety import check
+        text = data.get('text')
+        if not isinstance(text, str) or len(text) > 5000:
+            raise HTTPException(422, 'Lời đăng tối đa 5000 ký tự')
+        return check(text)
+
     @app.put('/api/publishing/default-channels')
     def default_channels(data: dict, request: Request):
         local_request(request); same_origin(request)

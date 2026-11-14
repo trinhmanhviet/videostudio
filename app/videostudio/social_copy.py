@@ -17,6 +17,22 @@ DRAMA = ('Write in a dramatic, suspenseful, curiosity-driven voice that makes pe
          'Build tension and tease the twist, but never reveal the ending. ')
 NO_HEDGING = ('Never use hedging phrases such as "được cho là", "bị cho là", "được cho rằng", "người ta cho rằng". '
               'State what the narration says directly. ')
+# Facebook is strict with violent, sexual and illegal-trade words (two research notes, Gemini and ChatGPT, 15/11/2026);
+# facebook_safety.py checks the result against facebook_words.json in the post form.
+FACEBOOK = ('facebook.caption is for a Facebook Page Reel; Facebook lowers reach, removes monetisation or gives strikes for '
+            'violent, gory, sexual, suicide, drug, weapon, gambling and trafficking wording, so for facebook.caption only: '
+            'open with a mystery, an odd detail or a psychological conflict, never with violence, and keep the first 150 characters '
+            'free of any such word; use natural Vietnamese euphemisms instead of the direct words (for example "không qua khỏi" '
+            'instead of "chết" or "bị giết", "ra tay" instead of "giết", "nạn nhân" or "người xấu số" instead of "xác chết" or '
+            '"thi thể", "che giấu tội ác" instead of "phân xác", "dấu vết tại hiện trường" instead of "máu me", '
+            '"chọn cách giải thoát cực đoan" instead of "tự tử", "xâm phạm danh dự" instead of "hiếp dâm", "chất cấm" instead of '
+            '"ma túy", "bản án cao nhất" instead of "tử hình"); never mask words with *, dots or misspellings (gi*t, g.i.ế.t, giớt), '
+            'Facebook reads them and treats them as dodging the rules; keep the euphemism truthful, do not turn a murder into an '
+            'ordinary death; no weapon, blood or skull emoji, at most 2-3 calm emoji such as 🔍 📂 🕯️; no engagement bait '
+            '("xem ngay kẻo bị xóa", "chấm để hóng", "like và share", "tag bạn bè"); 80-150 words in 2-3 short paragraphs; end '
+            'with one question about the clues or a character\'s choice, never about punishment or violence. '
+            'facebook.hashtags: 3-5 neutral genre or page tags such as #hosovuan #chuyencothat #truecrime #truyenaudio #ngontinh, '
+            'never a hashtag holding a violent or sexual word. ')
 NARRATION_LIMIT = 12000
 _running = set()
 _lock = threading.Lock()
@@ -51,8 +67,7 @@ def prompt(job):
             'youtube.title: at most 90 characters. youtube.description: 2-4 short paragraphs that summarise the story without giving away the ending. '
             'youtube.tags: 5-12 short tags without #, written as normal Vietnamese words with diacritics and spaces '
             '(for example "án mạng Thượng Hải", "vụ án có thật"), plus one or two of the main keywords again without diacritics '
-            '(for example "an mang thuong hai"). facebook.caption: a hook line and 2-3 short paragraphs ending with a question for the audience. '
-            'facebook.hashtags: 3-6. tiktok.caption: one or two lines, at most 150 characters. tiktok.hashtags: 3-5. '
+            '(for example "an mang thuong hai"). ' + FACEBOOK + 'tiktok.caption: one or two lines, at most 150 characters. tiktok.hashtags: 3-5. '
             'Hashtags start with # and contain no spaces.\n\n'
             f'Working title: {video_title(job)}\n\nNarration:\n{text}')
 
@@ -82,7 +97,7 @@ def validate(data):
     result = {
         'youtube': {'title': _clean(youtube.get('title'), 100), 'description': _clean(youtube.get('description'), 5000),
                     'tags': _tags(youtube.get('tags'), 15, False)},
-        'facebook': {'caption': _clean(facebook.get('caption'), 5000), 'hashtags': _tags(facebook.get('hashtags'), 8, True)},
+        'facebook': {'caption': _clean(facebook.get('caption'), 5000), 'hashtags': _tags(facebook.get('hashtags'), 5, True)},
         'tiktok': {'caption': _clean(tiktok.get('caption'), 300), 'hashtags': _tags(tiktok.get('hashtags'), 6, True)},
     }
     if not result['youtube']['title'] or not result['facebook']['caption'] or not result['tiktok']['caption']:

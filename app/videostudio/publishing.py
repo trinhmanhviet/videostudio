@@ -123,29 +123,124 @@ class Publishing:
     STYLES = ('case', 'story', 'news', 'meme')
 
     def default_channels(self):
+        """{kind of video: {platform: channel id}}: one YouTube channel and one Facebook Page per kind."""
         with self.store.db() as db:
             row = db.execute("SELECT value FROM publishing_settings WHERE key='default_channels'").fetchone()
-            known = {r['id'] for r in db.execute('SELECT id FROM publishing_channels WHERE connected=1')}
+            known = {r['id']: r['platform'] for r in db.execute('SELECT id,platform FROM publishing_channels WHERE connected=1')}
         saved = json.loads(row['value']) if row else {}
-        return {style: channel for style, channel in saved.items() if style in self.STYLES and channel in known}
+        result = {}
+        for style, value in saved.items():
+            if style not in self.STYLES:
+                continue
+            picks = value if isinstance(value, dict) else {known.get(value, ''): value}  # older setting: one channel per kind
+            picks = {platform: channel for platform, channel in picks.items() if known.get(channel) == platform}
+            if picks:
+                result[style] = picks
+        return result
 
     def set_default_channels(self, data):
         if not isinstance(data, dict):
             raise ValueError('Chọn kênh cho từng loại video')
         with self.store.db() as db:
-            known = {r['id'] for r in db.execute('SELECT id FROM publishing_channels WHERE connected=1')}
+            known = {r['id']: r['platform'] for r in db.execute('SELECT id,platform FROM publishing_channels WHERE connected=1')}
         result = {}
-        for style, channel in data.items():
+        for style, picks in data.items():
             if style not in self.STYLES:
                 raise ValueError('Loại video không hợp lệ')
-            if channel in (None, ''):
-                continue
-            if channel not in known:
-                raise ValueError('Kênh chưa kết nối')
-            result[style] = channel
+            if not isinstance(picks, dict):
+                raise ValueError('Chọn kênh theo từng nền tảng')
+            for platform, channel in picks.items():
+                if platform not in self.adapters:
+                    raise ValueError('Nền tảng không hợp lệ')
+                if channel in (None, ''):
+                    continue
+                if known.get(channel) != platform:
+                    raise ValueError('Kênh chưa kết nối hoặc không thuộc nền tảng này')
+                result.setdefault(style, {})[platform] = channel
         with self.store.db() as db:
             db.execute("INSERT OR REPLACE INTO publishing_settings VALUES('default_channels',?)", (_json(result),))
         return {'defaults': self.default_channels()}
+
+    # --- Facebook Page: how the Reels are doing ------------------------------------------------------------
+    REEL_FIELDS = ('id,description,created_time,length,permalink_url,views,post_views,picture,'
+                   'status{video_status,publishing_phase,copyright_check_status},'
+                   'comments.summary(true).limit(0),likes.summary(true).limit(0)')
+    # video_insights metrics shown when the token has read_insights (other metrics are ignored)
+    REEL_INSIGHTS = {'post_impressions_unique': 'reach', 'blue_reels_play_count': 'plays', 'fb_reels_total_plays': 'total_plays',
+                     'fb_reels_replay_count': 'replays', 'post_video_avg_time_watched': 'avg_watch_ms',
+                     'post_video_view_time': 'watch_ms', 'post_video_followers': 'new_followers',
+                     'post_video_social_actions': 'social_actions'}
+    _reels_cache = {}
+
+    def facebook_reels(self, channel_id, refresh=False, limit=30):
+        """Recent Reels of a connected Page: views, comments, likes, copyright check, the caption check and,
+        with read_insights, reach and watch time. Monetisation status is not offered by the Graph API."""
+        from .facebook_safety import check
+        channel = self.channel(channel_id)
+        if channel['platform'] != 'facebook':
+            raise ValueError('Chọn một Facebook Page')
+        cached = self._reels_cache.get(channel_id)
+        if cached and not refresh and self.clock() - cached['checked_at'] < 600:
+            return cached
+        credentials = channel['credentials']
+        base = 'https://graph.facebook.com/' + credentials.get('api_version', 'v24.0')
+        headers = {'Authorization': 'Bearer ' + credentials['access_token']}
+        page = self.client.get(f"{base}/{credentials['page_id']}", params={'fields': 'name,followers_count'}, headers=headers)
+        reels = self.client.get(f"{base}/{credentials['page_id']}/video_reels", params={'fields': self.REEL_FIELDS, 'limit': limit}, headers=headers)
+        if reels.status_code in (401, 403) or page.status_code in (401, 403):
+            raise PublishBlocked('Token Trang hết hạn hoặc thiếu quyền; kết nối lại Facebook Page')
+        if reels.status_code >= 400:
+            raise PublishBlocked(f'Facebook chưa cho đọc danh sách Reels (HTTP {reels.status_code})')
+        with self.store.db() as db:
+            ours = {r['remote_id']: dict(r) for r in db.execute(
+                "SELECT remote_id,job_id,title,state FROM publishing_schedules WHERE platform='facebook' AND remote_id IS NOT NULL")}
+        items, insights_ok = [], None
+        for video in reels.json().get('data', []):
+            insights = {}
+            if insights_ok is not False:
+                answer = self.client.get(f"{base}/{video['id']}/video_insights", headers=headers)
+                if answer.status_code == 200:
+                    insights_ok = True
+                    for metric in answer.json().get('data', []):
+                        key = self.REEL_INSIGHTS.get(metric.get('name'))
+                        value = (metric.get('values') or [{}])[0].get('value')
+                        if key and isinstance(value, (int, float)):
+                            insights[key] = value
+                else:
+                    insights_ok = False  # no read_insights: one refusal is enough, skip the rest
+            status = video.get('status') or {}
+            copyright_check = status.get('copyright_check_status') or {}
+            caption = video.get('description') or ''
+            caption_check = check(caption)
+            items.append({
+                'id': video['id'], 'caption': caption, 'created': video.get('created_time'), 'length': video.get('length'),
+                'url': 'https://www.facebook.com' + video['permalink_url'] if str(video.get('permalink_url', '')).startswith('/') else video.get('permalink_url'),
+                'picture': video.get('picture'), 'views': video.get('views'), 'post_views': video.get('post_views'),
+                'comments': ((video.get('comments') or {}).get('summary') or {}).get('total_count'),
+                'likes': ((video.get('likes') or {}).get('summary') or {}).get('total_count'),
+                'published': (status.get('publishing_phase') or {}).get('publish_status') == 'published',
+                'video_status': status.get('video_status'),
+                'copyright': 'match' if copyright_check.get('matches_found') else ('clear' if copyright_check.get('status') == 'complete' else 'pending'),
+                'check': {'verdict': caption_check['verdict'], 'issues': caption_check['issues'][:20]},
+                'insights': insights, 'tool': ours.get(video['id']),
+            })
+        # A Reel well under the Page's usual views (once a day old) is worth a look in Professional Dashboard.
+        now = datetime.now(timezone.utc)
+
+        def age(item):
+            try:
+                return (now - datetime.strptime(item['created'], '%Y-%m-%dT%H:%M:%S%z')).total_seconds()
+            except (TypeError, ValueError):
+                return 0
+        settled = sorted(i['views'] for i in items if isinstance(i['views'], int) and age(i) > 86400)
+        median = settled[len(settled) // 2] if len(settled) >= 4 else None
+        for item in items:
+            item['low'] = bool(median and isinstance(item['views'], int) and age(item) > 86400 and item['views'] < 0.4 * median)
+        info = page.json() if page.status_code == 200 else {}
+        result = {'channel_id': channel_id, 'page': {'name': info.get('name') or channel['name'], 'followers': info.get('followers_count')},
+                  'items': items, 'median_views': median, 'insights': insights_ok is True, 'checked_at': self.clock()}
+        self._reels_cache[channel_id] = result
+        return result
 
     def remove_channel(self, identifier):
         """Forget a connected channel in this tool (nothing is deleted on YouTube/Facebook)."""
@@ -623,7 +718,10 @@ class Publishing:
             return {'state':'published','phase':'published'}
         if status.get('video_status')=='error' or any(isinstance(v,dict) and v.get('status')=='error' for v in status.values()):
             raise PublishBlocked('Facebook báo lỗi xử lý video; kiểm tra Page / Meta Business Suite')
-        if row.get('phase') in ('created','uploaded') and self.clock()>=row['publish_at'] and (status.get('video_status')=='ready' or status.get('processing_phase',{}).get('status')=='complete'):
+        # Facebook only starts processing a Reel after the "finish" call, so the upload being complete is enough to send it.
+        uploaded = (status.get('video_status') in ('ready','upload_complete') or status.get('uploading_phase',{}).get('status')=='complete'
+                    or status.get('processing_phase',{}).get('status')=='complete')
+        if row.get('phase') in ('created','uploaded') and self.clock()>=row['publish_at'] and uploaded:
             # Persist before the effect. A lost finish reply must never trigger a second finish.
             with self.store.db() as db:
                 changed=db.execute("UPDATE publishing_schedules SET phase='finishing',updated=? WHERE id=? AND phase IN ('created','uploaded')",
