@@ -124,6 +124,18 @@ class RequestJournal:
                     pass
         self.complete(identifier, res)
 
+    def forget_empty(self, identifier, job):
+        """ChatGPT finished this request with an EMPTY answer (checked after a page reload): there is nothing to read
+        back, so the request goes back to 'prepared' and its conversation is dropped; asking again sends it in a new chat."""
+        with self.db() as c:
+            c.execute("UPDATE requests SET state='prepared' WHERE id=? AND state='sending'", (identifier,))
+            c.execute('DELETE FROM conversations WHERE job=?', (job,))
+
+    def ever_sent(self, job):
+        """Whether any request of this job got as far as Send (its reply may sit in that conversation)."""
+        with self.db() as c:
+            return c.execute("SELECT 1 FROM requests WHERE job=? AND state!='prepared' LIMIT 1", (job,)).fetchone() is not None
+
     def conversation(self, job, provider='chatgpt'):
         provider = self._provider(provider)
         with self.db() as c:

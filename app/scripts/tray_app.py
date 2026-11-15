@@ -15,6 +15,7 @@ import windows_integration as integration
 from windows_tray import Tray, message_box, single_instance
 
 ACTIVE = ('queued', 'running', 'retrying')
+PYTHON = r'C:\Python312\python.exe' if os.path.isfile(r'C:\Python312\python.exe') else 'python'
 ACTION_LABELS = {'start': 'mở hệ thống', 'stop': 'dừng hệ thống', 'restart': 'khởi động lại'}
 DEFAULT_SETTINGS = {'setup_done': False, 'notify': True, 'autostart_services': True}
 # ChatGPT text channel; start_system.ps1 reads the same data/text_transport.txt.
@@ -165,6 +166,15 @@ class TrayApp:
             ('separator',),
             ('item', 'Bảng điều khiển && nhật ký', self.open_panel, {}),
             ('item', 'Mở thư mục video', self.open_output, {}),
+            ('submenu', 'Dịch vụ nền', [
+                ('item', 'Khởi động lại ComfyUI', lambda: self.service('comfy_control', 'restart', 'ComfyUI'), {'grayed': busy}),
+                ('item', 'Tắt ComfyUI', lambda: self.service('comfy_control', 'stop', 'ComfyUI'), {'grayed': busy}),
+                ('item', 'Bật ComfyUI', lambda: self.service('comfy_control', 'start', 'ComfyUI'), {'grayed': busy}),
+                ('separator',),
+                ('item', 'Khởi động lại Chrome riêng', lambda: self.service('browser_manager', 'restart', 'Chrome riêng'), {'grayed': busy}),
+                ('item', 'Tắt Chrome riêng', lambda: self.service('browser_manager', 'stop', 'Chrome riêng'), {'grayed': busy}),
+                ('item', 'Bật Chrome riêng', lambda: self.service('browser_manager', 'debug', 'Chrome riêng'), {'grayed': busy}),
+            ]),
             ('submenu', 'Kết nối ChatGPT (tạo chữ)', [
                 ('item', label, lambda value=value: self.set_text_transport(value),
                  {'checked': transport == value, 'grayed': busy})
@@ -181,6 +191,19 @@ class TrayApp:
         ]
 
     # ── actions ──
+    def service(self, module, action, label):
+        """ComfyUI / dedicated Chrome control (python -m videostudio.<module> <action>); refused while a video runs."""
+        def work():
+            try:
+                done = subprocess.run([PYTHON, '-m', 'videostudio.' + module, action], cwd=self.root, capture_output=True, text=True,
+                                      encoding='utf-8', errors='replace', timeout=600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                text = (done.stdout or done.stderr or '').strip().splitlines()
+                self.tray.notify(label, (text[-1] if text else 'Xong.')[:200], warning=done.returncode != 0)
+            except Exception as error:
+                self.tray.notify(label, str(error)[:200], warning=True)
+        self.tray.notify(label, 'Đang thực hiện…')
+        threading.Thread(target=work, daemon=True).start()
+
     def on_left_click(self):
         self.open_studio()
 

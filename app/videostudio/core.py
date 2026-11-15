@@ -98,7 +98,7 @@ def validate_request(data):
 
     required={'idea','voice_id','duration_seconds'}
 
-    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text','story_snapshot'}
+    allowed={'idea','voice_id','duration_seconds','project','music_volume','pitch','quality_mode','image_provider','image_pool','workflow_mode','meme_engine','meme_input_mode','content_style','flow_batch_size','meta_batch_size','speech_batch_size','text_provider','workflow','edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled','speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text','story_snapshot'}
 
     if not isinstance(data,dict) or not required.issubset(set(data)) or not set(data).issubset(allowed):
 
@@ -114,7 +114,10 @@ def validate_request(data):
 
     provider=data.get('image_provider','flow')
 
-    if provider not in ('flow','chatgpt','comfy','meta'):raise ValueError('image_provider must be flow, chatgpt, comfy, or meta')
+    if provider not in ('flow','chatgpt','comfy','meta','pool'):raise ValueError('image_provider must be flow, chatgpt, comfy, meta or pool')
+    # 'pool': real pictures found for the video (image_pool.py), named by image_pool
+    if (provider=='pool')!=('image_pool' in data):raise ValueError('image_pool goes with image_provider pool')
+    if 'image_pool' in data and (not isinstance(data['image_pool'],str) or not re.fullmatch(r'[0-9a-f]{32}',data['image_pool'])):raise ValueError('Invalid image_pool')
 
     mode=data.get('workflow_mode')
 
@@ -227,7 +230,16 @@ def validate_request(data):
 class Store:
 
     def output_roots(self):
-        """Every folder that holds this tool's videos: the current one (Settings), earlier ones, and each project's parent."""
+        """Every folder that holds this tool's videos: the current one (Settings), earlier ones, and each project's parent.
+        A list page checks every video against these, so the answer is reused for 2 seconds (it reads the database
+        and resolves each folder on disk)."""
+        cached=getattr(self,'_roots_cache',None)
+        if cached and time.time()-cached[0]<2 and cached[1]==str(self.outputs):return list(cached[2])
+        result=self._output_roots()
+        self._roots_cache=(time.time(),str(self.outputs),result)
+        return list(result)
+
+    def _output_roots(self):
         roots=[Path(self.outputs)]
         try:
             from .output_settings import previous_roots
@@ -249,6 +261,9 @@ class Store:
         """The owned output root that contains `path` (deepest match), or None."""
         target=Path(path).resolve()
         found=[root for root in self.output_roots() if target==root or target.is_relative_to(root)]
+        if not found:  # a folder added in the last 2 seconds: ask again without the reused answer
+            self._roots_cache=None
+            found=[root for root in self.output_roots() if target==root or target.is_relative_to(root)]
         return max(found,key=lambda r:len(r.parts)) if found else None
 
     def __init__(self,path,outputs):
@@ -468,7 +483,7 @@ class Store:
         if 'speech' not in checkpoints or 'script' not in checkpoints:
             raise ValueError('T\u00e1c v\u1ee5 ch\u01b0a ho\u00e0n th\u00e0nh k\u1ecbch b\u1ea3n v\u00e0 gi\u1ecdng \u0111\u1ecdc \u0111\u1ec3 c\u00f3 th\u1ec3 t\u1ea1o l\u1ea1i \u1ea3nh')
         provider = image_provider or j['request'].get('image_provider', 'flow')
-        if provider not in ('flow', 'chatgpt', 'comfy', 'meta'):
+        if provider not in ('flow', 'chatgpt', 'comfy', 'meta') and not (provider == 'pool' and j['request'].get('image_pool')):
             raise ValueError('image_provider ph\u1ea3i l\u00e0 flow, chatgpt ho\u1eb7c comfy')
         batch_size = 1 if provider != 'flow' else (flow_batch_size if flow_batch_size is not None else j['request'].get('flow_batch_size', 1))
         if type(batch_size) is not int or batch_size not in available_flow_batch_sizes():
@@ -505,6 +520,7 @@ class Store:
                 c.execute("DELETE FROM checkpoints WHERE job=? AND stage IN ('images','render','verify')", (job_id,))
                 c.execute("DELETE FROM attempts WHERE job=? AND stage IN ('images','render','verify')", (job_id,))
                 req = dict(j['request']);req['image_provider']=provider;req['flow_batch_size']=batch_size
+                if provider != 'pool':req.pop('image_pool', None)  # drawn pictures from now on
                 c.execute("UPDATE jobs SET request=?, state='queued', stage='images', cancel=0, error=NULL, next_at=0, updated=? WHERE id=?",
                           (json.dumps(req, ensure_ascii=False), time.time(), job_id))
                 self.event(c, job_id, 'images', 'reset_images', f'Reset images with {provider}; previous files retained in {backup.name}')
@@ -529,6 +545,18 @@ class Store:
 
             d['events']=[dict(x) for x in c.execute('SELECT * FROM events WHERE job=? ORDER BY seq',(j,))]
 
+            return d
+
+    def get_light(self,j,stages):
+        """A job for list pages: only the named checkpoint stages, no event log. A finished video's narration
+        and scene data run to megabytes each, and Kho video lists every finished video."""
+        with self.db() as c:
+            r=c.execute('SELECT * FROM jobs WHERE id=?',(j,)).fetchone()
+            if not r: raise KeyError(j)
+            d=dict(r); d['request']=json.loads(d['request']); d.pop('idem')
+            marks=','.join('?'*len(stages))
+            d['checkpoints']={r['stage']:json.loads(r['value']) for r in c.execute(f'SELECT stage,value FROM checkpoints WHERE job=? AND stage IN ({marks})',(j,*stages))}
+            d['attempts']={};d['events']=[]
             return d
 
     def list(self):

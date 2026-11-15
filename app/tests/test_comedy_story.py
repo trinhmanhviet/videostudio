@@ -133,7 +133,7 @@ class ComedyStoryTests(unittest.TestCase):
                 nonlocal rounds
                 if '[COMEDY_CRITIC' in prompt:
                     reply=answer(prompt,check);rounds+=1
-                    if rounds==1:reply['issues']=[{'severity':'major','description':'Câu đầu dài','event_ids':['e1'],'beat_indices':[0]}]
+                    if rounds==1:reply['issues']=[{'severity':'blocking','description':'Câu đầu sai sự kiện gốc','event_ids':['e1'],'beat_indices':[0]}]  # only blocking issues are sent back for repair
                     return reply
                 if '[COMEDY_REPAIR' in prompt:
                     calls.append(prompt)

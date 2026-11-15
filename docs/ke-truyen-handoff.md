@@ -374,3 +374,21 @@ Ghi lại: chỗ đọc sai/ngắt sai (giây), chỗ giao diện khó dùng, l�
 - `ensure_space` trước bước gameplay và dựng: thiếu chỗ thì chờ tối đa 45 phút nếu Google Drive đang bật tự chuyển và xoá
   bản trên máy; không thì tạm dừng hàng đợi và dừng video với thông báo rõ (Thử lại làm tiếp từ bước đã lưu).
 - TTS cache giới hạn 6 GB, xoá câu lâu không dùng nhất trước (dùng lại thì cập nhật thời gian).
+
+## 16. Đăng tự động, tải truyện WikiCV, đọc lại câu, lời chào (2026-11-15)
+
+- **Đăng tự động** (`publishing_plans.py`, trang Lịch đăng): kế hoạch = loại video (+ một truyện/dự án), các kênh, giờ và
+  ngày trong tuần. Cứ 5 phút (vòng lặp đăng bài) tool lấp các khung giờ trong 48 giờ tới bằng video kế tiếp đã xong và đã
+  kiểm tra: truyện theo thứ tự chương (`story-snapshot.json`), loại khác theo thời gian tạo. Tự duyệt bản mới nhất, lời đăng
+  giống form (mô tả + hashtag, tag YouTube, lời đăng Facebook + câu ghi chú vụ án, nhãn AI). Bỏ qua bản chỉ có lời đọc MP3.
+  Video lỗi được ghi vào "bị bỏ qua" và không thử lại; hết video thì kế hoạch báo "Hết video sẵn sàng".
+- **Tải truyện WikiCV** (`story_crawl.py`, bảng Truyện nguồn): chạy nguyên `wikicv_auto_v3_2_mixed_titles/crawl_wikicv.py`
+  (robots.txt, nghỉ 2–4 giây mỗi chương, dừng khi 403/429/Cloudflare), đọc dòng nó in ra để hiện tiến độ, có nút Dừng.
+  Nút "Tải chương mới" trên từng truyện chạy lại với link trong `truyen.json`. Xong thì báo Telegram.
+- **Gợi ý từ điển phát âm** (`story_pronounce.py`): chữ viết tắt in hoa (bỏ qua câu viết hoa để hét), số dính đơn vị
+  (5km, 50%, 20tr, 60km/h), giờ (6h30), ký hiệu đứng riêng (&, @, +, #). Người dùng tick rồi Lưu thiết lập.
+- **Đọc lại câu đang chọn**: thiết lập truyện `retakes` [{text, take}]; cụm đọc chứa câu đó có `take` và identity TTS mới,
+  nên lần xếp hàng sau chỉ đọc lại cụm đó.
+- **Lời chào đầu/cuối tập**: thiết lập `intro_text`, `outro_text` với `{truyen}`, `{chuong}`; đọc bằng giọng kể, có phụ đề.
+- Kho video → **Số liệu kênh**: Facebook Reels (lượt xem, bình luận, thích, bản quyền, chấm lời đăng, tiếp cận khi có
+  `read_insights`) và YouTube (lượt xem, thích, bình luận, chế độ hiển thị).

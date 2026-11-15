@@ -3,6 +3,7 @@ GET status is passive. Only explicit browser/start or a scoped job may connect.
 """
 from .paths import DATA_ROOT
 import asyncio
+import contextlib
 import re
 import json
 import os
@@ -15,13 +16,41 @@ from .cdp_protocol import CDPConnection, CDPError
 from .cdp_requests import RequestJournal, IndeterminateRequest, valid_chat_url
 from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, correlate_turns
 from .exchanges import parse_reply
-from .cdp_images import ChatGPTImages, ImageAuthentication, ImageRejected
+from .cdp_images import ChatGPTImages, ImageAuthentication, ImageRejected, valid_attachments, SOCIAL_ROOT
+from .cdp_social import PostReader
 from .cdp_flow import FlowImages, FlowTaskError
 from .cdp_meta import MetaImages, MetaQuotaExhausted
 
 
 class NeedsAuthentication(RuntimeError):
     pass
+
+
+# ChatGPT work runs in lanes, each with its own tab, so a story edit or a Facebook analysis never waits for a video.
+# 'video' (the one video job at a time, plus its image/Flow/Gemini work) keeps the original job_lock; every story
+# being edited is its own lane ('story-<source>'), Facebook analyses share 'social'. At most SIDE_LANES side lanes
+# talk to ChatGPT at once. A lane's tab stays open while it is busy or was used in the last LANE_IDLE seconds.
+SIDE_LANES = 3
+LANE_IDLE = 20 * 60
+FRESH_CHAT = 'https://chatgpt.com/'
+COMPOSE_WAIT = 180
+EMPTY_WAIT = 30          # a finished turn empty this long is reloaded once, then treated as an empty answer
+EMPTY_RELOAD_PAUSE = 5   # longest wait for another tab to finish typing; then nothing is sent and the caller retries
+
+
+def lane_log(message):
+    """One line in data/logs/cdp.out.log (the daemon's stdout), so a slow lane shows where it waited."""
+    print(time.strftime('%Y-%m-%d %H:%M:%S'), message, flush=True)
+
+
+def lane_of(job):
+    job = str(job or '')
+    story = re.match(r'(story-[0-9a-f]+)-', job)
+    if story:
+        return story.group(1)
+    if job.startswith('social-'):
+        return 'social'
+    return 'video'
 
 
 class ChromeChatGPTBridge:
@@ -31,19 +60,40 @@ class ChromeChatGPTBridge:
         self.sessions = {}
         self.cdp = CDPConnection(on_event=self.on_event)
         self.connect_lock = asyncio.Lock()
-        self.job_lock = asyncio.Lock()
+        self.job_lock = asyncio.Lock()          # the 'video' lane (and the image/Flow/Meta/Gemini work it owns)
+        self.lane_locks = {}                    # other lanes: one request at a time per lane
+        self.side_lanes = asyncio.Semaphore(SIDE_LANES)
+        # Typing a prompt and pressing Send happen in one tab at a time (a few seconds each): ChatGPT copies an
+        # unsent draft into a chat opened meanwhile in another tab, which would mix two prompts.
+        self.compose_lock = asyncio.Lock()
+        self.lane_targets = {}                  # lane -> its ChatGPT tab
+        self.lane_used = {}                     # lane -> last time it used its tab
         self.authenticated = False
         self.last_error = None
         self.reasoning_effort = None  # 'high' once High reasoning was verified
         self.images = ChatGPTImages(self, DATA_ROOT/'chatgpt-images')
         self.flow_images = FlowImages(self, DATA_ROOT/'flow-images')
         self.meta_images = MetaImages(self, DATA_ROOT/'meta-images')
+        self.social = PostReader(self, SOCIAL_ROOT)
 
     def on_event(self, event):
         if getattr(self,'images',None):self.images.on_event(event)
         if getattr(self,'flow_images',None):self.flow_images.on_event(event)
         if event.get('method') in ('Target.targetDestroyed', 'Target.targetCrashed'):
-            self.sessions.pop(event.get('params', {}).get('targetId'), None)
+            gone = event.get('params', {}).get('targetId')
+            self.sessions.pop(gone, None)
+            for lane, target in list(getattr(self, 'lane_targets', {}).items()):
+                if target == gone:
+                    self.lane_targets.pop(lane, None)
+
+    def lock_for(self, lane):
+        return self.job_lock if lane == 'video' else self.lane_locks.setdefault(lane, asyncio.Lock())
+
+    def busy_targets(self):
+        """Tabs another lane may still need: its lane is working now or used it recently."""
+        now = time.time()
+        return {target for lane, target in self.lane_targets.items()
+                if self.lock_for(lane).locked() or now - self.lane_used.get(lane, 0) < LANE_IDLE}
 
     def status(self):
         connected = self.cdp.connected
@@ -67,9 +117,14 @@ class ChromeChatGPTBridge:
                 raise
 
     async def ensure_tab(self, job):
+        lane = lane_of(job)
         saved = self.journal.conversation(job)
+        if saved and lane != 'video' and not self.journal.ever_sent(job):
+            saved = None  # only the composer's page was noted; nothing to read back there, so a new chat is fine
         result = await self.cdp.command('Target.getTargets')
         targets = result.get('targetInfos', [])
+        alive = {t.get('targetId') for t in targets if t.get('type') == 'page'}
+        others = {t for l, t in self.lane_targets.items() if l != lane}
         target = None
         if saved:
             for t in targets:
@@ -78,32 +133,69 @@ class ChromeChatGPTBridge:
                     if t['url'].split('?')[0].rstrip('/') == saved['url'].split('?')[0].rstrip('/'):
                         target = t['targetId']
                         break
+        elif lane != 'video':
+            # A story chapter or a Facebook analysis is a self-contained prompt: it starts a NEW chat in its lane's tab,
+            # so one long conversation never slows ChatGPT down or lets earlier chapters colour the next one.
+            # A tab still holding a sent request with no known conversation stays put (its reply is only there):
+            # the lane then gets a new tab instead.
+            mine = self.lane_targets.get(lane)
+            urls = {t.get('targetId'): t.get('url', '') for t in targets}
+            if mine in alive and mine not in self.journal.pinned_targets() and valid_chat_url(urls.get(mine, '')):
+                session = await self.session(mine)
+                if urls[mine].split('?')[0].rstrip('/') != FRESH_CHAT.rstrip('/'):
+                    await self.cdp.command('Page.navigate', {'url': FRESH_CHAT}, session=session)
+                    await self.settle_new_chat(session)
+                target = mine
+                self.journal.set_conversation(job, FRESH_CHAT, target)
         else:
-            # Reuse active ChatGPT tab if one already exists
+            # Reuse this lane's ChatGPT tab (or, for the video lane, any reusable one no other lane holds).
+            mine = self.lane_targets.get(lane)
             for t in targets:
-                if t.get('type') == 'page' and valid_chat_url(t.get('url','')) and self.journal.reusable_text_target(t.get('targetId'),t.get('url','')):
-                    target = t['targetId']
+                ident = t.get('targetId')
+                if ident in others or (mine and ident != mine) or ident not in alive:
+                    continue
+                if valid_chat_url(t.get('url','')) and self.journal.reusable_text_target(ident, t.get('url','')):
+                    target = ident
                     self.journal.set_conversation(job, t.get('url', 'https://chatgpt.com/'), target)
                     break
         if not target:
-            url = saved['url'] if saved else 'https://chatgpt.com/'
-            created = await self.cdp.command('Target.createTarget', {'url':url})
+            url = saved['url'] if saved else FRESH_CHAT
+            # Side lanes open in the background: they never take the window from the video lane or the user.
+            created = await self.cdp.command('Target.createTarget', {'url':url, 'background': lane != 'video'})
             target = created['targetId']
             self.journal.own_target(target,'text')
             self.journal.set_conversation(job, url, target)
-
-        await self.close_other_chat_tabs(targets, target)
+        self.lane_targets[lane] = target
+        self.lane_used[lane] = time.time()
+        await self.close_other_chat_tabs(targets, {target} | self.busy_targets())
         return target
 
+    async def settle_new_chat(self, session, timeout=20):
+        """After Page.navigate: wait until the NEW page is there (root address, loaded, empty composer), so the
+        previous conversation's page is never read or typed into while it is being replaced."""
+        deadline = time.monotonic() + timeout
+        probe = r'''(()=>{const c=document.querySelector('#prompt-textarea,[contenteditable="true"][role="textbox"]');
+          return {path:location.pathname,ready:document.readyState,composer:!!c,draft:c?(c.innerText||'').trim().length:-1}})()'''
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+            try:
+                state = await self.evaluate(session, probe)
+            except (RuntimeError, TimeoutError, CDPError):
+                continue
+            if isinstance(state, dict) and state.get('path') == '/' and state.get('ready') == 'complete' and state.get('composer'):
+                await asyncio.sleep(0.8)  # the composer's controls (model menu) hydrate just after it appears
+                return True
+        return False
+
     async def close_other_chat_tabs(self, targets, keep):
-        """Keep a single ChatGPT tab open (owner request 2026-11-08: extra tabs cost RAM).
-        All ChatGPT work runs under job_lock, so no other tab is in use right now, and every
-        conversation URL is journaled, so a closed conversation reopens from its URL when needed.
-        Tabs holding a sent request whose URL is still unknown are kept for recovery."""
+        """Close ChatGPT tabs nobody needs (owner request 2026-11-08: extra tabs cost RAM). keep: the tabs of lanes
+        that are working or were used recently (each lane has one). Every conversation URL is journaled, so a closed
+        conversation reopens from its URL when needed. Tabs holding a sent request whose URL is still unknown stay."""
+        keep = {keep} if isinstance(keep, str) else set(keep)
         pinned = self.journal.pinned_targets()
         for t in targets:
             ident = t.get('targetId')
-            if t.get('type') != 'page' or ident == keep or ident in pinned or not valid_chat_url(t.get('url', '')):
+            if t.get('type') != 'page' or ident in keep or ident in pinned or not valid_chat_url(t.get('url', '')):
                 continue
             try:
                 await self.cdp.command('Target.closeTarget', {'targetId': ident})
@@ -137,6 +229,13 @@ class ChromeChatGPTBridge:
         if target not in self.sessions:
             result = await self.cdp.command('Target.attachToTarget', {'targetId':target, 'flatten':True})
             self.sessions[target] = result['sessionId']
+            # A tab behind another tab must keep rendering ChatGPT's answer: the page is told it has focus and is
+            # active (not frozen). Best effort; older Chrome builds may not know one of these commands.
+            for method, params in (('Emulation.setFocusEmulationEnabled', {'enabled': True}), ('Page.setWebLifecycleState', {'state': 'active'})):
+                try:
+                    await self.cdp.command(method, params, session=result['sessionId'])
+                except Exception:
+                    pass
         return self.sessions[target]
 
     async def evaluate(self, session, expression):
@@ -145,7 +244,7 @@ class ChromeChatGPTBridge:
             raise RuntimeError('ChatGPT DOM evaluation failed')
         return result.get('result', {}).get('value')
 
-    async def page_ready(self, job, marker='', timeout=30):
+    async def page_ready(self, job, marker='', timeout=60):
         target = await self.ensure_tab(job)
         session = await self.session(target)
         # Only activate the tool-owned tab; no global freeze/Memory Saver changes.
@@ -237,19 +336,40 @@ class ChromeChatGPTBridge:
                 except ValueError:pass
             return raw if isinstance(raw,dict) else {}
         current=await state()
+        # The composer appears before its model control does (fresh or just reloaded tab): wait for the control.
+        appear=time.monotonic()+10
+        while not current.get('high') and not isinstance(current.get('button'),dict) and time.monotonic()<appear:
+            await asyncio.sleep(.5)
+            current=await state()
         if current.get('high'):
             self.reasoning_effort='high';return True
-        button=current.get('button')
-        if not isinstance(button,dict):raise RuntimeError('ChatGPT High reasoning control unavailable; no request sent')
-        for kind in ('mousePressed','mouseReleased'):
-            await self.cdp.command('Input.dispatchMouseEvent',{'type':kind,'x':button['x'],'y':button['y'],'button':'left','clickCount':1},session=session)
         slider=None
-        deadline=time.monotonic()+3
-        while time.monotonic()<deadline:
-            current=await state();slider=current.get('slider')
-            if isinstance(slider,dict) and isinstance(slider.get('track'),dict) and slider.get('max',0)>0:break
-            await asyncio.sleep(.1)
-        if not isinstance(slider,dict):raise RuntimeError('ChatGPT reasoning slider unavailable; no request sent')
+        # A tab that was opened behind another one may not draw the model menu at the first click: close the menu,
+        # bring the tab forward and click once more (still inside the compose turn, so no other tab is typing).
+        for attempt in range(2):
+            button=current.get('button')
+            if not isinstance(button,dict):
+                await self._close_menu(session)
+                raise RuntimeError('ChatGPT High reasoning control unavailable; no request sent')
+            for kind in ('mousePressed','mouseReleased'):
+                await self.cdp.command('Input.dispatchMouseEvent',{'type':kind,'x':button['x'],'y':button['y'],'button':'left','clickCount':1},session=session)
+            deadline=time.monotonic()+(3 if attempt==0 else 6)
+            while time.monotonic()<deadline:
+                current=await state();slider=current.get('slider')
+                if isinstance(slider,dict) and isinstance(slider.get('track'),dict) and slider.get('max',0)>0:break
+                slider=None
+                await asyncio.sleep(.1)
+            if slider or attempt:break
+            await self._close_menu(session)
+            try:await self.cdp.command('Page.bringToFront',{},session=session)
+            except Exception:pass
+            await asyncio.sleep(1)
+            current=await state()
+            if current.get('high'):
+                self.reasoning_effort='high';return True
+        if not isinstance(slider,dict):
+            await self._close_menu(session)
+            raise RuntimeError('ChatGPT reasoning slider unavailable; no request sent')
         # The slider ignores a click on its track (2026-11); step it with the arrow keys it announces.
         await self.evaluate(session,"document.querySelector('[role=\"slider\"][aria-valuemax]')?.focus()")
         steps=max(1,int(slider.get('max') or 0)-int(slider.get('value') or 0))
@@ -268,93 +388,153 @@ class ChromeChatGPTBridge:
             await self.cdp.command('Input.dispatchKeyEvent',{'type':kind,'key':'Escape','code':'Escape','windowsVirtualKeyCode':27},session=session)
         await asyncio.sleep(.2)
 
-    async def ask_chatgpt(self, job, prompt_text, timeout_seconds=300):
-        async with self.job_lock:
-            record = self.journal.prepare(job, prompt_text)
-            if record['state'] == 'completed':
-                return record['response']
-            identifier = record['id']
-            marker = '[VideoStudio request '+identifier+']'
-            await self.connect()
-            if record['state'] == 'prepared':
-                target, session, state = await self.page_ready(job, marker)
-                wrapped = (marker+'\n'+prompt_text+'\nReturn exactly one JSON object with this envelope: '
-                           +json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
-                draft = state.get('draft','').strip()
-                if state.get('generating'):
-                    raise RuntimeError('Owned tab has active generation; no overwrite or send')
-                if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()) and self.stale_own_draft(draft):
-                    await self.clear_composer(session)
-                    draft = (await self.evaluate(session, snapshot_expression(marker)) or {}).get('draft','').strip()
-                if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()):
-                    raise RuntimeError('Owned tab has a different draft; no overwrite or send')
-                await self.ensure_high_effort(session)
-                if not draft:
-                    focused = await self.evaluate(session, composer_expression())
-                    if not focused:
-                        raise RuntimeError('Composer unavailable; no prompt sent')
-                    if isinstance(focused, dict) and 'x' in focused and 'y' in focused:
-                        for kind in ('mousePressed', 'mouseReleased'):
-                            await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':focused['x'], 'y':focused['y'], 'button':'left', 'clickCount':1}, session=session)
-                        await asyncio.sleep(0.1)
-                    await self.cdp.command('Input.insertText', {'text':wrapped}, session=session)
-                button = None
-                send_deadline = time.monotonic()+5
-                while time.monotonic() < send_deadline:
-                    button = await self.evaluate(session, send_button_expression())
-                    if button:
-                        break
-                    await asyncio.sleep(.2)
-                if not button:
-                    raise RuntimeError('Send button unavailable; draft preserved, no request sent')
-                # Durable write BEFORE mouse input. Any crash from here is recovery-only.
-                self.journal.claim_send(identifier)
-                final = await self.evaluate(session, snapshot_expression(marker))
-                draft_clean = ' '.join(final.get('draft','').replace('\u00a0',' ').split()) if final else ''
-                wrapped_clean = ' '.join(wrapped.replace('\u00a0',' ').split())
-                if not final or final.get('mode')!='chat' or final.get('login') or final.get('challenge') or final.get('generating') or not draft_clean or (draft_clean != wrapped_clean and marker not in draft_clean):
-                    raise IndeterminateRequest('Chat mode or draft changed at send boundary; no mouse dispatch, receipt retained')
+    async def ask_chatgpt(self, job, prompt_text, timeout_seconds=300, attachments=None):
+        # attachments: 1-4 pictures from the tool's own folders, put into the composer before the prompt is typed
+        files = valid_attachments(attachments)
+        lane = lane_of(job)
+        side = contextlib.nullcontext() if lane == 'video' else self.side_lanes
+        asked = time.monotonic()
+        if self.lock_for(lane).locked():
+            lane_log(f'[{lane}] {job}: waiting for the previous request of this lane')
+        async with self.lock_for(lane), side:
+            self.lane_used[lane] = time.time()
+            waited = time.monotonic() - asked
+            lane_log(f'[{lane}] {job}: started' + (f' after waiting {waited:.0f}s' if waited >= 1 else ''))
+            try:
+                answer = await self._ask_in_lane(job, prompt_text, timeout_seconds, files)
+                lane_log(f'[{lane}] {job}: answered in {time.monotonic() - asked:.0f}s')
+                return answer
+            except BaseException as error:
+                lane_log(f'[{lane}] {job}: {type(error).__name__}: {str(error)[:200]}')
+                raise
+            finally:
+                self.lane_used[lane] = time.time()
+
+    async def _send_prompt(self, job, identifier, marker, prompt_text, files):
+        """Type the prompt into this job's tab and press Send (under compose_lock: one tab at a time)."""
+        target, session, state = await self.page_ready(job, marker)
+        wrapped = (marker+'\n'+prompt_text+'\nReturn exactly one JSON object with this envelope: '
+                   +json.dumps({'request_id':identifier,'result':{'your_response':'replace with the requested JSON object'}},ensure_ascii=False))
+        draft = state.get('draft','').strip()
+        if state.get('generating'):
+            raise RuntimeError('Owned tab has active generation; no overwrite or send')
+        if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()) and self.stale_own_draft(draft):
+            await self.clear_composer(session)
+            draft = (await self.evaluate(session, snapshot_expression(marker)) or {}).get('draft','').strip()
+        if draft and ' '.join(draft.split()) != ' '.join(wrapped.split()):
+            raise RuntimeError('Owned tab has a different draft; no overwrite or send')
+        await self.ensure_high_effort(session)
+        if files and not draft:
+            await self.images._attach(session, files)
+        if not draft:
+            focused = await self.evaluate(session, composer_expression())
+            if not focused:
+                raise RuntimeError('Composer unavailable; no prompt sent')
+            if isinstance(focused, dict) and 'x' in focused and 'y' in focused:
                 for kind in ('mousePressed', 'mouseReleased'):
-                    await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
-                await self.evaluate(session, "(() => { const b = document.querySelector('button[aria-label=\"Send\"],button[data-testid=\"send-button\"],button[aria-label=\"Send prompt\"],button[aria-label=\"Send message\"]'); if(b && !b.disabled) b.click(); })()")
+                    await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':focused['x'], 'y':focused['y'], 'button':'left', 'clickCount':1}, session=session)
+                await asyncio.sleep(0.1)
+            # A whole chapter (~9,000 characters) can take longer than the usual 10 s on a busy page.
+            await self.cdp.command('Input.insertText', {'text':wrapped}, session=session, timeout=60)
+        button = None
+        send_deadline = time.monotonic()+5
+        while time.monotonic() < send_deadline:
+            button = await self.evaluate(session, send_button_expression())
+            if button:
+                break
+            await asyncio.sleep(.2)
+        if not button:
+            raise RuntimeError('Send button unavailable; draft preserved, no request sent')
+        # Durable write BEFORE mouse input. Any crash from here is recovery-only.
+        self.journal.claim_send(identifier)
+        final = await self.evaluate(session, snapshot_expression(marker))
+        draft_clean = ' '.join(final.get('draft','').replace('\u00a0',' ').split()) if final else ''
+        wrapped_clean = ' '.join(wrapped.replace('\u00a0',' ').split())
+        if not final or final.get('mode')!='chat' or final.get('login') or final.get('challenge') or final.get('generating') or not draft_clean or (draft_clean != wrapped_clean and marker not in draft_clean):
+            raise IndeterminateRequest('Chat mode or draft changed at send boundary; no mouse dispatch, receipt retained')
+        for kind in ('mousePressed', 'mouseReleased'):
+            await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
+        await self.evaluate(session, "(() => { const b = document.querySelector('button[aria-label=\"Send\"],button[data-testid=\"send-button\"],button[aria-label=\"Send prompt\"],button[aria-label=\"Send message\"]'); if(b && !b.disabled) b.click(); })()")
+        return target, session
+
+    async def _ask_in_lane(self, job, prompt_text, timeout_seconds, files):
+        record = self.journal.prepare(job, prompt_text)
+        if record['state'] == 'completed':
+            return record['response']
+        identifier = record['id']
+        marker = '[VideoStudio request '+identifier+']'
+        await self.connect()
+        if record['state'] == 'prepared':
+            waiting = time.monotonic()
+            try:
+                await asyncio.wait_for(self.compose_lock.acquire(), COMPOSE_WAIT)
+            except asyncio.TimeoutError:
+                raise RuntimeError(f'Another ChatGPT tab kept the composer turn over {COMPOSE_WAIT}s; nothing sent, ask again') from None
+            try:
+                if time.monotonic() - waiting >= 1:
+                    lane_log(f'[{lane_of(job)}] {job}: typing turn after {time.monotonic() - waiting:.0f}s')
+                target, session = await self._send_prompt(job, identifier, marker, prompt_text, files)
+                lane_log(f'[{lane_of(job)}] {job}: sent')
+            finally:
+                self.compose_lock.release()
+        else:
+            target = await self.ensure_tab(job)
+            session = await self.session(target)
+            await self.cdp.command('Target.activateTarget', {'targetId':target})
+        # Previously attempted request: only read its conversation, never send again.
+        deadline = time.monotonic()+timeout_seconds
+        previous = None
+        empty_since, reloaded = None, False
+        while time.monotonic() < deadline:
+            state = correlate_turns(await self.evaluate(session, snapshot_expression(marker)), marker)
+            # ChatGPT sometimes finishes a turn with NO answer at all. After 30 s of a finished, empty turn the page is
+            # reloaded once (the answer may just not have been drawn); still empty, a story chapter or a Facebook
+            # analysis is asked again in a new chat (harmless), while a video request is never resent automatically.
+            if state and state.get('matched') and not state.get('generating') and not (state.get('text') or '').strip():
+                empty_since = empty_since or time.monotonic()
+                if time.monotonic() - empty_since > EMPTY_WAIT:
+                    if not reloaded:
+                        lane_log(f'[{lane_of(job)}] {job}: the finished answer is empty; reloading the page once')
+                        await self.cdp.command('Page.reload', {}, session=session)
+                        reloaded, empty_since = True, None
+                        await asyncio.sleep(EMPTY_RELOAD_PAUSE)
+                        continue
+                    if lane_of(job) == 'video':
+                        raise IndeterminateRequest('ChatGPT finished with an empty answer; video requests are never resent automatically')
+                    self.journal.forget_empty(identifier, job)
+                    raise RuntimeError('ChatGPT finished with an empty answer; nothing to read, it will be asked again in a new chat')
             else:
-                target = await self.ensure_tab(job)
-                session = await self.session(target)
-                await self.cdp.command('Target.activateTarget', {'targetId':target})
-            # Previously attempted request: only read its conversation, never send again.
-            deadline = time.monotonic()+timeout_seconds
-            previous = None
-            while time.monotonic() < deadline:
-                state = correlate_turns(await self.evaluate(session, snapshot_expression(marker)), marker)
-                if state and (state.get('login') or state.get('challenge')):
-                    self.authenticated = False
-                    raise NeedsAuthentication('Authentication required; pending request retained, not resent')
-                if state and valid_chat_url(state.get('url','')):
-                    self.journal.set_conversation(job, state['url'], target)
-                text = (state or {}).get('text','')
-                if state and state.get('matched') and not state.get('generating') and text and text == previous:
+                empty_since = None
+            if state and (state.get('login') or state.get('challenge')):
+                self.authenticated = False
+                raise NeedsAuthentication('Authentication required; pending request retained, not resent')
+            if state and valid_chat_url(state.get('url','')):
+                self.journal.set_conversation(job, state['url'], target)
+            text = (state or {}).get('text','')
+            if state and state.get('matched') and not state.get('generating') and text and text == previous:
+                try:
+                    value = None
                     try:
-                        value = None
-                        try:
-                            value = parse_reply(text)
-                        except Exception:
-                            cleaned = text.strip()
-                            if cleaned.startswith('`json\n') and cleaned.endswith('\n`'): cleaned = cleaned[8:-4].strip()
-                            elif cleaned.startswith('`\n') and cleaned.endswith('\n`'): cleaned = cleaned[4:-4].strip()
-                            dec = json.JSONDecoder()
-                            raw_obj, _ = dec.raw_decode(cleaned)
-                            if isinstance(raw_obj, dict):
-                                value = raw_obj
-                        if value:
-                            self.journal.accept(identifier, value)
-                            return self.journal.get(identifier)['response']
-                    except (ValueError, json.JSONDecodeError):
-                        pass
-                if text != previous or (state and state.get('generating')):
-                    deadline = max(deadline, time.monotonic() + 90)
-                previous = text
-                await asyncio.sleep(1)
-            raise IndeterminateRequest('Matching completed response unavailable; receipt retained, no automatic resubmission')
+                        value = parse_reply(text)
+                    except Exception:
+                        cleaned = text.strip()
+                        if cleaned.startswith('`json\n') and cleaned.endswith('\n`'): cleaned = cleaned[8:-4].strip()
+                        elif cleaned.startswith('`\n') and cleaned.endswith('\n`'): cleaned = cleaned[4:-4].strip()
+                        dec = json.JSONDecoder()
+                        raw_obj, _ = dec.raw_decode(cleaned)
+                        if isinstance(raw_obj, dict):
+                            value = raw_obj
+                    if value:
+                        self.journal.accept(identifier, value)
+                        return self.journal.get(identifier)['response']
+                except (ValueError, json.JSONDecodeError):
+                    pass
+            if text != previous or (state and state.get('generating')):
+                deadline = max(deadline, time.monotonic() + 90)
+            previous = text
+            await asyncio.sleep(1)
+        raise IndeterminateRequest('Matching completed response unavailable; receipt retained, no automatic resubmission')
+
 
     async def close(self):
         await self.cdp.close()  # leave owned Chrome open; never close personal Chrome
@@ -612,6 +792,10 @@ async def create_app(bridge=None):
                     if not isinstance(body['timeout'], (int, float)) or not 60 <= body['timeout'] <= 900:raise web.HTTPBadRequest(text='timeout must be 60..900 seconds')
                     options['timeout'] = float(body['timeout'])
                 value = {'ok':True, 'data':await bridge.images.generate(body.get('task_id'),body.get('prompt'),**options)}
+            elif request.path == '/api/social/fetch-images':
+                value = {'ok':True, 'data':await bridge.social.fetch_images(body.get('task_id'), body.get('urls') or [])}
+            elif request.path == '/api/social/read':
+                value = {'ok':True, 'data':await bridge.social.read(body.get('task_id'), body.get('url'))}
             elif request.path == '/api/meta/images/generate':
                 value = {'ok':True, 'data':await bridge.meta_images.generate(body.get('task_id'),body.get('prompt'))}
             elif request.path == '/api/meta/images/batch':
@@ -662,7 +846,8 @@ async def create_app(bridge=None):
                 timeout = body.get('timeout_seconds', 300)
                 if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 30 <= timeout <= 1800:
                     raise web.HTTPBadRequest(text='timeout_seconds must be 30..1800')
-                value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt, timeout_seconds=float(timeout))}
+                options = {'attachments': body['attachments']} if body.get('attachments') is not None else {}
+                value = {'ok':True, 'data':await bridge.ask_chatgpt(job, prompt, timeout_seconds=float(timeout), **options)}
             bridge.last_error = None
             return web.json_response(value)
         except MetaQuotaExhausted as e:
@@ -691,7 +876,7 @@ async def create_app(bridge=None):
 
     app = web.Application(middlewares=[local_only], client_max_size=512*1024)
     app.router.add_get('/api/status',status)
-    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/gemini','/api/images/generate','/api/meta/images/generate','/api/meta/images/batch','/api/flow/characters/create','/api/flow/characters/reference','/api/flow/images/generate','/api/flow/images/generate-batch','/api/flow/account/reconcile'):
+    for route in ('/api/browser/start','/api/browser/probe','/api/chat','/api/social/read','/api/social/fetch-images','/api/gemini','/api/images/generate','/api/meta/images/generate','/api/meta/images/batch','/api/flow/characters/create','/api/flow/characters/reference','/api/flow/images/generate','/api/flow/images/generate-batch','/api/flow/account/reconcile'):
         app.router.add_post(route,mutate)
     app.on_cleanup.append(cleanup)
     return app

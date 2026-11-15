@@ -311,6 +311,7 @@ def build_units(snapshot):
     units = []
 
     rules = sorted((snapshot.get('settings') or {}).get('pronunciations') or [], key=lambda r: -len(r['from']))
+    retakes = [(r['text'], r['take']) for r in (snapshot.get('settings') or {}).get('retakes') or [] if r.get('text')]
     patterns = [(re.compile(r'(?<!\w)' + re.escape(r['from']) + r'(?!\w)', re.IGNORECASE), r['to']) for r in rules]
 
     def add(text, kind, chapter, pause):
@@ -322,7 +323,21 @@ def build_units(snapshot):
             unit = {'id': f'u{len(units):05d}', 'text': text, 'kind': kind, 'chapter': chapter, 'pause': pause}
             if spoken != text:
                 unit['spoken'] = spoken  # read aloud this way; subtitles keep the written text
+            flat = ' '.join(text.split())
+            take = max((n for sentence, n in retakes if sentence in flat), default=0)
+            if take:
+                unit['take'] = take  # "Đọc lại câu này": a fresh reading of the part holding that sentence
             units.append(unit)
+
+    settings = snapshot.get('settings') or {}
+
+    def greeting(template):
+        # {truyen} the book, {chuong} the episode ("Chương 3" or "Chương 3–5"), {kenh} left to the person's own words
+        values = {'truyen': (snapshot.get('book') or {}).get('title') or '', 'chuong': episode_title(snapshot).split(':')[0]}
+        return re.sub(r'\{(truyen|chuong)\}', lambda m: values[m.group(1)], template or '').strip()
+    intro, outro = greeting(settings.get('intro_text')), greeting(settings.get('outro_text'))
+    if intro:
+        add(intro, 'title', 0, PAUSE['title'])  # read with the narration voice, shown in the subtitles too
 
     for chapter_index, chapter in enumerate(snapshot['chapters']):
         if chapter['read_title']:
@@ -342,6 +357,9 @@ def build_units(snapshot):
                 add(group, 'text', chapter_index, PAUSE['paragraph'] if index == len(groups) - 1 else 0.0)
         if units:
             units[-1]['pause'] = max(units[-1]['pause'], PAUSE['end'] if chapter_index < len(snapshot['chapters']) - 1 else .6)
+    if outro and units:
+        units[-1]['pause'] = max(units[-1]['pause'], PAUSE['title'])
+        add(outro, 'title', len(snapshot['chapters']) - 1, .6)
     return units
 
 
@@ -381,6 +399,8 @@ def speech(pipeline, job, check):
     rhythm = request.get('speech_rhythm', 'natural')
     for unit in units:
         unit['identity'] = speech_identity(unit.get('spoken', unit['text']), voice, request, pipeline)
+        if unit.get('take'):
+            unit['identity'] = hashlib.sha256(f"{unit['identity']}:take{unit['take']}".encode()).hexdigest()
         unit['raw'] = str(folder / f'{unit["id"]}.raw.wav')
     # Reuse: this job's own receipts first, then the shared cache of earlier episodes (same text + voice + settings).
     missing = []
@@ -615,7 +635,23 @@ def images(pipeline, job, check):
         _write(plan_path, plan_data)
         if layout.get('continue_gameplay', True):
             library.advance_cursor(book_id, next_cursor['clip'], next_cursor['offset'], job['id'])
+        if snapshot.get('gameplay_fallback'):
+            _log(pipeline, job, 'images', 'Thư mục gameplay trên Drive đã hết clip mới: video này dùng lại clip đã dùng. Thêm video vào thư mục để có cảnh mới.')
+        elif getattr(pipeline, 'store', None):
+            # Clips from the Drive gameplay folder that this video plays to the end are used: moved into "Used".
+            try:
+                from .gameplay_drive import GameplayFolder
+                GameplayFolder(pipeline.store, library).after_plan(segments, snapshot['gameplay'], lambda m: _log(pipeline, job, 'images', m))
+            except Exception as error:  # bookkeeping only; the video goes on
+                _log(pipeline, job, 'images', f'Chưa ghi được clip gameplay đã dùng: {str(error)[:160]}')
     master = build_master(pipeline, job, plan_path, check)
+    try:
+        # The footage is now inside this video's master: used Drive-folder clips need no copy on this machine.
+        freed = library.drop_used_cache() if hasattr(library, 'drop_used_cache') else 0
+        if freed:
+            _log(pipeline, job, 'images', f'Đã xoá bản tải về của clip gameplay đã dùng trên máy ({freed / 2**30:.1f} GB); bản gốc vẫn ở Used trên Drive.')
+    except OSError as error:
+        _log(pipeline, job, 'images', f'Chưa xoá được bản tải về của clip đã dùng: {str(error)[:120]}')
     _log(pipeline, job, 'images', f'Gameplay: {len(plan_data["segments"])} đoạn, {int(seconds // 60)} phút {int(seconds % 60)} giây'
          + (f', lặp lại danh sách {plan_data["loops"]} lần.' if plan_data['loops'] else '.'))
     # The master is a rebuildable cache (from the frozen plan), so it is not an attested asset: it may be removed to

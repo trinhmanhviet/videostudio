@@ -189,48 +189,6 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(accepted.json()['job']['request']['flow_batch_size'],10)
                 self.assertEqual(client.post('/api/jobs',json={**REQUEST,'flow_batch_size':20},headers={'Idempotency-Key':'unapproved'}).status_code,422)
 
-    def test_job_form_advertises_disabled_unvalidated_batch_sizes_and_sends_integer(self):
-        html=(Path(__file__).resolve().parents[1]/'static'/'index.html').read_text(encoding='utf8')
-        self.assertIn('<select id="flowBatchSize"',html)
-        for size in (3,5,10):
-            self.assertIn(f'<option value="{size}" disabled>',html)
-        self.assertIn("flow_batch_size:Number($('#flowBatchSize').value)",html)
-        self.assertIn('health.flow_batch_sizes',html)
-        self.assertIn("if(!flow)select.value='1'",html)
-        self.assertIn("availableFlowBatchSizes=[1]",html)
-        self.assertIn('updateFlowBatchChoices();',html)
-
-    def test_batch_selector_behavior_with_mocked_health(self):
-        if not shutil.which('node'):self.skipTest('Node unavailable')
-        html=Path(__file__).resolve().parents[1]/'static'/'index.html'
-        script=r'''
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const html=fs.readFileSync(process.argv[1],'utf8'),start=html.indexOf('let availableFlowBatchSizes=[1];'),stop=html.indexOf('refreshFlowBatchChoices();',start)+'refreshFlowBatchChoices();'.length;
-assert(start>0 && stop>start);
-const workflow={value:'research'},provider={value:'flow'},selector={value:'1',disabled:false,options:[1,3,5,10].map(n=>({value:String(n),disabled:n!==1,textContent:''}))},note={textContent:''},providerNote={textContent:''};
-let response={flow_batch_sizes:[1]},fail=false;
-const context=vm.createContext({$:id=>({'#workflowMode':workflow,'#imageProvider':provider,'#flowBatchSize':selector,'#flowBatchNote':note,'#imageProviderNote':providerNote}[id]),api:async()=>{if(fail)throw Error('offline');return response},console});
-vm.runInContext(html.slice(start,stop),context);
-(async()=>{
- response={flow_batch_sizes:[1,10]};await vm.runInContext('refreshFlowBatchChoices()',context);
- assert.deepEqual(selector.options.map(o=>o.disabled),[false,true,true,false]);
- vm.runInContext('flowBatchChoiceInitialized=false',context);await vm.runInContext('refreshFlowBatchChoices()',context);
- assert.equal(selector.value,'1');  // sequential by default: the retry and ComfyUI fallback work scene by scene
- selector.value='10';selector.onchange();await vm.runInContext('refreshFlowBatchChoices()',context);assert.equal(selector.value,'10');
- selector.value='1';selector.onchange();await vm.runInContext('refreshFlowBatchChoices()',context);assert.equal(selector.value,'1');
- workflow.value='meme';selector.value='10';vm.runInContext('updateFlowBatchChoices()',context);
- assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
- workflow.value='research';vm.runInContext('updateFlowBatchChoices()',context);assert.equal(selector.disabled,false);
- selector.value='10';provider.value='chatgpt';vm.runInContext('updateFlowBatchChoices()',context);
- assert.equal(selector.value,'1');assert.equal(selector.disabled,true);
- provider.value='flow';fail=true;await vm.runInContext('refreshFlowBatchChoices()',context);
- assert.deepEqual(selector.options.map(o=>o.disabled),[false,true,true,true]);
- assert.equal(Number(selector.value),1);assert.equal(Number.isInteger(Number(selector.value)),true);
-})().catch(e=>{console.error(e);process.exitCode=1});
-'''
-        result=subprocess.run(['node','-e',script,str(html)],capture_output=True,text=True,timeout=10)
-        self.assertEqual(result.returncode,0,result.stderr)
-
     def test_api_local_no_generation(self):
         from fastapi.testclient import TestClient
         from videostudio.api import create_app
@@ -322,15 +280,3 @@ vm.runInContext(html.slice(start,stop),context);
         self.assertIn('35-year-old Vietnamese man', portrait_prompt)
         self.assertIn('Authentic ethnic facial structure', portrait_prompt)
         self.assertIn('neutral identity-reference portrait', portrait_prompt)
-
-    def test_reset_images_ui_elements_in_html(self):
-        html = (Path(__file__).resolve().parents[1] / 'static' / 'index.html').read_text(encoding='utf-8')
-        self.assertIn('id="resetImagesModal"', html)
-        self.assertIn('id="resetImageProvider"', html)
-        self.assertIn('id="resetFlowBatchSize"', html)
-        self.assertIn('openResetImagesModal', html)
-        self.assertIn('appendJobActionButtons', html)
-        self.assertIn('job-reset-images', html)
-        self.assertIn('heroResetImagesBtn', html)
-
-if __name__=='__main__':unittest.main()

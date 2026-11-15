@@ -23,20 +23,6 @@ test('admitted but queued jobs are waiting, not reported as running',()=>{
   assert.equal(result.active.length,1);assert.equal(result.waiting.length,1);
 });
 
-test('video details isolate one job while legacy project links retain their jobs',()=>{
-  const html=fs.readFileSync(new URL('../static/index.html',import.meta.url),'utf8');
-  const definition=html.match(/function renderProjectJobs\(\)[\s\S]*?(?=\nasync function loadJobs)/)[0];
-  const jobs=[{id:'one',project:'shared',created:1},{id:'two',project:'shared',created:2},{id:'other',project:'elsewhere'}];
-  for(const [selected,expected] of [['one',['one']],[null,['two','one']],['missing',[]],['other',[]]]){
-    let visible;
-    const root={children:[],querySelector:()=>null,prepend:()=>{},replaceChildren:()=>{}};
-    const context=vm.createContext({$:()=>root,allJobs:jobs,activeProject:'shared',activeVideoJobId:selected,
-      updateHeroCompletedVideo:items=>{visible=items.map(item=>item.id);},renderJobCard:job=>({id:'job-'+job.id,after:()=>{}}),text:()=>({})});
-    vm.runInContext(definition,context);context.renderProjectJobs();
-    assert.deepEqual(visible,expected);
-  }
-});
-
 test('TXT import preserves multiline scripts separated by a blank line', () => {
   assert.equal(typeof ui.parseImport, 'function');
   assert.deepEqual(plain(ui.parseImport('\uFEFFLời đầu\r\nLời tiếp\r\n\r\nVideo hai', 'stories.txt')), [{text:'Lời đầu\nLời tiếp'}, {text:'Video hai'}]);
@@ -110,18 +96,13 @@ test('scheduling requires and pins the selected approved version', () => {
 test('approved shell is progressive and retains the canonical application scripts', () => {
   const html=fs.readFileSync(new URL('../static/index.html',import.meta.url),'utf8');
   assert.match(html,/studio-shell\.css/);assert.match(html,/content-studio\.js/);
-  for(const id of ['galleryContainer','projectInput','create','viewWorkspace','projectJobsList','voice','textProvider','imageProvider'])assert.ok(html.includes('id="'+id+'"'),id);
-  assert.match(html,/scene-editor\.js/);assert.match(html,/function archiveProject\(/);assert.match(html,/function openOptionalWorkspace\(/);
+  // the connection card that Cài đặt shows, and the helpers the studio shares with the classic script
+  for(const id of ['studioConnection','checks','connectorStatus','browserStart','browserProbe','globalRefresh'])assert.ok(html.includes('id="'+id+'"'),id);
+  assert.match(html,/function openOptionalWorkspace\(/);assert.match(html,/function socialPanel\(/);
+  // the old project pane, its job list and the old scene editor are gone
+  for(const id of ['paneProjects','galleryContainer','viewWorkspace','projectJobsList','create'])assert.ok(!html.includes('id="'+id+'"'),id);
+  assert.doesNotMatch(html,/scene-editor\.js/);assert.doesNotMatch(html,/\/api\/jobs'\)/);
 });
-test('preflight refresh cannot re-enable create while a factory submission is pending',()=>{
-  const html=fs.readFileSync(new URL('../static/index.html',import.meta.url),'utf8');
-  const nodes={'#submit':{disabled:false},'#voice':{value:'voice'},'#create':{dataset:{submitting:'true'}}};
-  const context=vm.createContext({$:id=>nodes[id],ready:true,submitting:false});
-  vm.runInContext(html.match(/function enable\(\)\{[^\n]+\}/)[0],context);
-  context.enable();assert.equal(nodes['#submit'].disabled,true);
-  delete nodes['#create'].dataset.submitting;context.enable();assert.equal(nodes['#submit'].disabled,false);
-});
-
 test('navigation during a pending refresh eventually loads the newly selected page', async()=>{
   let release;
   const barrier=new Promise(resolve=>release=resolve), calls=[];

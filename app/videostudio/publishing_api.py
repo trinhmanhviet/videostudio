@@ -8,6 +8,19 @@ from .publishing import Publishing, PublishBlocked, PublishUncertain
 def register_publishing_routes(app, store, versions, same_origin, local_request):
     service = Publishing(store, versions)
     app.state.publishing = service
+    from .publishing_plans import PostingPlans
+    plans = PostingPlans(store, service, versions)
+    service.plans = plans
+    publish_tick = service.tick
+
+    def tick():  # the publishing loop also runs the posting plans (every few minutes)
+        try:
+            plans.tick()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Posting plans will retry')
+        return publish_tick()
+    service.tick = tick
 
     def call(function, *args):
         try:
@@ -74,6 +87,10 @@ def register_publishing_routes(app, store, versions, same_origin, local_request)
             raise HTTPException(422, 'Chưa kết nối Facebook Page')
         return call(service.facebook_reels, channel_id, refresh)
 
+    @app.get('/api/publishing/youtube/videos')
+    def youtube_videos(channel_id: str, refresh: bool = False):
+        return call(service.youtube_videos, channel_id, refresh)
+
     @app.post('/api/publishing/facebook-check')
     def facebook_check(data: dict):
         from .facebook_safety import check
@@ -110,5 +127,38 @@ def register_publishing_routes(app, store, versions, same_origin, local_request)
     def reconcile_schedule(identifier: str, request: Request):
         local_request(request); same_origin(request)
         return call(service.reconcile, identifier)
+
+    # --- Đăng tự động -----------------------------------------------------------------------------------
+    def plan_call(function, *args):
+        try:
+            return function(*args)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy kế hoạch đăng')
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+
+    @app.get('/api/publishing/plans')
+    def list_plans():
+        return {**plans.items(), 'projects': plans.projects()}
+
+    @app.post('/api/publishing/plans')
+    def create_plan(data: dict, request: Request):
+        same_origin(request)
+        return plan_call(plans.save, data)
+
+    @app.put('/api/publishing/plans/{plan_id}')
+    def update_plan(plan_id: str, data: dict, request: Request):
+        same_origin(request)
+        return plan_call(plans.save, data, plan_id)
+
+    @app.delete('/api/publishing/plans/{plan_id}')
+    def delete_plan(plan_id: str, request: Request):
+        same_origin(request)
+        return plan_call(plans.delete, plan_id)
+
+    @app.post('/api/publishing/plans/run')
+    def run_plans(request: Request):
+        same_origin(request)
+        return {'scheduled': plans.tick(force=True), **plans.items()}
 
     return service

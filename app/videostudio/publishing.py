@@ -245,6 +245,65 @@ class Publishing:
         self._reels_cache[channel_id] = result
         return result
 
+    def youtube_videos(self, channel_id, refresh=False, limit=30):
+        """Latest uploads of a connected YouTube channel with views, likes, comments and visibility (youtube.readonly)."""
+        channel = self.channel(channel_id)
+        if channel['platform'] != 'youtube':
+            raise ValueError('Chọn một kênh YouTube')
+        cached = self._reels_cache.get(channel_id)
+        if cached and not refresh and self.clock() - cached['checked_at'] < 600:
+            return cached
+        headers = self._yt_headers(channel)
+        api = 'https://www.googleapis.com/youtube/v3/'
+        info = (self._request('GET', api + 'channels', params={'part': 'contentDetails,statistics,snippet', 'mine': 'true'},
+                              headers=headers).json().get('items') or [{}])[0]
+        uploads = ((info.get('contentDetails') or {}).get('relatedPlaylists') or {}).get('uploads')
+        ids = []
+        if uploads:
+            listing = self._request('GET', api + 'playlistItems', params={'part': 'contentDetails', 'playlistId': uploads, 'maxResults': limit},
+                                    headers=headers).json()
+            ids = [i['contentDetails']['videoId'] for i in listing.get('items', []) if (i.get('contentDetails') or {}).get('videoId')]
+        videos = self._request('GET', api + 'videos', params={'part': 'snippet,statistics,status,contentDetails', 'id': ','.join(ids)},
+                               headers=headers).json().get('items', []) if ids else []
+        with self.store.db() as db:
+            ours = {r['remote_id']: dict(r) for r in db.execute(
+                "SELECT remote_id,job_id,title,state FROM publishing_schedules WHERE platform='youtube' AND remote_id IS NOT NULL")}
+
+        def seconds(value):
+            match = re.fullmatch(r'P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', value or '')
+            if not match:
+                return None
+            d, h, m, s = (int(x or 0) for x in match.groups())
+            return d * 86400 + h * 3600 + m * 60 + s
+        items = []
+        for video in videos:
+            stats, snippet, status = video.get('statistics') or {}, video.get('snippet') or {}, video.get('status') or {}
+            number = lambda key: int(stats[key]) if str(stats.get(key, '')).isdigit() else None
+            thumbs = snippet.get('thumbnails') or {}
+            items.append({'id': video['id'], 'title': snippet.get('title') or '', 'created': snippet.get('publishedAt'),
+                          'length': seconds((video.get('contentDetails') or {}).get('duration')),
+                          'url': 'https://www.youtube.com/watch?v=' + video['id'], 'picture': (thumbs.get('medium') or thumbs.get('default') or {}).get('url'),
+                          'views': number('viewCount'), 'likes': number('likeCount'), 'comments': number('commentCount'),
+                          'privacy': status.get('privacyStatus'), 'publish_at': status.get('publishAt'), 'tool': ours.get(video['id'])})
+        settled = sorted(i['views'] for i in items if isinstance(i['views'], int) and i['privacy'] == 'public')
+        median = settled[len(settled) // 2] if len(settled) >= 4 else None
+        now = datetime.now(timezone.utc)
+        for item in items:
+            try:
+                old = (now - datetime.fromisoformat(item['created'].replace('Z', '+00:00'))).total_seconds() > 86400
+            except (AttributeError, ValueError):
+                old = False
+            item['low'] = bool(median and old and item['privacy'] == 'public' and isinstance(item['views'], int) and item['views'] < 0.4 * median)
+        stats = info.get('statistics') or {}
+        result = {'channel_id': channel_id, 'platform': 'youtube',
+                  'page': {'name': (info.get('snippet') or {}).get('title') or channel['name'],
+                           'followers': int(stats['subscriberCount']) if str(stats.get('subscriberCount', '')).isdigit() else None,
+                           'views': int(stats['viewCount']) if str(stats.get('viewCount', '')).isdigit() else None,
+                           'videos': int(stats['videoCount']) if str(stats.get('videoCount', '')).isdigit() else None},
+                  'items': items, 'median_views': median, 'checked_at': self.clock()}
+        self._reels_cache[channel_id] = result
+        return result
+
     def remove_channel(self, identifier):
         """Forget a connected channel in this tool (nothing is deleted on YouTube/Facebook)."""
         with self.store.db() as db:

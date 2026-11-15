@@ -70,7 +70,6 @@ test('first timeout reconciles its receipt without a second click and suppresses
     }
     return {items:[],total:0,total_pages:1};
   });
-  const refreshed=[];app.sandbox.loadProjects=()=>{refreshed.push('projects');throw Error('Refresh unavailable');};app.sandbox.loadJobs=async()=>refreshed.push('jobs');
   const card=app.api.videoCard({job_id:'job 1',title:'Video test',versions:[]});
   app.find(card,'Đã đăng & dọn').onclick();
   const form=app.nodes.find(node=>node.tagName==='FORM'),submit=app.all(form).find(node=>node.type==='submit');
@@ -85,7 +84,7 @@ test('first timeout reconciles its receipt without a second click and suppresses
   assert.equal(requests[0].options.headers['Idempotency-Key'],requests[1].options.headers['Idempotency-Key']);
   assert.deepEqual(JSON.parse(requests[0].options.body),{confirm:true});assert.equal(app.saved.size,0);
   assert.ok(app.nodes.find(node=>node.className==='studio-dialog').removed);
-  assert.deepEqual(refreshed,['projects','jobs']);assert.ok(app.calls.some(call=>call.path==='/api/factory/queue'));
+assert.ok(app.calls.some(call=>call.path==='/api/factory/queue'));
 });
 
 test('dropped first request checks status then retries the exact frozen body automatically',async()=>{

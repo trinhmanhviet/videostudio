@@ -377,7 +377,8 @@
     }
     function refresh(rebuildEditor = true) {
       if(destroyed)return;
-      const firstVoice=voiceList()[0]?.[0];
+      // Default voice when none is chosen yet: Trúc Ly (owner request 2026-11-16), else the first in the list.
+      const firstVoice=(voiceList().find(([id])=>id==='Trúc Ly')||voiceList()[0])?.[0];
       // Catalog loading must populate genuinely empty choices, while retaining saved voice IDs.
       if(firstVoice) {
         if(!common.voice)common.voice=firstVoice;

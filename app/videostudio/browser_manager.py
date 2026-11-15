@@ -34,6 +34,11 @@ class BrowserManager:
                 else:raise RuntimeError('Chrome chưa sẵn sàng. Kiểm tra cửa sổ Chrome riêng rồi thử lại; không mở thêm bản trùng.')
             result=self._summary(current)
         return {**result,'busy':False}
+    def restart(self):
+        """Close the dedicated Chrome and open it again in debug mode (the tool's mode); the profile and its
+        sign-ins are kept. Refused while a video or image job is running, like stop/open."""
+        self.stop()
+        return self.open('debug')
     def stop(self):
         with self.lock:
             self._idle();current=self._current()
@@ -47,7 +52,7 @@ if __name__=='__main__':
     from .chrome_browser import ROOT
     sys.stdout.reconfigure(encoding='utf8');sys.stderr.reconfigure(encoding='utf8')
     parser=argparse.ArgumentParser(description='Open/close the fixed VideoStudio Chrome profile without starting the server.')
-    parser.add_argument('mode',choices=['clean','debug','stop']);args=parser.parse_args()
+    parser.add_argument('mode',choices=['clean','debug','stop','restart']);args=parser.parse_args()
     def active_jobs():
         database=Path(os.getenv('VS_DATABASE',str(DATA_ROOT/'jobs.sqlite3')))
         if not database.exists():return 0
@@ -58,7 +63,7 @@ if __name__=='__main__':
             return count
     try:
         manager=BrowserManager(active_jobs=active_jobs)
-        result=manager.stop() if args.mode=='stop' else manager.open(args.mode)
+        result=manager.stop() if args.mode=='stop' else manager.restart() if args.mode=='restart' else manager.open(args.mode)
         print(json.dumps(result,ensure_ascii=True))
     except Exception as error:
         print(str(error));raise SystemExit(1)

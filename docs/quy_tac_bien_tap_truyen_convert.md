@@ -308,8 +308,8 @@ Các điểm dưới đây đã kiểm chứng trên bộ chuẩn hóa chữ c�
 13. Đọc thầm thành tiếng vài đoạn thoại dồn dập: người nghe biết ai đang nói.
 14. Câu chữ ghi log nghi vấn đã đánh dấu trong hồ sơ.
 
----`, `□□□`, `###`...). Các bộ đọc TTS (VieNeu, Edge TTS, Kokoro...) sẽ đọc to thành "ngôi sao ngôi sao", "hoa thị", "hình vuông" hoặc làm khựng âm thanh.
-  - Chuyển toàn bộ các điểm chuyển cảnh này thành **1 dòng trống ngắt đoạn (blank line)** để công cụ đọc tự tạo khoảng lặng nghỉ (pause) tự nhiên giữa 2 phân cảnh.
+Ngoài ra:
+
 - Không Markdown, không ký hiệu trang trí, không dòng nguồn, không URL, không lời bình AI.
 - Dữ liệu tra cứu (thuật ngữ, nhân vật, log) lưu file riêng.
 

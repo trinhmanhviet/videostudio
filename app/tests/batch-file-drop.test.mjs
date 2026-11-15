@@ -114,6 +114,7 @@ test('batch payload uses each row image provider and clears irrelevant batch set
   const row={title:'Test',text:'Kịch bản',voice:'voice',style:'case',input:'script',image_provider:'comfy'};
   let payload=payloadContext.batchPayload(row).defaults;
   assert.equal(payload.image_provider,'comfy');assert.equal(payload.flow_batch_size,1);
+  assert.equal(payload.music_volume,0.35);  // background music stays on by default
   row.image_provider='meta';payload=payloadContext.batchPayload(row).defaults;
   assert.equal(payload.image_provider,'meta');assert.equal(payload.meta_batch_size,8);assert.equal(payload.flow_batch_size,1);
   row.image_provider='chatgpt';assert.equal(payloadContext.batchPayload(row).defaults.image_provider,'chatgpt');
@@ -151,7 +152,7 @@ test('new and remembered rows preserve speech batches through cloning and JSON f
   const source=fs.readFileSync(new URL('../static/content-studio.js',import.meta.url),'utf8');
   const saved=new Map();let seq=0;
   const sandbox=vm.createContext({state:{batchRows:[]},global:{crypto:{randomUUID:()=>String(++seq)}},
-    localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},$:()=>null,voiceOptions:()=>[['v','Voice']],
+    localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},$:()=>null,voiceOptions:()=>[['v','Voice']],defaultVoice:()=>'',
     parseImport:context.ContentStudio.parseImport,renderBatchRows:()=>{},toast:()=>{}});
   vm.runInContext(source.match(/function rememberedRow\(\)[\s\S]*?(?=\n  function touchRow)/)[0],sandbox);
   let row=sandbox.newBatchRow();assert.equal(row.speech_batch_size,256);
@@ -162,16 +163,3 @@ test('new and remembered rows preserve speech batches through cloning and JSON f
   assert.equal(sandbox.state.batchRows[0].speech_batch_size,17);
 });
 
-test('single video submission sends the chosen speech batch in request defaults',async()=>{
-  const source=fs.readFileSync(new URL('../static/content-studio.js',import.meta.url),'utf8');
-  const values={'#idea':'Narration','#voice':'v','#duration':'60','#unit':'1','#studioSpeechBatchSize':'33','#projectInput':'Project','#studioStyle':'meme','#textProvider':'chatgpt','#imageProvider':'comfy','#flowBatchSize':'1','#musicVolume':'0','#createPitch':'0'};
-  const nodes=Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{value}]));nodes['#submitError']={};nodes['#submit']={};
-  const calls=[],form={dataset:{inputMode:'script'}};
-  const sandbox=vm.createContext({form,state:{batch:false},$:id=>nodes[id],normalizeItem:value=>value,
-    factoryScope:async()=>null,pendingRequest:(storage,payload)=>({key:'key',identity:JSON.stringify(payload)}),sessionStorage:{removeItem:()=>{}},PENDING_KEY:'key',
-    request:async(path,opts)=>calls.push({path,opts}),renderBatchItems:()=>{},closeDrawer:()=>{},navigate:()=>{},toast:()=>{},global:{}});
-  vm.runInContext(source.match(/form.onsubmit=async event=>\{[\s\S]*?(?=\n    document.addEventListener)/)[0],sandbox);
-  await form.onsubmit({preventDefault(){}});
-  assert.equal(calls.length,1);assert.equal(JSON.parse(calls[0].opts.body).defaults.speech_batch_size,33);
-  nodes['#studioSpeechBatchSize'].value='513';await form.onsubmit({preventDefault(){}});assert.equal(calls.length,1);assert.match(nodes['#submitError'].textContent,/512/);
-});

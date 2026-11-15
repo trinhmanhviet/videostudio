@@ -621,7 +621,8 @@ class Pipeline:
                     stats=c.get('system_stats');stats.raise_for_status()
                 check()
                 devices=stats.json().get('devices',[])
-                return {'freed':True,'recovered':recovered,'vram_free':min((d.get('vram_free',0) for d in devices),default=0)}
+                from .gpu import device_free
+                return {'freed':True,'recovered':recovered,'vram_free':device_free(devices)}
             if receipt.exists():
                 saved=json.loads(receipt.read_text());pid=saved.get('prompt_id')
                 if not pid:raise PermanentError('Indeterminate Comfy submission; refusing duplicate GPU work')
@@ -766,7 +767,7 @@ class Pipeline:
             prompt_text=(('Use ChatGPT High reasoning and available web search to research the factual topic. ' if transport=='cdp' else 'Develop a cautious, explicitly unverified background summary from existing model knowledge; live Web Search is not attested through this transport. ')+'Give useful information directly, not just links. '
                          'Do not make independent URL access a prerequisite; URLs may be optional citations. Do not invent facts or present uncertain claims as certain. '
                          'Return JSON {"title":str,"research_context":{"summary":str,"facts":[{"claim":str,"explanation":str,"caveat":str,"source_urls":[str]}],"uncertainties":[str]},"research_query":str,"visual_prompt":str,"music_prompt":str}. '
-                         'Music must be instrumental. content_style=news: concise factual reporting, distinguish confirmed facts from uncertainty in the research notes. '
+                         'Music must be instrumental. content_style=news: fast, dramatic reporting with conflict and stakes; note once which claims are rumours, never repeat disclaimers. '
                          'content_style=case: documentary chronology with evidence, distinguish allegations from findings in the research notes, never invent clues or guilt. '
                          'Apply the requested style to narration, pacing and visual plan. Video request: '+json.dumps(j['request'],ensure_ascii=False))
             d=self.llm_json(prompt_text,check)
@@ -1056,6 +1057,10 @@ class Pipeline:
                      '1. NO GREETINGS OR ANNOUNCEMENTS: Never start with "Xin chào", "Hôm nay chúng ta sẽ tìm hiểu", "Chào mừng", or "Bạn có biết".\n'
                      '2. NO META-NARRATION OR ARTIFICIAL DISCLAIMERS: Never say "sau đây là", "như hình ảnh hiển thị", "hình ảnh mang tính tái hiện", "hãy theo chân một nhân vật/dòng họ tưởng tượng", or "tóm lại là". Immerse the viewer directly into the living reality of the story.\n'
                      '3. NO RHETORICAL TRANSITION CLICHÉS: Never use "vậy điều này có ý nghĩa gì?", "tại sao lại như vậy?". Use strong declarative statements or causal connectors ("Nhưng", "Chính vì vậy").\n'
+                     '4b. NO REPEATED HEDGING (owner request 2026-11-16): never keep reminding the viewer that something is unproven '
+                     '("chưa có bằng chứng", "cần chứng cứ riêng", "không đồng nghĩa", "chưa đủ căn cứ", "không thể xác nhận", "vẫn thiếu bằng chứng", "những tài liệu chính thức không xác lập"). '
+                     'Attribute an unconfirmed claim ONCE to whoever makes it ("theo bài đăng đang lan truyền", "giới quan sát đồn rằng") and keep the story moving; '
+                     'at most ONE short sentence in the whole script may say the claims are unconfirmed. Tell news with drama: conflict, stakes, reversals, fast pace.\n'
                      '4. NO ENCYCLOPEDIC LISTING OR AI TELL-WORDS: Never use "bức tranh toàn cảnh", "khám phá sâu hơn", "minh chứng sống động", "không thể phủ nhận". Avoid dry listing.\n'
                      '5. 5-STAGE RETENTION ARCHITECTURE:\n'
                      '   - STAGE 1 (HOOK, 0-5s): Start with a powerful Hook (Curiosity Gap, Challenging Common Intuition, High-Stakes Dilemma, or Unbelievable Juxtaposition). Include a concrete metric, date, or tangible object.\n'
@@ -1073,6 +1078,9 @@ class Pipeline:
                      +json.dumps({'request':j['request'],'plan':j['checkpoints']['plan'],'research':j['checkpoints']['research'],'repair_feedback':feedback},ensure_ascii=False))
         d=self.llm_json(prompt_text,check)
         allowed={s['path'] for s in j['checkpoints']['research']['sources']}
+        # ChatGPT research ('chatgpt_unverified') keeps no source documents here: links the model lists (e.g. from a
+        # Facebook post's idea) cannot be checked against anything, so they are dropped instead of failing the script.
+        if not allowed and isinstance(d,dict) and d.get('source_paths'):d['source_paths']=[]
         if not isinstance(d.get('narration'),str) or not d['narration'].strip() or (allowed and not d.get('source_paths')) or not set(d.get('source_paths',[]))<=allowed:raise ValueError('Unattributed or empty script')
         scenes=d.get('scenes')
         if not isinstance(scenes,list) or not scenes or len(scenes)>max_scenes:raise ValueError(f'Timed utterance storyboard required (1-{max_scenes} scenes)')
@@ -2183,6 +2191,7 @@ class Pipeline:
     def _images(self,j,check):
         from .visual_quality import gate_mode
         provider=j.get('request',{}).get('image_provider','comfy')
+        if provider=='pool':return self._pool_images(j,check)
         if provider not in ('flow','chatgpt','comfy','meta'):raise PermanentError('Unknown initial image provider')
         batch_size=j.get('request',{}).get('flow_batch_size',1)
         if type(batch_size) is not int or batch_size not in (1,3,5,10):
@@ -2271,6 +2280,45 @@ class Pipeline:
         # A short natural tail hold belongs to the final scene, not stretched speech.
         scenes[-1]['duration']+=timeline_duration(j)-j['checkpoints']['speech']['duration_seconds']
         return {'scenes':scenes,'assets':assets,'image_provider':provider,'character_references':list(references.values()),'reference_mode':reference_mode,'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
+    def _pool_images(self,j,check):
+        """Real pictures found for the video's source (image_pool.py). With fewer than MIN_POOL usable pictures the
+        scenes are drawn by ComfyUI instead, so the video still gets every scene."""
+        from .image_pool import load_pool,compose,match,MIN_POOL
+        log=(lambda m:self.store.log(j['id'],'images',m)) if getattr(self,'store',None) else (lambda m:None)
+        try:pictures=load_pool(j['request'].get('image_pool'))
+        except (ValueError,OSError):pictures=[]
+        if len(pictures)<MIN_POOL:
+            log(f'Chỉ có {len(pictures)} ảnh thật dùng được; vẽ các cảnh bằng ComfyUI để video vẫn đủ cảnh.')
+            return self._images({**j,'request':{**j['request'],'image_provider':'comfy','flow_batch_size':1}},check)
+        speech_cp=j['checkpoints']['speech'];scenes_items=speech_cp.get('scenes') or speech_cp['utterances']
+        folder=Path(j['output']);plan_path=folder/'image-pool-match.json'
+        plan=json.loads(plan_path.read_text(encoding='utf8')) if plan_path.is_file() else {}
+        # The pool may have grown since (pictures fetched later): a different set of pictures is matched again.
+        pictures_key=[p['file'] for p in pictures]
+        if plan.get('pool')!=j['request']['image_pool'] or plan.get('pictures')!=pictures_key or len(plan.get('chon',[]))!=len(scenes_items) or any(c>=len(pictures) for c in plan['chon']):
+            check();log(f'Đang chọn ảnh thật cho {len(scenes_items)} cảnh từ {len(pictures)} ảnh tìm được…')
+            from .story_editor import ask_chatgpt
+            chosen,by=match(scenes_items,pictures,lambda prompt:ask_chatgpt(j['id']+'-pool-match',prompt,attempts=2))
+            plan={'pool':j['request']['image_pool'],'pictures':pictures_key,'chon':chosen,'by':by}
+            temporary=plan_path.with_suffix('.part');temporary.write_text(json.dumps(plan),encoding='utf8');temporary.replace(plan_path)
+        scenes=[];assets=[]
+        for i,u in enumerate(scenes_items):
+            check()
+            picture=pictures[plan['chon'][i]]
+            kind=f'images-{i:04}';path=folder/(kind+'.png');checkpoint=path.with_suffix('.checkpoint.json')
+            saved=json.loads(checkpoint.read_text(encoding='utf8')) if checkpoint.is_file() else {}
+            source_sha=digest(Path(picture['path']))
+            if not (path.is_file() and saved.get('provider')=='pool' and saved.get('sha256')==digest(path) and saved.get('source_sha256')==source_sha):
+                compose(picture['path'],path)
+                saved={'sha256':digest(path),'prompt':u['visual_prompt'],'provider':'pool','source':picture['file'],'source_sha256':source_sha,
+                       'nguon':picture.get('nguon'),'mo_ta':picture.get('mo_ta'),'task_id':kind,'width':1920,'height':1080}
+                temporary=checkpoint.with_suffix('.part.json');temporary.write_text(json.dumps(saved,ensure_ascii=False),encoding='utf8');temporary.replace(checkpoint)
+            scenes.append({'path':str(path),'duration':u['duration'],'character_mentions':[]});assets.append(asset(path))
+        scenes[-1]['duration']+=timeline_duration(j)-speech_cp['duration_seconds']
+        sources=list(dict.fromkeys(p.get('nguon') for p in pictures if p.get('nguon')))
+        log(f'Đã đặt ảnh thật cho {len(scenes)} cảnh ({"ChatGPT chọn" if plan.get("by")=="chatgpt" else "xoay vòng"}); thay ảnh nào chưa ổn trong trang video.')
+        return {'scenes':scenes,'assets':assets,'image_provider':'pool','image_sources':sources[:30],'reference_mode':'not_applicable',
+                'visual_qa_status':'not_checked','visual_qa_scope':'technical_only','visual_qa_required':False}
     def subtitles(self,j,check):
         if j.get('request',{}).get('workflow_mode')=='story_narration':from . import story_pipeline;return story_pipeline.subtitles(self,j,check)
         from .captions import write_captions

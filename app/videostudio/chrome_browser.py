@@ -26,7 +26,11 @@ class BrowserConfig:
         if profile == personal or personal in profile.parents:
             raise ValueError('Refusing personal Chrome profile; choose a separate directory')
         args=[str(self.executable),'--user-data-dir='+str(profile),'--no-first-run','--no-default-browser-check']
-        if mode=='debug':args+=['--remote-debugging-address=127.0.0.1',f'--remote-debugging-port={self.debug_port}']
+        if mode=='debug':
+            args+=['--remote-debugging-address=127.0.0.1',f'--remote-debugging-port={self.debug_port}']
+            # Several ChatGPT tabs work at once and most of them sit behind another tab or a minimised window:
+            # Chrome must not slow down or freeze them (takes effect the next time the dedicated Chrome starts).
+            args+=['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']
         return args+['https://accounts.google.com/AddSession' if mode=='clean' else 'https://flow.google.com/']
 
 

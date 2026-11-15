@@ -29,7 +29,7 @@ IMAGE_TYPES = {'.png', '.jpg', '.jpeg', '.webp'}
 MAX_CHAPTER_CHARS = 400_000
 HEADING = re.compile(r'^\s*(?:Chương|Chuong|Chapter|Hồi|Hoi)\s+(\d+)\s*[.:：\-–—]?\s*(.*?)\s*$', re.I)
 
-DEFAULT_SETTINGS = {'speech_engine': 'vieneu', 'voice_id': 'Thiện Minh', 'speech_rhythm': 'story', 'speech_speed': 1.0,
+DEFAULT_SETTINGS = {'speech_engine': 'vieneu', 'voice_id': 'Trúc Ly', 'speech_rhythm': 'story', 'speech_speed': 1.0,
                     'khanh_steps': 32, 'speech_batch_size': 256}
 DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': True, 'vertical': True,
                   'burn_subtitles': True, 'export_srt': True, 'export_mp3': True, 'game_audio': False,
@@ -139,6 +139,12 @@ class StoryLibrary:
             if 'drive_file_id' not in columns:
                 db.execute('ALTER TABLE gameplay ADD COLUMN drive_file_id TEXT')
                 db.execute('ALTER TABLE gameplay ADD COLUMN source_url TEXT')
+            # Clips from the Drive gameplay folder: drive_folder = that folder, used = when a video played one to its end.
+            if 'drive_folder' not in columns:
+                db.execute('ALTER TABLE gameplay ADD COLUMN drive_folder TEXT')
+                db.execute('ALTER TABLE gameplay ADD COLUMN used REAL')
+                db.execute('ALTER TABLE gameplay ADD COLUMN moved INTEGER NOT NULL DEFAULT 0')
+            db.execute('CREATE TABLE IF NOT EXISTS gameplay_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
             if 'reviewed' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
                 db.execute('ALTER TABLE chapters ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0')
             if 'source_sha256' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
@@ -196,8 +202,11 @@ class StoryLibrary:
             inherited = json.loads(last['settings']) if last else {}
             db.execute('INSERT INTO books VALUES(?,?,?,?,?,?,?,0,?)', (identifier, title, json.dumps({**inherited, **(settings or {})}, ensure_ascii=False),
                        json.dumps({}, ensure_ascii=False), 1, now, now, source))
-            # A new book uses every gameplay clip already in the library, in import order.
-            for index, clip in enumerate(db.execute('SELECT id FROM gameplay WHERE deleted=0 ORDER BY created').fetchall()):
+            # A new book uses every gameplay clip already in the library, in import order (used Drive clips only
+            # when "Dùng lại clip đã dùng" is on).
+            reuse = self.gameplay_setting('reuse', False)
+            for index, clip in enumerate(db.execute('SELECT id FROM gameplay WHERE deleted=0 AND (used IS NULL OR ?) ORDER BY created',
+                                                    (int(reuse),)).fetchall()):
                 db.execute('INSERT OR IGNORE INTO book_gameplay VALUES(?,?,?,0,NULL)', (identifier, clip['id'], index))
         return self.book(identifier)
 
@@ -217,6 +226,28 @@ class StoryLibrary:
             db.execute('UPDATE books SET title=?,settings=?,layout=?,revision=revision+1,updated=? WHERE id=?',
                        (title, json.dumps(settings, ensure_ascii=False), json.dumps(layout, ensure_ascii=False), time.time(), book_id))
         return self.book(book_id)
+
+    def retake(self, book_id, text):
+        """Read one sentence again: the next render of a chapter holding it synthesises that part anew (a new take),
+        every other part keeps the voice already made."""
+        text = ' '.join(str(text or '').split()).strip(' -—–')
+        if len(text) < 4:
+            raise ValueError('Bôi đen câu bị đọc sai trong ô nội dung (ít nhất vài chữ)')
+        if len(text) > 600:
+            raise ValueError('Chỉ chọn một câu (tối đa 600 ký tự)')
+        with self.db() as db:
+            row = db.execute('SELECT * FROM books WHERE id=? AND deleted=0', (book_id,)).fetchone()
+            if not row:
+                raise KeyError('Không tìm thấy truyện')
+            settings = json.loads(row['settings'])
+            retakes = [r for r in settings.get('retakes') or [] if isinstance(r, dict)]
+            old = next((r for r in retakes if r.get('text') == text), None)
+            take = min(99, (old['take'] if old else 0) + 1)
+            retakes = [r for r in retakes if r.get('text') != text] + [{'text': text, 'take': take}]
+            settings['retakes'] = retakes[-500:]
+            db.execute('UPDATE books SET settings=?,revision=revision+1,updated=? WHERE id=?',
+                       (json.dumps(settings, ensure_ascii=False), time.time(), book_id))
+        return {'take': take, 'book': self.book(book_id)}
 
     def delete_book(self, book_id):
         with self.db() as db:
@@ -257,6 +288,55 @@ class StoryLibrary:
         start = (page - 1) * page_size
         return {'items': items[start:start + page_size], 'total': len(items), 'page': page, 'page_size': page_size,
                 'total_words': total_words, 'all_ids': [i['id'] for i in items], 'words_by_id': {i['id']: i['words'] for i in items}}
+
+    def issues(self, book_id, code='', limit=1000):
+        """Every spot to check across the whole book, in reading order, so thousands of chapters need no scrolling.
+        `counts` covers all of them; `items` stops at `limit` (filter by `code` to see the rest of one kind)."""
+        from .story_lint import lint
+        self.book(book_id)
+        limit = min(5000, max(1, int(limit)))
+        with self.db() as db:
+            rows = db.execute('SELECT id,title,text,sha256 FROM chapters WHERE book_id=? AND deleted=0 ORDER BY position', (book_id,)).fetchall()
+        counts, items, chapters = {}, [], 0
+        for order, row in enumerate(rows, 1):
+            found = lint(row['text'], row['sha256'])
+            chapters += bool(found)
+            for issue in found:
+                kind = counts.setdefault(issue['code'], {'label': issue['label'].split(':')[0], 'count': 0})
+                kind['count'] += 1
+                if (not code or issue['code'] == code) and len(items) < limit:
+                    items.append({'chapter_id': row['id'], 'order': order, 'title': row['title'], **issue})
+        total = sum(k['count'] for k in counts.values())
+        shown = counts.get(code, {}).get('count', 0) if code else total
+        return {'total': total, 'chapters': chapters, 'counts': counts, 'items': items, 'more': max(0, shown - len(items))}
+
+    def strip_notes(self, book_id):
+        """"Xoá lời bình": remove every author/translator note Soát chữ found, in every chapter of the book.
+        Each changed chapter keeps its previous text in Bản cũ. A chapter that would be left empty is not touched."""
+        from .story_lint import notes
+        self.book(book_id)
+        changed, parts, skipped = 0, 0, []
+        with self.db() as db:
+            rows = db.execute('SELECT * FROM chapters WHERE book_id=? AND deleted=0 ORDER BY position', (book_id,)).fetchall()
+            for order, row in enumerate(rows, 1):
+                found = notes(row['text'])
+                if not found:
+                    continue
+                text = row['text']
+                for start, end, _ in reversed(found):
+                    text = text[:start] + text[end:]
+                text = re.sub(r'(?:\n\s*\*\*\*\s*)+$', '', clean_text(text)).strip()  # a scene break left dangling at the end
+                if not text:
+                    skipped.append(order)
+                    continue
+                self._remember(db, row, 'trước khi xoá lời bình')
+                db.execute('UPDATE chapters SET text=?,sha256=?,revision=revision+1,updated=? WHERE id=?',
+                           (text, sha256_text(text), time.time(), row['id']))
+                changed += 1
+                parts += len(found)
+            if changed:
+                db.execute('UPDATE books SET updated=? WHERE id=?', (time.time(), book_id))
+        return {'chapters': changed, 'parts': parts, 'skipped': skipped}
 
     def index(self, book_id):
         """Every chapter of the book in reading order, without text (books may have thousands of chapters)."""
@@ -444,25 +524,35 @@ class StoryLibrary:
         path = Path(row['path'])
         drive = row['drive_file_id'] if 'drive_file_id' in row.keys() else None
         # A Drive clip stays usable when its cached copy was trimmed: it is downloaded again when a video needs it.
+        keys = row.keys()
         return {'id': row['id'], 'sha256': row['sha256'], 'name': row['name'], 'duration': row['duration'], 'width': row['width'],
                 'height': row['height'], 'fps': row['fps'], 'has_audio': bool(row['has_audio']), 'size': row['size'],
                 'available': path.is_file() or bool(drive), 'cached': path.is_file(), 'drive_file_id': drive,
-                'source': 'drive' if drive else 'local', 'thumbnail': f'/api/story/gameplay/{row["id"]}/thumbnail'}
+                'source': 'drive' if drive else 'local', 'thumbnail': f'/api/story/gameplay/{row["id"]}/thumbnail',
+                'folder': bool(row['drive_folder']) if 'drive_folder' in keys else False,
+                'used': bool(row['used']) if 'used' in keys else False}
 
-    def add_gameplay_cached(self, path, name, sha, drive_file_id, url):
-        """A clip downloaded from a Drive link: the file stays in the cache (it may be trimmed and fetched again)."""
+    def add_gameplay_cached(self, path, name, sha, drive_file_id, url, folder=None, used=False):
+        """A clip downloaded from a Drive link or the Drive gameplay folder: the file stays in the cache (it may be
+        trimmed and fetched again). folder: the Drive folder it came from; used: it already sits in that folder's Used."""
         path = Path(path)
         with self.db() as db:
             old = db.execute('SELECT * FROM gameplay WHERE sha256=?', (sha,)).fetchone()
         if old and not old['deleted']:
+            if folder and not old['drive_folder']:
+                with self.db() as db:
+                    db.execute('UPDATE gameplay SET drive_folder=?, drive_file_id=? WHERE id=?', (folder, drive_file_id, old['id']))
             return {**self._clip(old), 'duplicate': True}
         info = self.probe_video(path)
         identifier = old['id'] if old else uuid.uuid4().hex
+        used_at = time.time() if used else None
         with self.db() as db:
-            db.execute('INSERT OR REPLACE INTO gameplay(id,sha256,name,path,duration,width,height,fps,has_audio,size,created,deleted,drive_file_id,source_url) '
-                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?)', (identifier, sha, Path(name).name[:200], str(path), info['duration'], info['width'],
-                       info['height'], info['fps'], int(info['has_audio']), path.stat().st_size, time.time(), drive_file_id, url[:500]))
-            for book in db.execute('SELECT id FROM books WHERE deleted=0').fetchall():
+            db.execute('INSERT OR REPLACE INTO gameplay(id,sha256,name,path,duration,width,height,fps,has_audio,size,created,deleted,drive_file_id,source_url,'
+                       'drive_folder,used,moved) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)', (identifier, sha, Path(name).name[:200], str(path), info['duration'],
+                       info['width'], info['height'], info['fps'], int(info['has_audio']), path.stat().st_size, time.time(), drive_file_id, url[:500],
+                       folder, used_at, int(bool(used))))
+            books = [] if used and not self.gameplay_setting('reuse', False) else db.execute('SELECT id FROM books WHERE deleted=0').fetchall()
+            for book in books:
                 last = db.execute('SELECT COALESCE(MAX(position),-1) FROM book_gameplay WHERE book_id=?', (book['id'],)).fetchone()[0]
                 db.execute('INSERT OR IGNORE INTO book_gameplay VALUES(?,?,?,0,NULL)', (book['id'], identifier, last + 1))
             row = db.execute('SELECT * FROM gameplay WHERE id=?', (identifier,)).fetchone()
@@ -528,6 +618,110 @@ class StoryLibrary:
                             '-vf', 'scale=480:-2', str(target)], check=True, timeout=60)
         return target
 
+    # --- Drive gameplay folder: settings, used clips ----------------------------------------------------------
+    def gameplay_setting(self, key, default=None):
+        with self.db() as db:
+            row = db.execute('SELECT value FROM gameplay_settings WHERE key=?', (key,)).fetchone()
+        return json.loads(row['value']) if row else default
+
+    def set_gameplay_setting(self, key, value):
+        with self.db() as db:
+            if value is None:
+                db.execute('DELETE FROM gameplay_settings WHERE key=?', (key,))
+            else:
+                db.execute('INSERT OR REPLACE INTO gameplay_settings VALUES(?,?)', (key, json.dumps(value, ensure_ascii=False)))
+
+    def drive_clip_ids(self):
+        """Drive file ids already in the library (also deleted ones: a clip the user removed is not fetched again)."""
+        with self.db() as db:
+            return {r['drive_file_id'] for r in db.execute('SELECT drive_file_id FROM gameplay WHERE drive_file_id IS NOT NULL')}
+
+    def folder_counts(self, folder):
+        with self.db() as db:
+            row = db.execute('SELECT SUM(used IS NULL), SUM(used IS NOT NULL), SUM(used IS NOT NULL AND moved=0) FROM gameplay '
+                             'WHERE drive_folder=? AND deleted=0', (folder,)).fetchone()
+        return {'new': row[0] or 0, 'used': row[1] or 0, 'to_move': row[2] or 0}
+
+    def clips_to_move(self, folder):
+        with self.db() as db:
+            return [dict(r) for r in db.execute('SELECT id, name, drive_file_id FROM gameplay WHERE drive_folder=? AND used IS NOT NULL '
+                                                'AND moved=0 AND drive_file_id IS NOT NULL', (folder,))]
+
+    def set_moved(self, clip_id):
+        with self.db() as db:
+            db.execute('UPDATE gameplay SET moved=1 WHERE id=?', (clip_id,))
+
+    def _drop_from_playlists(self, db, clip_ids):
+        """Take clips out of every book's playlist; each book's cursor keeps pointing at the same footage.
+        The cursor counts clips in the playable list (cut_plan's "usable"), so it is recounted without the dropped ones."""
+        clip_ids = set(clip_ids)
+        if not clip_ids:
+            return
+        for book in db.execute('SELECT DISTINCT book_id FROM book_gameplay').fetchall():
+            rows = db.execute('''SELECT g.id, g.path, g.drive_file_id, b.start, COALESCE(b.end, g.duration) AS end FROM book_gameplay b
+                JOIN gameplay g ON g.id=b.gameplay_id WHERE b.book_id=? AND g.deleted=0 ORDER BY b.position''', (book['book_id'],)).fetchall()
+            usable = [r['id'] for r in rows if (Path(r['path']).is_file() or r['drive_file_id']) and r['end'] - r['start'] >= 1]
+            if not clip_ids & {r['id'] for r in rows}:
+                continue
+            cursor = db.execute('SELECT * FROM gameplay_cursor WHERE book_id=?', (book['book_id'],)).fetchone()
+            if cursor and usable:
+                index = min(int(cursor['clip']), len(usable) - 1)
+                kept = [i for i in usable if i not in clip_ids]
+                new_index = sum(1 for i in usable[:index] if i not in clip_ids)
+                offset = 0.0 if usable[index] in clip_ids else cursor['offset']
+                if new_index >= len(kept):
+                    new_index, offset = 0, 0.0
+                db.execute('UPDATE gameplay_cursor SET clip=?, offset=? WHERE book_id=?', (new_index, offset, book['book_id']))
+            db.execute(f'DELETE FROM book_gameplay WHERE book_id=? AND gameplay_id IN ({",".join("?" * len(clip_ids))})', (book['book_id'], *clip_ids))
+
+    def mark_used(self, clip_ids):
+        """Clips a video played to their end. Only clips from the Drive gameplay folder are tracked; unless reuse is on
+        they leave every playlist. Returns the clips newly marked (to move into Used on Drive)."""
+        with self.db() as db:
+            rows = [r for r in (db.execute('SELECT * FROM gameplay WHERE id=?', (i,)).fetchone() for i in set(clip_ids))
+                    if r and r['drive_folder'] and r['used'] is None]
+            for row in rows:
+                db.execute('UPDATE gameplay SET used=? WHERE id=?', (time.time(), row['id']))
+            if rows and not self.gameplay_setting('reuse', False):
+                self._drop_from_playlists(db, [r['id'] for r in rows])
+        return [r['id'] for r in rows]
+
+    def drop_used_cache(self):
+        """Used Drive-folder clips live on Drive (in Used): their downloaded copies are removed to save disk. A later
+        video that needs one again downloads it by its file id. Returns the bytes freed."""
+        freed = 0
+        with self.db() as db:
+            rows = db.execute('SELECT path FROM gameplay WHERE used IS NOT NULL AND drive_folder IS NOT NULL AND drive_file_id IS NOT NULL').fetchall()
+        for row in rows:
+            path = Path(row['path'])
+            if path.is_file():
+                freed += path.stat().st_size
+                path.unlink(missing_ok=True)
+        return freed
+
+    def set_reuse(self, reuse):
+        """On: used Drive clips go back to the end of every playlist. Off: they leave every playlist."""
+        self.set_gameplay_setting('reuse', bool(reuse))
+        with self.db() as db:
+            used = [r['id'] for r in db.execute('SELECT id FROM gameplay WHERE used IS NOT NULL AND drive_folder IS NOT NULL AND deleted=0 ORDER BY used')]
+            if not reuse:
+                self._drop_from_playlists(db, used)
+                return
+            for book in db.execute('SELECT id FROM books WHERE deleted=0').fetchall():
+                for clip in used:
+                    last = db.execute('SELECT COALESCE(MAX(position),-1) FROM book_gameplay WHERE book_id=?', (book['id'],)).fetchone()[0]
+                    db.execute('INSERT OR IGNORE INTO book_gameplay VALUES(?,?,?,0,NULL)', (book['id'], clip, last + 1))
+
+    def playable(self, book_id):
+        """Clips a new video may use: the book's playlist; when no clip is left there (every new clip used and reuse
+        off), the used Drive clips instead, so the video is still made. Returns (items, fell_back)."""
+        items = [c for c in self.gameplay(book_id)['items'] if c['available']]
+        if items:
+            return items, False
+        with self.db() as db:
+            rows = db.execute('SELECT * FROM gameplay WHERE used IS NOT NULL AND drive_folder IS NOT NULL AND deleted=0 ORDER BY used').fetchall()
+        return [{**self._clip(r), 'start': 0.0, 'end': r['duration']} for r in rows if self._clip(r)['available']], bool(rows)
+
     # --- cursor ------------------------------------------------------------------------------------------
     def cursor(self, book_id):
         with self.db() as db:
@@ -580,8 +774,8 @@ class StoryLibrary:
             raise ConflictError('Có chương đã bị xoá hoặc không thuộc truyện này. Tải lại danh sách chương.')
         chapters = [{'id': rows[i]['id'], 'order': order[i], 'number': rows[i]['number'], 'title': rows[i]['title'], 'read_title': bool(rows[i]['read_title']),
                      'text': rows[i]['text'], 'sha256': rows[i]['sha256'], 'revision': rows[i]['revision']} for i in chapter_ids]
-        playlist = [c for c in self.gameplay(book_id)['items'] if c['available']]
-        snapshot = {'version': 1, 'book': {'id': book['id'], 'title': book['title']}, 'chapters': chapters,
+        playlist, fell_back = self.playable(book_id)
+        snapshot = {'version': 1, 'gameplay_fallback': fell_back, 'book': {'id': book['id'], 'title': book['title']}, 'chapters': chapters,
                     'settings': book['settings'], 'layout': book['layout'],
                     'gameplay': [{'id': c['id'], 'sha256': c['sha256'], 'name': c['name'], 'path': self._clip_path(c['id']),
                                   'duration': c['duration'], 'start': c['start'], 'end': c['end'], 'has_audio': c['has_audio'],
@@ -647,7 +841,8 @@ class ConflictError(ValueError):
 def validate_settings(value):
     if not isinstance(value, dict):
         raise ValueError('Thiết lập giọng không hợp lệ')
-    allowed = {'speech_engine', 'voice_id', 'speech_rhythm', 'speech_speed', 'khanh_steps', 'speech_batch_size', 'speech_reference_text', 'pronunciations'}
+    allowed = {'speech_engine', 'voice_id', 'speech_rhythm', 'speech_speed', 'khanh_steps', 'speech_batch_size', 'speech_reference_text', 'pronunciations',
+               'retakes', 'intro_text', 'outro_text'}
     if set(value) - allowed:
         raise ValueError('Thiết lập giọng có trường lạ')
     result = dict(value)
@@ -678,6 +873,23 @@ def validate_settings(value):
             if written and spoken and written != spoken:
                 clean.append({'from': written, 'to': spoken})
         result['pronunciations'] = clean
+    for key in ('intro_text', 'outro_text'):
+        if key in result:
+            if not isinstance(result[key], str) or len(result[key]) > 600:
+                raise ValueError('Lời chào tối đa 600 ký tự')
+            result[key] = ' '.join(result[key].split())
+    if 'retakes' in result:
+        retakes = result['retakes']
+        if not isinstance(retakes, list) or len(retakes) > 500:
+            raise ValueError('Danh sách câu đọc lại tối đa 500 câu')
+        clean = []
+        for item in retakes:
+            if not isinstance(item, dict) or not isinstance(item.get('text'), str) or type(item.get('take')) is not int:
+                raise ValueError('Câu đọc lại không hợp lệ')
+            text = ' '.join(item['text'].split())[:600]
+            if text and 1 <= item['take'] <= 99:
+                clean.append({'text': text, 'take': item['take']})
+        result['retakes'] = clean
     return result
 
 

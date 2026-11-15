@@ -82,6 +82,15 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
                 posted_cleanup.wake.wait(1)
                 posted_cleanup.wake.clear()
             else:stop.wait(1)
+    def gameplay_loop():
+        # The Drive gameplay folder: new clips are fetched every 15 minutes (GameplayFolder.tick decides when).
+        while not stop.wait(60):
+            try:
+                folder=getattr(app.state,'gameplay_folder',None)
+                if folder:folder.tick()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Gameplay folder sync will retry')
     @asynccontextmanager
     async def lifespan(app):
         threads=[]
@@ -89,7 +98,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if posted_cleanup:posted_cleanup.recover()
             flow_accounts.recover_after_restart()
             if voice_studio:voice_studio.recover()
-            for target in (loop,heartbeat,publishing_loop,cleanup_loop):
+            for target in (loop,heartbeat,publishing_loop,cleanup_loop,gameplay_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
         yield
         stop.set()
@@ -343,10 +352,20 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             allowed=host.hostname in ('127.0.0.1','localhost','::1') and not (host.username or host.password or host.path or host.query or host.fragment)
         except ValueError:allowed=False
         if not allowed:raise HTTPException(403,'Loopback Host required for browser control')
+    PUBLIC_HOSTS={h.strip().lower() for h in os.getenv('VS_PUBLIC_HOSTS','videostudio.multigen.store').split(',') if h.strip()}
+    def owner_request(request):
+        """Owner-only actions (posting, cleanup, Cài đặt / Kết nối & hệ thống): the machine itself, or the public site
+        behind Cloudflare Access (the owner on the phone; only their Gmail is allowed in).
+        The server only listens on 127.0.0.1, so a public Host arrives through the tunnel, after Access let the person in."""
+        from urllib.parse import urlparse
+        try:host=urlparse('//'+request.headers.get('host','')).hostname or ''
+        except ValueError:host=''
+        if host.lower() in PUBLIC_HOSTS and request.headers.get('cf-access-jwt-assertion'):return
+        browser_request_local(request)
     @app.get('/api/browser/status')
     def browser_status(request:Request):
         import httpx
-        browser_request_local(request)
+        owner_request(request)
         try:
             r=httpx.get(browser_endpoint()+'/api/status',timeout=2,trust_env=False)
             if r.status_code!=200:raise HTTPException(503,'Browser service unavailable')
@@ -354,24 +373,24 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         except httpx.HTTPError:raise HTTPException(503,'Start the dedicated VideoStudio browser service first')
     @app.get('/api/browser/profile')
     def browser_profile_status(request:Request):
-        browser_request_local(request)
+        owner_request(request)
         try:return browser_manager.status()
         except RuntimeError as error:raise HTTPException(503,str(error))
     @app.post('/api/browser/profile/open')
     def browser_profile_open(data:dict,request:Request):
-        browser_request_local(request);same_origin(request)
+        owner_request(request);same_origin(request)
         if set(data)!={'mode'} or data.get('mode') not in ('clean','debug'):raise HTTPException(422,'Chọn Mở sạch hoặc Mở debug; profile được giữ cố định.')
         try:return browser_manager.open(data['mode'])
         except ValueError as error:raise HTTPException(409,str(error))
         except RuntimeError as error:raise HTTPException(503,str(error))
     @app.post('/api/browser/profile/stop')
     def browser_profile_stop(request:Request):
-        browser_request_local(request);same_origin(request)
+        owner_request(request);same_origin(request)
         try:return browser_manager.stop()
         except ValueError as error:raise HTTPException(409,str(error))
         except RuntimeError as error:raise HTTPException(503,str(error))
     def flow_account_response(job_id,request,operation):
-        browser_request_local(request)
+        owner_request(request)
         if operation!='status':same_origin(request)
         with store.db() as connection:
             owned=connection.execute('SELECT id FROM connector_scopes WHERE job=?',(job_id,)).fetchone()
@@ -392,7 +411,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def flow_account_continue(job_id:str,request:Request):return flow_account_response(job_id,request,'continue_job')
     def browser_control(action,request):
         import httpx
-        browser_request_local(request)
+        owner_request(request)
         same_origin(request)
         try:
             r=httpx.post(browser_endpoint()+'/api/browser/'+action,json={},headers={'X-VS-Client':'videostudio'},timeout=40,trust_env=False)
@@ -404,8 +423,14 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     def browser_start(request:Request):return browser_control('start',request)
     @app.post('/api/browser/probe')
     def browser_probe(request:Request):return browser_control('probe',request)
+    voice_cache={'at':0.0,'value':None};voice_cache_lock=threading.Lock()
     @app.get('/api/voices')
     def catalog():
+        # Several panels ask for the voice list at page load; within a few seconds they share one answer.
+        with voice_cache_lock:
+            if voice_cache['value'] is not None and time.time()-voice_cache['at']<5:return voice_cache['value']
+            voice_cache['value']=voice_list();voice_cache['at']=time.time();return voice_cache['value']
+    def voice_list():
         c=voices.catalog()
         from .voice_timing import reading_profiles
         profiles=reading_profiles(store,c['voices'])
@@ -420,6 +445,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         raise HTTPException(404,'Sample unavailable; no synthesis performed')
     @app.post('/api/voices/clone')
     async def clone_voice(data:dict,request:Request):
+        voice_cache['value']=None
         same_origin(request)
         name=data.get('name','').strip()
         if not name:raise HTTPException(422,'Tên giọng đọc không được để trống')
@@ -486,12 +512,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
     voice_studio.stop_event=stop
     @app.get('/api/system/status')
     def system_status(request:Request):
-        browser_request_local(request)
+        owner_request(request)
         active=browser_active_jobs()
         return {'status':'running','port':8877,'active_jobs':active,'cdp_port':8879}
     @app.post('/api/system/stop')
     def system_stop(request:Request,data:dict|None=None):
-        browser_request_local(request);same_origin(request)
+        owner_request(request);same_origin(request)
         data=data or {}
         force=bool(data.get('force',False))
         active=browser_active_jobs()
@@ -507,7 +533,7 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         return {'ok':True,'message':'VideoStudio đang tắt...'}
     @app.post('/api/system/restart')
     def system_restart(request:Request,data:dict|None=None):
-        browser_request_local(request);same_origin(request)
+        owner_request(request);same_origin(request)
         data=data or {}
         force=bool(data.get('force',False))
         active=browser_active_jobs()
@@ -1166,6 +1192,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         lambda data,key,scope:submit(data,factory_request(scope),idempotency_key=key),
         validate_submission=validate_factory_request,
         retry_job=lambda job_id,scope,resume_cancelled=False:retry_job(job_id,{'resume_cancelled':resume_cancelled},factory_request(scope)))
+    # Tạo video từ bài Facebook: paste a post link; Chrome reads it, ChatGPT analyses it, the idea joins the queue.
+    from .social_import import register_social_routes
+    register_social_routes(app,store,factory,same_origin)
+    # Dịch vụ nền (Cài đặt): stop / start / restart ComfyUI and the dedicated Chrome.
+    from .services_api import register_service_routes
+    register_service_routes(app,owner_request,same_origin,browser_manager)
     def name_video(content,request):
         from . import social_copy
         pipeline.context.job='name-'+uuid.uuid4().hex;pipeline.context.text_provider=request.get('text_provider','chatgpt')
@@ -1173,10 +1205,10 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         finally:pipeline.context.job=None
     factory.name_video=name_video
     from .publishing_api import register_publishing_routes
-    publisher=register_publishing_routes(app,store,factory,same_origin,browser_request_local)
+    publisher=register_publishing_routes(app,store,factory,same_origin,owner_request)
     factory.channel_states=publisher.channel_states
     from .posted_cleanup_api import register_posted_cleanup_routes
-    posted_cleanup=register_posted_cleanup_routes(app,store,same_origin,browser_request_local)
+    posted_cleanup=register_posted_cleanup_routes(app,store,same_origin,owner_request)
     @app.get('/api/settings/output-root')
     def output_root():
         from .output_settings import describe

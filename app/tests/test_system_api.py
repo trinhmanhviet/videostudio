@@ -37,6 +37,19 @@ class SystemAPITests(unittest.TestCase):
         res = self.client.post('/api/system/restart', json={}, headers={'Host': 'evil.com'})
         self.assertEqual(res.status_code, 403)
 
+    def test_posting_opens_on_the_public_site_behind_cloudflare_access_only(self):
+        public = {'Host': 'videostudio.multigen.store', 'Cf-Access-Jwt-Assertion': 'signed-by-access'}
+        self.assertEqual(self.client.get('/api/publishing/channels', headers=public).status_code, 200)
+        self.assertEqual(self.client.get('/api/publishing/channels', headers={'Host': 'videostudio.multigen.store'}).status_code, 403)
+        self.assertEqual(self.client.get('/api/publishing/channels', headers={'Host': 'evil.com', 'Cf-Access-Jwt-Assertion': 'x'}).status_code, 403)
+        # Cài đặt / Kết nối & hệ thống also open there (one owner); without Access, or on another host, they stay shut
+        self.assertEqual(self.client.get('/api/system/status', headers=public).status_code, 200)
+        self.assertNotEqual(self.client.get('/api/browser/profile', headers=public).status_code, 403)
+        self.assertEqual(self.client.get('/api/system/status', headers={'Host': 'videostudio.multigen.store'}).status_code, 403)
+        self.assertEqual(self.client.get('/api/system/status', headers={'Host': 'evil.com', 'Cf-Access-Jwt-Assertion': 'x'}).status_code, 403)
+        # opening a folder in Explorer only makes sense at the machine itself
+        self.assertEqual(self.client.post('/api/jobs/x/open-folder', headers=public).status_code, 403)
+
     @patch('subprocess.Popen')
     def test_system_stop_and_restart_when_idle(self, mock_popen):
         res = self.client.post('/api/system/stop', json={})

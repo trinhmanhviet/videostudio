@@ -18,7 +18,10 @@ def image_prompt(prompt,identifier,layout='portrait'):
     return (head+' Return the generated image, not a written description or JSON. Do not draw tracking markers, labels or watermarks. Follow this '+('scene description' if layout in ('portrait','landscape') else 'description')+':\n'+prompt+'\nTracking marker (never draw it): [VideoStudio image request '+identifier+']')
 
 # Reference images may only come from the tool's own asset folders (never arbitrary paths from a request).
-ATTACHMENT_ROOTS=(Path(__file__).resolve().parents[1]/'memestudio'/'assets',)
+# Facebook posts read for a video (cdp_social) keep their pictures and video frames under DATA_ROOT/social-posts.
+from .paths import DATA_ROOT
+SOCIAL_ROOT=DATA_ROOT/'social-posts'
+ATTACHMENT_ROOTS=(Path(__file__).resolve().parents[1]/'memestudio'/'assets',SOCIAL_ROOT)
 ATTACHMENT_TYPES=('.png','.jpg','.jpeg','.webp')
 
 
@@ -213,23 +216,25 @@ class ChatGPTImages:
                 return value
             await b.connect();target=await self._target(job,record['state']!='prepared');session=await b.session(target);await b.cdp.command('Target.activateTarget',{'targetId':target})
             if record['state']=='prepared':
-                wrapped=image_prompt(prompt,identifier,layout);state=await self._ready(session,marker,wrapped);draft=state.get('draft','').strip()
-                if state.get('generating'):raise RuntimeError('Image tab already generating; no overwrite')
-                if draft and ' '.join(draft.split())!=' '.join(wrapped.split()):raise RuntimeError('Different draft exists; no overwrite')
-                if files:await self._attach(session,files)
-                if not draft:
-                    await self._click(session,await b.evaluate(session,composer_expression()));await b.cdp.command('Input.insertText',{'text':wrapped},session=session)
-                button=None;deadline=time.monotonic()+5
-                while time.monotonic()<deadline:
-                    button=await b.evaluate(session,send_button_expression())
-                    if button:break
-                    await asyncio.sleep(.2)
-                if not button:raise RuntimeError('Image Send button unavailable; draft preserved')
-                b.journal.claim_send(identifier) # must be durable BEFORE input
-                final=await b.evaluate(session,image_snapshot(marker))
-                if final.get('login') or final.get('challenge'):raise ImageAuthentication('Authentication changed before Send; receipt retained')
-                if final.get('mode')!='chat' or final.get('generating') or ' '.join(final.get('draft','').split())!=' '.join(wrapped.split()):raise IndeterminateRequest('Draft/mode changed at image send boundary; no resend')
-                await self._click(session,button) # exactly one submit, no fallback click
+                # Typing and Send take turns with the text lanes' tabs (ChatGPT copies unsent drafts between tabs).
+                async with b.compose_lock:
+                    wrapped=image_prompt(prompt,identifier,layout);state=await self._ready(session,marker,wrapped);draft=state.get('draft','').strip()
+                    if state.get('generating'):raise RuntimeError('Image tab already generating; no overwrite')
+                    if draft and ' '.join(draft.split())!=' '.join(wrapped.split()):raise RuntimeError('Different draft exists; no overwrite')
+                    if files:await self._attach(session,files)
+                    if not draft:
+                        await self._click(session,await b.evaluate(session,composer_expression()));await b.cdp.command('Input.insertText',{'text':wrapped},session=session)
+                    button=None;deadline=time.monotonic()+5
+                    while time.monotonic()<deadline:
+                        button=await b.evaluate(session,send_button_expression())
+                        if button:break
+                        await asyncio.sleep(.2)
+                    if not button:raise RuntimeError('Image Send button unavailable; draft preserved')
+                    b.journal.claim_send(identifier) # must be durable BEFORE input
+                    final=await b.evaluate(session,image_snapshot(marker))
+                    if final.get('login') or final.get('challenge'):raise ImageAuthentication('Authentication changed before Send; receipt retained')
+                    if final.get('mode')!='chat' or final.get('generating') or ' '.join(final.get('draft','').split())!=' '.join(wrapped.split()):raise IndeterminateRequest('Draft/mode changed at image send boundary; no resend')
+                    await self._click(session,button) # exactly one submit, no fallback click
             deadline=time.monotonic()+timeout;found=None
             while time.monotonic()<deadline:
                 state=await b.evaluate(session,image_snapshot(marker))

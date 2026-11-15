@@ -22,7 +22,12 @@ import httpx
 
 from .paths import DATA_ROOT
 
-SCOPES = 'openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly'
+# drive: the gameplay folder is the user's own folder; moving a used clip into its "Used" subfolder needs write access
+# to files the tool did not create. Accounts connected before this need to be connected again once.
+SCOPES = 'openid email https://www.googleapis.com/auth/drive'
+FOLDER = 'application/vnd.google-apps.folder'
+QUOTA_CACHE = {}  # account -> (time, quota) for the settings page
+FOLDER_ID = re.compile(r'/folders/([A-Za-z0-9_-]{20,})')
 API = 'https://www.googleapis.com/drive/v3'
 UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
 CHUNK = 64 * 1024 * 1024
@@ -35,6 +40,16 @@ FILE_ID = re.compile(r'(?:/d/|[?&]id=|/file/d/|/open\?id=)([A-Za-z0-9_-]{20,})')
 
 class DriveError(RuntimeError):
     pass
+
+
+def folder_id_from_link(link):
+    link = str(link or '').strip()
+    if re.fullmatch(r'[A-Za-z0-9_-]{20,}', link):
+        return link
+    match = FOLDER_ID.search(link) or FILE_ID.search(link)
+    if not match or urlparse(link).hostname not in ('drive.google.com', 'docs.google.com'):
+        raise ValueError('Dán link thư mục Google Drive (dạng https://drive.google.com/drive/folders/…)')
+    return match.group(1)
 
 
 def file_id_from_link(link):
@@ -180,6 +195,16 @@ class DriveStorage:
         usage = int(data.get('usage') or 0)
         return {'limit': limit, 'usage': usage, 'free': (limit - usage) if limit else 10 ** 15}
 
+    def cached_quota(self, account, age=120):
+        """Free space for the settings page: asking Google takes about a second per account, so it is reused for 2 minutes.
+        Uploads still ask Google fresh (pick_account)."""
+        hit = QUOTA_CACHE.get(account)
+        if hit and time.time() - hit[0] < age:
+            return hit[1]
+        value = self.quota(account)
+        QUOTA_CACHE[account] = (time.time(), value)
+        return value
+
     def status(self):
         try:
             self.client()
@@ -189,7 +214,7 @@ class DriveStorage:
         accounts = []
         for account in self.accounts():
             try:
-                q = self.quota(account['id'])
+                q = self.cached_quota(account['id'])
                 accounts.append({**account, 'free_gb': round(q['free'] / 2**30, 1) if q['limit'] else None,
                                  'total_gb': round(q['limit'] / 2**30, 1) if q['limit'] else None, 'ok': True})
             except Exception as error:
@@ -314,6 +339,86 @@ class DriveStorage:
         part.replace(target)
         return digest.hexdigest(), size
 
+    # --- gameplay folder (the user's own folder of gameplay videos) ---------------------------------------------
+    def find_folder(self, folder_id, account=None):
+        """The given account, else the first connected account, that can open this folder: (account, {id, name})."""
+        last = None
+        accounts = self.accounts()
+        if account:
+            accounts = [a for a in accounts if a['id'] == account] or accounts
+        for account in accounts:
+            response = httpx.get(f'{API}/files/{folder_id}', headers=self._headers(account['id']), timeout=30,
+                                 params={'fields': 'id,name,mimeType', 'supportsAllDrives': 'true'})
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('mimeType') != FOLDER:
+                    raise ValueError('Link này là một tệp, không phải thư mục. Dán link thư mục chứa video gameplay.')
+                return account['id'], data
+            last = response.status_code
+        raise DriveError('Không tài khoản Drive nào mở được thư mục này' + (f' (mã {last})' if last else '. Thêm tài khoản trong Cài đặt.'))
+
+    def list_folders(self, account, parent='root'):
+        """Folders inside parent, by name; parent 'shared' = folders other people shared with this account."""
+        where = 'sharedWithMe' if parent == 'shared' else f"'{parent}' in parents"
+        items, token = [], None
+        while len(items) < 1000:
+            params = {'q': f"{where} and mimeType='{FOLDER}' and trashed=false", 'orderBy': 'name', 'fields': 'nextPageToken,files(id,name)',
+                      'pageSize': 200, 'supportsAllDrives': 'true', 'includeItemsFromAllDrives': 'true'}
+            if token:
+                params['pageToken'] = token
+            response = httpx.get(API + '/files', headers=self._headers(account), timeout=30, params=params)
+            if response.status_code != 200:
+                raise DriveError(f'Không đọc được thư mục trên Drive (mã {response.status_code})')
+            data = response.json()
+            items += data.get('files', [])
+            token = data.get('nextPageToken')
+            if not token:
+                break
+        return items
+
+    def list_videos(self, account, folder_id):
+        """Videos directly inside a folder, oldest upload first."""
+        items, token = [], None
+        while True:
+            params = {'q': f"'{folder_id}' in parents and trashed=false and mimeType contains 'video/'", 'orderBy': 'createdTime',
+                      'fields': 'nextPageToken,files(id,name,size,md5Checksum,mimeType)', 'pageSize': 200,
+                      'supportsAllDrives': 'true', 'includeItemsFromAllDrives': 'true'}
+            if token:
+                params['pageToken'] = token
+            response = httpx.get(API + '/files', headers=self._headers(account), timeout=30, params=params)
+            if response.status_code != 200:
+                raise DriveError(f'Không đọc được thư mục gameplay (mã {response.status_code})')
+            data = response.json()
+            items += data.get('files', [])
+            token = data.get('nextPageToken')
+            if not token:
+                return items
+
+    def child_folder(self, account, parent, name, create=True):
+        escaped = name.replace("'", "\\'")
+        found = httpx.get(API + '/files', headers=self._headers(account), timeout=30, params={
+            'q': f"name='{escaped}' and '{parent}' in parents and mimeType='{FOLDER}' and trashed=false",
+            'fields': 'files(id)', 'supportsAllDrives': 'true', 'includeItemsFromAllDrives': 'true'})
+        if found.status_code == 200 and found.json().get('files'):
+            return found.json()['files'][0]['id']
+        if not create:
+            return None
+        created = httpx.post(API + '/files', headers=self._headers(account), timeout=30, params={'fields': 'id', 'supportsAllDrives': 'true'},
+                             json={'name': name, 'mimeType': FOLDER, 'parents': [parent]})
+        if created.status_code >= 300:
+            raise DriveError(_write_problem(created, 'tạo thư mục ' + name))
+        return created.json()['id']
+
+    def move(self, account, file_id, from_folder, to_folder):
+        """Move a file between folders (same file id, so a later download of it still works)."""
+        response = httpx.patch(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30, json={},
+                               params={'addParents': to_folder, 'removeParents': from_folder, 'fields': 'id,parents', 'supportsAllDrives': 'true'})
+        if response.status_code == 404:
+            return False
+        if response.status_code >= 300:
+            raise DriveError(_write_problem(response, 'chuyển clip vào Used'))
+        return True
+
     def stream(self, account, file_id, range_header=None):
         headers = self._headers(account)
         if range_header:
@@ -322,6 +427,14 @@ class DriveStorage:
         request = client.build_request('GET', f'{API}/files/{file_id}', params={'alt': 'media'}, headers=headers)
         response = client.send(request, stream=True)
         return client, response
+
+
+def _write_problem(response, what):
+    text = response.text[:300]
+    if response.status_code == 403 and ('insufficient' in text.lower() or 'scope' in text.lower()):
+        return (f'Drive chưa cho phép {what}: tài khoản được kết nối trước khi có quyền sửa tệp. '
+                'Vào Cài đặt → Google Drive, bấm Thêm tài khoản với đúng tài khoản đó và đồng ý quyền Drive.')
+    return f'Drive không cho {what} (mã {response.status_code}): {text[:160]}'
 
 
 def _pieces(chunk, offset, progress, step=1024 * 1024):

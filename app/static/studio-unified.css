@@ -182,3 +182,20 @@ button.st-icon:disabled{opacity:.35;cursor:default}
 .st-reel-stats strong{font-size:15px;font-variant-numeric:tabular-nums}.st-reel-stats small{font-size:11px;color:var(--muted)}
 .st-reel-tags{display:flex;flex-wrap:wrap;gap:5px}.st-reel .st-help{margin-top:2px;padding-top:6px}
 .studio-calendar-toolbar[aria-label="Nội dung Kho video"]{justify-content:flex-start}
+.st-plans{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+.st-plans-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.st-plans-head h2{margin:0;font-size:20px}.st-plans-head p{margin:4px 0 0}
+.st-plans-head .st-actions{margin:0}.st-plan-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:14px;margin-top:14px}
+.st-plan{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}.st-plan.is-off{opacity:.7}
+.st-plan-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.st-plan-top>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-plan-note{margin:0;color:var(--warn);font-size:12.5px}
+.st-plan-slots{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.st-plan-slots li{display:flex;gap:10px}.st-plan-slots time{color:var(--accent);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.st-plan-slots span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-plan-days{display:flex;gap:6px;flex-wrap:wrap}.st-plan-days label{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-weight:400}
+.st-stats-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.st-reels-list.is-wide .st-reel{grid-template-columns:168px minmax(0,1fr)}.st-reels-list.is-wide .st-reel-thumb{aspect-ratio:16/9;align-self:start}
+/* Cài đặt → Dịch vụ nền */
+.studio-services .studio-service{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line,#35445b)}
+.studio-services .studio-service:first-of-type{border-top:0}
+.studio-service-info{display:flex;flex-direction:column;gap:3px;min-width:220px;flex:1}
+.studio-service-state{font-size:13px;font-weight:600;color:#f2c46d}.studio-service-state.is-on{color:#8fe0a8}.studio-service-state.is-off{color:#a8b7c9}

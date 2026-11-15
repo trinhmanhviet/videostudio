@@ -28,6 +28,36 @@ def record_owned(path, prompt_id):
         tmp.write_text(json.dumps(d))
         tmp.replace(path)
 
+def driver_free_bytes():
+    """Free memory of the GPU as the NVIDIA driver reports it (nvidia-smi), or None when it cannot be read."""
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=memory.free', '--format=csv,noheader,nounits'], capture_output=True,
+                                text=True, timeout=10, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
+        values = [int(line.strip()) for line in result.stdout.splitlines() if line.strip().isdigit()]
+        return min(values) * 1024 * 1024 if result.returncode == 0 and values else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def device_free(devices, driver=driver_free_bytes):
+    """Free VRAM for a new ComfyUI job. ComfyUI with the cudaMallocAsync allocator reports only what is free inside
+    the pool it already holds (e.g. 110 MB of a 134 MB pool on an empty 24 GB card), so the driver's own figure is
+    used when it is larger. When the card is really full both figures are low and the caller unloads/stops as before."""
+    reported = min((d.get('vram_free', 0) for d in devices), default=0)
+    if not devices or not all(pool_only_report(d) for d in devices):
+        return reported
+    actual = driver()
+    return max(reported, actual) if actual is not None else reported
+
+
+def pool_only_report(device):
+    """ComfyUI's figure is the free space inside its own small pool, not the card's: vram_free equals
+    torch_vram_free and that pool is a small part of the card (seen 2026-11-16: 110 MB free of a 134 MB pool, 24 GB card)."""
+    total, pool = device.get('vram_total') or 0, device.get('torch_vram_total') or 0
+    return ('torch_vram_free' in device and device.get('vram_free') == device.get('torch_vram_free')
+            and total > 0 and pool < total / 4)
+
+
 def free_comfy(client):
     """Request the user-authorized unload; callers must first verify an idle queue."""
     response = client.post('free', json={'unload_models': True, 'free_memory': True})
@@ -75,7 +105,7 @@ def recover_comfy(url, check):
                 process.communicate()
 
 def headroom(client, devices, path):
-    free = min((d.get('vram_free', 0) for d in devices), default=0)
+    free = device_free(devices)
     path = Path(path)
     if not path.is_file():
         return free, False

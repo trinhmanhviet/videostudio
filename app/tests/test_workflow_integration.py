@@ -57,7 +57,7 @@ class WorkflowRequestIntegrationTests(unittest.TestCase):
                 self.assertEqual(client.get('/api/workflows').status_code,200)
                 scope=client.post('/api/connector/sessions').json()['project_id']
                 route=f'/story-video/projects/{scope}/production'
-                self.assertIn('id="create"',client.get(route).text)
+                self.assertIn('id="studioConnection"',client.get(route).text)
                 self.assertNotIn('id="workflowWorkspace"',client.get(route).text)
                 self.assertIn('id="workflowWorkspace"',client.get(route+'?workspace=editor').text)
                 self.assertIn('data-chatgpt-web-action="start"',client.get(route+'?connector_test=true&workspace=editor').text)

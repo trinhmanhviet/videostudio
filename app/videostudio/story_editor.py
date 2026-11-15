@@ -54,7 +54,10 @@ VIẾT ĐỂ NGHE (bắt buộc)
 13. Mỗi câu tối đa khoảng 200 ký tự (khoảng 40 từ), vế nào cũng có dấu phẩy. Đoạn văn tối đa khoảng 120 từ.
 14. Từ nước ngoài: dịch nghĩa sang tiếng Việt. Số thập phân viết dấu phẩy (1,5). Không dùng chữ cái đứng một mình làm tên (ông A).
 15. Từ tượng thanh viết bằng chữ có nghĩa ("Két!", "Rầm!"), không kéo dài chữ (kéttt), không dùng ——.
-16. Không giữ số trang/phần lẻ của nguồn crawl, URL, dòng "Nguồn", quảng cáo. Không chèn lời bình của AI vào nội dung."""
+16. Không giữ số trang/phần lẻ của nguồn crawl, URL, dòng "Nguồn", quảng cáo. Không chèn lời bình của AI vào nội dung.
+17. BỎ HẲN những gì không phải truyện: lời tác giả ("Lời tác giả", "Tác giả có lời muốn nói", tác giả tâm sự, xin bình luận,
+    xin phiếu, báo lịch đăng), lời người dịch/converter/editor, "PS:", tiểu kịch trường, "Hết chương", "Còn tiếp".
+    Chép nguyên văn từng phần đã bỏ (từ bản convert) vào "da_bo". Lời nhân vật nói về "tác giả" trong truyện (xuyên thư…) thì giữ."""
 
 PROFILE_PROMPT = """Bạn chuẩn bị biên tập toàn bộ một tiểu thuyết convert Trung–Việt thành bản tiếng Việt để đọc thành tiếng.
 Đọc phần mở đầu dưới đây và lập HỒ SƠ TRUYỆN dùng chung cho mọi chương.
@@ -89,7 +92,8 @@ Bản convert:
 Biên tập toàn văn chương này theo mọi quy tắc trên. Trả về your_response là JSON object:
 {{"tieu_de": "tên chương tiếng Việt, không kèm chữ Chương và số", "noi_dung": "toàn bộ nội dung đã biên tập, các đoạn cách nhau bằng một dòng trống, không có dòng tiêu đề",
  "thuat_ngu_moi": [{{"goc": "", "dich": ""}}], "nhan_vat_moi": [{{"ten": "", "gioi_tinh": "", "xung_ho": ""}}],
- "ghi_chu": ["chỗ convert mơ hồ và cách đã hiểu; chỗ đã thêm lời dẫn để người nghe biết ai nói"]}}"""
+ "ghi_chu": ["chỗ convert mơ hồ và cách đã hiểu; chỗ đã thêm lời dẫn để người nghe biết ai nói"],
+ "da_bo": ["nguyên văn phần lời tác giả/người dịch đã bỏ, chép từ bản convert"]}}"""
 
 FIX_PROMPT = """{rules}
 
@@ -108,7 +112,7 @@ Bản biên tập cần sửa:
 <<<
 {edited}
 >>>
-Trả về your_response là JSON object cùng dạng: {{"tieu_de": "", "noi_dung": "", "thuat_ngu_moi": [], "nhan_vat_moi": [], "ghi_chu": []}}"""
+Trả về your_response là JSON object cùng dạng: {{"tieu_de": "", "noi_dung": "", "thuat_ngu_moi": [], "nhan_vat_moi": [], "ghi_chu": [], "da_bo": []}}"""
 
 
 def split_chapters(raw: str):
@@ -165,14 +169,22 @@ def clean_for_speech(text: str) -> str:
     return re.sub(r'^(\*\*\*\n\n)+|(\n\n\*\*\*)+$', '', text).strip()
 
 
-def check_chapter(source: str, edited: str):
-    """Problems a listener would hear, or signs that text was dropped. Empty list means the chapter passes."""
+def removed_chars(answer):
+    """Length of the author's/translator's notes ChatGPT left out on purpose (rule 17), so they do not count as cut text."""
+    parts = answer.get('da_bo') if isinstance(answer, dict) else None
+    return sum(len(p) for p in parts if isinstance(p, str)) if isinstance(parts, list) else 0
+
+
+def check_chapter(source: str, edited: str, removed: int = 0):
+    """Problems a listener would hear, or signs that text was dropped. Empty list means the chapter passes.
+    `removed`: characters of author/translator notes left out on purpose."""
+    from .story_lint import notes
     problems = []
     body = edited.replace('\n***\n', '\n')
     found = sorted(set(FORBIDDEN.findall(body)))
     if found:
         problems.append('Còn ký hiệu cấm: ' + ' '.join(found))
-    ratio = len(edited) / max(1, len(source))
+    ratio = len(edited) / max(1, len(source) - min(removed, len(source) // 2))
     if ratio < 0.72:
         problems.append(f'Bản biên tập chỉ dài {ratio:.0%} bản convert: có thể đã bị cắt hoặc tóm tắt. Phải biên tập toàn văn.')
     if ratio > 1.3:
@@ -186,6 +198,9 @@ def check_chapter(source: str, edited: str):
         problems.append('Không được có dòng tiêu đề "Chương" trong nội dung.')
     if re.search(r'https?://|www\.|Nguồn\s*:', edited, re.I):
         problems.append('Còn URL hoặc dòng nguồn.')
+    left = notes(edited)
+    if left:
+        problems.append('Còn lời tác giả/người dịch, phải bỏ hẳn (quy tắc 17): ' + ' | '.join(edited[s:e][:80] for s, e, _ in left[:3]))
     return problems
 
 
@@ -272,7 +287,7 @@ class StoryEditor:
                                        number=number, title=chapter['title'], text=chapter['text'])
         answer = self._answer(self.ask(self._job('chapter', number), prompt))
         edited = clean_for_speech(answer['noi_dung'])
-        problems = check_chapter(chapter['text'], edited)
+        problems = check_chapter(chapter['text'], edited, removed_chars(answer))
         attempts = [{'problems': problems}]
         if problems:
             self.log(f'  Chương {number}: nhờ ChatGPT sửa: ' + '; '.join(p[:90] for p in problems))
@@ -280,10 +295,11 @@ class StoryEditor:
                                     problems='\n'.join('- ' + p for p in problems), source=chapter['text'], edited=edited)
             fixed = self._answer(self.ask(self._job('fix', number), fix))
             fixed_text = clean_for_speech(fixed['noi_dung'])
-            fixed_problems = check_chapter(chapter['text'], fixed_text)
+            fixed_problems = check_chapter(chapter['text'], fixed_text, removed_chars(fixed) or removed_chars(answer))
             attempts.append({'problems': fixed_problems})
             if len(fixed_problems) <= len(problems):
-                answer, edited, problems = {**answer, **fixed, 'ghi_chu': (answer.get('ghi_chu') or []) + (fixed.get('ghi_chu') or [])}, fixed_text, fixed_problems
+                answer, edited, problems = {**answer, **fixed, 'ghi_chu': (answer.get('ghi_chu') or []) + (fixed.get('ghi_chu') or []),
+                                            'da_bo': fixed.get('da_bo') or answer.get('da_bo') or []}, fixed_text, fixed_problems
         return answer, edited, problems, attempts
 
     @staticmethod
@@ -321,7 +337,7 @@ class StoryEditor:
             self._learn(profile, answer)
             progress['chapters'][key] = {'source_sha256': source_hash, 'title': heading, 'chars_source': len(chapter['text']),
                                          'chars_edited': len(edited), 'problems': problems, 'attempts': attempts,
-                                         'notes': answer.get('ghi_chu') or [], 'seconds': round(time.time() - started), 'at': time.time()}
+                                         'notes': answer.get('ghi_chu') or [], 'removed': answer.get('da_bo') or [], 'seconds': round(time.time() - started), 'at': time.time()}
             self._write(self.progress_path, progress)
             self.log(f'  xong sau {round(time.time() - started)} giây' + (' · CẦN XEM LẠI: ' + '; '.join(problems) if problems else ''))
             # Each finished chapter is merged (and handed to the caller) at once, so it can be reviewed and queued

@@ -262,15 +262,9 @@
     const system=button('',()=>navigate('settings'),'secondary studio-system-button');system.id='studioSystem';append(system,el('span','studio-system-dot'),el('span','','Kết nối & hệ thống'));header.querySelector('.row').prepend(system);
     for(const name of ['batch','story','queue','library','calendar','settings','details']) {const view=el('section','studio-view');view.id='studio-'+name;view.hidden=true;$('main').append(view);}
     const existingGlobalRefresh=$('#globalRefresh').onclick;$('#globalRefresh').onclick=()=>{existingGlobalRefresh?.();if(state.page==='details')state.details?.refresh(true);else refreshPage();};
-    const existingOpenProject=global.openProject;
     // Top-level function declarations are shared with the existing classic script.
     global.openProject=function(name,jobId=null){state.detailReturn=state.page==='queue'?'queue':'library';if(jobId&&global.StudioDetails){state.detailJobId=jobId;navigate('details',false);state.details?.destroy?.();state.details=global.StudioDetails.open($('#studio-details'),{jobId,request,onBack:()=>navigate(state.detailReturn),toast,openEditWorkspace:id=>global.openOptionalWorkspace?.(id)});return;}navigate('library');};
-    const back=$('#btnBackToGallery'),existingBack=back.onclick;back.textContent='← Quay lại';back.onclick=()=>{existingBack?.();$('#studioNewVideo').hidden=true;navigate(state.detailReturn||'library');};
-    const projectHeader=$('#viewWorkspace').firstElementChild;const createButton=button('+ Tạo video',openDrawer);createButton.id='studioNewVideo';const headerActions=el('div','studio-project-actions');const workflowEntry=$('#optionalWorkflowEntry');const consoleToggle=$('#btnToggleInlineLog');append(headerActions,consoleToggle,workflowEntry,createButton);projectHeader.append(headerActions);
-    const oldCreate=$('#btnConfirmProjectModal').onclick;$('#btnConfirmProjectModal').onclick=async()=>{await oldCreate();if($('#projectModal').hidden)openDrawer();};
-    $('#tabProjects').onclick=()=>navigate('projects');$('#tabClone').onclick=()=>navigate('settings');
-    $('#viewGallery h2').textContent='Dự án';$('#viewGallery p').textContent='Tiếp tục câu chuyện của bạn';
-    installDrawer();installSettings();
+    installSettings();
     const requested=new URLSearchParams(location.search).get('view');
     const initial=requested==='videos'?'library':requested;
     navigate(['batch','story','queue','library','calendar','settings'].includes(initial)?initial:'batch',true);
@@ -279,14 +273,13 @@
     updateSystemIndicator();initializeConnection();loadReadingProfiles();
   }
   let readingProfilesLoaded=0,readingProfilesRequest=null;
-  async function loadReadingProfiles() {if(readingProfilesRequest||Date.now()-readingProfilesLoaded<60000)return readingProfilesRequest;readingProfilesRequest=(async()=>{try{const data=await request('/api/voices');setVoiceProfiles(data.voices||data.items||[]);readingProfilesLoaded=Date.now();renderBatchRows();syncAutoDuration();}catch{/* A labelled fallback keeps video creation available if timing metadata cannot load. */}finally{readingProfilesRequest=null;}})();return readingProfilesRequest;}
+  async function loadReadingProfiles() {if(readingProfilesRequest||Date.now()-readingProfilesLoaded<60000)return readingProfilesRequest;readingProfilesRequest=(async()=>{try{const data=await request('/api/voices');const catalog=data.voices||data.items||[];setVoiceProfiles(catalog);state.voiceCatalog=catalog;state.voiceList=catalog.map(v=>[v.id,(v.name??v.label??v.id)+(v.available===false?' (không khả dụng)':'')]);readingProfilesLoaded=Date.now();renderBatchRows();}catch{/* A labelled fallback keeps video creation available if timing metadata cannot load. */}finally{readingProfilesRequest=null;}})();return readingProfilesRequest;}
   function navigate(name, reload=true) {
     if(name==='projects')name='library';  // the old project pages are gone
     if(state.page==='batch')state.createController?.save();
     if(state.page==='story'&&name!=='story')state.storyController?.save?.();
     state.details?.setVisible?.(name==='details');
-    state.page=name;closeDrawer(false);
-    $('#paneProjects').hidden=name!=='projects';$('#paneClone').hidden=true;
+    state.page=name;
     for(const view of document.querySelectorAll('.studio-view'))view.hidden=view.id!=='studio-'+name;
     for(const node of document.querySelectorAll('[data-studio-nav]')) {if(node.dataset.studioNav===(name==='details'?(state.detailReturn||'library'):name))node.setAttribute('aria-current','page');else node.removeAttribute('aria-current');}
     const view=$('#studio-'+name);if(reload&&view&&!view.children.length)view.replaceChildren(el('div','studio-loading','Đang tải…'));
@@ -303,75 +296,19 @@
   async function initializeConnection() {try{await factoryScope();}catch(error){$('#connectorStatus').textContent=error.message;}}
   function updateSystemIndicator() {const checks=$('#checks');const ready=checks?.querySelectorAll('.error').length===0&&checks?.querySelector('.pass');$('#studioSystem .studio-system-dot')?.classList.toggle('ready',!!ready);}
 
-  function installDrawer() {
-    const backdrop=el('div','studio-drawer-backdrop');backdrop.id='studioDrawerBackdrop';backdrop.hidden=true;backdrop.onclick=()=>closeDrawer();
-    const drawer=el('section','studio-drawer');drawer.id='studioDrawer';drawer.hidden=true;drawer.setAttribute('role','dialog');drawer.setAttribute('aria-modal','true');drawer.setAttribute('aria-labelledby','studioDrawerTitle');
-    const head=append(el('div','studio-drawer-head'),el('h2','','Tạo video'),button('×',()=>closeDrawer()));head.querySelector('h2').id='studioDrawerTitle';head.querySelector('button').setAttribute('aria-label','Đóng form tạo video');
-    const body=el('div','studio-drawer-body');body.append(el('h2','','Bạn muốn kể chuyện gì?'));
-    const form=$('#create');body.append(form);append(drawer,head,body);document.body.append(backdrop,drawer);
-    const source=el('div','studio-segments');source.setAttribute('role','group');source.setAttribute('aria-label','Nguồn nội dung');
-    for(const [value,label] of [['script','Tôi đã có kịch bản'],['idea','Phát triển ý tưởng']]){const node=button(label,()=>{form.dataset.inputMode=value;syncWorkflow();for(const b of source.children)b.setAttribute('aria-pressed',String(b===node));},'');node.dataset.input=value;node.setAttribute('aria-pressed',String(value==='idea'));source.append(node);}form.prepend(source);form.dataset.inputMode='idea';
-    const storyInput=el('input');storyInput.type='file';storyInput.accept='.txt,text/plain';storyInput.hidden=true;
-    storyInput.onchange=async()=>{const f=storyInput.files?.[0];storyInput.value='';if(!f)return;const story=parseStoryFile(await f.text(),f.name);if(!story){$('#submitError').textContent='File trống hoặc là file mục lục.';return;}
-      source.querySelector('[data-input="script"]')?.click();$('#idea').value=story.text;$('#idea').dispatchEvent(new Event('input',{bubbles:true}));$('#submitError').textContent='';};
-    const openStory=button('Mở file truyện (.txt)',()=>storyInput.click());openStory.classList.add('studio-open-story');$('#ideaLabel').before(openStory,storyInput);
-    const styleLabel=el('label','','Phong cách');styleLabel.htmlFor='studioStyle';const style=el('select');style.id='studioStyle';for(const [value,label] of Object.entries(styleLabels)){const o=el('option','',label);o.value=value;style.append(o);}style.value='case';style.onchange=syncWorkflow;$('#idea').after(styleLabel,style);
-    const importBox=el('div','studio-import');importBox.id='studioImport';importBox.hidden=true;
-    const label=el('label','','Nhập nội dung từ file');label.htmlFor='studioImportFile';const file=el('input');file.id='studioImportFile';file.type='file';file.accept='.txt,.json,text/plain,application/json';
-    file.onchange=async()=>{if(!file.files?.[0])return;try{state.batchItems=parseImport(await file.files[0].text(),file.files[0].name);renderBatchItems();$('#submitError').textContent='';}catch(error){$('#submitError').textContent=error.message;}finally{file.value='';}};
-    append(importBox,label,file,el('p','','TXT: mỗi video cách nhau một dòng trống. JSON: danh sách chuỗi hoặc mục có text, title, duration_seconds.'));
-    const rows=el('div');rows.id='studioBatchRows';const add=button('+ Thêm nội dung',()=>{state.batchItems=readBatchItems(false);state.batchItems.push({text:''});renderBatchItems();});append(importBox,rows,add);style.after(importBox);
-    const speechLabel=el('label','','Batch giọng đọc (câu mỗi lượt)');speechLabel.htmlFor='studioSpeechBatchSize';
-    const speechBatch=el('input');speechBatch.id='studioSpeechBatchSize';speechBatch.type='number';speechBatch.min='1';speechBatch.max='512';speechBatch.step='1';speechBatch.required=true;speechBatch.value=String(rememberedRow().speech_batch_size??256);
-    const speechField=append(el('div','studio-speech-batch'),speechLabel,speechBatch);$('#voice').after(speechField);
-    speechBatch.onchange=()=>{try{localStorage.setItem('videostudio.batch.last',JSON.stringify({...rememberedRow(),speech_batch_size:Number(speechBatch.value)}));}catch{}};
-    const advanced=el('details','studio-advanced');advanced.append(el('summary','','Cài đặt nâng cao'));
-    for(const selector of ['label[for=textProvider]','#textProvider','#textProviderNote','#flowBatchSizeLabel','#flowBatchSize','#flowBatchNote','#metaBatchSizeLabel','#metaBatchSize','#musicVolumeLabel','#musicVolume','label[for=createPitch]']){const node=$(selector);if(node)advanced.append(node);}
-    advanced.append($('#createPitch').parentElement);$('#limits').before(advanced);
-    const durationMode=selectNode([['auto','Tự tính theo giọng'],['manual','Tự nhập thời lượng']],'auto','Cách tính thời lượng',value=>{form.dataset.durationMode=value;syncAutoDuration();});
-    durationMode.id='studioDurationMode';$('#durationLabel').after(durationMode);
-    $('#limits').textContent='Video dọc 9:16 · Thời lượng được kiểm tra trước khi nhận';
-    form.onsubmit=async event=>{
-      event.preventDefault();if(form.dataset.submitting==='true')return;$('#submitError').textContent='';
-      try {
-        const items=state.batch?readBatchItems(true):[normalizeItem({text:$('#idea').value},0)];const voice=$('#voice').value;if(!voice)throw Error('Chọn giọng đọc trước khi tạo video.');
-        const duration=form.dataset.autoDuration==='true'?estimateNarrationSeconds($('#idea').value,voice,$('#studioStyle').value):Number($('#duration').value)*Number($('#unit').value);if(!Number.isFinite(duration)||duration<=0)throw Error('Nhập thời lượng hợp lệ.');
-        const speechSize=Number($('#studioSpeechBatchSize').value);if(!Number.isInteger(speechSize)||speechSize<1||speechSize>512)throw Error('Batch giọng đọc phải là số nguyên từ 1 đến 512.');
-        const payload={project:$('#projectInput').value||'Dự án mặc định',style:$('#studioStyle').value,input_mode:form.dataset.inputMode,defaults:{duration_seconds:duration,voice_id:voice,speech_batch_size:speechSize,text_provider:$('#textProvider').value,image_provider:$('#imageProvider').value,flow_batch_size:Number($('#flowBatchSize').value),...($('#imageProvider').value==='meta'?{meta_batch_size:Number($('#metaBatchSize').value)}:{}),music_volume:Number($('#musicVolume').value)/100,pitch:Number($('#createPitch').value)||0,quality_mode:'quick'},items};
-        if(payload.style==='meme'){payload.defaults.image_provider='comfy';payload.defaults.flow_batch_size=1;payload.defaults.music_volume=0;}
-        const scope=await factoryScope();const pending=pendingRequest(sessionStorage,payload,undefined,scope||'',form.dataset.autoDuration==='true');
-        form.dataset.submitting='true';$('#submit').disabled=true;
-        await request('/api/factory/batches',{method:'POST',headers:{'Idempotency-Key':pending.key,...(scope?{'X-Connector-Scope':scope}:{})},body:pending.identity});
-        sessionStorage.removeItem(PENDING_KEY);state.batchItems=[];renderBatchItems();closeDrawer();navigate('queue');toast('Đã thêm '+items.length+' video vào hàng đợi.');
-      } catch(error) {$('#submitError').textContent=error.message;}
-      finally {delete form.dataset.submitting;if(typeof global.enable==='function')global.enable();}
-    };
-    document.addEventListener('keydown',event=>{if(drawer.hidden)return;if(event.key==='Escape'){event.preventDefault();closeDrawer();}if(event.key==='Tab'){const nodes=[...drawer.querySelectorAll('button,input,select,textarea,summary,a[href]')].filter(n=>!n.disabled&&n.getClientRects().length);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
-    $('#idea').addEventListener('input',syncAutoDuration);
-    $('#voice').addEventListener('change',syncAutoDuration);
-    syncWorkflow();
-  }
-  function syncWorkflow() {const form=$('#create');$('#workflowMode').value=$('#studioStyle').value==='meme'?'meme':form.dataset.inputMode==='script'?'provided_narration':'research';if(typeof global.onWorkflowModeChange==='function')global.onWorkflowModeChange();$('#ideaLabel').textContent=form.dataset.inputMode==='script'?'Kịch bản của bạn':'Ý tưởng của bạn';$('#idea').placeholder=form.dataset.inputMode==='script'?'Nhập lời đọc của video, mỗi dòng là một câu.':'Nhập chủ đề, câu chuyện hoặc điều bạn muốn chia sẻ…';$('#workflowModeNote').textContent=form.dataset.inputMode==='script'?'Giữ nguyên lời đọc bạn nhập; tự chuẩn bị hình ảnh theo từng cảnh.':'Từ ý tưởng của bạn, phát triển kịch bản và hình ảnh theo phong cách đã chọn.';$('#durationControls').hidden=false;$('#durationLabel').textContent='Độ dài mong muốn';$('#unit').disabled=false;$('#duration').required=true;syncAutoDuration();}
   function estimateNote(voice) {return readingProfiles.get(voice)?.source&&readingProfiles.get(voice).source!=='default'?'theo giọng đã đo':'ước tính chung · giọng chưa đủ dữ liệu';}
-  function syncAutoDuration() {const form=$('#create');if(!form)return;const eligible=form.dataset.inputMode==='script'&&!state.batch;const selected=form.dataset.durationMode||(autoDuration($('#studioStyle')?.value,form.dataset.inputMode)?'auto':'manual');const auto=eligible&&selected==='auto';form.dataset.autoDuration=String(auto);const mode=$('#studioDurationMode');if(mode){mode.hidden=!eligible;mode.value=selected;}if(!auto){$('#durationControls').hidden=false;$('#duration').required=true;$('#durationLabel').textContent='Độ dài mong muốn';return;}
-    const seconds=estimateNarrationSeconds($('#idea').value,$('#voice').value,$('#studioStyle').value);$('#durationControls').hidden=true;$('#duration').required=false;$('#durationLabel').textContent=seconds?'Độ dài: khoảng '+durationText(seconds)+' ('+estimateNote($('#voice').value)+')':'Độ dài: tự tính khi bạn dán kịch bản';}
-  function setBatchMode(batch) {state.batch=batch;syncAutoDuration();$('#studioImport').hidden=!batch;$('#idea').hidden=batch;$('#idea').required=!batch;$('#ideaLabel').hidden=batch;for(const node of document.querySelectorAll('[data-batch]'))node.setAttribute('aria-pressed',String(node.dataset.batch===String(batch)));$('#submit').textContent=batch?'Thêm vào hàng đợi':'Tạo video';if(batch&&!state.batchItems.length){state.batchItems=[{text:''}];renderBatchItems();}}
-  function openDrawer() {if(!$('#projectInput').value){global.openProjectModal?.();return;}state.drawerFocus=document.activeElement;$('#studioDrawerTitle').textContent=$('#projectInput').value;$('#studioDrawer').hidden=false;$('#studioDrawerBackdrop').hidden=false;document.body.style.overflow='hidden';$('#studioDrawer .studio-drawer-head button').focus();}
-  function closeDrawer(restore=true) {if(!$('#studioDrawer'))return;const wasOpen=!$('#studioDrawer').hidden;$('#studioDrawer').hidden=true;$('#studioDrawerBackdrop').hidden=true;document.body.style.overflow='';if(wasOpen&&restore&&state.drawerFocus?.isConnected)state.drawerFocus.focus();}
-  function readBatchItems(validate) {const items=[...document.querySelectorAll('.studio-batch-item')].map(node=>({text:node.querySelector('textarea').value,title:node.querySelector('input[type=text]').value,duration_seconds:node.querySelector('input[type=number]').value}));if(!validate)return items;if(!items.length)throw Error('Thêm ít nhất một nội dung trước khi tạo.');return items.map(normalizeItem);}
-  function renderBatchItems() {const root=$('#studioBatchRows');root.replaceChildren(el('p','studio-batch-summary',state.batchItems.length+' video · Có thể sửa nội dung và thời lượng từng mục'));
-    state.batchItems.forEach((item,index)=>{const row=el('div','studio-batch-item');const title=el('input');title.type='text';title.value=item.title||'';title.placeholder='Tiêu đề video '+(index+1);title.maxLength=200;title.setAttribute('aria-label','Tiêu đề video '+(index+1));const remove=button('×',()=>{state.batchItems=readBatchItems(false);state.batchItems.splice(index,1);renderBatchItems();});remove.setAttribute('aria-label','Xóa mục '+(index+1));const area=el('textarea');area.value=item.text||'';area.maxLength=100000;area.setAttribute('aria-label','Nội dung video '+(index+1));const duration=el('input');duration.type='number';duration.min='0.1';duration.step='0.1';duration.placeholder='Mặc định';duration.value=item.duration_seconds||'';duration.setAttribute('aria-label','Thời lượng riêng video '+(index+1));const label=append(el('label'),el('span','','Thời lượng riêng (giây)'),duration);append(row,append(el('div','studio-batch-item-head'),title,remove),area,label);root.append(row);});
-  }
 
   // ---- Tạo video: one or more rows, each with its own settings and internal project.
   const inputLabels = {idea:'Phát triển ý tưởng',script:'Đã có kịch bản'};
-  function voiceOptions() {return [...($('#voice')?.options||[])].filter(o=>o.value).map(o=>[o.value,o.textContent]);}
+  // The voice catalog for Tạo video rows (loaded with the reading profiles); unavailable voices stay listed, marked.
+  function voiceOptions() {return state.voiceList||[];}
+  function defaultVoice() {const list=state.voiceCatalog||[];return (list.find(v=>v.available!==false&&/trúc\s*ly/i.test(String(v.name??v.label??v.id)))||list.find(v=>v.available!==false))?.id||'';}
   let voicePreviewPlayer;
   async function previewVoice(id) {try{const data=await request('/api/voices');const voice=(data.voices||data.items||[]).find(v=>v.id===id);const url=voice?.sample_url&&localURL(voice.sample_url);if(!url){toast('Giọng này chưa có mẫu nghe. Mở Kho tài nguyên → Giọng đọc để tạo bản thử riêng.');return;}voicePreviewPlayer?.pause();voicePreviewPlayer=new Audio(url);await voicePreviewPlayer.play();}catch(error){toast(error.message||'Chưa phát được mẫu giọng.');}}
   // Per-viewer convenience: start new rows with the style, source and voice used last time.
   function rememberedRow() {try{return JSON.parse(localStorage.getItem('videostudio.batch.last')||'{}')||{};}catch{return {};}}
   function rememberRow(row) {state.createController?.rememberSettings(row);try{localStorage.setItem('videostudio.batch.last',JSON.stringify(global.StudioCreate?global.StudioCreate.settingsOf(row):{style:row.style,input:row.input,voice:row.voice,image_provider:row.image_provider,speech_batch_size:row.speech_batch_size??256}));}catch{}}
-  function newBatchRow(base={}) {const last=state.batchRows.at(-1)||state.createController?.common||rememberedRow();if(global.StudioCreate)return global.StudioCreate.createRow({...last,voice:last.voice||$('#voice')?.value||voiceOptions()[0]?.[0]||''},base,(text,voice,style,row)=>estimateNarrationSeconds(text,voice,style)/(Number(row?.speech_speed)||1));return {key:global.crypto.randomUUID(),title:'',text:'',style:last.style||'case',input:last.input||'idea',voice:last.voice||$('#voice')?.value||voiceOptions()[0]?.[0]||'',image_provider:last.image_provider||$('#imageProvider')?.value||'comfy',speech_batch_size:last.speech_batch_size??256,seconds:last.seconds||60,unit:last.unit||'1',uncertain:false,error:'',...base};}
+  function newBatchRow(base={}) {const last=state.batchRows.at(-1)||state.createController?.common||rememberedRow();if(global.StudioCreate)return global.StudioCreate.createRow({...last,voice:last.voice||defaultVoice()||voiceOptions()[0]?.[0]||''},base,(text,voice,style,row)=>estimateNarrationSeconds(text,voice,style)/(Number(row?.speech_speed)||1));return {key:global.crypto.randomUUID(),title:'',text:'',style:last.style||'case',input:last.input||'idea',voice:last.voice||defaultVoice()||voiceOptions()[0]?.[0]||'',image_provider:last.image_provider||'comfy',speech_batch_size:last.speech_batch_size??256,seconds:last.seconds||60,unit:last.unit||'1',uncertain:false,error:'',...base};}
   function touchRow(row) {row.error='';if(!row.uncertain){row.key=global.crypto.randomUUID();delete row.submitted_duration_seconds;}}
   function selectNode(options,value,label,onchange) {const node=el('select');node.setAttribute('aria-label',label);for(const [v,text] of options){const o=el('option','',text);o.value=v;node.append(o);}node.value=value;if(node.value!==value&&options.length)node.value=options[0][0];node.onchange=()=>onchange(node.value);return node;}
   function batchRowNode(row,index) {
@@ -385,7 +322,7 @@
     const field=(label,control)=>append(el('label'),el('span','',label),control);
     const style=selectNode(Object.entries(styleLabels),row.style,'Phong cách video '+(index+1),v=>{row.style=v;touchRow(row);syncDuration();syncImage();});
     const input=selectNode(Object.entries(inputLabels),row.input,'Nguồn nội dung video '+(index+1),v=>{row.input=v;touchRow(row);area.placeholder=placeholder();syncDuration();});
-    const voices=voiceOptions();if(voices.length&&!voices.some(([v])=>v===row.voice))row.voice=voices[0][0];
+    const voices=voiceOptions();if(voices.length&&!voices.some(([v])=>v===row.voice))row.voice=defaultVoice()||voices[0][0];
     const voice=selectNode(voices.length?voices:[['','Đang tải giọng…']],row.voice,'Giọng đọc video '+(index+1),v=>{row.voice=v;touchRow(row);syncDuration();});
     // The voice list loads after the page; refresh the rows once it is there.
     voice.onfocus=()=>{if(!voices.length&&voiceOptions().length)renderBatchRows();};
@@ -408,13 +345,14 @@
   }
   function renderBatchRows() {if(state.createController)return state.createController.refresh();const list=$('#studioBatchList');if(!list)return;list.replaceChildren(...state.batchRows.map(batchRowNode));
     $('#studioBatchSubmit').textContent=state.batchRows.length?'Thêm '+state.batchRows.length+' video vào hàng đợi':'Thêm video vào hàng đợi';$('#studioBatchSubmit').disabled=!state.batchRows.length||state.batchSubmitting;}
+  // A row without its own music level gets 35%, the default of the create form this page replaced.
   function batchPayload(row) {
     const text=row.text.trim();if(!text)throw Error('Chưa có nội dung.');if(!row.voice)throw Error('Chọn giọng đọc.');
     const duration=durationForRow(row);if(!Number.isFinite(duration)||duration<=0)throw Error('Nhập độ dài hợp lệ.');
     const speechSize=Number(row.speech_batch_size??256);if(!Number.isInteger(speechSize)||speechSize<1||speechSize>512)throw Error('Batch giọng đọc phải là số nguyên từ 1 đến 512.');
     const name=(row.title.trim()||text.split('\n')[0]).slice(0,80).trim();
-    const provider=row.style==='meme'?'comfy':(row.image_provider||$('#imageProvider')?.value||'comfy');
-    const defaults={duration_seconds:duration,voice_id:row.voice,speech_batch_size:speechSize,speech_engine:row.speech_engine||'vieneu',khanh_steps:Number(row.khanh_steps||32),speech_rhythm:row.speech_rhythm||'natural',speech_speed:Number(row.speech_speed)||1,...(row.speech_reference_text?{speech_reference_text:row.speech_reference_text}:{}),text_provider:row.text_provider||$('#textProvider')?.value||'chatgpt',image_provider:provider,flow_batch_size:provider==='flow'?Number(row.flow_batch_size??$('#flowBatchSize')?.value??1):1,...(provider==='meta'?{meta_batch_size:Number(row.meta_batch_size??$('#metaBatchSize')?.value??8)}:{}),music_volume:row.style==='meme'?0:(row.music_volume??Number($('#musicVolume')?.value||0)/100),pitch:row.pitch??(Number($('#createPitch')?.value)||0),quality_mode:row.quality_mode||'quick'};
+    const provider=row.style==='meme'?'comfy':(row.image_provider||'comfy');
+    const defaults={duration_seconds:duration,voice_id:row.voice,speech_batch_size:speechSize,speech_engine:row.speech_engine||'vieneu',khanh_steps:Number(row.khanh_steps||32),speech_rhythm:row.speech_rhythm||'natural',speech_speed:Number(row.speech_speed)||1,...(row.speech_reference_text?{speech_reference_text:row.speech_reference_text}:{}),text_provider:row.text_provider||'chatgpt',image_provider:provider,flow_batch_size:provider==='flow'?Number(row.flow_batch_size??1):1,...(provider==='meta'?{meta_batch_size:Number(row.meta_batch_size??8)}:{}),music_volume:row.style==='meme'?0:(row.music_volume??0.35),pitch:row.pitch??0,quality_mode:row.quality_mode||'quick'};
     for(const field of ['edit_preset','references_enabled','captions_enabled','music_enabled','sfx_enabled'])if(row[field]!=null)defaults[field]=row[field];
     return {project:name,style:row.style,input_mode:row.input,defaults,items:[{text,title:name}],...(row.title.trim()?{}:{auto_name:true})};
   }
@@ -455,7 +393,43 @@
     if(state.storyController)return state.storyController.refresh();
     state.storyController=global.StoryWorkspace.mount(root,{toast,openQueue:()=>navigate('queue')});
   }
-  function loadBatchPage() {loadReadingProfiles();const root=$('#studio-batch');if(global.StudioCreate){if(state.createController)return state.createController.refresh();state.createController=global.StudioCreate.mount(root,{state,voiceOptions,estimateNarrationSeconds:(text,voice,style,row)=>estimateNarrationSeconds(text,voice,style)/(Number(row?.speech_speed)||1),durationText,textMetrics,styleLabels,importFiles:addStoryFiles,submit:submitBatch,toast,collectDroppedFiles,previewVoice});global.ContentStudio.importStoryFiles=files=>state.createController.importFiles(files);return;}if(root.querySelector('[data-batch-page]'))return renderBatchRows();
+  // ---- Tạo video từ bài Facebook: paste a link; the dedicated Chrome reads the post, ChatGPT looks at its text and
+  // pictures and writes the idea, which joins the queue with this page's settings (voice, pictures, engine).
+  function socialBox() {
+    const box=el('section','sc-panel studio-social');
+    const input=el('input');input.type='url';input.placeholder='Dán link bài Facebook (https://www.facebook.com/…)';input.setAttribute('aria-label','Link bài Facebook');
+    const minutes=selectNode([['1','khoảng 1 phút'],['2','khoảng 2 phút'],['3','khoảng 3 phút'],['5','khoảng 5 phút'],['8','khoảng 8 phút'],['10','khoảng 10 phút']],'3','Độ dài video',()=>{});
+    const list=el('div','studio-social-list');
+    const go=button('Tạo video từ bài này',async()=>{
+      const url=input.value.trim();if(!url){toast('Dán link bài Facebook trước.');return;}
+      try{
+        const row={...newBatchRow(),text:'(bài Facebook)',title:'',input:'idea',style:'news',duration_mode:'manual',seconds:Number(minutes.value),unit:'60'};
+        const {items,input_mode,auto_name,...batch}=batchPayload(row);
+        const scope=await factoryScope();go.disabled=true;
+        await request('/api/social/imports',{method:'POST',headers:scope?{'X-Connector-Scope':scope}:{},body:JSON.stringify({url,batch})});
+        input.value='';toast('Đã nhận link. Tool đang đọc bài; xong sẽ tự vào Hàng đợi.');await drawSocial(list);
+      }catch(error){toast(error.message);}finally{go.disabled=false;}
+    },'');go.classList.add('studio-social-go');
+    append(box,append(el('div','sc-panel-heading'),el('h2','','Tạo video từ bài Facebook'),el('span','sc-muted','Đọc bài trong Chrome riêng, ChatGPT phân tích chữ và ảnh rồi đưa vào hàng đợi')),
+      append(el('div','studio-social-form'),input,minutes,go),
+      el('p','sc-muted','Hình trong video là ảnh thật ChatGPT tìm trên mạng (cùng ảnh của bài), không vẽ; ảnh nào chưa ổn thì tải ảnh khác lên thay ở trang chi tiết video. Giọng đọc và bộ đọc lấy theo Thiết lập chung bên dưới. Video trong bài chỉ được chụp vài khung hình để phân tích, không dùng lại.'),list);
+    drawSocial(list);
+    return box;
+  }
+  async function drawSocial(list) {
+    clearTimeout(state.socialTimer);
+    let data;try{data=await request('/api/social/imports');}catch{return;}
+    if(!list.isConnected&&state.page!=='batch')return;
+    list.replaceChildren(...data.items.slice(0,6).map(item=>{
+      const row=el('div','studio-social-item is-'+item.state);
+      const facts=[item.author,item.characters?item.characters.toLocaleString('vi-VN')+' ký tự':'',item.pictures?item.pictures+' ảnh':'',item.frames?item.frames+' khung hình video':'',item.real_pictures!=null?(item.real_pictures>=3?item.real_pictures+' ảnh thật cho video':'ít ảnh thật, video sẽ vẽ ảnh'):''].filter(Boolean).join(' · ');
+      append(row,append(el('div','studio-social-head'),el('strong','',item.title||item.url),el('span','studio-social-state',item.step)),
+        facts?el('span','sc-muted',facts):null,item.error?el('p','studio-social-error',item.error):null,
+        item.state==='done'?button('Mở Hàng đợi',()=>navigate('queue'),'secondary'):null);
+      return row;}));
+    if(data.items.some(item=>['queued','reading','analysing'].includes(item.state)))state.socialTimer=setTimeout(()=>{if(list.isConnected)drawSocial(list);},4000);
+  }
+  function loadBatchPage() {loadReadingProfiles();const root=$('#studio-batch');if(global.StudioCreate){if(state.createController)return state.createController.refresh();state.createController=global.StudioCreate.mount(root,{state,voiceOptions,estimateNarrationSeconds:(text,voice,style,row)=>estimateNarrationSeconds(text,voice,style)/(Number(row?.speech_speed)||1),durationText,textMetrics,styleLabels,importFiles:addStoryFiles,submit:submitBatch,toast,collectDroppedFiles,previewVoice});global.ContentStudio.importStoryFiles=files=>state.createController.importFiles(files);const heading=root.querySelector('.sc-heading');if(heading)heading.after(socialBox());else root.prepend(socialBox());return;}if(root.querySelector('[data-batch-page]'))return renderBatchRows();
     if(!state.batchRows.length)state.batchRows=[newBatchRow()];
     const page=el('div');page.dataset.batchPage='true';
     const tools=el('div','studio-batch-tools');
@@ -478,7 +452,6 @@
     append(page,pageHeader('Tạo video','Nhập một hoặc nhiều kịch bản. Mỗi video có cài đặt riêng; hàng đợi xử lý lần lượt theo thứ tự bên dưới.'),tools,list,footer,status);
     root.replaceChildren(page);renderBatchRows();
     // Voices load after the page; fill rows still showing "Đang tải giọng…" once they arrive.
-    const voiceSelect=$('#voice');if(voiceSelect&&global.MutationObserver)new MutationObserver(()=>{if(voiceOptions().length&&document.querySelector('.studio-batch-settings select option[value=""]'))renderBatchRows();}).observe(voiceSelect,{childList:true});
   }
 
   async function renderNotify(card) {
@@ -612,7 +585,7 @@
   }
   function installSettings() {const root=$('#studio-settings');root.classList.add('st-page');root.append(pageHeader('Cài đặt','Lưu trữ, đăng bài, thông báo và kết nối tạo video.'));
     const group=(title,...cards)=>{const box=el('section','st-group');box.append(el('h2','st-group-title',title),append(el('div','st-grid'),...cards));root.append(box);return box;};
-    const connection=$('#viewWorkspace>.layout>aside');connection.classList.add('studio-connection','st-card');connection.hidden=false;connection.querySelector('h2').textContent='Kết nối tạo video';
+    const connection=$('#studioConnection');connection.classList.add('studio-connection','st-card');connection.hidden=false;connection.querySelector('h2').textContent='Kết nối tạo video';
     // The long list of runtime checks folds into one line: "14/14 đạt"; it opens by itself when something fails.
     const checks=$('#checks'),connector=$('#connectorStatus');
     if(checks&&!checks.closest('.st-checks')){
@@ -630,7 +603,45 @@
     append(tools,stHead('Công cụ & trợ giúp'),el('p','notice','Khi gặp lỗi, xem nhật ký hoặc kiểm tra hệ thống trong thẻ Kết nối tạo video.'),append(el('div','st-actions'),resourceLink),append(el('div','st-actions'),button('Xem nhật ký',openLogs,'secondary')));
     group('Lưu trữ video',driveCard,storage);
     group('Đăng bài và thông báo',channels,notifyCard);
-    group('Tạo video',connection,tools);
+    const services=el('section','card st-card st-wide studio-services');services.id='studioSettingsServices';renderServices(services);
+    group('Tạo video',connection,tools,services);
+  }
+
+  // ---- Dịch vụ nền: ComfyUI (images, music) and the dedicated Chrome (ChatGPT, Flow): status and stop / start / restart.
+  async function renderServices(card) {
+    clearTimeout(state.servicesTimer);
+    let data;
+    try {data=await request('/api/system/services');}
+    catch(error){card.replaceChildren(stHead('Dịch vụ nền'),el('p','studio-error',error.message));return;}
+    const labels={restart:'Khởi động lại',stop:'Tắt',start:'Bật'};
+    const row=(service,title,help,info)=>{
+      const task=info.task||{};
+      const line=append(el('div','studio-service'),append(el('div','studio-service-info'),el('strong','',title),
+        el('span','studio-service-state'+(info.running?' is-on':info.running===false?' is-off':''),task.busy?('Đang '+labels[task.busy].toLowerCase()+'…'):info.label||''),
+        el('span','st-muted',help),task.message&&!task.busy?el('span','st-muted',task.message):null));
+      const actions=el('div','st-actions');
+      for(const action of ['restart','stop','start']){
+        const go=button(labels[action],async()=>{
+          const ask=action==='start'?null:(service==='comfy'?'ComfyUI':'Chrome riêng')+': '+labels[action].toLowerCase()+'?';
+          if(ask&&!global.confirm(ask))return;
+          try{await request('/api/system/services/'+service+'/'+action,{method:'POST',body:JSON.stringify({})});}
+          catch(error){
+            if(/Đang có video/.test(error.message)&&global.confirm(error.message+'\n\nVẫn '+labels[action].toLowerCase()+'?')){
+              try{await request('/api/system/services/'+service+'/'+action,{method:'POST',body:JSON.stringify({force:true})});}catch(again){toast(again.message);}
+            } else toast(error.message);
+          }
+          renderServices(card);
+        },action==='restart'?'':'secondary');
+        go.disabled=Boolean(task.busy)||(action==='start'&&info.running)||(action==='stop'&&info.running===false);
+        actions.append(go);
+      }
+      line.append(actions);return line;
+    };
+    card.replaceChildren(stHead('Dịch vụ nền'),
+      row('comfy','ComfyUI','Vẽ ảnh ComfyUI và tạo nhạc nền. Khởi động lại khi bị treo hoặc báo thiếu VRAM vô lý.',data.comfy),
+      row('chrome','Chrome riêng','ChatGPT, Flow, Meta và đọc bài Facebook. Khởi động lại giữ nguyên đăng nhập.',data.chrome));
+    if((data.comfy.task||{}).busy||(data.chrome.task||{}).busy||state.page==='settings')
+      state.servicesTimer=setTimeout(()=>{if(card.isConnected&&state.page==='settings')renderServices(card);},(data.comfy.task||{}).busy||(data.chrome.task||{}).busy?3000:15000);
   }
 
   function clock(seconds) {const s=Math.max(0,Math.round(Number(seconds)||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+r:String(m).padStart(2,'0')+':'+r;}
@@ -721,52 +732,68 @@
   function libraryHeader(root) {
     root.replaceChildren(pageHeader('Kho video','Xem video và lưu dấu bài đã đăng.'));
     const tabs=el('div','studio-calendar-toolbar');tabs.setAttribute('aria-label','Nội dung Kho video');
-    for(const [value,label] of [['videos','Video'],['history','Sổ đăng'],['facebook','Facebook Reels']]){const tab=button(label,()=>{state.libraryView=value;return loadLibrary();});tab.setAttribute('aria-pressed',String(state.libraryView===value));tabs.append(tab);}root.append(tabs);
+    for(const [value,label] of [['videos','Video'],['history','Sổ đăng'],['facebook','Số liệu kênh']]){const tab=button(label,()=>{state.libraryView=value;return loadLibrary();});tab.setAttribute('aria-pressed',String(state.libraryView===value));tabs.append(tab);}root.append(tabs);
   }
   async function loadFacebookReels(refresh=false) {
-    // How the Page's Reels are doing: views, comments, likes, copyright check, the caption check and (with read_insights) reach.
+    // Số liệu kênh: Facebook Page Reels (views, comments, likes, copyright, caption check, reach with read_insights)
+    // and YouTube uploads (views, likes, comments, visibility), one connected channel at a time.
     const root=$('#studio-library'),ticket=++state.request;
     if(!root.querySelector('.st-reels'))libraryHeader(root);
     let box=root.querySelector('.st-reels');if(!box){box=el('section','st-reels');root.append(box);}
-    if(!box.childElementCount)box.append(el('div','studio-loading','Đang đọc Trang Facebook…'));
-    let data;try{data=await request('/api/publishing/facebook/reels'+(state.reelsChannel?'?channel_id='+encodeURIComponent(state.reelsChannel)+(refresh?'&refresh=true':''):(refresh?'?refresh=true':'')));}
-    catch(error){if(ticket!==state.request)return;box.replaceChildren(el('p','studio-error',error.message),button('Mở cài đặt',()=>navigate('settings'),'secondary'));return;}
-    if(ticket!==state.request)return;state.reelsChannel=data.channel_id;
+    if(!state.channels?.length||!state.channelsAt||Date.now()-state.channelsAt>60000){try{const data=await request('/api/publishing/channels');state.channels=data.items||[];state.channelsAt=Date.now();}catch{}}
+    const channels=state.channels.filter(c=>c.connected===true&&String(c.id).includes(':'));
+    if(!channels.length){box.replaceChildren(el('p','st-muted','Chưa kết nối kênh nào.'),button('Mở cài đặt',()=>navigate('settings'),'secondary'));return;}
+    if(!channels.some(c=>c.id===state.statsChannel))state.statsChannel=(channels.find(c=>c.platform==='facebook')||channels[0]).id;
+    const current=channels.find(c=>c.id===state.statsChannel);
+    const chips=el('div','st-stats-chips');
+    for(const channel of channels){const chip=button((channel.platform==='facebook'?'Facebook · ':'YouTube · ')+(channel.name||channel.id).split(' · ')[0],()=>{state.statsChannel=channel.id;box.replaceChildren();loadFacebookReels();},'studio-chip');chip.setAttribute('aria-pressed',String(channel.id===state.statsChannel));chips.append(chip);}
+    if(!box.querySelector('.st-stats-chips'))box.replaceChildren(chips,el('div','studio-loading','Đang đọc số liệu…'));
+    const facebook=current.platform==='facebook';
+    let data;try{data=await request((facebook?'/api/publishing/facebook/reels':'/api/publishing/youtube/videos')+'?channel_id='+encodeURIComponent(current.id)+(refresh?'&refresh=true':''));}
+    catch(error){if(ticket!==state.request)return;box.replaceChildren(chips,el('p','studio-error',error.message),button('Mở cài đặt',()=>navigate('settings'),'secondary'));return;}
+    if(ticket!==state.request)return;
     const num=v=>typeof v==='number'?v.toLocaleString('vi-VN'):'—';
     const when=new Date(data.checked_at*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
     const reload=button('Làm mới',()=>loadFacebookReels(true),'secondary');
-    const dashboard=el('a','button secondary','Xem kiếm tiền (Professional Dashboard)');dashboard.href='https://www.facebook.com/professional_dashboard';dashboard.target='_blank';dashboard.rel='noopener';
-    const head=append(el('div','st-reels-head'),append(el('div'),el('strong','',data.page.name),el('span','st-muted',` · ${num(data.page.followers)} người theo dõi · ${data.items.length} Reels gần nhất · đọc lúc ${when}`)),append(el('div','st-actions'),reload,dashboard));
-    const notes=[el('p','st-muted','Facebook không cho tool đọc trạng thái kiếm tiền: Reels nào bị gắn "nên xem" thì mở Professional Dashboard để kiểm tra.')];
-    if(!data.insights)notes.push(el('p','st-muted','Chưa có quyền read_insights nên chưa thấy lượt tiếp cận và thời gian xem.'));
-    const list=el('div','st-reels-list');
+    const dashboard=el('a','button secondary',facebook?'Xem kiếm tiền (Professional Dashboard)':'Mở YouTube Studio');
+    dashboard.href=facebook?'https://www.facebook.com/professional_dashboard':'https://studio.youtube.com/channel/'+current.id.split(':')[1];dashboard.target='_blank';dashboard.rel='noopener';
+    const summary=facebook?` · ${num(data.page.followers)} người theo dõi · ${data.items.length} Reels gần nhất`:` · ${num(data.page.followers)} người đăng ký · ${num(data.page.views)} lượt xem · ${num(data.page.videos)} video`;
+    const head=append(el('div','st-reels-head'),append(el('div'),el('strong','',data.page.name),el('span','st-muted',summary+` · đọc lúc ${when}`)),append(el('div','st-actions'),reload,dashboard));
+    const notes=facebook?[el('p','st-muted','Facebook không cho tool đọc trạng thái kiếm tiền: Reels nào bị gắn "nên xem" thì mở Professional Dashboard để kiểm tra.')]:[];
+    if(facebook&&!data.insights)notes.push(el('p','st-muted','Chưa có quyền read_insights nên chưa thấy lượt tiếp cận và thời gian xem.'));
+    const list=el('div','st-reels-list'+(facebook?'':' is-wide'));
     const verdictText={fix:'Lời đăng nên sửa',review:'Lời đăng nên xem lại',safe:'Lời đăng ổn'};
+    const privacyText={public:'Công khai',unlisted:'Không công khai',private:'Riêng tư'};
     for(const item of data.items){
       const card=el('article','st-reel'+(item.low?' is-low':''));
       const thumb=el('a','st-reel-thumb');thumb.href=item.url||'#';thumb.target='_blank';thumb.rel='noopener';
       if(item.picture){const img=el('img');img.src=item.picture;img.alt='';img.loading='lazy';img.referrerPolicy='no-referrer';thumb.append(img);}
       if(item.length)thumb.append(el('span','studio-video-length',clock(item.length)));
-      const first=String(item.caption||'').split('\n').find(Boolean)||'(không có lời đăng)';
+      const first=facebook?(String(item.caption||'').split('\n').find(Boolean)||'(không có lời đăng)'):item.title;
       const stats=el('div','st-reel-stats');
       const stat=(label,value)=>stats.append(append(el('span'),el('strong','',value),el('small','',label)));
-      stat('lượt xem',num(item.views));stat('người xem',num(item.post_views));stat('bình luận',num(item.comments));stat('thích',num(item.likes));
-      if(item.insights.reach!=null)stat('tiếp cận',num(item.insights.reach));
-      if(item.insights.avg_watch_ms!=null)stat('xem TB',clock(item.insights.avg_watch_ms/1000));
-      if(item.insights.new_followers!=null)stat('theo dõi mới',num(item.insights.new_followers));
+      stat('lượt xem',num(item.views));if(facebook)stat('người xem',num(item.post_views));stat('bình luận',num(item.comments));stat('thích',num(item.likes));
+      if(item.insights?.reach!=null)stat('tiếp cận',num(item.insights.reach));
+      if(item.insights?.avg_watch_ms!=null)stat('xem TB',clock(item.insights.avg_watch_ms/1000));
+      if(item.insights?.new_followers!=null)stat('theo dõi mới',num(item.insights.new_followers));
       const tags=el('div','st-reel-tags');
-      if(item.low)tags.append(el('span','st-pill is-warn','Lượt xem thấp hẳn so với Trang: nên xem trạng thái'));
-      tags.append(el('span','st-pill '+(item.check.verdict==='fix'?'is-bad':item.check.verdict==='review'?'is-warn':'is-ok'),verdictText[item.check.verdict]));
-      tags.append(el('span','st-pill '+(item.copyright==='match'?'is-bad':item.copyright==='clear'?'is-ok':''),item.copyright==='match'?'Trùng bản quyền':item.copyright==='clear'?'Bản quyền ổn':'Đang kiểm tra bản quyền'));
-      if(!item.published)tags.append(el('span','st-pill is-warn','Chưa công khai'));
+      if(item.low)tags.append(el('span','st-pill is-warn',facebook?'Lượt xem thấp hẳn so với Trang: nên xem trạng thái':'Lượt xem thấp hẳn so với kênh'));
+      if(facebook){
+        tags.append(el('span','st-pill '+(item.check.verdict==='fix'?'is-bad':item.check.verdict==='review'?'is-warn':'is-ok'),verdictText[item.check.verdict]));
+        tags.append(el('span','st-pill '+(item.copyright==='match'?'is-bad':item.copyright==='clear'?'is-ok':''),item.copyright==='match'?'Trùng bản quyền':item.copyright==='clear'?'Bản quyền ổn':'Đang kiểm tra bản quyền'));
+        if(!item.published)tags.append(el('span','st-pill is-warn','Chưa công khai'));
+      }else{
+        tags.append(el('span','st-pill '+(item.privacy==='public'?'is-ok':'is-warn'),item.publish_at&&item.privacy==='private'?'Hẹn công khai '+new Date(item.publish_at).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'}):privacyText[item.privacy]||item.privacy||'—'));
+      }
       if(item.tool)tags.append(el('span','st-pill','Đăng bằng tool'));
       const body=append(el('div','st-reel-body'),el('strong','st-reel-title',first),el('small','st-muted',item.created?new Date(item.created).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'}):''),stats,tags);
-      const words=item.check.issues.filter(i=>i.level!=='note');
+      const words=facebook?item.check.issues.filter(i=>i.level!=='note'):[];
       if(words.length){const more=el('details','st-help');more.append(el('summary','',`${words.length} chỗ trong lời đăng`));
         for(const issue of words)more.append(el('p','',`“${issue.text}” · ${issue.label}`+(issue.replace?.length?` · thử: ${issue.replace.slice(0,2).join(', ')}`:'')));body.append(more);}
       append(card,thumb,body);list.append(card);
     }
-    if(!data.items.length)list.append(el('p','st-muted','Trang chưa có Reels nào.'));
-    box.replaceChildren(head,...notes,list);
+    if(!data.items.length)list.append(el('p','st-muted',facebook?'Trang chưa có Reels nào.':'Kênh chưa có video nào.'));
+    box.replaceChildren(chips,head,...notes,list);
   }
   async function loadPublicationHistory() {
     const root=$('#studio-library'),ticket=++state.request;
@@ -972,7 +999,8 @@
       if(schedules.some(item=>['scheduled','publishing','blocked'].includes(item.state)&&Date.parse(item.publish_at||item.scheduled_at)>Date.now()))root.append(el('p','notice','Giữ máy bật và ứng dụng chạy để video được gửi đúng giờ.'));
       const filtered=schedules.filter(item=>{const key=localDay(item.scheduled_at||item.publish_at);return week.some(date=>dayKey(date)===key);});
       const calendar=el('div','studio-calendar-week');calendar.hidden=state.scheduleView!=='week';for(const date of week){const day=el('section','studio-calendar-day'+(dayKey(date)===localDay(new Date().toISOString())?' today':''));append(day,append(el('h3'),el('span','',date.toLocaleDateString('vi-VN',{weekday:'short'})),el('strong','',date.getDate())));for(const item of filtered.filter(i=>localDay(i.scheduled_at||i.publish_at)===dayKey(date))){const event=button('',()=>scheduleDetail(item),'studio-calendar-event');append(event,el('time','',prettyDate(item.scheduled_at||item.publish_at).split(' ')[0]),el('span','',item.title||item.video_title||'Video'),stateBadge(item.state||item.status));event.classList.add('is-'+(item.state||item.status||'scheduled'));day.append(event);}calendar.append(day);}root.append(calendar);
-      const list=el('div','studio-schedule-list'+(state.scheduleView==='week'?' studio-calendar-list-mobile':''));if(state.scheduleView==='week')list.style.display='none';if(!filtered.length)list.append(empty('Tuần này chưa có lịch đăng','Duyệt một video trong Kho video rồi bấm Lên lịch.'));for(const item of filtered.sort((a,b)=>Date.parse(a.publish_at)-Date.parse(b.publish_at)))list.append(scheduleRow(item));root.append(list);
+      const list=el('div','studio-schedule-list'+(state.scheduleView==='week'?' studio-calendar-list-mobile':''));if(state.scheduleView==='week')list.style.display='none';if(!filtered.length)list.append(empty('Tuần này chưa có lịch đăng','Bấm "Đăng / hẹn giờ" trên video trong Kho video, hoặc tạo Đăng tự động bên dưới.'));for(const item of filtered.sort((a,b)=>Date.parse(a.publish_at)-Date.parse(b.publish_at)))list.append(scheduleRow(item));root.append(list);
+      root.append(plansSection());
     }catch(error){errorNode(root,error);}}
   function dayKey(date) {return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
   function localDay(value) {try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));}catch{return '';}}
@@ -999,7 +1027,7 @@
         if(result.ok!==true||!result.entry?.id)throw Error('Chưa xác nhận được kết quả. Hãy thử lại để kiểm tra cùng yêu cầu.');
         try{global.localStorage.removeItem(postedReceiptKey(id));}catch{}
         modal.close();toast(result.cleanup_pending?'Đã lưu Sổ đăng; một số tệp đang chờ dọn.':'Đã lưu Sổ đăng và xóa job/tệp.');
-        await Promise.allSettled([()=>loadLibrary(),()=>global.loadProjects?.(),()=>global.loadJobs?.(),()=>refreshQueueBadge()].map(refresh=>Promise.resolve().then(refresh)));
+        await Promise.allSettled([()=>loadLibrary(),()=>refreshQueueBadge()].map(refresh=>Promise.resolve().then(refresh)));
       }catch(e){error.textContent=e.message;if(e.status===422){try{global.localStorage.removeItem(postedReceiptKey(id));pending=null;note.hidden=true;}catch{}}}
       finally{postedSending.delete(id);submit.disabled=false;submit.textContent='Đã đăng & dọn';}
     };
@@ -1103,6 +1131,68 @@
       if(!failed.length){modal.close();navigate('calendar');toast(done.length>1?`Đã lưu ${done.length} lịch đăng.`:'Đã lưu lịch đăng.');}
       else error.textContent=(done.length?`Đã lưu ${done.length} kênh. `:'')+'Chưa lưu được: '+failed.join(' · ');
     };
+  }
+  // --- Đăng tự động: plans that keep the calendar filled with the next finished videos ------------------------
+  const DAY_NAMES=['T2','T3','T4','T5','T6','T7','CN'];
+  function plansSection() {
+    if(!state.plansBox){state.plansBox=el('section','st-plans');loadPlans();setInterval(()=>{if(state.page==='calendar'&&!document.hidden)loadPlans();},60000);}
+    return state.plansBox;
+  }
+  async function loadPlans(run=false) {
+    const box=state.plansBox;if(!box)return;
+    let data;try{data=run?await request('/api/publishing/plans/run',{method:'POST',body:'{}'}):await request('/api/publishing/plans');}catch(error){box.replaceChildren(el('p','studio-error',error.message));return;}
+    if(run){toast(data.scheduled?`Đã xếp thêm ${data.scheduled} lịch đăng.`:'Không có lịch mới để xếp.');state.calendarSignature=null;loadCalendar();}
+    if(data.projects)state.planProjects=data.projects;
+    const channelName=id=>{const c=state.channels.find(x=>x.id===id);return c?(c.platform==='facebook'?'Facebook ':'YouTube ')+(c.name||id).split(' · ')[0]:id;};
+    const head=append(el('div','st-plans-head'),append(el('div'),el('h2','','Đăng tự động'),el('p','st-muted','Tool tự lấy video kế tiếp đã làm xong (truyện theo thứ tự chương) và xếp lịch trước tối đa 2 ngày, với tiêu đề, lời đăng và nhãn giống khi bạn đăng tay.')),
+      append(el('div','st-actions'),button('Xếp lịch ngay',()=>loadPlans(true),'secondary'),button('+ Kế hoạch mới',()=>openPlan(),'')));
+    const list=el('div','st-plan-list');
+    for(const plan of data.items){
+      const card=el('article','st-plan'+(plan.enabled?'':' is-off'));
+      const days=plan.days.length===7?'mỗi ngày':plan.days.map(d=>DAY_NAMES[d]).join(', ');
+      const facts=[filterStyleLabels[plan.style]||plan.style,plan.project||'mọi dự án',plan.times.join(', ')+' · '+days,plan.channels.map(channelName).join(' + ')].join(' · ');
+      const top=append(el('div','st-plan-top'),append(el('div'),el('strong','',plan.name),el('small','st-muted',facts)),el('span','st-pill '+(plan.enabled?'is-ok':''),plan.enabled?'Đang bật':'Đang tắt'));
+      const body=[top,el('small','st-muted',`${plan.waiting} video sẵn sàng chờ đăng`+(plan.ai_label?' · gắn nhãn AI':''))];
+      if(plan.note)body.push(el('p','st-plan-note',plan.note));
+      if(plan.upcoming.length){const ul=el('ul','st-plan-slots');for(const slot of plan.upcoming)ul.append(append(el('li'),el('time','',new Date(slot.slot_at*1000).toLocaleString('vi-VN',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})),el('span','',slot.title)));body.push(ul);}
+      if(plan.skipped.length){const more=el('details','st-help');more.append(el('summary','',`${plan.skipped.length} video bị bỏ qua`));for(const skip of plan.skipped)more.append(el('p','',`${skip.title}: ${skip.reason}`));body.push(more);}
+      const toggle=button(plan.enabled?'Tắt':'Bật',async()=>{try{await request('/api/publishing/plans/'+plan.id,{method:'PUT',body:JSON.stringify({...planBody(plan),enabled:!plan.enabled})});loadPlans();}catch(error){toast(error.message);}},'secondary');
+      const remove=button('Xoá',async()=>{if(!global.confirm('Xoá kế hoạch "'+plan.name+'"? Các lịch đăng đã xếp vẫn giữ trong lịch (huỷ ở đó nếu cần).'))return;await request('/api/publishing/plans/'+plan.id,{method:'DELETE'});loadPlans();},'st-link');
+      body.push(append(el('div','st-actions'),button('Sửa',()=>openPlan(plan),'secondary'),toggle,remove));
+      card.append(...body);list.append(card);
+    }
+    if(!data.items.length)list.append(el('p','st-muted','Chưa có kế hoạch nào. Ví dụ: Kể truyện · Trọng Sinh · 19:00 mỗi ngày · YouTube Tôi Đọc Truyện + Facebook.'));
+    box.replaceChildren(head,list);
+  }
+  function planBody(plan) {return {name:plan.name,style:plan.style,project:plan.project,channels:plan.channels,times:plan.times,days:plan.days,enabled:plan.enabled,ai_label:plan.ai_label};}
+  async function openPlan(plan=null) {
+    const modal=dialog(plan?'Sửa kế hoạch đăng':'Kế hoạch đăng mới');const form=el('form','st-post');const error=el('p','studio-error');error.setAttribute('role','alert');
+    const field=(text,input)=>append(el('label','st-post-field'),el('span','',text),input);
+    try{const data=await request('/api/publishing/channels');state.channels=data.items||[];state.channelDefaults=data.defaults||{};}catch{}
+    const name=el('input');name.maxLength=120;name.placeholder='Ví dụ: Trọng Sinh mỗi tối';name.value=plan?.name||'';
+    const style=el('select');for(const [value,label] of Object.entries(filterStyleLabels))style.append(new Option(label,value));style.value=plan?.style||'story';
+    const project=el('select');
+    const channelBox=el('div','st-post-channels');const boxes=[];
+    const fillProjects=()=>{project.replaceChildren(new Option('Mọi truyện / dự án loại này',''));for(const item of state.planProjects?.[style.value]||[])project.append(new Option(`${item.project} (${item.videos} video)`,item.project));project.value=plan&&plan.style===style.value?plan.project:'';};
+    const fillChannels=()=>{channelBox.replaceChildren();boxes.length=0;const defaults=Object.values(state.channelDefaults[style.value]||{});
+      for(const channel of state.channels.filter(c=>c.connected===true&&String(c.id).includes(':'))){const input=el('input');input.type='checkbox';input.checked=plan&&plan.style===style.value?plan.channels.includes(channel.id):defaults.includes(channel.id);
+        channelBox.append(append(el('label','st-post-channel'),input,append(el('span'),el('strong','',(channel.name||channel.id)),el('small','',channel.platform==='facebook'?'Facebook Reels · bản dọc':'YouTube · bản ngang 16:9'))));boxes.push({input,channel});}};
+    style.onchange=()=>{fillProjects();fillChannels();};fillProjects();fillChannels();
+    const times=el('input');times.value=(plan?.times||['19:00']).join(', ');times.placeholder='19:00, 21:30';
+    const dayBox=el('div','st-plan-days');const dayInputs=DAY_NAMES.map((label,index)=>{const input=el('input');input.type='checkbox';input.checked=plan?plan.days.includes(index):true;dayBox.append(append(el('label'),input,el('span','',label)));return input;});
+    const ai=el('input');ai.type='checkbox';ai.checked=plan?plan.ai_label:true;const on=el('input');on.type='checkbox';on.checked=plan?plan.enabled:true;
+    const save=el('button','','Lưu kế hoạch');save.type='submit';
+    append(form,field('Tên kế hoạch',name),field('Loại video',style),field('Truyện / dự án',project),append(el('div','st-post-field'),el('span','','Đăng lên'),channelBox),
+      field('Giờ đăng mỗi ngày (giờ Việt Nam, cách nhau bằng dấu phẩy)',times),append(el('div','st-post-field'),el('span','','Ngày trong tuần'),dayBox),
+      append(el('label','st-post-channel'),ai,append(el('span'),el('strong','','Gắn nhãn nội dung AI'),el('small','','YouTube: "Nội dung bị thay đổi hoặc tổng hợp"'))),
+      append(el('label','st-post-channel'),on,append(el('span'),el('strong','','Bật kế hoạch'),el('small','','Tắt thì tool không xếp lịch mới; lịch đã xếp vẫn giữ'))),
+      el('p','notice','Tool tự duyệt bản mới nhất của mỗi video khi xếp lịch. Video chỉ có lời đọc (MP3) và video chưa kiểm tra xong không được đăng.'),error,save);
+    modal.box.append(form);
+    form.onsubmit=async event=>{event.preventDefault();error.textContent='';save.disabled=true;
+      const body={name:name.value.trim(),style:style.value,project:project.value,channels:boxes.filter(b=>b.input.checked).map(b=>b.channel.id),
+        times:times.value.split(/[,\s]+/).filter(Boolean),days:dayInputs.map((input,index)=>input.checked?index:-1).filter(i=>i>=0),ai_label:ai.checked,enabled:on.checked};
+      try{await request('/api/publishing/plans'+(plan?'/'+plan.id:''),{method:plan?'PUT':'POST',body:JSON.stringify(body)});modal.close();toast('Đã lưu kế hoạch. Tool xếp lịch trong vài phút, hoặc bấm Xếp lịch ngay.');loadPlans();}
+      catch(e){error.textContent=e.message;}finally{save.disabled=false;}};
   }
   function scheduleDetail(item) {const modal=dialog(item.title||item.video_title||'Chi tiết lịch đăng');append(modal.box,el('p','notice',prettyDate(item.publish_at)+' · Giờ Việt Nam'),stateBadge(item.state||item.status),el('p','',item.caption||'Chưa có lời đăng.'));if(item.message||item.error)modal.box.append(el('p','studio-error',item.message||item.error));if(item.remote_url){try{const url=new URL(item.remote_url);if(url.protocol==='https:'&&/^(www\.)?(youtube\.com|youtu\.be|facebook\.com)$/.test(url.hostname)){const link=el('a','button secondary','Mở bài đã đăng');link.href=url.href;link.target='_blank';link.rel='noopener';modal.box.append(link);}}catch{}}if(['blocked','needs_attention'].includes(item.state))modal.box.append(button('Thử lại',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/retry',{method:'POST',body:'{}'});modal.close();loadCalendar();}catch(error){toast(error.message);}}));if(['scheduled','blocked'].includes(item.state))modal.box.append(button('Hủy lịch đăng',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id),{method:'DELETE'});modal.close();loadCalendar();toast('Đã hủy lịch đăng.');}catch(error){toast(error.message);}}));}
   labels.connected='Đã kết nối';

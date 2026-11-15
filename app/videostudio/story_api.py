@@ -18,6 +18,8 @@ from .story_library import ConflictError, StoryLibrary, estimate_seconds, natura
 
 SOURCES_ROOT = Path(os.getenv('VS_STORY_SOURCES', str(APP_ROOT.parent / 'wikicv_auto_v3_2_mixed_titles' / 'du_lieu_truyen')))
 MAX_UPLOAD = 20 * 1024 ** 3
+# Stories edited by ChatGPT at the same time; each has its own ChatGPT tab (the daemon's 'story-<source>' lane).
+PARALLEL_EDITS = 2
 
 
 def group_by_length(chapter_ids, words, target_minutes, speed=1.0, rate=4.2):
@@ -198,6 +200,39 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             raise HTTPException(404, 'Không có lượt tải này')
         return link_jobs[task_id]
 
+    # The Drive gameplay folder: new clips are fetched by themselves, used ones are moved into "Used".
+    from .gameplay_drive import GameplayFolder
+    gameplay_folder = GameplayFolder(store, library)
+    app.state.gameplay_folder = gameplay_folder
+
+    def folder_call(function, *args):
+        from .drive_storage import DriveError
+        try:
+            return call(function, *args)
+        except DriveError as error:
+            raise HTTPException(422, str(error))
+
+    @app.get('/api/story/gameplay/drive-folder')
+    def drive_folder_status():
+        return gameplay_folder.status()
+
+    @app.put('/api/story/gameplay/drive-folder')
+    def drive_folder_set(data: dict, request: Request):
+        same_origin(request)
+        result = folder_call(gameplay_folder.configure, data)
+        if data.get('link') and result['folder']:
+            gameplay_folder.start_sync()  # fetch the clips already there right away
+        return gameplay_folder.status()
+
+    @app.get('/api/story/gameplay/drive-folders')
+    def drive_folder_browse(account: str = '', parent: str = 'root'):
+        return folder_call(gameplay_folder.browse, account or None, parent)
+
+    @app.post('/api/story/gameplay/drive-folder/sync')
+    def drive_folder_sync(request: Request):
+        same_origin(request)
+        return folder_call(gameplay_folder.start_sync)
+
     @app.put('/api/story/books/{book_id}/gameplay')
     def playlist(book_id: str, data: dict, request: Request):
         same_origin(request)
@@ -253,6 +288,47 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             raise HTTPException(404, 'Không có ảnh nền')
         return FileResponse(path)
 
+    @app.post('/api/story/books/{book_id}/retake')
+    def retake(book_id: str, data: dict, request: Request):
+        """Mark a sentence the voice read wrong; adding the chapter to the queue again re-reads only that part."""
+        same_origin(request)
+        try:
+            return library.retake(book_id, data.get('text'))
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy truyện')
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+
+    @app.get('/api/story/books/{book_id}/issues')
+    def book_issues(book_id: str, code: str = '', limit: int = 1000):
+        """Soát chữ for the whole book: every spot to check, in reading order."""
+        try:
+            return library.issues(book_id, code, limit)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy truyện')
+
+    @app.post('/api/story/books/{book_id}/strip-notes')
+    def strip_notes(book_id: str, request: Request):
+        """Xoá lời bình: every author/translator note in the book; the old text stays in Bản cũ."""
+        same_origin(request)
+        try:
+            return library.strip_notes(book_id)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy truyện')
+
+    @app.get('/api/story/books/{book_id}/pronunciation-suggestions')
+    def pronunciation_suggestions(book_id: str):
+        """Abbreviations, numbers glued to units, clock times and symbols across the book, with a proposed reading."""
+        from .story_pronounce import suggest
+        try:
+            book_data = library.book(book_id)
+        except KeyError:
+            raise HTTPException(404, 'Không tìm thấy truyện')
+        with library.db() as db:
+            texts = [r['text'] for r in db.execute('SELECT text FROM chapters WHERE book_id=? AND deleted=0', (book_id,))]
+        existing = [r.get('from') for r in (book_data.get('settings') or {}).get('pronunciations') or []]
+        return {'items': suggest(texts, existing), 'chapters': len(texts)}
+
     @app.post('/api/story/books/{book_id}/preview')
     def layout_preview(book_id: str, data: dict, request: Request):
         """A still frame of each layout (first frame of the playlist + titles + a sample caption). Never moves the gameplay cursor."""
@@ -301,7 +377,7 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         settings, layout = book_data['settings'], book_data['layout']
         if not audio_only and not layout.get('horizontal', True) and not layout.get('vertical', True):
             raise HTTPException(422, 'Chọn ít nhất một định dạng: ngang hoặc dọc')
-        clips = [c for c in library.gameplay(book_id)['items'] if c['available']]
+        clips, _ = library.playable(book_id)
         if not clips and not audio_only:
             raise HTTPException(422, 'Chưa có clip gameplay cho truyện này. Mở Gameplay → Thêm clip trước khi xếp hàng (nghe thử giọng vẫn dùng được).')
         import shutil
@@ -407,7 +483,8 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         return {'name': path.name, 'title': profile.get('ten_truyen') or meta.get('title') or path.name, 'chapters': total,
                 'edited': len(progress), 'needs_review': sorted(int(k) for k, v in progress.items() if v.get('problems')),
                 'merged': (path / 'truyen_gop_bien_tap.txt').is_file(), 'running': bool(state.get('thread') and state['thread'].is_alive()),
-                'log': (state.get('log') or [])[-8:], 'error': state.get('error'), 'book_id': book_row['id'] if book_row else None}
+                'log': (state.get('log') or [])[-8:], 'error': state.get('error'), 'book_id': book_row['id'] if book_row else None,
+                'url': meta.get('introduction_url'), 'downloaded': meta.get('downloaded_chapters')}
 
     @app.get('/api/story/sources')
     def sources():
@@ -468,8 +545,8 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         state = editing.get(name)
         if state and state['thread'].is_alive():
             return source_info(path)
-        if any(s['thread'].is_alive() for s in editing.values()):
-            raise HTTPException(409, 'Đang biên tập một truyện khác. Chờ xong rồi chạy tiếp truyện này.')
+        if sum(s['thread'].is_alive() for s in editing.values()) >= PARALLEL_EDITS:
+            raise HTTPException(409, f'Đang biên tập {PARALLEL_EDITS} truyện cùng lúc. Chờ một truyện xong rồi chạy tiếp truyện này.')
         start_edit(path, data.get('from'), data.get('to'))
         return source_info(path)
 
@@ -481,8 +558,43 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
                 saved = json.loads(marker.read_text(encoding='utf-8'))
             except (OSError, ValueError):
                 saved = {}
-            if not editing:
+            if sum(s['thread'].is_alive() for s in editing.values()) < PARALLEL_EDITS:
                 start_edit(marker.parent.parent, saved.get('from'), saved.get('to'))
+
+    # --- WikiCV downloader (the user's own crawl_wikicv.py, run as is) -----------------------------------------
+    from .story_crawl import Crawler
+
+    def crawl_done(result):
+        if result.get('stopped'):
+            return
+        try:
+            from .notify import send
+            title = result.get('title') or result.get('url')
+            if result.get('error'):
+                send(store, f'⚠️ Tải truyện dừng: {title}\n{result["error"][:300]}')
+            else:
+                send(store, f'📥 Đã tải {result.get("saved", 0)} chương mới: {title}' + (' (đến chương mới nhất)' if result.get('complete') else ''))
+        except Exception:
+            pass
+    crawler = Crawler(SOURCES_ROOT.parent / 'crawl_wikicv.py', SOURCES_ROOT, on_finish=crawl_done)
+
+    @app.get('/api/story/crawl')
+    def crawl_status():
+        return crawler.status()
+
+    @app.post('/api/story/crawl')
+    def crawl_start(data: dict, request: Request):
+        """Download a WikiCV book (or only its new chapters) into the sources folder; saved chapters are never fetched again."""
+        same_origin(request)
+        try:
+            return crawler.start(data.get('url'), data.get('max_chapters', 0))
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+
+    @app.post('/api/story/crawl/stop')
+    def crawl_stop(request: Request):
+        same_origin(request)
+        return crawler.stop()
 
     @app.get('/api/story/sources/{name}')
     def source_status(name: str):

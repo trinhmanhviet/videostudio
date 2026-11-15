@@ -38,7 +38,7 @@ def _cached_digest(path):
 
 
 REQUEST_FIELDS = {'voice_id', 'duration_seconds', 'music_volume', 'pitch', 'quality_mode',
-                  'image_provider', 'flow_batch_size', 'meta_batch_size', 'speech_batch_size', 'text_provider',
+                  'image_provider', 'image_pool', 'flow_batch_size', 'meta_batch_size', 'speech_batch_size', 'text_provider',
                   'speech_engine','khanh_steps','speech_rhythm','speech_speed','speech_reference_text',
                   'edit_preset', 'references_enabled', 'captions_enabled', 'music_enabled', 'sfx_enabled'}
 
@@ -65,6 +65,16 @@ def _message(error):
         detail = ' · '.join(parts)
     return str(detail)[:2000]
 
+
+
+def slim_job(job):
+    """A job for list views: every checkpoint stays (so "which stages are done" still works) with only its short
+    values. Narration lines, scene lists and asset lists (tens of MB over many videos) are left out."""
+    def small(value):
+        return value is None or isinstance(value, (bool, int, float)) or (isinstance(value, str) and len(value) <= 1000)
+    checkpoints = {stage: ({k: v for k, v in data.items() if small(v)} if isinstance(data, dict) else data)
+                   for stage, data in (job.get('checkpoints') or {}).items()}
+    return {**job, 'checkpoints': checkpoints}
 
 class ContentFactory:
     def __init__(self, store, submit_job, public_job=None, validate_submission=None, video_probe=None, retry_job=None):
@@ -264,6 +274,8 @@ class ContentFactory:
         return item
 
     def queue(self):
+        """Polled for the nav badge and the Hàng đợi page: jobs are sent slim (see slim_job); a video's own page
+        loads the full job."""
         with self.store.db() as db:
             self._sync(db)
             paused = bool(db.execute('SELECT paused FROM factory_settings WHERE id=1').fetchone()[0])
@@ -283,8 +295,11 @@ class ContentFactory:
         counts = {}
         for item in items:
             counts[item['state']] = counts.get(item['state'], 0) + 1
+        for item in items:
+            if item.get('job'):
+                item['job'] = slim_job(item['job'])
         return {'paused': paused, 'items': items, 'counts': counts,
-                'active_job': self.public_job(self.store.get(active['id'])) if active else None}
+                'active_job': slim_job(self.public_job(self.store.get(active['id']))) if active else None}
 
     def get_batch(self, batch_id):
         with self.store.db() as db:
@@ -674,7 +689,8 @@ class ContentFactory:
             # Publisher registers this optional query hook for per-channel state.
         records = []
         for identifier in ids:
-            try:job = self.store.get(identifier)
+            # Only what the list needs: render/verify (which files are the video) and images (the thumbnail).
+            try:job = self.store.get_light(identifier, ('render', 'verify', 'images'))
             except KeyError:continue
             request = job['request']
             meta = metadata.get(identifier, {})

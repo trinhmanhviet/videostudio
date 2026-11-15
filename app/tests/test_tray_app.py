@@ -98,7 +98,7 @@ class TrayAppTests(unittest.TestCase):
         self.assertTrue(running['Mở hệ thống'].get('grayed'))
         self.assertFalse(running['Dừng hệ thống'].get('grayed'))
         commands, _ = flatten_menu(self.app.menu())
-        self.assertEqual(len(commands), 13)
+        self.assertEqual(len(commands), 19)  # + 6 in Dịch vụ nền (ComfyUI, Chrome riêng)
 
     def test_click_when_stopped_starts_system_then_opens_studio_once(self):
         def start(root, action, emit):
