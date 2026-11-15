@@ -20,7 +20,9 @@ def parse_reply(text):
             d[k]=v
         return d
     def invalid(value):raise ValueError('Nonfinite JSON number')
-    d=json.loads(raw,object_pairs_hook=pairs,parse_constant=invalid)
+    # strict=False: a reply shown as plain text (not a code block) carries real line breaks inside its strings
+    # (a whole chapter); strict JSON would reject it and the reply was never accepted (2026-11-16).
+    d=json.loads(raw,object_pairs_hook=pairs,parse_constant=invalid,strict=False)
     if not isinstance(d,dict):raise ValueError('JSON object required')
     return d
 

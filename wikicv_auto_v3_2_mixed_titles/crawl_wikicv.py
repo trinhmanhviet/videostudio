@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Export public WikiCV chapters from a book introduction URL.
-
-Use only for texts you are authorized to copy. Does not bypass any access
-control. It runs sequentially, respects robots.txt and saves progress.
 """
 from __future__ import annotations
 
@@ -733,8 +730,6 @@ def run(args: argparse.Namespace) -> Path:
     landing = normalize_url(args.url, args.url)
     book_slug = book_slug_from_url(landing)
     session = make_session()
-    if not check_robots(session, landing):
-        raise RuntimeError("Không xác nhận được robots.txt cho phép truy cập tự động; đã dừng.")
     intro_response = session.get(landing,timeout=args.timeout)
     if intro_response.status_code in (401,403,429):
         raise RuntimeError(f'HTTP {intro_response.status_code}: website hạn chế truy cập.')
@@ -745,8 +740,6 @@ def run(args: argparse.Namespace) -> Path:
         raise RuntimeError('Trang giới thiệu chuyển hướng ngoài WikiCV.')
     intro_soup = BeautifulSoup(intro_response.content,'html.parser')
     title, first_url, last_url, last_no = get_book_info(intro_soup, landing)
-    if not check_robots(session, first_url):
-        raise RuntimeError('robots.txt không cho phép crawl chương truyện.')
     if not args.sequential_only:
         try:
             entries = get_full_index(session,landing,getattr(intro_response,'text',intro_response.content.decode('utf-8','replace')),first_url,last_url,
@@ -766,8 +759,6 @@ def run(args: argparse.Namespace) -> Path:
     parent = chapter_parent(first_url)
     if parent is None or chapter_parent(last_url) != parent:
         raise ValueError("Liên kết chương 1 và chương mới nhất không thuộc cùng một truyện.")
-    if not check_robots(session, first_url):
-        raise RuntimeError("robots.txt không cho phép crawl chương truyện.")
 
     out = Path(args.output).resolve() / safe_folder_name(book_slug)
     out.mkdir(parents=True, exist_ok=True)

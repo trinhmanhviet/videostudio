@@ -234,3 +234,10 @@ class ParallelEditTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReplyParsingTests(unittest.TestCase):
+    def test_a_plain_text_reply_with_real_line_breaks_in_a_chapter_is_accepted(self):
+        from videostudio.exchanges import parse_reply
+        reply = '{\n  "request_id": "x",\n  "result": {"your_response": {"noi_dung": "Sáng sớm hôm sau.\n\nBiệt thự nhà họ Hoắc."}}\n}'
+        self.assertEqual(parse_reply(reply)['result']['your_response']['noi_dung'], 'Sáng sớm hôm sau.\n\nBiệt thự nhà họ Hoắc.')

@@ -520,7 +520,7 @@ class ChromeChatGPTBridge:
                         cleaned = text.strip()
                         if cleaned.startswith('`json\n') and cleaned.endswith('\n`'): cleaned = cleaned[8:-4].strip()
                         elif cleaned.startswith('`\n') and cleaned.endswith('\n`'): cleaned = cleaned[4:-4].strip()
-                        dec = json.JSONDecoder()
+                        dec = json.JSONDecoder(strict=False)
                         raw_obj, _ = dec.raw_decode(cleaned)
                         if isinstance(raw_obj, dict):
                             value = raw_obj
