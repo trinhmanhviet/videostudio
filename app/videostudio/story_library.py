@@ -85,9 +85,11 @@ def split_chapters(text):
     text = clean_text(text)
     lines = text.split('\n')
     marks = [i for i, line in enumerate(lines) if HEADING.match(line)]
-    if len(marks) < 2:
+    intro = '\n'.join(lines[:marks[0]]).strip() if marks else ''
+    # One heading after a single title line is still a merged file (a book whose first chapter alone is edited so far);
+    # imported whole, that file became an extra chapter and shifted the numbering of every chapter after it.
+    if len(marks) < 2 and not (marks and intro and '\n' not in intro and len(intro) <= 200):
         return None, []
-    intro = '\n'.join(lines[:marks[0]]).strip()
     title = intro.split('\n')[0].strip() if intro and len(intro.split('\n')[0]) <= 200 else ''
     chapters = []
     for index, start in enumerate(marks):

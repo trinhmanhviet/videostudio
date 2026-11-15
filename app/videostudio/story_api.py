@@ -40,7 +40,17 @@ def group_by_length(chapter_ids, words, target_minutes, speed=1.0, rate=4.2):
 
 def register_story_routes(app, store, factory, pipeline, voices, same_origin, resume_editing=True):
     library = StoryLibrary(ffprobe=getattr(pipeline, 'ffprobe', 'ffprobe'), ffmpeg=getattr(pipeline, 'ffmpeg', 'ffmpeg'))
-    editing = {}  # source name -> {'thread', 'log': [...], 'error', 'done'}
+    editing = {}  # source name -> {'thread', 'log': [...], 'error', 'stop': Event (Pause), 'status': live request state}
+
+    def edit_marker(path):
+        """bien_tap/.dang-bien-tap: an edit to continue after a restart ({'from','to'}); 'paused': true keeps it
+        stopped (a restart never resumes a story the owner paused)."""
+        marker = path / 'bien_tap' / '.dang-bien-tap'
+        try:
+            saved = json.loads(marker.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            saved = None
+        return marker, saved if isinstance(saved, dict) else ({} if marker.is_file() else None)
 
     def call(function, *args, **kwargs):
         try:
@@ -473,6 +483,8 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         profile = read('bien_tap/ho_so.json', {})
         progress = read('bien_tap/tien_do.json', {}).get('chapters', {})
         state = editing.get(path.name) or {}
+        running = bool(state.get('thread') and state['thread'].is_alive())
+        _, saved = edit_marker(path)
         from .story_editor import split_chapters
         try:
             total = len(split_chapters((path / 'truyen_gop.txt').read_text(encoding='utf-8'))[1])
@@ -482,7 +494,10 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             book_row = db.execute('SELECT id FROM books WHERE source=? AND deleted=0', ('source:' + path.name,)).fetchone()
         return {'name': path.name, 'title': profile.get('ten_truyen') or meta.get('title') or path.name, 'chapters': total,
                 'edited': len(progress), 'needs_review': sorted(int(k) for k, v in progress.items() if v.get('problems')),
-                'merged': (path / 'truyen_gop_bien_tap.txt').is_file(), 'running': bool(state.get('thread') and state['thread'].is_alive()),
+                'merged': (path / 'truyen_gop_bien_tap.txt').is_file(), 'running': running,
+                'pausing': running and bool(state.get('stop') and state['stop'].is_set()),
+                'paused': not running and bool(saved and saved.get('paused')),
+                'status': (state.get('status') or '') if running else '',
                 'log': (state.get('log') or [])[-8:], 'error': state.get('error'), 'book_id': book_row['id'] if book_row else None,
                 'url': meta.get('introduction_url'), 'downloaded': meta.get('downloaded_chapters')}
 
@@ -508,7 +523,9 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         marker = path / 'bien_tap' / '.dang-bien-tap'
         marker.parent.mkdir(exist_ok=True)
         marker.write_text(json.dumps({'from': first, 'to': last}), encoding='utf-8')
-        log = []
+        # The log of a paused run goes on, so the owner sees where it stopped and where it went on.
+        log = (editing.get(name) or {}).get('log') or []
+        stop = threading.Event()
 
         def chapter_done(number):
             try:
@@ -519,21 +536,27 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
                 log.append('Chưa thêm được chương vào Kể truyện: ' + str(error)[:200])
 
         def work():
-            from .story_editor import StoryEditor
+            from .story_editor import Paused, StoryEditor
             try:
-                StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line))).run(first, last, on_chapter=chapter_done)
+                StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line)),
+                            status=lambda text: editing[name].update(status=text), stop=stop).run(first, last, on_chapter=chapter_done)
                 marker.unlink(missing_ok=True)  # finished: nothing to resume
                 try:
                     from .notify import send
                     send(store, f'📚 Đã biên tập xong truyện: {source_info(path)["title"]}')
                 except Exception:
                     pass
+            except Paused:
+                log.append(time.strftime('%H:%M ') + 'Đã tạm dừng. Các chương đã xong vẫn giữ; bấm Tiếp tục để biên tập tiếp.')
             except Exception as error:
                 editing[name]['error'] = str(error)[:500]
                 log.append('Dừng: ' + str(error)[:300])
+            finally:
+                editing[name]['status'] = ''
 
+        del log[:-40]
         thread = threading.Thread(target=work, name='story-edit-' + name, daemon=True)
-        editing[name] = {'thread': thread, 'log': log, 'error': None}
+        editing[name] = {'thread': thread, 'log': log, 'error': None, 'stop': stop, 'status': ''}
         thread.start()
 
     @app.post('/api/story/sources/{name}/edit')
@@ -547,19 +570,52 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             return source_info(path)
         if sum(s['thread'].is_alive() for s in editing.values()) >= PARALLEL_EDITS:
             raise HTTPException(409, f'Đang biên tập {PARALLEL_EDITS} truyện cùng lúc. Chờ một truyện xong rồi chạy tiếp truyện này.')
-        start_edit(path, data.get('from'), data.get('to'))
+        _, saved = edit_marker(path)
+        saved = saved or {}
+        if saved.get('paused') and (state or {}).get('log') is not None:
+            state['log'].append(time.strftime('%H:%M ') + 'Tiếp tục biên tập.')
+        start_edit(path, data.get('from', saved.get('from')), data.get('to', saved.get('to')))
+        return source_info(path)
+
+    @app.post('/api/story/sources/{name}/pause')
+    def pause_source(name: str, request: Request):
+        """Tạm dừng: stops after the request in flight reaches a safe point (a chapter not yet typed is withdrawn; one
+        already sent keeps being read by the daemon, so Tiếp tục reads its answer without sending it again).
+        Finished chapters stay; a server restart does not resume a paused story."""
+        same_origin(request)
+        path = source_dir(name)
+        marker, saved = edit_marker(path)
+        state = editing.get(name)
+        running = bool(state and state['thread'].is_alive())
+        if not running and saved is None:
+            raise HTTPException(409, 'Truyện này không đang biên tập')
+        marker.parent.mkdir(exist_ok=True)
+        marker.write_text(json.dumps({**(saved or {}), 'paused': True}), encoding='utf-8')
+        if running and not state['stop'].is_set():
+            state['stop'].set()
+            state['log'].append(time.strftime('%H:%M ') + 'Đang tạm dừng…')
         return source_info(path)
 
     # An edit interrupted by a server restart continues by itself (the daemon journal prevents resending a chapter).
-    # Only the real server resumes (tests and helper apps must never start ChatGPT requests).
-    if resume_editing and SOURCES_ROOT.is_dir():
+    # Only the real server resumes, from its startup (lifespan): importing the app (tests, helper apps) must never
+    # start ChatGPT requests. 2026-11-16: resuming at import made every full test run edit the live story a second
+    # time in the test process, sending each chapter twice.
+    def resume_edits():
+        if not resume_editing or not SOURCES_ROOT.is_dir():
+            return
         for marker in SOURCES_ROOT.glob('*/bien_tap/.dang-bien-tap'):
             try:
                 saved = json.loads(marker.read_text(encoding='utf-8'))
             except (OSError, ValueError):
                 saved = {}
+            if isinstance(saved, dict) and saved.get('paused'):
+                continue  # paused by the owner: stays paused until Tiếp tục
+            running = editing.get(marker.parent.parent.name)
+            if running and running['thread'].is_alive():
+                continue
             if sum(s['thread'].is_alive() for s in editing.values()) < PARALLEL_EDITS:
                 start_edit(marker.parent.parent, saved.get('from'), saved.get('to'))
+    app.state.resume_story_edits = resume_edits
 
     # --- WikiCV downloader (the user's own crawl_wikicv.py, run as is) -----------------------------------------
     from .story_crawl import Crawler

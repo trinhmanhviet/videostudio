@@ -61,7 +61,9 @@ def snapshot_expression(marker=''):
             assistantText=assistantText.replace(/^ChatGPT said:\s*(ChatGPT)?/,'');
           }
         }
-        return {user,assistant:assistantText.trim(),state:turn.getAttribute('data-talvt-turn-state'),id:assistant?.getAttribute('data-chatgpt-search-message-ids')||''};
+        // Only the start of a user turn is needed (the request marker is its first line); a whole chapter prompt
+        // read back every second made each snapshot hundreds of KB.
+        return {user:user.slice(0,2000),assistant:assistantText.trim(),state:turn.getAttribute('data-talvt-turn-state'),id:assistant?.getAttribute('data-chatgpt-search-message-ids')||''};
       });
       const generating=!!document.querySelector('[data-testid="stop-button"],button[aria-label="Stop generating"]');
       return {turns,mode:modeInfo.mode,url:location.href, login, challenge, composer:!!composer, draft:composer?(composer.innerText||composer.value||''):'', matched, text, messageId, generating};

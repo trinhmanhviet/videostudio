@@ -565,12 +565,15 @@
         list.replaceChildren(...data.items.map(source => {
           const row = el('article','sw-source');
           const progress = el('progress'); progress.max = source.chapters || 1; progress.value = source.edited;
-          const status = source.running ? 'Đang biên tập…' : source.edited >= source.chapters && source.chapters ? 'Đã biên tập xong' : source.edited ? `Đã biên tập ${source.edited}/${source.chapters} chương` : 'Chưa biên tập';
+          const status = source.pausing ? 'Đang tạm dừng…' : source.running ? `Đang biên tập ${source.edited}/${source.chapters} chương…` : source.paused ? `Đã tạm dừng ở ${source.edited}/${source.chapters} chương` : source.edited >= source.chapters && source.chapters ? 'Đã biên tập xong' : source.edited ? `Đã biên tập ${source.edited}/${source.chapters} chương` : 'Chưa biên tập';
+          const path = `/api/story/sources/${encodeURIComponent(source.name)}`;
           add(row, add(el('div','sw-source-info'), el('strong','',source.title), el('span','sw-muted',`${source.chapters} chương${source.downloaded?` (${source.downloaded} mục đã tải)`:''} · ${status}` + (source.needs_review.length ? ` · cần xem lại: ${source.needs_review.join(', ')}` : '')), progress,
-            source.log.length ? el('pre','sw-source-log',source.log.join('\n')) : null, source.error ? el('p','sw-error',source.error) : null),
+            source.log.length ? el('pre','sw-source-log',source.log.join('\n') + (source.status ? `\n… ${source.status}` : '')) : null, source.error ? el('p','sw-error',source.error) : null),
             add(el('div','sw-source-actions'),
               source.url ? (()=>{const b=btn('Tải chương mới',async()=>{await startCrawl(source.url, 0); openCrawl();},'','upload');b.disabled=crawlRunning();b.title='Chạy lại công cụ tải: chỉ lấy các chương mới đăng trên WikiCV';return b;})() : null,
-              (()=>{const b=btn(source.edited&&source.edited<source.chapters?'Biên tập tiếp':'Biên tập bằng ChatGPT',async()=>{await api(`/api/story/sources/${encodeURIComponent(source.name)}/edit`, json('POST',{}));toast('Đã bắt đầu biên tập. Có thể đóng cửa sổ này; tool vẫn chạy.');refresh();},'');b.disabled=source.running||(source.edited>=source.chapters&&source.chapters>0);return b;})(),
+              // Tạm dừng: the chapter not yet typed is withdrawn; one already sent is still read, so Tiếp tục does not send it again.
+              source.running ? (()=>{const b=btn(source.pausing?'Đang tạm dừng…':'Tạm dừng',async()=>{await api(`${path}/pause`, json('POST',{}));toast('Đang tạm dừng. Chương đã xong được giữ; bấm Tiếp tục để làm tiếp.');refresh();},'');b.disabled=source.pausing;return b;})() :
+              (()=>{const b=btn(source.paused?'Tiếp tục':source.edited&&source.edited<source.chapters?'Biên tập tiếp':'Biên tập bằng ChatGPT',async()=>{await api(`${path}/edit`, json('POST',{}));toast(source.paused?'Đã tiếp tục biên tập.':'Đã bắt đầu biên tập. Có thể đóng cửa sổ này; tool vẫn chạy.');refresh();},source.paused?'sw-accent':'');b.disabled=source.edited>=source.chapters&&source.chapters>0;return b;})(),
               (()=>{const b=btn(source.book_id?'Cập nhật vào Kể truyện':'Nhập vào Kể truyện',async()=>{const r=await api(`/api/story/sources/${encodeURIComponent(source.name)}/import`, json('POST',{}),120000);toast(`Đã nhập: thêm ${r.added}, cập nhật ${r.updated} chương`+(r.kept?`, giữ nguyên ${r.kept} chương bạn đã sửa.`:'.'));close();await loadBooks(r.book.id);},'sw-accent');b.disabled=!source.merged;b.title=source.merged?'':'Biên tập trước để có bản đọc được';return b;})()));
           return row;
         }));

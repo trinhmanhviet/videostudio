@@ -100,6 +100,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if voice_studio:voice_studio.recover()
             for target in (loop,heartbeat,publishing_loop,cleanup_loop,gameplay_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
+            # story edits stopped by the restart go on (paused ones stay paused); never at import time
+            resume=getattr(app.state,'resume_story_edits',None)
+            if resume:resume()
         yield
         stop.set()
         # Running stage checks cancellation through store; shutdown leaves running

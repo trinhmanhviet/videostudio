@@ -136,7 +136,7 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
     async def test_lanes_run_side_by_side_but_one_request_at_a_time_inside_a_lane(self):
         running, overlap = set(), []
 
-        async def fake(job, prompt, timeout, files):
+        async def fake(job, prompt, timeout, files, started=None):
             lane = lane_of(job)
             overlap.append(set(running))
             running.add(lane)
@@ -206,11 +206,101 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
             await self.bridge.ask_chatgpt('3f2a6c1e-0000-4000-8000-000000000000', 'prompt', timeout_seconds=600)
         self.assertEqual(self.bridge.journal.get(record['id'])['state'], 'sending')
 
+    async def stuck_answer(self, job, page, **waits):
+        """A sent request whose page keeps showing `page` (a snapshot) without ever moving."""
+        from videostudio import cdp_daemon
+        record = self.bridge.journal.prepare(job, 'prompt')
+        self.bridge.journal.claim_send(record['id'])
+        self.bridge.journal.set_conversation(job, 'https://chatgpt.com/c/stuck', 'tab')
+        self.bridge.connect = AsyncMock()
+        self.bridge.ensure_tab = AsyncMock(return_value='tab')
+        self.bridge.session = AsyncMock(return_value='session')
+        self.bridge.cdp = MagicMock()
+        self.bridge.cdp.command = AsyncMock(return_value={})
+        marker = '[VideoStudio request ' + record['id'] + ']'
+        self.bridge.evaluate = AsyncMock(return_value=page(marker))
+        waits = {'EMPTY_RELOAD_PAUSE': 0, **waits}
+        for name, value in waits.items():
+            p = mock.patch.object(cdp_daemon, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        return record
+
+    @staticmethod
+    def finished_unreadable(marker):
+        return {'url': 'https://chatgpt.com/c/stuck', 'matched': False, 'turns': [
+            {'user': marker + ' prompt', 'assistant': 'Xin lỗi, tôi không thể trả lời theo đúng định dạng.', 'state': 'complete', 'id': 'm1'}]}
+
+    @staticmethod
+    def thinking_forever(marker):
+        return {'url': 'https://chatgpt.com/c/stuck', 'matched': False, 'turns': [
+            {'user': marker + ' prompt', 'assistant': '', 'state': 'streaming', 'id': 'm1'}]}
+
+    async def test_a_finished_but_unreadable_story_answer_is_reloaded_then_asked_again(self):
+        record = await self.stuck_answer('story-ab-chapter-080-0', self.finished_unreadable, UNREAD_WAIT=0.05)
+        with self.assertRaisesRegex(RuntimeError, 'asked again in a new chat'):
+            await asyncio.wait_for(self.bridge.ask_chatgpt('story-ab-chapter-080-0', 'prompt', timeout_seconds=600), 10)
+        self.assertEqual(sum(c.args[0] == 'Page.reload' for c in self.bridge.cdp.command.call_args_list), 1)
+        self.assertEqual(self.bridge.journal.get(record['id'])['state'], 'prepared')
+        self.assertEqual(self.bridge.progress_of('story-ab-chapter-080-0'), {'phase': None})  # nothing left in flight
+
+    async def test_a_story_answer_that_stops_moving_is_reloaded_then_asked_again(self):
+        record = await self.stuck_answer('story-ab-chapter-081-0', self.thinking_forever, STALL_WAIT=0.05)
+        with self.assertRaisesRegex(RuntimeError, 'stopped moving'):
+            await asyncio.wait_for(self.bridge.ask_chatgpt('story-ab-chapter-081-0', 'prompt', timeout_seconds=600), 10)
+        self.assertEqual(sum(c.args[0] == 'Page.reload' for c in self.bridge.cdp.command.call_args_list), 1)
+        self.assertEqual(self.bridge.journal.get(record['id'])['state'], 'prepared')
+
+    async def test_a_stuck_video_answer_is_reloaded_but_never_resent(self):
+        from videostudio.cdp_requests import IndeterminateRequest
+        job = '3f2a6c1e-0000-4000-8000-000000000000'
+        record = await self.stuck_answer(job, self.finished_unreadable, UNREAD_WAIT=0.05)
+        with self.assertRaises(IndeterminateRequest):
+            await asyncio.wait_for(self.bridge.ask_chatgpt(job, 'prompt', timeout_seconds=600), 10)
+        self.assertEqual(self.bridge.journal.get(record['id'])['state'], 'sending')
+
+    async def test_a_story_reply_without_its_envelope_is_accepted_after_our_marker(self):
+        def answer(marker):
+            return {'url': 'https://chatgpt.com/c/ok', 'matched': False, 'turns': [
+                {'user': marker + ' prompt', 'assistant': '{"tieu_de": "A", "noi_dung": "Một hai ba."}', 'state': 'complete', 'id': 'm1'}]}
+        await self.stuck_answer('story-ab-chapter-082-0', answer)
+        value = await asyncio.wait_for(self.bridge.ask_chatgpt('story-ab-chapter-082-0', 'prompt', timeout_seconds=600), 10)
+        self.assertEqual(value, {'tieu_de': 'A', 'noi_dung': 'Một hai ba.'})
+
+    async def test_a_withdrawn_request_is_never_typed(self):
+        self.bridge.connect = AsyncMock()
+        self.bridge._send_prompt = AsyncMock()
+        await self.bridge.compose_lock.acquire()              # another tab is typing
+        task = asyncio.create_task(self.bridge.ask_chatgpt('story-ab-chapter-090-0', 'prompt'))
+        await asyncio.sleep(0.05)
+        self.assertEqual(self.bridge.progress_of('story-ab-chapter-090-0')['phase'], 'composing')
+        self.bridge.cancel('story-ab-chapter-090-0')
+        self.bridge.compose_lock.release()
+        from videostudio.cdp_daemon import RequestCancelled
+        with self.assertRaises(RequestCancelled):
+            await task
+        self.bridge._send_prompt.assert_not_awaited()
+        self.assertEqual(self.bridge.journal.prepare('story-ab-chapter-090-0', 'prompt')['state'], 'prepared')
+        # asking again later (Tiếp tục) is not affected by the old withdrawal
+        await asyncio.sleep(0.05)
+        self.bridge._send_prompt = AsyncMock(side_effect=RuntimeError('typed now'))
+        with self.assertRaisesRegex(RuntimeError, 'typed now'):
+            await self.bridge.ask_chatgpt('story-ab-chapter-090-0', 'prompt')
+
+    def test_an_unsent_prompt_of_the_same_story_may_be_cleared_from_the_composer(self):
+        old = self.bridge.journal.prepare('story-ab-chapter-091-0', 'old prompt')
+        draft = '[VideoStudio request ' + old['id'] + ']\nold prompt'
+        self.assertTrue(self.bridge.stale_own_draft(draft, 'story-ab'))
+        self.assertFalse(self.bridge.stale_own_draft(draft, 'story-cd'))     # another story's draft stays
+        self.assertFalse(self.bridge.stale_own_draft(draft, 'video'))
+        self.bridge.journal.claim_send(old['id'])
+        self.assertFalse(self.bridge.stale_own_draft(draft, 'story-ab'))     # sent: its reply may still come
+
     async def test_side_lanes_are_capped(self):
         from videostudio import cdp_daemon
         peak, now = [0], [0]
 
-        async def fake(job, prompt, timeout, files):
+        async def fake(job, prompt, timeout, files, started=None):
             now[0] += 1; peak[0] = max(peak[0], now[0])
             await asyncio.sleep(0.03)
             now[0] -= 1

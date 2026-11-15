@@ -27,6 +27,7 @@ SENTENCE = re.compile(r'(?<=[.!?…])["”]?\s+')
 MAX_SENTENCE = 240  # rule says about 200; a little slack before asking ChatGPT to rewrite
 DAEMON = 'http://127.0.0.1:8879'
 TIMEOUT = 1200  # High reasoning on a full chapter can take several minutes
+POLL = 3        # seconds between looks at the daemon's progress (and at Tạm dừng) while a request runs
 
 RULES = """VAI TRÒ: Biên tập viên văn học chuyên nghiệp. Biến bản convert Trung–Việt thành văn tiếng Việt tự nhiên, trôi chảy,
 tương đương bản dịch người thật biên tập. Bản này sẽ được ĐỌC THÀNH TIẾNG bằng giọng đọc máy (TTS), người nghe không nhìn thấy chữ.
@@ -204,14 +205,41 @@ def check_chapter(source: str, edited: str, removed: int = 0):
     return problems
 
 
+def profile_for(profile, *texts):
+    """Story profile trimmed to one chapter: everything except the character and term lists as is; the main characters
+    (full entries from the profile prompt) always; a later-learned character or a term only when one of its names or
+    spellings occurs (any case) in the given texts (the chapter's convert text, the previous chapter's ending)."""
+    haystack = '\n'.join(t for t in texts if t).lower()
+
+    def occurs(*names):
+        return any(isinstance(n, str) and len(n.strip()) >= 2 and n.strip().lower() in haystack for n in names)
+
+    people = []
+    for person in profile.get('nhan_vat') or []:
+        if not isinstance(person, dict):
+            continue
+        main = bool(person.get('than_phan') or person.get('dai_tu_loi_ke'))
+        if main or occurs(person.get('ten'), *(person.get('ten_goi_khac') or [])):
+            people.append(person)
+    terms = [t for t in profile.get('thuat_ngu') or [] if isinstance(t, dict) and occurs(t.get('goc'), t.get('dich'))]
+    return {**profile, 'nhan_vat': people, 'thuat_ngu': terms}
+
+
+class Paused(Exception):
+    """The owner paused this story's edit; progress is kept and nothing is half-typed in a ChatGPT tab."""
+
+
 class StoryEditor:
-    def __init__(self, story_dir, ask=None, log=print):
+    def __init__(self, story_dir, ask=None, log=print, status=None, stop=None):
+        """status(text): the live state of the request in flight ('' when none); stop: a threading.Event set by Pause."""
         self.story = Path(story_dir).resolve()
         self.source = self.story / 'truyen_gop.txt'
         if not self.source.is_file():
             raise FileNotFoundError(f'Không thấy {self.source}')
         self.out = self.story / 'bien_tap'
-        self.ask = ask or ask_chatgpt
+        self.status = status or (lambda text: None)
+        self.stop = stop
+        self.ask = ask or (lambda job, prompt: ask_chatgpt(job, prompt, status=self.status, stop=self.stop))
         self.log = log
         self.progress_path = self.out / 'tien_do.json'
 
@@ -260,8 +288,13 @@ class StoryEditor:
         return value
 
     @staticmethod
-    def _profile_text(profile):
-        return json.dumps(profile, ensure_ascii=False, indent=1)
+    def _profile_text(profile, *texts):
+        """The profile part a chapter needs. The profile grows with every chapter (180 chapters: ~150 people, ~1,300
+        terms, 190,000 characters); sending all of it made each prompt ~200,000 characters, so typing took a minute
+        and ChatGPT slowed down chapter after chapter. A term whose convert spelling is not in this chapter (or the end
+        of the previous one) cannot be used in it, so only matching terms go; the main characters (made with the
+        profile) always go, a character learned later goes when the chapter names them."""
+        return json.dumps(profile_for(profile, *texts), ensure_ascii=False)
 
     def _learn(self, profile, answer):
         """New names and terms from a chapter join the profile, so later chapters write them the same way."""
@@ -283,7 +316,7 @@ class StoryEditor:
         previous = ''
         if previous_tail:
             previous = 'Đoạn cuối chương trước (đã biên tập, để nối mạch và giữ xưng hô):\n<<<\n' + previous_tail + '\n>>>\n\n'
-        prompt = CHAPTER_PROMPT.format(rules=RULES, profile=self._profile_text(profile), previous=previous,
+        prompt = CHAPTER_PROMPT.format(rules=RULES, profile=self._profile_text(profile, chapter['text'], previous_tail), previous=previous,
                                        number=number, title=chapter['title'], text=chapter['text'])
         answer = self._answer(self.ask(self._job('chapter', number), prompt))
         edited = clean_for_speech(answer['noi_dung'])
@@ -291,7 +324,7 @@ class StoryEditor:
         attempts = [{'problems': problems}]
         if problems:
             self.log(f'  Chương {number}: nhờ ChatGPT sửa: ' + '; '.join(p[:90] for p in problems))
-            fix = FIX_PROMPT.format(rules=RULES, profile=self._profile_text(profile), number=number,
+            fix = FIX_PROMPT.format(rules=RULES, profile=self._profile_text(profile, chapter['text'], edited), number=number,
                                     problems='\n'.join('- ' + p for p in problems), source=chapter['text'], edited=edited)
             fixed = self._answer(self.ask(self._job('fix', number), fix))
             fixed_text = clean_for_speech(fixed['noi_dung'])
@@ -318,6 +351,8 @@ class StoryEditor:
         selected = [c for c in chapters if (first is None or c['number'] >= first) and (last is None or c['number'] <= last)]
         self.log(f'{profile.get("ten_truyen") or title}: {len(chapters)} chương, biên tập {len(selected)} chương.')
         for chapter in selected:
+            if self.stop is not None and self.stop.is_set():
+                raise Paused()
             key = str(chapter['number'])
             path = self.out / f'chuong_{chapter["number"]:03d}.txt'
             source_hash = hashlib.sha256(chapter['text'].encode('utf-8')).hexdigest()
@@ -367,17 +402,69 @@ class StoryEditor:
         return summary
 
 
-def ask_chatgpt(job, prompt, *, daemon=DAEMON, attempts=4):
+def _wait_text(progress):
+    """The daemon's progress for one request, in the owner's words (shown live under the Truyện nguồn log)."""
+    phase, seconds = progress.get('phase'), int(progress.get('seconds') or 0)
+    minutes = f'{seconds // 60} phút' if seconds >= 60 else f'{seconds} giây'
+    chars = progress.get('chars') or 0
+    return {'queued': f'chờ lượt (yêu cầu trước của truyện này chưa xong) {minutes}',
+            'composing': f'chờ lượt gõ (tab ChatGPT khác đang gõ) {minutes}',
+            'typing': f'đang gõ chương vào ChatGPT {minutes}',
+            'sent': f'đã gửi, chờ ChatGPT bắt đầu {minutes}',
+            'thinking': f'ChatGPT đang suy nghĩ {minutes}',
+            'writing': f'ChatGPT đang viết ({chars:,} ký tự) {minutes}'.replace(',', '.'),
+            'reading': f'ChatGPT đã viết xong, đang đọc câu trả lời {minutes}',
+            'reloading': progress.get('detail') or 'tải lại trang ChatGPT',
+            'retry': progress.get('detail') or 'hỏi lại trong cuộc trò chuyện mới'}.get(phase, '')
+
+
+def ask_chatgpt(job, prompt, *, daemon=DAEMON, attempts=6, status=None, stop=None):
     """One prompt through the dedicated ChatGPT tab. A timeout is not a failure: the daemon has journaled the
-    request, so asking again with the same job and prompt only waits for and reads the same answer."""
+    request, so asking again with the same job and prompt only waits for and reads the same answer.
+    status(text) gets the live state every few seconds; stop (threading.Event) pauses: a request not yet typed is
+    withdrawn, one already sent keeps being read by the daemon, so resuming reads its answer without sending again."""
     import httpx
+    import threading
+    status = status or (lambda text: None)
     last = None
     for attempt in range(attempts):
+        box = {}
+
+        def post():
+            try:
+                box['response'] = httpx.post(daemon + '/api/chat', json={'prompt': prompt, 'job_id': job, 'timeout_seconds': TIMEOUT},
+                                             headers={'X-VS-Client': 'videostudio'}, timeout=TIMEOUT + 900, trust_env=False)
+            except Exception as error:  # noqa: BLE001 - reported below like any failed try
+                box['error'] = error
+        worker = threading.Thread(target=post, name='chatgpt-' + job, daemon=True)
+        worker.start()
+        while worker.is_alive():
+            worker.join(POLL)
+            if stop is not None and stop.is_set():
+                try:
+                    httpx.post(daemon + '/api/chat/cancel', json={'job_id': job}, headers={'X-VS-Client': 'videostudio'}, timeout=10, trust_env=False)
+                except httpx.HTTPError:
+                    pass
+                status('')
+                raise Paused()
+            if worker.is_alive():
+                try:
+                    progress = httpx.get(daemon + '/api/chat/progress', params={'job_id': job}, timeout=5, trust_env=False).json()
+                    status(_wait_text(progress) if isinstance(progress, dict) else '')
+                except (httpx.HTTPError, ValueError):
+                    pass
+        status('')
+        if 'error' in box:
+            last = box['error']
+            if not isinstance(last, (httpx.HTTPError, ValueError)):
+                raise last
+            status('Không liên lạc được dịch vụ ChatGPT, thử lại sau 10 giây…')
+            time.sleep(10)
+            continue
+        response = box['response']
         try:
-            response = httpx.post(daemon + '/api/chat', json={'prompt': prompt, 'job_id': job, 'timeout_seconds': TIMEOUT},
-                                  headers={'X-VS-Client': 'videostudio'}, timeout=TIMEOUT + 120, trust_env=False)
             data = response.json()
-        except (httpx.HTTPError, ValueError) as error:
+        except ValueError as error:
             last = error
             time.sleep(10)
             continue
@@ -393,5 +480,12 @@ def ask_chatgpt(job, prompt, *, daemon=DAEMON, attempts=4):
         last = RuntimeError(f'ChatGPT lỗi HTTP {response.status_code}: {data.get("code") or ""} {str(data.get("error") or "")[:300]}')
         if data.get('code') in ('authentication_required',):
             break
+        if data.get('code') == 'cancelled' and stop is not None and stop.is_set():
+            raise Paused()
+        if data.get('code') == 'ask_again':  # the daemon found the chat stuck and put the chapter back: ask at once
+            status('ChatGPT đứng yên, hỏi lại trong cuộc trò chuyện mới…')
+            time.sleep(2)
+            continue
+        status('Lỗi: ' + str(data.get('error') or data.get('code') or '')[:160] + ' · thử lại sau 15 giây…')
         time.sleep(15)
     raise RuntimeError(str(last))
