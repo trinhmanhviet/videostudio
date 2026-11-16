@@ -137,6 +137,52 @@ class GameplayFolder:
             self.lock.release()
         return self.status()
 
+    # --- one clip: play it, delete it everywhere -----------------------------------------------------------------
+    def _row(self, clip_id):
+        with self.library.db() as db:
+            row = db.execute('SELECT * FROM gameplay WHERE id=? AND deleted=0', (clip_id,)).fetchone()
+        if not row:
+            raise KeyError('Không tìm thấy clip')
+        return dict(row)
+
+    def _account_for(self, row):
+        """The Drive account that can reach a clip: its gameplay folder's account, else the first one that sees it."""
+        source = self.source()
+        if source and row.get('drive_folder') == source['id']:
+            return source['account']
+        account, _ = self.drive.metadata(row['drive_file_id'])
+        return account
+
+    def playback(self, clip_id):
+        """Where the clip can be played from: ('file', path) when it is on this computer, else ('drive', account, file id)."""
+        row = self._row(clip_id)
+        if Path(row['path']).is_file():
+            return 'file', Path(row['path'])
+        if row.get('drive_file_id'):
+            return 'drive', self._account_for(row), row['drive_file_id']
+        raise KeyError('Không thấy tệp của clip này trên máy')
+
+    def delete_clip(self, clip_id, in_use):
+        """The owner deleted the clip (confirmed on its thumbnail): it leaves every book, its file and preview leave this
+        computer, and its Drive file goes to Drive's trash (Google keeps it 30 days). A clip a queued video still uses
+        is refused. The library keeps the Drive id, so the folder sync never fetches the clip again."""
+        row = self._row(clip_id)
+        self.library.remove_gameplay(clip_id, in_use)
+        path = Path(row['path'])
+        roots = [Path(self.library.gameplay_root).resolve(), CACHE.resolve()]
+        local = False
+        if path.is_file() and any(path.resolve().is_relative_to(root) for root in roots):
+            path.unlink(missing_ok=True)
+            local = True
+        (Path(self.library.root) / 'previews' / f'thumb-{row["sha256"][:16]}.jpg').unlink(missing_ok=True)
+        drive, problem = 'none', None
+        if row.get('drive_file_id'):
+            try:
+                drive = 'trashed' if self.drive.trash(self._account_for(row), row['drive_file_id']) else 'gone'
+            except Exception as error:  # the clip is gone here either way; say why Drive kept its file
+                drive, problem = 'failed', str(error)[:300]
+        return {'deleted': True, 'local': local, 'drive': drive, 'error': problem}
+
     # --- used clips --------------------------------------------------------------------------------------------
     def move_used(self):
         """Move every used clip of the folder into Used on Drive. Raises DriveError (with how to fix it) if Drive refuses."""

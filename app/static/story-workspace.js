@@ -808,23 +808,7 @@
       const items = state.gameplay.items.map(c=>({...c}));
       const l = layout();
       const summary = el('p','sw-muted',`${items.length} clip · ${fmtClock(state.gameplay.total_seconds)} dùng được` + (state.gameplay.cursor ? ` · chương sau tiếp tục từ clip ${state.gameplay.cursor.clip+1}, giây ${Math.round(state.gameplay.cursor.offset)}` : ''));
-      const list = el('div','sw-clips');
-      items.forEach((clip, index) => {
-        const row = el('article','sw-clip'); if (!clip.available) row.classList.add('is-missing');
-        const img = el('img'); img.src = clip.thumbnail; img.alt = ''; img.loading = 'lazy';
-        const start = el('input'); start.type='number'; start.min=0; start.step=1; start.value=Math.round(clip.start); start.setAttribute('aria-label','Bắt đầu (giây)');
-        const end = el('input'); end.type='number'; end.min=1; end.step=1; end.value=Math.round(clip.end); end.setAttribute('aria-label','Kết thúc (giây)');
-        start.onchange = () => {clip.start = Number(start.value); savePlaylist(items).catch(e=>toast(e.message));};
-        end.onchange = () => {clip.end = Number(end.value); savePlaylist(items).catch(e=>toast(e.message));};
-        const up = iconBtn('up','Lên',()=>{items.splice(index-1,0,items.splice(index,1)[0]);return savePlaylist(items);}); up.disabled = index === 0;
-        const down = iconBtn('down','Xuống',()=>{items.splice(index+1,0,items.splice(index,1)[0]);return savePlaylist(items);}); down.disabled = index === items.length-1;
-        const remove = iconBtn('trash','Bỏ khỏi truyện này',()=>{items.splice(index,1);return savePlaylist(items);},'sw-danger');
-        add(row, img, add(el('div','sw-clip-info'), el('strong','',(clip.source==='drive'?'☁ ':'')+clip.name), el('span','sw-muted',`${fmtClock(clip.duration)} · ${clip.width}×${clip.height} · ${Math.round(clip.fps)}fps${clip.has_audio?'':' · không tiếng'}${clip.source==='drive'?(clip.cached?' · Drive, đã tải sẵn':' · Drive, tải lại khi cần'):''}${clip.used?' · đã dùng':''}${clip.available?'':' · KHÔNG THẤY TỆP'}`),
-          add(el('div','sw-clip-range'), el('span','sw-muted','Dùng từ'), start, el('span','sw-muted','đến'), end, el('span','sw-muted','giây'))),
-          add(el('div','sw-row-actions'), up, down, remove));
-        list.append(row);
-      });
-      if (!items.length) list.append(el('p','sw-muted','Chưa có clip. Thêm video gameplay bạn đã quay (MP4/MKV/MOV/WebM). Clip được lưu một lần trong thư viện chung, dùng cho mọi truyện.'));
+      const list = clipGrid(items);
       const audio = el('input'); audio.type='checkbox'; audio.checked = Boolean(l.game_audio); audio.onchange = () => patchBook({layout:{game_audio:audio.checked}});
       const resume = el('input'); resume.type='checkbox'; resume.checked = l.continue_gameplay !== false; resume.onchange = () => patchBook({layout:{continue_gameplay:resume.checked}});
       const link = el('input'); link.type = 'text'; link.placeholder = 'Dán link Google Drive của video gameplay';
@@ -852,6 +836,96 @@
         add(el('label','sw-check'), resume, el('span','','Chương sau tiếp tục từ chỗ gameplay chương trước dừng')),
         el('p','sw-muted','Clip ngắn hơn lời kể sẽ nối clip tiếp theo, hết danh sách thì lặp lại. Không tăng tốc game, không kéo khung hình đứng.'));
       return box;
+    }
+    // Clips as a grid of small thumbnails in a box of its own height (a thousand clips do not stretch the page): tiles
+    // are added a screenful at a time while scrolling, pictures load when they come into view. The bin on a tile asks
+    // on the tile itself, then deletes the clip everywhere; a tap on the tile opens the viewer.
+    const CLIP_PAGE = 48;
+    function clipGrid(items) {
+      const wrap = el('div','sw-clip-grid-wrap');
+      if (!items.length) return add(wrap, el('p','sw-muted','Chưa có clip. Thêm video gameplay bạn đã quay (MP4/MKV/MOV/WebM). Clip được lưu một lần trong thư viện chung, dùng cho mọi truyện.'));
+      const grid = el('div','sw-clip-grid');
+      let shown = 0;
+      const more = () => {
+        const until = Math.min(items.length, Math.max(shown + CLIP_PAGE, state.clipShown || 0));
+        for (; shown < until; shown++) grid.append(clipTile(items, shown));
+        state.clipShown = shown;
+      };
+      more();
+      grid.onscroll = () => {
+        state.clipScroll = grid.scrollTop;
+        if (shown < items.length && grid.scrollTop + grid.clientHeight > grid.scrollHeight - 200) more();
+      };
+      requestAnimationFrame(() => {grid.scrollTop = state.clipScroll || 0;});
+      return add(wrap, grid);
+    }
+    function clipTile(items, index) {
+      const clip = items[index];
+      const tile = el('article','sw-tile'); if (!clip.available) tile.classList.add('is-missing'); if (clip.used) tile.classList.add('is-used');
+      tile.tabIndex = 0; tile.setAttribute('role','button');
+      tile.setAttribute('aria-label', `Clip ${index+1}: ${clip.name}, ${fmtClock(clip.end - clip.start)} dùng. Bấm để xem`);
+      tile.title = clip.name;
+      const img = el('img'); img.src = clip.thumbnail; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+      img.onerror = () => {img.replaceWith(el('span','sw-tile-blank', 'Chưa có ảnh'));};
+      const badge = el('span','sw-tile-num', String(index + 1));
+      const time = el('span','sw-tile-time', fmtClock(clip.end - clip.start));
+      const flags = el('span','sw-tile-flags', [clip.source === 'drive' ? '☁' : '', clip.used ? 'Đã dùng' : '', clip.available ? '' : 'Mất tệp'].filter(Boolean).join(' · '));
+      const bin = iconBtn('trash','Xoá clip',() => {state.confirmClip = clip.id; tile.replaceChildren(...tileBody(), confirmBox());}, 'sw-tile-bin');
+      const tileBody = () => [img, badge, time, flags, bin];
+      const confirmBox = () => {
+        const box = el('div','sw-tile-confirm'); box.setAttribute('role','alertdialog'); box.setAttribute('aria-label','Xác nhận xoá clip');
+        const keep = btn('Huỷ', () => {state.confirmClip = null; tile.replaceChildren(...tileBody());});
+        const go = btn('Xoá', async () => {
+          go.disabled = keep.disabled = true; go.lastChild.textContent = 'Đang xoá…';
+          try {
+            const r = await api('/api/story/gameplay/' + clip.id, {method: 'DELETE'});
+            state.confirmClip = null;
+            toast(r.drive === 'failed' ? `Đã xoá clip khỏi máy. Drive chưa xoá được: ${r.error}` : r.drive === 'trashed' ? 'Đã xoá clip trên máy và chuyển vào thùng rác Drive.' : 'Đã xoá clip.');
+            await loadGameplay(); renderSettings(); renderFooter();
+          } catch (error) {go.disabled = keep.disabled = false; go.lastChild.textContent = 'Xoá'; throw error;}
+        }, 'sw-danger-solid');
+        box.onclick = e => e.stopPropagation(); box.onkeydown = e => {e.stopPropagation(); if (e.key === 'Escape') keep.click();};
+        return add(box, el('strong','','Xoá clip này?'), el('span','', clip.source === 'drive' ? 'Xoá trên máy và đưa vào thùng rác Drive.' : 'Xoá hẳn khỏi máy.'), add(el('div','sw-tile-confirm-actions'), keep, go));
+      };
+      bin.addEventListener('click', e => e.stopPropagation());
+      tile.replaceChildren(...tileBody(), ...(state.confirmClip === clip.id ? [confirmBox()] : []));
+      tile.onclick = () => openClip(items, index);
+      tile.onkeydown = e => {if (e.target === tile && (e.key === 'Enter' || e.key === ' ')) {e.preventDefault(); openClip(items, index);}};
+      return tile;
+    }
+    // The clip viewer: play the clip, set the part a video uses (from the player's current second or typed), move it
+    // in this book's order or take it out of this book only.
+    function openClip(items, index) {
+      const clip = items[index];
+      const dialog = el('dialog','sw-dialog sw-clip-dialog');
+      const close = () => {video.pause(); video.removeAttribute('src'); video.load(); dialog.close(); dialog.remove();};
+      const video = el('video'); video.controls = true; video.preload = 'metadata'; video.playsInline = true;
+      video.src = `/api/story/gameplay/${clip.id}/video#t=${Math.max(0, Number(clip.start) || 0)}`;
+      const note = el('p','sw-muted', clip.cached || clip.source !== 'drive' ? '' : 'Clip đang phát thẳng từ Drive (chưa có trên máy), có thể chậm một chút.');
+      video.onerror = () => {note.className = 'sw-warning'; note.textContent = 'Không phát được clip này' + (clip.available ? '.' : ': không thấy tệp trên máy và Drive.');};
+      const start = el('input'); start.type='number'; start.min=0; start.step=1; start.value=Math.round(clip.start); start.setAttribute('aria-label','Bắt đầu (giây)');
+      const end = el('input'); end.type='number'; end.min=1; end.step=1; end.max=Math.floor(clip.duration); end.value=Math.round(clip.end); end.setAttribute('aria-label','Kết thúc (giây)');
+      const length = el('span','sw-muted');
+      const showLength = () => {length.textContent = `Dùng ${fmtClock(Math.max(0, Number(end.value) - Number(start.value)))} trên ${fmtClock(clip.duration)}`;};
+      start.oninput = end.oninput = showLength; showLength();
+      const here = (input) => btn(input === start ? 'Bắt đầu từ đây' : 'Kết thúc ở đây', () => {input.value = Math.round(video.currentTime); showLength();}, '', 'play');
+      const jump = btn('Xem từ đầu đoạn', () => {video.currentTime = Number(start.value) || 0; video.play().catch(() => {});});
+      video.ontimeupdate = () => {if (!video.paused && Number(end.value) > Number(start.value) && video.currentTime >= Number(end.value)) video.pause();};
+      const save = btn('Lưu đoạn dùng', async () => {
+        clip.start = Number(start.value); clip.end = Number(end.value);
+        await savePlaylist(items); toast('Đã lưu đoạn dùng của clip.'); close();
+      }, 'sw-primary', 'save');
+      const move = (to) => async () => {items.splice(to, 0, items.splice(index, 1)[0]); await savePlaylist(items); close(); openClip(state.gameplay.items.map(c => ({...c})), to);};
+      const up = btn('Lên trước', move(index - 1), '', 'up'); up.disabled = index === 0;
+      const down = btn('Xuống sau', move(index + 1), '', 'down'); down.disabled = index === items.length - 1;
+      const drop = btn('Bỏ khỏi truyện này', async () => {items.splice(index, 1); await savePlaylist(items); toast('Đã bỏ clip khỏi truyện này. Clip vẫn còn cho truyện khác.'); close();});
+      const info = `${fmtClock(clip.duration)} · ${clip.width}×${clip.height} · ${Math.round(clip.fps)}fps${clip.has_audio?'':' · không tiếng'}${clip.source==='drive'?(clip.cached?' · Drive, đã tải về máy':' · Drive, chưa tải về máy'):''}${clip.used?' · đã dùng':''}`;
+      add(dialog, add(el('div','sw-layout-head'), add(el('div'), el('h2','',`Clip ${index + 1}: ${clip.name}`), el('p','',info)), iconBtn('close','Đóng',close)),
+        video, note,
+        add(el('div','sw-clip-range'), el('span','sw-muted','Dùng từ giây'), start, here(start), el('span','sw-muted','đến giây'), end, here(end), length),
+        add(el('div','sw-clip-dialog-actions'), jump, up, down, drop, save));
+      doc.body.append(dialog); dialog.showModal();
+      dialog.addEventListener('cancel', e => {e.preventDefault(); close();});
     }
     // Thư mục gameplay trên Drive: the tool fetches new videos from it by itself and moves used ones into "Used".
     function driveFolderBox() {

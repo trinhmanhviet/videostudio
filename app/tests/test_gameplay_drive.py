@@ -108,6 +108,15 @@ class FakeDrive:
         self.moves.append((file_id, from_folder, to_folder))
         return True
 
+    def trash(self, account, file_id):
+        if self.fail:
+            raise self.fail
+        self.trashed = getattr(self, 'trashed', []) + [(account, file_id)]
+        return True
+
+    def metadata(self, file_id):
+        return 'two@example.com', {'id': file_id}
+
 
 class FolderSyncTests(unittest.TestCase):
     def setUp(self):
@@ -181,3 +190,67 @@ class FolderSyncTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DeleteClipTests(unittest.TestCase):
+    """The owner deletes a clip from its thumbnail: gone from every book, from this computer and into Drive's trash."""
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        cache = mock.patch.object(gameplay_drive, 'CACHE', Path(self.tmp, 'cache'))
+        cache.start()
+        self.addCleanup(cache.stop)
+        self.library = make_library(self.tmp)
+        self.book = self.library.create_book('A')['id']
+        self.drive = FakeDrive(self.tmp)
+        self.folder = GameplayFolder(store=None, library=self.library, drive=self.drive)
+        self.folder.configure({'link': FOLDER, 'account': 'me@example.com'})
+
+    def test_folder_clip_is_deleted_here_and_trashed_on_drive_and_never_fetched_again(self):
+        clip = add_clip(self.library, self.tmp, 'one.mp4')
+        keep = add_clip(self.library, self.tmp, 'two.mp4')
+        result = self.folder.delete_clip(clip, set())
+        self.assertEqual((result['local'], result['drive']), (True, 'trashed'))
+        self.assertFalse(Path(self.tmp, 'cache', 'one.mp4').exists())
+        self.assertTrue(Path(self.tmp, 'cache', 'two.mp4').exists())
+        self.assertEqual(self.drive.trashed, [('me@example.com', 'id-one.mp4')])
+        self.assertEqual(playlist(self.library, self.book), ['two.mp4'])
+        self.assertIn('id-one.mp4', self.library.drive_clip_ids())
+        self.assertEqual(self.folder.playback(keep), ('file', Path(self.tmp, 'cache', 'two.mp4')))
+        with self.assertRaises(KeyError):
+            self.folder.playback(clip)
+
+    def test_clip_from_a_link_is_trashed_with_the_account_that_sees_it(self):
+        clip = add_clip(self.library, self.tmp, 'link.mp4', folder=None)
+        self.folder.delete_clip(clip, set())
+        self.assertEqual(self.drive.trashed, [('two@example.com', 'id-link.mp4')])
+
+    def test_drive_refusal_still_deletes_here_and_says_why(self):
+        clip = add_clip(self.library, self.tmp, 'one.mp4')
+        self.drive.fail = DriveError('Drive không cho chuyển vào thùng rác (mã 403)')
+        result = self.folder.delete_clip(clip, set())
+        self.assertEqual(result['drive'], 'failed')
+        self.assertIn('403', result['error'])
+        self.assertEqual(playlist(self.library, self.book), [])
+
+    def test_clip_a_queued_video_uses_is_refused_untouched(self):
+        from videostudio.story_library import ConflictError
+        clip = add_clip(self.library, self.tmp, 'one.mp4')
+        with self.assertRaises(ConflictError):
+            self.folder.delete_clip(clip, {clip})
+        self.assertTrue(Path(self.tmp, 'cache', 'one.mp4').exists())
+        self.assertFalse(getattr(self.drive, 'trashed', []))
+        self.assertEqual(playlist(self.library, self.book), ['one.mp4'])
+
+    def test_file_outside_the_tool_folders_is_never_deleted(self):
+        outside = Path(self.tmp, 'mine', 'own.mp4')
+        outside.parent.mkdir()
+        outside.write_bytes(b'x')
+        import hashlib
+        clip = self.library.add_gameplay_cached(outside, 'own.mp4', hashlib.sha256(b'own').hexdigest(), 'id-own', 'u', folder=FOLDER)['id']
+        self.assertFalse(self.folder.delete_clip(clip, set())['local'])
+        self.assertTrue(outside.exists())
+
+    def test_uncached_drive_clip_plays_from_drive(self):
+        clip = add_clip(self.library, self.tmp, 'one.mp4')
+        Path(self.tmp, 'cache', 'one.mp4').unlink()
+        self.assertEqual(self.folder.playback(clip), ('drive', 'me@example.com', 'id-one.mp4'))

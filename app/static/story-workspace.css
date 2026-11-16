@@ -179,3 +179,24 @@ body.studio-ready main:has(>.studio-view:not([hidden])>.story-workspace){padding
 /* Dialogs sit on <body>, outside .story-workspace: they need the same colour tokens. */
 .sw-dialog{--sw-bg:#101827;--sw-panel:#1b293c;--sw-panel-2:#142235;--sw-border:#35445b;--sw-text:#f3f6fa;--sw-muted:#a8b7c9;--sw-accent:#79c9ef;
   color:var(--sw-text)}
+/* Gameplay clips: a grid of thumbnails in a box of its own height; the bin asks on the tile itself. */
+.sw-clip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;max-height:360px;overflow-y:auto;align-content:start;padding:1px;overscroll-behavior:contain}
+.sw-tile{position:relative;aspect-ratio:16/10;border:1px solid var(--sw-border);border-radius:7px;overflow:hidden;background:#0b1422;cursor:pointer}
+.sw-tile:hover,.sw-tile:focus-visible{border-color:var(--sw-accent);outline:none}
+.sw-tile.is-missing{border-color:#a5585c}.sw-tile.is-used>img{opacity:.55}
+.sw-tile>img,.sw-tile-blank{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sw-tile-blank{display:grid;place-items:center;color:var(--sw-muted);font-size:11px}
+.sw-tile-num,.sw-tile-time,.sw-tile-flags{position:absolute;font-size:11px;line-height:1;padding:3px 5px;border-radius:4px;background:#0b1422cc;color:#f3f6fa;pointer-events:none}
+.sw-tile-num{top:4px;left:4px;font-weight:700}.sw-tile-time{bottom:4px;right:4px;font-variant-numeric:tabular-nums}
+.sw-tile-flags{bottom:4px;left:4px;max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sw-tile-flags:empty{display:none}
+.sw-tile .sw-tile-bin{position:absolute;top:3px;right:3px;width:28px;height:28px;min-height:28px;border-radius:6px;background:#0b1422d9;color:#ffbabd;opacity:0;transition:opacity .12s}
+.sw-tile:hover .sw-tile-bin,.sw-tile:focus-within .sw-tile-bin{opacity:1}
+@media (hover:none){.sw-tile .sw-tile-bin{opacity:1}}
+.sw-tile-confirm{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:6px 8px;background:#0b1422ee;font-size:11px;line-height:1.3;color:#d9e2ec;cursor:default}
+.sw-tile-confirm strong{font-size:13px;color:#fff}
+.sw-tile-confirm-actions{display:flex;gap:5px;margin-top:2px}.sw-tile-confirm-actions .sw-btn{flex:1;min-height:26px;padding:3px 6px;font-size:12px}
+.sw-danger-solid{background:#c2454d;border-color:#c2454d;color:#fff}.sw-danger-solid:hover:not(:disabled){background:#d85961;color:#fff}
+.sw-clip-dialog{width:min(900px,calc(100vw - 24px))}
+.sw-clip-dialog video{display:block;width:100%;max-height:58vh;background:#000;border-radius:8px;margin-bottom:8px}
+.sw-clip-dialog .sw-clip-range{margin:8px 0}
+.sw-clip-dialog-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:10px}

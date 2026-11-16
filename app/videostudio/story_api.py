@@ -251,7 +251,35 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
     @app.delete('/api/story/gameplay/{clip_id}')
     def remove_clip(clip_id: str, request: Request):
         same_origin(request)
-        return call(library.remove_gameplay, clip_id, clips_in_use())
+        # Deleted for good: out of every book, off this computer, and into Drive's trash (asked first on the thumbnail).
+        return call(gameplay_folder.delete_clip, clip_id, clips_in_use())
+
+    @app.get('/api/story/gameplay/{clip_id}/video')
+    def clip_video(clip_id: str, request: Request):
+        """Play a clip in the clip viewer: the file on this computer, or straight from Drive when only Drive has it
+        (Range requests pass through, so the player can seek)."""
+        from fastapi.responses import StreamingResponse
+        from .drive_storage import DriveError
+        try:
+            where = call(gameplay_folder.playback, clip_id)
+        except DriveError as error:
+            raise HTTPException(502, str(error))
+        if where[0] == 'file':
+            return FileResponse(where[1], media_type='video/mp4' if where[1].suffix != '.webm' else 'video/webm')
+        client, response = gameplay_folder.drive.stream(where[1], where[2], request.headers.get('range'))
+        if response.status_code not in (200, 206):
+            client.close()
+            raise HTTPException(502, f'Drive không trả clip (mã {response.status_code})')
+        headers = {k: v for k, v in response.headers.items() if k.lower() in ('content-length', 'content-range')}
+        headers['Accept-Ranges'] = 'bytes'
+
+        def body():
+            try:
+                yield from response.iter_bytes(1024 * 1024)
+            finally:
+                response.close()
+                client.close()
+        return StreamingResponse(body(), status_code=response.status_code, headers=headers, media_type='video/mp4')
 
     @app.get('/api/story/gameplay/{clip_id}/thumbnail')
     def thumbnail(clip_id: str):
