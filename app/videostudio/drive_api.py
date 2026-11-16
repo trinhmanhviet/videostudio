@@ -303,7 +303,10 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
                             continue  # gone from Drive already
                         key = (row['account'], parent)
                         if key not in data_of:
-                            data_of[key] = drive.child_folder(row['account'], parent, DATA_FOLDER)
+                            # Already inside a "data" folder (uploaded there, or an earlier round moved it): stays put.
+                            # 2026-11-16: a second round made data/data before this check.
+                            in_data = drive.name_of(row['account'], parent) == DATA_FOLDER
+                            data_of[key] = parent if in_data else drive.child_folder(row['account'], parent, DATA_FOLDER)
                         if data_of[key] != parent:
                             drive.move(row['account'], row['file_id'], parent, data_of[key])
                             changed += 1

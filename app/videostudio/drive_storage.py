@@ -423,6 +423,13 @@ class DriveStorage:
         data = response.json()
         return None if data.get('trashed') else (data.get('parents') or [None])[0]
 
+    def name_of(self, account, file_id):
+        response = httpx.get(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30,
+                             params={'fields': 'name', 'supportsAllDrives': 'true'})
+        if response.status_code >= 300:
+            raise DriveError(f'Không đọc được tên trên Drive (mã {response.status_code})')
+        return response.json().get('name')
+
     def rename(self, account, file_id, name):
         response = httpx.patch(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30, json={'name': name},
                                params={'fields': 'id,name', 'supportsAllDrives': 'true'})

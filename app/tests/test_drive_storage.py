@@ -205,15 +205,16 @@ class DriveStorageTests(unittest.TestCase):
         calls = []
         with patch.object(DriveStorage, 'trash', lambda self, a, f: calls.append(('trash', f)) or True), \
                 patch.object(DriveStorage, 'rename', lambda self, a, f, n: calls.append(('rename', f, n)) or True), \
-                patch.object(DriveStorage, 'parent_of', lambda self, a, f: 'P'), \
+                patch.object(DriveStorage, 'parent_of', lambda self, a, f: 'D' if f == 'id-e-v1_anh-bia.jpg' else 'P'), \
+                patch.object(DriveStorage, 'name_of', lambda self, a, folder: 'data' if folder == 'D' else 'Truyện'), \
                 patch.object(DriveStorage, 'child_folder', lambda self, a, parent, name, create=True: parent + '/' + name), \
                 patch.object(DriveStorage, 'move', lambda self, a, f, src, dst: calls.append(('move', f, src, dst)) or True):
             drive = drive_api.register_drive_routes(FastAPI(), self.store, SimpleNamespace(), lambda request: None, background=False)
-            self.assertEqual(drive.tidy_layout(), 5)
+            self.assertEqual(drive.tidy_layout(), 4)  # the cover was already in a data folder: never data/data
             self.assertEqual(drive.tidy_layout(), 0)  # once
         self.assertIn(('trash', 'id-e-v1_doc.srt'), calls)
         self.assertIn(('rename', 'id-e-v1_ngang.srt', 'e-v1.srt'), calls)
-        self.assertEqual(sorted(c[1] for c in calls if c[0] == 'move'), ['id-e-v1.mp3', 'id-e-v1_anh-bia.jpg', 'id-e-v1_dang-bai.txt'])
+        self.assertEqual(sorted(c[1] for c in calls if c[0] == 'move'), ['id-e-v1.mp3', 'id-e-v1_dang-bai.txt'])
         self.assertTrue(all(c[3] == 'P/data' for c in calls if c[0] == 'move'))
         with self.store.db() as db:
             rows = {r['kind']: dict(r) for r in db.execute("SELECT * FROM drive_files WHERE job_id='j'")}
