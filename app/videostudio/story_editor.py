@@ -225,6 +225,24 @@ def profile_for(profile, *texts):
     return {**profile, 'nhan_vat': people, 'thuat_ngu': terms}
 
 
+def unwrap_answer(value, key):
+    """ChatGPT sometimes wraps the requested object: {"your_response": "<the object as a JSON string>"} (2026-11-16,
+    chapter 99 of a story), a one-key object around it, or the object as a string with raw line breaks inside.
+    Peel such layers until the object that has `key` shows; anything else comes back as it was."""
+    for _ in range(4):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value.strip(), strict=False)
+            except ValueError:
+                return value
+            continue
+        if isinstance(value, dict) and key not in value and len(value) == 1:
+            value = next(iter(value.values()))
+            continue
+        return value
+    return value
+
+
 class Paused(Exception):
     """The owner paused this story's edit; progress is kept and nothing is half-typed in a ChatGPT tab."""
 
@@ -279,7 +297,7 @@ class StoryEditor:
             existing = 'Hồ sơ biên tập đã có từ trước (kiểm tra lại, dùng phần đúng):\n<<<\n' + old.read_text(encoding='utf-8')[:8000] + '\n>>>\n'
         prompt = PROFILE_PROMPT.format(rules=RULES, title=title, existing=existing, sample='\n\n'.join(sample)[:30000])
         self.log('Lập hồ sơ truyện (tên, xưng hô, thuật ngữ)…')
-        value = self.ask(self._job('profile'), prompt)
+        value = unwrap_answer(self.ask(self._job('profile'), prompt), 'nhan_vat')
         if not isinstance(value, dict) or not isinstance(value.get('nhan_vat'), list):
             raise ValueError('ChatGPT không trả về hồ sơ truyện hợp lệ')
         value.setdefault('thuat_ngu', [])
@@ -318,7 +336,13 @@ class StoryEditor:
             previous = 'Đoạn cuối chương trước (đã biên tập, để nối mạch và giữ xưng hô):\n<<<\n' + previous_tail + '\n>>>\n\n'
         prompt = CHAPTER_PROMPT.format(rules=RULES, profile=self._profile_text(profile, chapter['text'], previous_tail), previous=previous,
                                        number=number, title=chapter['title'], text=chapter['text'])
-        answer = self._answer(self.ask(self._job('chapter', number), prompt))
+        try:
+            answer = self._answer(self.ask(self._job('chapter', number), prompt))
+        except ValueError:
+            # The answer is kept by the daemon, so asking the same request again only reads it back: a reply without
+            # the chapter (an odd wrapper, a cut-off answer) is asked once more in a new chat instead of stopping.
+            self.log(f'  Chương {number}: câu trả lời không có nội dung chương, hỏi lại trong cuộc trò chuyện mới…')
+            answer = self._answer(self.ask(self._job('chapter', number, 1), prompt))
         edited = clean_for_speech(answer['noi_dung'])
         problems = check_chapter(chapter['text'], edited, removed_chars(answer))
         attempts = [{'problems': problems}]
@@ -337,6 +361,7 @@ class StoryEditor:
 
     @staticmethod
     def _answer(value):
+        value = unwrap_answer(value, 'noi_dung')
         if not isinstance(value, dict) or not isinstance(value.get('noi_dung'), str) or len(value['noi_dung'].strip()) < 50:
             raise ValueError('ChatGPT không trả về nội dung chương')
         value['tieu_de'] = str(value.get('tieu_de') or '').strip()

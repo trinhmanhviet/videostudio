@@ -95,6 +95,35 @@ class StoryEditorTests(unittest.TestCase):
         self.assertEqual([p['ten'] for p in profile_for(profile, 'Không ai khác.')['nhan_vat']], ['Khương Ỷ'])
         self.assertEqual(len(profile['thuat_ngu']), 3)  # the saved profile itself is untouched
 
+    def test_wrapped_answers_are_unwrapped(self):
+        # 2026-11-16, chapter 99: {"your_response": "<the JSON as a string, with raw line breaks>"} stopped the edit.
+        from videostudio.story_editor import unwrap_answer
+        inner = '{"tieu_de":"Ngoại Truyện","noi_dung":"Dòng một.\nDòng hai."}'
+        self.assertEqual(unwrap_answer({'your_response': inner}, 'noi_dung')['noi_dung'], 'Dòng một.\nDòng hai.')
+        self.assertEqual(unwrap_answer({'answer': {'noi_dung': 'x'}}, 'noi_dung'), {'noi_dung': 'x'})
+        self.assertEqual(unwrap_answer(inner, 'noi_dung')['tieu_de'], 'Ngoại Truyện')
+        self.assertEqual(unwrap_answer({'nhan_vat': []}, 'nhan_vat'), {'nhan_vat': []})
+        self.assertEqual(unwrap_answer({'a': 1, 'b': 2}, 'noi_dung'), {'a': 1, 'b': 2})
+        self.assertEqual(unwrap_answer('không phải JSON', 'noi_dung'), 'không phải JSON')
+
+    def test_a_reply_without_the_chapter_is_asked_again_in_a_new_chat_not_stopped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            story = Path(tmp)
+            (story / 'truyen_gop.txt').write_text(RAW, encoding='utf-8')
+            calls = []
+
+            def ask(job, prompt):
+                calls.append(job)
+                if '-profile-' in job:
+                    return {'ten_truyen': 'T', 'nhan_vat': [], 'thuat_ngu': [], 'luu_y': []}
+                number = int(job.split('-')[-2])
+                if number == 2 and '-chapter-' in job and job.endswith('-0'):
+                    return {'loi': 'không có chương'}  # the daemon keeps this answer: asking job -0 again reads it back
+                return {'your_response': json.dumps({'tieu_de': 'A', 'noi_dung': split_chapters(RAW)[1][number - 1]['text'] + ' Thêm một câu cho đủ dài để không rỗng.'})}
+            StoryEditor(story, ask=ask, log=lambda *_: None).run()
+            self.assertTrue((story / 'bien_tap' / 'chuong_003.txt').is_file())
+            self.assertEqual([j.rsplit('-', 2)[-2:] for j in calls if '-chapter-' in j][:4], [['001', '0'], ['002', '0'], ['002', '1'], ['003', '0']])
+
     def test_pause_stops_before_the_next_chapter_and_keeps_progress(self):
         import threading
         from videostudio.story_editor import Paused
