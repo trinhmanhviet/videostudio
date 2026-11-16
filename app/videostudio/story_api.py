@@ -380,13 +380,14 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
     def layout_preview(book_id: str, data: dict, request: Request):
         """A still frame of each layout (first frame of the playlist + titles + a sample caption). Never moves the gameplay cursor."""
         same_origin(request)
-        from .story_preview import still, test_clip
+        from .story_preview import intro_clip, still, test_clip
         kind = data.get('kind', 'still')
         orientation = data.get('orientation', 'ngang')
-        if orientation not in ('ngang', 'doc') or kind not in ('still', 'clip'):
+        makers = {'still': still, 'clip': test_clip, 'intro': intro_clip}
+        if orientation not in ('ngang', 'doc') or kind not in makers:
             raise HTTPException(422, 'Kiểu xem trước không hợp lệ')
         try:
-            path = (still if kind == 'still' else test_clip)(library, pipeline, book_id, data.get('chapter_id'), orientation)
+            path = makers[kind](library, pipeline, book_id, data.get('chapter_id'), orientation)
         except KeyError as error:
             raise HTTPException(404, str(error).strip("'"))
         except (ValueError, RuntimeError) as error:

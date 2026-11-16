@@ -1101,9 +1101,23 @@
         coverBox.replaceChildren(...parts);
       };
       drawCover();
+      // Title intro: the cover look animated over the first ~2 s; the narration waits 2.5 s for it.
+      const introOut = el('div','sw-test-out');
+      const introTry = orientation => {
+        const b = btn(orientation==='ngang'?'Xem thử intro ngang':'Xem thử intro dọc', async () => {
+          b.disabled = true; introOut.replaceChildren(el('p','sw-muted','Đang dựng vài giây đầu video (không đọc giọng, không đổi vị trí gameplay)…'));
+          try {const r = await api(`/api/story/books/${state.book.id}/preview`, json('POST', {kind:'intro', orientation, chapter_id:state.chapter?.id}), 240000);
+            const video = el('video'); video.controls = true; video.autoplay = true; video.muted = true; video.src = r.url; introOut.replaceChildren(video);}
+          catch (error) {introOut.replaceChildren(el('p','sw-error',error.message));}
+          finally {b.disabled = false;}
+        }, '', 'play');
+        return b;
+      };
       add(box, field('Tên kênh', channel), field('Ảnh nền', add(el('div','sw-inline'), background, iconBtn('upload','Tải ảnh nền lên',()=>bgInput.click()))), bgInput,
         field('Nén video', codec),
         el('h3','','Ảnh bìa'), coverBox,
+        el('h3','','Mở đầu video'), add(el('div','sw-checks'), check('intro','Intro tên truyện và chương như ảnh bìa (lời kể bắt đầu sau 2,5 giây)')),
+        add(el('div','sw-inline'), introTry('ngang'), introTry('doc')), introOut,
         el('h3','','Đầu ra'), add(el('div','sw-checks'), check('horizontal','Ngang 16:9'), check('vertical','Dọc 9:16'), check('burn_subtitles','Hiện phụ đề trên video'), check('export_srt','Xuất phụ đề SRT'), check('export_mp3','MP3 lời kể')),
         btn('Lưu khung hình cho truyện',()=>patchBook({layout:{...l, channel:channel.value}},'Đã lưu khung hình cho truyện.'),'sw-wide','save'),
         btn('Xem bố cục ngang / dọc',openLayout,'sw-wide sw-accent'));

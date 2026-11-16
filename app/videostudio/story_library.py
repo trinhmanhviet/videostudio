@@ -34,7 +34,8 @@ DEFAULT_SETTINGS = {'speech_engine': 'vieneu', 'voice_id': 'Trúc Ly', 'speech_r
 DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': True, 'vertical': True,
                   'burn_subtitles': True, 'export_srt': True, 'export_mp3': True, 'game_audio': False,
                   'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc',
-                  'cover_source': 'game', 'cover_image': '', 'cover_at': 0.3, 'cover_text': True}
+                  'cover_source': 'game', 'cover_image': '', 'cover_at': 0.3, 'cover_text': True,
+                  'intro': True}
 # Built-in backgrounds: gradients rendered by FFmpeg, no image files required.
 PRESET_BACKGROUNDS = {
     'preset:dem-xanh': {'name': 'Đêm xanh', 'top': '0x0b1a33', 'bottom': '0x1d3b63'},
@@ -933,7 +934,7 @@ def validate_layout(value):
     if set(value) - set(DEFAULT_LAYOUT):
         raise ValueError('Khung hình có trường lạ')
     result = dict(value)
-    for key in ('horizontal', 'vertical', 'burn_subtitles', 'export_srt', 'export_mp3', 'game_audio', 'continue_gameplay'):
+    for key in ('horizontal', 'vertical', 'burn_subtitles', 'export_srt', 'export_mp3', 'game_audio', 'continue_gameplay', 'intro'):
         if key in result and type(result[key]) is not bool:
             raise ValueError(key + ' phải là bật/tắt')
     if 'channel' in result:

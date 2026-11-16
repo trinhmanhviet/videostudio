@@ -1,4 +1,4 @@
-"""Layout previews for "Kể truyện": a still frame per orientation, or a 10-second test clip the user asks for.
+"""Layout previews for "Kể truyện": a still frame per orientation, a 10-second test clip, or the title intro alone.
 
 Both use the same layout code as the real render (story_pipeline.write_ass / LAYOUTS) and the first clip of the book's
 playlist. They never move the gameplay cursor, never run TTS and never write into the book's output folder.
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .media import run
 from .story_library import PRESET_BACKGROUNDS
-from .story_pipeline import FPS, LAYOUTS, _background_input, layout_for, write_ass
+from .story_pipeline import FPS, INTRO_SECONDS, LAYOUTS, _background_input, intro_seconds, layout_for, write_ass
 
 
 def _context(library, book_id, chapter_id):
@@ -35,22 +35,22 @@ def _context(library, book_id, chapter_id):
     return snapshot, clips[0], sentence
 
 
-def _cues(sentence, orientation, seconds):
+def _cues(sentence, orientation, seconds, start=0.0):
     from .story_pipeline import _wrap
     groups = _wrap(sentence, LAYOUTS[orientation]['line_chars'])[:1] or [['']]
-    return [{'start': 0.0, 'end': seconds, 'lines': groups[0]}]
+    return [{'start': start, 'end': seconds, 'lines': groups[0]}]
 
 
 def _name(prefix, value, suffix):
     return f'{prefix}-' + hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:20] + suffix
 
 
-def _compose(library, pipeline, snapshot, clip, sentence, orientation, seconds, target, still):
+def _compose(library, pipeline, snapshot, clip, sentence, orientation, seconds, target, still, intro=0.0):
     layout = layout_for(orientation, snapshot.get('layout'))
     width, height = layout['size']
     gx, gy, gw, gh = layout['game']
     folder = library.root / 'previews'
-    ass = write_ass(folder / (target.stem + '.ass'), orientation, snapshot, _cues(sentence, orientation, seconds), True)
+    ass = write_ass(folder / (target.stem + '.ass'), orientation, snapshot, _cues(sentence, orientation, seconds, intro), True, intro=intro)
     background, bg_filter = _background_input(snapshot, width, height, seconds, folder, getattr(pipeline, 'ffmpeg', 'ffmpeg'))
     start = min(max(clip['start'], 0) + 3, max(0, clip['end'] - seconds - .5))
     gameplay = ['-ss', f'{start:.2f}', '-t', f'{seconds:.2f}', '-i', clip_path(library, clip['id'])]
@@ -86,8 +86,20 @@ def still(library, pipeline, book_id, chapter_id, orientation):
 def test_clip(library, pipeline, book_id, chapter_id, orientation):
     snapshot, clip, sentence = _context(library, book_id, chapter_id)
     key = {'o': orientation, 'snapshot': {k: v for k, v in snapshot.items() if k != 'chapters'}, 'chapter': snapshot['chapters'][0]['title'],
-           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 1}
+           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 2}
     target = library.root / 'previews' / _name('test', key, '.mp4')
+    if not target.is_file():  # starts like the real video: with the intro when the book has it on
+        _compose(library, pipeline, snapshot, clip, sentence, orientation, 10.0, target, False, intro=intro_seconds(snapshot))
+    return target
+
+
+def intro_clip(library, pipeline, book_id, chapter_id, orientation):
+    """Only the first seconds of a video: the title intro, then the first caption appears. Shown even when the
+    book has the intro turned off, so it can be judged before turning it on."""
+    snapshot, clip, sentence = _context(library, book_id, chapter_id)
+    key = {'o': orientation, 'snapshot': {k: v for k, v in snapshot.items() if k != 'chapters'}, 'chapter': snapshot['chapters'][0]['title'],
+           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 1, 'intro': INTRO_SECONDS}
+    target = library.root / 'previews' / _name('intro', key, '.mp4')
     if not target.is_file():
-        _compose(library, pipeline, snapshot, clip, sentence, orientation, 10.0, target, False)
+        _compose(library, pipeline, snapshot, clip, sentence, orientation, INTRO_SECONDS + 2.0, target, False, intro=INTRO_SECONDS)
     return target

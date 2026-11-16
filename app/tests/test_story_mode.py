@@ -89,9 +89,33 @@ class StoryLibraryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_settings({'pronunciations': [{'from': 'x'}]})
         self.assertEqual(validate_layout({'cover_source': 'image', 'cover_at': 0.5})['cover_at'], 0.5)
-        for bad in ({'cover_source': 'web'}, {'cover_at': 1.5}, {'cover_text': 'yes'}):
+        for bad in ({'cover_source': 'web'}, {'cover_at': 1.5}, {'cover_text': 'yes'}, {'intro': 1}):
             with self.assertRaises(ValueError):
                 validate_layout(bad)
+        self.assertFalse(validate_layout({'intro': False})['intro'])
+        self.assertTrue(self.library.book(self.library.create_book('Truyện thử')['id'])['layout']['intro'])
+
+    def test_title_intro_animates_each_letter_and_waits_for_it(self):
+        snapshot = {'book': {'id': 'b', 'title': 'Trọng sinh: Công lược'}, 'layout': {'channel': 'Kênh'},
+                    'chapters': [{'id': 'c1', 'order': 1, 'number': 1, 'title': 'Trọng sinh', 'read_title': True, 'text': 'x'}]}
+        self.assertEqual(story_pipeline.intro_seconds(snapshot), story_pipeline.INTRO_SECONDS)
+        self.assertEqual(story_pipeline.intro_seconds({**snapshot, 'layout': {'intro': False}}), 0)
+        self.assertEqual(story_pipeline.intro_seconds({**snapshot, 'audio_only': True}), 0)
+        # Decomposed accents stay with their letter.
+        self.assertEqual(story_pipeline._graphemes('Tro\u0323ng'), ['T', 'r', 'ọ', 'n', 'g'])
+        cues = [{'start': 0.0, 'end': 2.0, 'lines': ['Một câu.']}]
+        with tempfile.TemporaryDirectory() as tmp:
+            for orientation in ('ngang', 'doc'):
+                plain = story_pipeline.write_ass(Path(tmp) / 'a.ass', orientation, snapshot, cues, True).read_text(encoding='utf-8')
+                self.assertNotIn('IntroBook', plain)
+                self.assertIn('Dialogue: 1,0:00:00.00', plain)
+                shifted = story_pipeline.shift_cues(cues, 2.5)
+                text = story_pipeline.write_ass(Path(tmp) / 'b.ass', orientation, snapshot, shifted, True, intro=2.5).read_text(encoding='utf-8')
+                letters = len([c for c in 'TRỌNG SINH: CÔNG LƯỢC' if c != ' ']) + len([c for c in 'Chương 1: Trọng sinh' if c != ' '])
+                self.assertEqual(text.count('\\move('), 2 * letters)  # outline + fill per letter
+                self.assertEqual(text.count('\\p1}'), 1)  # one dark band
+                self.assertNotIn('Dialogue: 1,0:00:00.00', text)  # top titles wait for the intro to leave
+                self.assertIn('Dialogue: 0,0:00:02.50,0:00:04.50,Caption', text)
 
     def test_listing_counts_writing_issues_and_filters_them(self):
         book = self.library.create_book('Truyện thử')
@@ -320,6 +344,11 @@ class StoryRenderTests(unittest.TestCase):
             self.assertEqual(names, ['chuong-001-canh-cong-cu-v1.mp3', 'chuong-001-canh-cong-cu-v1_anh-bia.jpg', 'chuong-001-canh-cong-cu-v1_dang-bai.txt',
                                      'chuong-001-canh-cong-cu-v1_doc.mp4', 'chuong-001-canh-cong-cu-v1_doc.srt',
                                      'chuong-001-canh-cong-cu-v1_ngang.mp4', 'chuong-001-canh-cong-cu-v1_ngang.srt'])
+            # The title intro is on by default: narration and subtitles wait for it, the video is that much longer.
+            self.assertEqual(job['checkpoints']['render']['intro_seconds'], story_pipeline.INTRO_SECONDS)
+            srt = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_ngang.srt').read_text(encoding='utf-8')
+            self.assertIn('00:00:02,500 --> ', srt)
+            self.assertAlmostEqual(result['duration_seconds'], 4.0 + story_pipeline.INTRO_SECONDS, places=3)
             kit = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_dang-bai.txt').read_text(encoding='utf-8')
             self.assertIn('Chuyến trở về · Chương 1: Cánh cổng cũ', kit)
             self.assertIn('#truyenaudio', kit)
