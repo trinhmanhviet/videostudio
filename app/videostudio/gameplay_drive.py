@@ -7,6 +7,7 @@ fail (no permission yet, network): the clip is still counted as used, and the mo
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import threading
 import time
@@ -17,6 +18,14 @@ from .drive_storage import CACHE, DriveError, DriveStorage, cache_trim, folder_i
 VIDEO_TYPES = {'.mp4', '.mkv', '.mov', '.webm'}
 SYNC_EVERY = 15 * 60
 USED = 'Used'
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 class GameplayFolder:
@@ -101,7 +110,7 @@ class GameplayFolder:
                 self.task.update(state='idle')
                 return self.status()
             self.task.update(state='running', done=0, total=0, current='', received=0, size=0, added=0, error=None)
-            known = self.library.drive_clip_ids()
+            known = self.library.drive_clip_ids() | set(self.library.gameplay_setting('duplicate_ids', []))
             wanted = [(f, False) for f in self.drive.list_videos(source['account'], source['id'])]
             if self.library.gameplay_setting('reuse', False):
                 used_folder = self._used_folder(source, create=False)
@@ -115,7 +124,14 @@ class GameplayFolder:
                 self.task.update(current=name, received=0, size=int(meta.get('size') or 0))
                 target = CACHE / f'{meta["id"]}{Path(name).suffix.lower()}'
                 try:
-                    sha, _ = self.drive.download(meta['id'], target, account=source['account'], progress=lambda n: self.task.update(received=n))
+                    size = int(meta.get('size') or 0)
+                    if size and target.is_file() and target.stat().st_size == size:
+                        sha = file_sha256(target)  # already here from an earlier sync: no second download
+                    else:
+                        sha, _ = self.drive.download(meta['id'], target, account=source['account'], progress=lambda n: self.task.update(received=n))
+                    if self._skip_duplicate(meta['id'], sha, target):
+                        self.task['done'] += 1
+                        continue
                     self.library.add_gameplay_cached(target, name, sha, meta['id'], f'https://drive.google.com/file/d/{meta["id"]}/view',
                                                      folder=source['id'], used=used)
                     cache_trim(keep=[target])
@@ -136,6 +152,21 @@ class GameplayFolder:
         finally:
             self.lock.release()
         return self.status()
+
+    def _skip_duplicate(self, file_id, sha, target):
+        """A Drive file with the same picture as a clip already fetched (a video uploaded twice) or one the owner
+        deleted: never a second clip. Its Drive id is remembered, so later syncs do not download it again, and the
+        downloaded copy leaves the cache."""
+        with self.library.db() as db:
+            row = db.execute('SELECT * FROM gameplay WHERE sha256=?', (sha,)).fetchone()
+        if not row or (not row['deleted'] and not row['drive_file_id']):
+            return False  # new, or a clip added from this computer that this Drive file now backs (kept as before)
+        ids = self.library.gameplay_setting('duplicate_ids', [])
+        if file_id not in ids:
+            self.library.set_gameplay_setting('duplicate_ids', ids + [file_id])
+        if Path(target).resolve() != Path(row['path']).resolve():
+            Path(target).unlink(missing_ok=True)
+        return True
 
     # --- one clip: play it, delete it everywhere -----------------------------------------------------------------
     def _row(self, clip_id):

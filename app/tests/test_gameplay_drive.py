@@ -99,8 +99,9 @@ class FakeDrive:
     def download(self, file_id, target, check=lambda: None, account=None, progress=None):
         self.downloads.append(file_id)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
-        Path(target).write_bytes(file_id.encode())
-        return hashlib.sha256(file_id.encode()).hexdigest(), len(file_id)
+        body = getattr(self, 'same_as', {}).get(file_id, file_id).encode()  # same_as: a file uploaded twice
+        Path(target).write_bytes(body)
+        return hashlib.sha256(body).hexdigest(), len(body)
 
     def move(self, account, file_id, from_folder, to_folder):
         if self.fail:
@@ -162,6 +163,39 @@ class FolderSyncTests(unittest.TestCase):
         self.assertEqual(self.drive.moves, [('v1', FOLDER, 'USED')])
         self.assertEqual(playlist(self.library, self.book), ['two.mp4'])
         self.assertIn('Used', log[0])
+
+    def test_a_video_uploaded_twice_is_one_clip_and_its_copy_is_never_downloaded_again(self):
+        # 2026-11-16: 3 videos sat twice in the owner's folder; every sync downloaded the copies again (~590 MB).
+        self.drive.files[FOLDER].append({'id': 'v1copy', 'name': 'one.mp4', 'size': 2})
+        self.drive.same_as = {'v1copy': 'v1'}
+        self.folder.configure({'link': FOLDER})
+        status = self.folder.sync()
+        self.assertEqual((status['task']['added'], status['new']), (2, 2))
+        self.assertEqual(playlist(self.library, self.book), ['one.mp4', 'two.mp4'])
+        self.assertFalse(Path(self.tmp, 'cache', 'v1copy.mp4').exists())
+        self.assertTrue(Path(self.tmp, 'cache', 'v1.mp4').exists())
+        self.folder.sync()
+        self.assertEqual(self.drive.downloads, ['v1', 'v2', 'v1copy'])
+
+    def test_a_copy_of_a_deleted_clip_does_not_bring_it_back(self):
+        self.folder.configure({'link': FOLDER})
+        self.folder.sync()
+        self.drive.trash = lambda account, file_id: True
+        one = next(c for c in self.library.gameplay(self.book)['items'] if c['name'] == 'one.mp4')
+        self.folder.delete_clip(one['id'], set())
+        self.drive.files[FOLDER].append({'id': 'v1copy', 'name': 'one.mp4', 'size': 2})
+        self.drive.same_as = {'v1copy': 'v1'}
+        self.folder.sync()
+        self.assertEqual(playlist(self.library, self.book), ['two.mp4'])
+
+    def test_a_file_already_in_the_cache_is_not_downloaded_again(self):
+        Path(self.tmp, 'cache').mkdir(exist_ok=True)
+        Path(self.tmp, 'cache', 'v1.mp4').write_bytes(b'v1')
+        self.drive.files[FOLDER][0]['size'] = 2
+        self.folder.configure({'link': FOLDER})
+        self.folder.sync()
+        self.assertEqual(self.drive.downloads, ['v2'])
+        self.assertEqual(playlist(self.library, self.book), ['one.mp4', 'two.mp4'])
 
     def test_a_refused_move_is_retried_on_the_next_sync(self):
         self.folder.configure({'link': FOLDER})
