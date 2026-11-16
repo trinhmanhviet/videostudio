@@ -899,15 +899,21 @@
         }
         openSchedule({job_id:id,version_id:version.version_id||version.id,approved:true,title:video.title,style:video.style});
       },''):null;
-      if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';actions.append(post);if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));return;}
+      // "Dựng lại khung hình" needs no video file: it rebuilds from the kept narration and the same gameplay footage
+      // (clips missing here come back from Drive by themselves), so a video already on Drive can be rebuilt too.
+      const rerender=()=>button('Dựng lại khung hình',async()=>{
+        if(!global.confirm('Dựng lại video này với khung hình, ảnh bìa, intro và kiểu nén hiện tại của truyện?\nGiữ nguyên lời kể, giọng đọc đã có và đúng đoạn gameplay cũ; bản cũ vẫn giữ.'))return;
+        try{await request('/api/story/jobs/'+encodeURIComponent(id)+'/rerender',{method:'POST',body:'{}'});toast('Đã xếp hàng dựng lại. Xem ở Hàng đợi.');}catch(error){toast(error.message);}
+      });
+      if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';actions.append(post);if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));
+        if(isStory(video)){const more=el('details','studio-more');const list=el('div','studio-more-list');more.append(el('summary','','⋯'),list);more.querySelector('summary').setAttribute('aria-label','Thao tác khác');
+          list.append(button('Chi tiết',()=>global.openProject(video.project||'Dự án mặc định',id)),rerender());actions.append(more);}
+        return;}
       if(post)actions.append(post);
       actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));
       const more=el('details','studio-more');const list=el('div','studio-more-list');more.append(el('summary','','⋯'),list);more.querySelector('summary').setAttribute('aria-label','Thao tác khác');
       list.append(button('Chi tiết',()=>global.openProject(video.project||'Dự án mặc định',id)));
-      if(isStory(video))list.append(button('Dựng lại khung hình',async()=>{
-        if(!global.confirm('Dựng lại video này với khung hình, ảnh nền, ảnh bìa và kiểu nén hiện tại của truyện?\nGiữ nguyên lời kể, giọng đọc đã có và đúng đoạn gameplay cũ; bản cũ vẫn giữ.'))return;
-        try{await request('/api/story/jobs/'+encodeURIComponent(id)+'/rerender',{method:'POST',body:'{}'});toast('Đã xếp hàng dựng lại. Xem ở Hàng đợi.');}catch(error){toast(error.message);}
-      }));
+      if(isStory(video))list.append(rerender());
       if(version){const pack=el('a','button secondary','Tải trọn bộ (video + phụ đề)');pack.href='/api/factory/videos/'+encodeURIComponent(id)+'/pack?'+filterQuery({version_id:version.version_id||version.id,include:'video,captions,sidecar'});pack.download='';list.append(pack);}
       if(video.style==='meme'){const edit=el('a','button secondary','Chỉnh sửa');edit.href='/meme-editor?job='+encodeURIComponent(id);list.append(edit);}else list.append(button('Chỉnh sửa',()=>global.openOptionalWorkspace?.(id)));
       list.append(button('Xóa',()=>openDeleteVideo(video),'secondary studio-danger'));actions.append(more);

@@ -37,6 +37,29 @@ class DriveStorageTests(unittest.TestCase):
             with self.assertRaises(DriveError):
                 self.drive.pick_account(1 * 2**30)
 
+    def test_metadata_asks_each_account_by_its_id_and_skips_disabled_ones(self):
+        # 2026-11-16: the whole account row went to _headers, so "fetch the clip again from Drive" failed with
+        # "unhashable type: 'dict'" and the rebuild of a chapter stopped.
+        with self.store.db() as db:
+            db.execute("INSERT INTO drive_accounts VALUES('off@x','off@x','t',0,0,1)")
+            db.execute("INSERT INTO drive_accounts VALUES('a@x','a@x','t',1,0,0)")
+            db.execute("INSERT INTO drive_accounts VALUES('b@x','b@x','t',2,0,0)")
+        asked = []
+
+        class Response:
+            def __init__(self, status):
+                self.status_code = status
+
+            def json(self):
+                return {'id': 'F', 'name': 'clip.mp4'}
+
+        def get(url, headers, **kwargs):
+            asked.append(headers['Authorization'])
+            return Response(200 if headers['Authorization'] == 'Bearer b@x' else 404)
+        with patch.object(DriveStorage, 'token', lambda self, account: account), patch.object(drive_storage.httpx, 'get', get):
+            self.assertEqual(self.drive.metadata('F'), ('b@x', {'id': 'F', 'name': 'clip.mp4'}))
+        self.assertEqual(asked, ['Bearer a@x', 'Bearer b@x'])
+
     def test_cache_trim_removes_oldest_beyond_limit_but_keeps_files_in_use(self):
         cache = Path(self.tmp.name) / 'cache'
         cache.mkdir()

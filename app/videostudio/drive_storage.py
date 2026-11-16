@@ -310,7 +310,10 @@ class DriveStorage:
     def metadata(self, file_id):
         last = None
         for account in self.accounts():
-            response = httpx.get(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30,
+            if account.get('disabled'):
+                continue
+            # _headers takes the account id (a whole account row here broke every "fetch the clip again from Drive").
+            response = httpx.get(f'{API}/files/{file_id}', headers=self._headers(account['id']), timeout=30,
                                  params={'fields': 'id,name,size,md5Checksum,mimeType', 'supportsAllDrives': 'true'})
             if response.status_code == 200:
                 return account['id'], response.json()
