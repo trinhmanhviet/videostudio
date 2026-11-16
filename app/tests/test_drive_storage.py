@@ -151,6 +151,76 @@ class DriveStorageTests(unittest.TestCase):
         self.assertEqual([r['job'] for r in done['recent']], ['Chương j2', 'Chương j1'])
         self.assertFalse(any(p.exists() for paths in files.values() for p in paths))  # deleted after the match
 
+    def test_only_videos_and_subtitles_stay_in_the_project_folder_the_rest_goes_to_data(self):
+        import json as _json
+        import time as _time
+        from types import SimpleNamespace
+        from fastapi import FastAPI
+        from videostudio import drive_api
+        out = Path(self.tmp.name) / 'videos'
+        out.mkdir()
+        files = [out / n for n in ('c-v1_doc.mp4', 'c-v1_ngang.mp4', 'c-v1.srt', 'c-v1.mp3', 'c-v1_anh-bia.jpg', 'c-v1_dang-bai.txt')]
+        for path in files:
+            path.write_bytes(b'v' * 64)
+        now = _time.time()
+        with self.store.db() as db:
+            db.execute("INSERT INTO drive_accounts VALUES('a@x','a@x','t',0,0,0)")
+            db.execute('CREATE TABLE IF NOT EXISTS factory_batches(id TEXT, style TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS factory_items(job_id TEXT, batch_id TEXT)')
+            db.execute('INSERT INTO jobs(id,idem,request,state,output,created,updated) VALUES(?,?,?,?,?,?,?)',
+                       ('j', 'j', _json.dumps({'project': 'Truyện', 'content_style': 'story'}), 'completed', str(out), now, now))
+        self.drive.set_setting('include_old', True)
+        placed = {}
+
+        def upload(self, account, path, folder, check=None, progress=None):
+            placed[path.name] = folder
+            return {'id': path.name, 'size': str(path.stat().st_size), 'md5Checksum': drive_storage.local_md5(path)}
+        real_get = self.store.get
+        app = FastAPI()
+        with patch.object(DriveStorage, 'pick_account', lambda self, size: 'a@x'), \
+                patch.object(DriveStorage, 'folder', lambda self, a, parts: '/'.join(parts)), \
+                patch.object(DriveStorage, 'upload', upload), \
+                patch.object(self.store, 'get', lambda job_id: {**real_get(job_id), 'checkpoints': {'verify': {'verified': True}}}), \
+                patch('videostudio.output_layout.job_deliverables', lambda job: files):
+            drive_api.register_drive_routes(app, self.store, SimpleNamespace(), lambda request: None, background=False)
+            routes = {r.name: r.endpoint for r in app.routes if hasattr(r, 'endpoint')}
+            routes['sync_now'](SimpleNamespace())
+            for _ in range(200):
+                if routes['progress']()['result']:
+                    break
+                _time.sleep(0.02)
+        main = 'Video/truyen-doc/Truyện'
+        self.assertEqual({n for n, f in placed.items() if f == main}, {'c-v1_doc.mp4', 'c-v1_ngang.mp4', 'c-v1.srt'})
+        self.assertEqual({n for n, f in placed.items() if f == main + '/data'}, {'c-v1.mp3', 'c-v1_anh-bia.jpg', 'c-v1_dang-bai.txt'})
+
+    def test_old_uploads_are_tidied_once_into_data_with_one_shared_subtitle(self):
+        from types import SimpleNamespace
+        from fastapi import FastAPI
+        from videostudio import drive_api
+        names = ['e-v1_doc.mp4', 'e-v1_ngang.mp4', 'e-v1_doc.srt', 'e-v1_ngang.srt', 'e-v1.mp3', 'e-v1_anh-bia.jpg', 'e-v1_dang-bai.txt']
+        with self.store.db() as db:
+            for name in names:
+                db.execute("INSERT INTO drive_files(job_id,kind,name,local_path,account,file_id,size,md5,uploaded,local_deleted) VALUES(?,?,?,?,?,?,?,?,?,1)",
+                           ('j', name, name, 'x', 'a@x', 'id-' + name, 1, 'm', 1))
+        calls = []
+        with patch.object(DriveStorage, 'trash', lambda self, a, f: calls.append(('trash', f)) or True), \
+                patch.object(DriveStorage, 'rename', lambda self, a, f, n: calls.append(('rename', f, n)) or True), \
+                patch.object(DriveStorage, 'parent_of', lambda self, a, f: 'P'), \
+                patch.object(DriveStorage, 'child_folder', lambda self, a, parent, name, create=True: parent + '/' + name), \
+                patch.object(DriveStorage, 'move', lambda self, a, f, src, dst: calls.append(('move', f, src, dst)) or True):
+            drive = drive_api.register_drive_routes(FastAPI(), self.store, SimpleNamespace(), lambda request: None, background=False)
+            self.assertEqual(drive.tidy_layout(), 5)
+            self.assertEqual(drive.tidy_layout(), 0)  # once
+        self.assertIn(('trash', 'id-e-v1_doc.srt'), calls)
+        self.assertIn(('rename', 'id-e-v1_ngang.srt', 'e-v1.srt'), calls)
+        self.assertEqual(sorted(c[1] for c in calls if c[0] == 'move'), ['id-e-v1.mp3', 'id-e-v1_anh-bia.jpg', 'id-e-v1_dang-bai.txt'])
+        self.assertTrue(all(c[3] == 'P/data' for c in calls if c[0] == 'move'))
+        with self.store.db() as db:
+            rows = {r['kind']: dict(r) for r in db.execute("SELECT * FROM drive_files WHERE job_id='j'")}
+        self.assertEqual(rows['e-v1_doc.srt']['trashed'], 1)
+        self.assertEqual(rows['e-v1_ngang.srt']['name'], 'e-v1.srt')
+        self.assertEqual(rows['e-v1_doc.mp4']['name'], 'e-v1_doc.mp4')  # the videos are untouched
+
     def test_posted_videos_go_to_drive_trash_only_when_switched_on_and_all_posts_are_public(self):
         from types import SimpleNamespace
         from fastapi import FastAPI

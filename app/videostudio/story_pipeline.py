@@ -1011,14 +1011,17 @@ def render(pipeline, job, check):
         source.with_suffix('.json').unlink(missing_ok=True)
         published[orientation] = str(target)
         files.append(target)
-        if layout.get('export_srt', True):
-            srt = root / f'{stem}_{orientation}.srt'
-            if intro:  # the video's subtitles start after the intro, like its narration
-                write_srt(shift_cues(timed[orientation], intro), srt)
-            else:
-                shutil.copyfile(job['checkpoints']['subtitles'][f'srt_{orientation}'], srt)
-            published[f'srt_{orientation}'] = str(srt)
-            files.append(srt)
+    if layout.get('export_srt', True) and outputs:
+        # One subtitle file for both videos (same words and times; only the line breaks of the burned captions differ,
+        # and the platforms wrap an uploaded .srt themselves): the landscape cues, the wider lines, when there are any.
+        orientation = 'ngang' if 'ngang' in outputs else next(iter(outputs))
+        srt = root / f'{stem}.srt'
+        if intro:  # the video's subtitles start after the intro, like its narration
+            write_srt(shift_cues(timed[orientation], intro), srt)
+        else:
+            shutil.copyfile(job['checkpoints']['subtitles'][f'srt_{orientation}'], srt)
+        published['srt'] = str(srt)
+        files.append(srt)
     if layout.get('export_mp3', True):
         mp3 = root / f'{stem}.mp3'
         run([pipeline.ffmpeg, '-v', 'error', '-y', '-i', str(narration), '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
@@ -1085,7 +1088,7 @@ def verify(pipeline, job, check):
             assets += verify_video(path, seconds, pipeline.ffprobe, size=size)['assets']
         except Exception as error:
             raise PermanentError(f'Bản {orientation} chưa đạt: {error}')
-    for key in ('mp3', 'srt_ngang', 'srt_doc', 'cover', 'post'):
+    for key in ('mp3', 'srt', 'srt_ngang', 'srt_doc', 'cover', 'post'):
         path = render_cp['story_outputs'].get(key)
         if path:
             if not Path(path).is_file() or Path(path).stat().st_size == 0:

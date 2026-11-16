@@ -349,14 +349,14 @@ class StoryRenderTests(unittest.TestCase):
                 story_pipeline.StoryLibrary = original
             self.assertTrue(result['verified'])
             names = sorted(p.name for p in (root / 'Book').iterdir() if p.is_file())
-            self.assertEqual(names, ['chuong-001-canh-cong-cu-v1.mp3', 'chuong-001-canh-cong-cu-v1_anh-bia.jpg', 'chuong-001-canh-cong-cu-v1_dang-bai.txt',
-                                     'chuong-001-canh-cong-cu-v1_doc.mp4', 'chuong-001-canh-cong-cu-v1_doc.srt',
-                                     'chuong-001-canh-cong-cu-v1_ngang.mp4', 'chuong-001-canh-cong-cu-v1_ngang.srt'])
+            self.assertEqual(names, ['chuong-001-canh-cong-cu-v1.mp3', 'chuong-001-canh-cong-cu-v1.srt', 'chuong-001-canh-cong-cu-v1_anh-bia.jpg',
+                                     'chuong-001-canh-cong-cu-v1_dang-bai.txt', 'chuong-001-canh-cong-cu-v1_doc.mp4',
+                                     'chuong-001-canh-cong-cu-v1_ngang.mp4'])  # one subtitle file shared by both videos
             # The title intro is on by default: narration and subtitles wait for it, the video is that much longer.
             intro = story_pipeline.intro_seconds(snapshot)
             self.assertGreater(intro, 1)
             self.assertEqual(job['checkpoints']['render']['intro_seconds'], intro)
-            srt = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_ngang.srt').read_text(encoding='utf-8')
+            srt = (root / 'Book' / 'chuong-001-canh-cong-cu-v1.srt').read_text(encoding='utf-8')
             self.assertIn(story_pipeline._srt_time(intro) + ' --> ', srt)
             self.assertAlmostEqual(result['duration_seconds'], 4.0 + intro, places=3)
             # The intro plays on the first gameplay frame held still: no extra footage is planned for it.

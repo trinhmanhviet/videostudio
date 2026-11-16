@@ -14,6 +14,13 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from .drive_storage import CATEGORIES, DriveError, DriveStorage, local_md5
 from .notify import emit
 
+DATA_FOLDER = 'data'
+
+
+def in_main_folder(name):
+    """A video's project folder on Drive holds only what a person opens: the videos and their subtitles."""
+    return name.lower().endswith(('.mp4', '.srt'))
+
 
 def register_drive_routes(app, store, factory, same_origin, stop_event=None, background=True):
     drive = DriveStorage(store)
@@ -211,6 +218,7 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
         title = job['request'].get('title') or job.get('title') or project
         account = drive.pick_account(sum(p.stat().st_size for p in files))
         folder = drive.folder(account, ['Video', category(job), project])
+        data_folder = None
         base = state['bytes_done']  # bytes of earlier jobs in this run
         for index, path in enumerate(files):
             size = path.stat().st_size
@@ -233,7 +241,14 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
                 info['done'] = done
                 state['bytes_done'] = base + done
                 sent(base + done)
-            result = drive.upload(account, path, folder, progress=moved)
+            # The project folder keeps what a person opens (the videos and their subtitles); the rest of a video's files
+            # (cover, post text, MP3, other caption formats) go into its "data" folder.
+            if in_main_folder(path.name):
+                target = folder
+            else:
+                data_folder = data_folder or drive.folder(account, ['Video', category(job), project, DATA_FOLDER])
+                target = data_folder
+            result = drive.upload(account, path, target, progress=moved)
             state['phase'] = 'verify'
             if int(result.get('size', -1)) != size or result.get('md5Checksum') != md5:
                 raise DriveError(f'{path.name}: tệp trên Drive không khớp bản trên máy; giữ nguyên bản trên máy')
@@ -251,6 +266,55 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
                 db.execute('UPDATE drive_files SET local_deleted=1 WHERE job_id=?', (job['id'],))
                 db.execute('DELETE FROM drive_failures WHERE job_id=?', (job['id'],))
         return title
+
+    def tidy_layout():
+        """Files uploaded before the "data" folder existed: everything but the videos and subtitles moves into "data"
+        beside them, and of a story's two .srt (one per video, same words and times) the landscape one stays as the
+        shared one, named like the episode, the other goes to Drive's trash. Same file ids, so playing and posting
+        from Drive go on working. Done once; anything Drive refuses is tried again on the next round."""
+        if drive.setting('layout', 0) >= 2:
+            return 0
+        with store.db() as db:
+            rows = [dict(r) for r in db.execute('SELECT * FROM drive_files WHERE local_deleted=1 AND trashed=0 ORDER BY job_id')]
+        by_job = {}
+        for row in rows:
+            by_job.setdefault(row['job_id'], []).append(row)
+        changed = problems = 0
+        data_of = {}
+        for job_rows in by_job.values():
+            names = {r['name'] for r in job_rows}
+            for row in job_rows:
+                name = row['name']
+                try:
+                    if name.endswith('_doc.srt') and name[:-len('_doc.srt')] + '_ngang.srt' in names:
+                        drive.trash(row['account'], row['file_id'])
+                        with store.db() as db:
+                            db.execute('UPDATE drive_files SET trashed=1 WHERE job_id=? AND kind=?', (row['job_id'], row['kind']))
+                        changed += 1
+                    elif name.endswith('_ngang.srt') and name[:-len('_ngang.srt')] + '_doc.srt' in names:
+                        shared = name[:-len('_ngang.srt')] + '.srt'
+                        drive.rename(row['account'], row['file_id'], shared)
+                        with store.db() as db:
+                            db.execute('UPDATE drive_files SET name=? WHERE job_id=? AND kind=?', (shared, row['job_id'], row['kind']))
+                        changed += 1
+                    elif not in_main_folder(name):
+                        parent = drive.parent_of(row['account'], row['file_id'])
+                        if not parent:
+                            continue  # gone from Drive already
+                        key = (row['account'], parent)
+                        if key not in data_of:
+                            data_of[key] = drive.child_folder(row['account'], parent, DATA_FOLDER)
+                        if data_of[key] != parent:
+                            drive.move(row['account'], row['file_id'], parent, data_of[key])
+                            changed += 1
+                except Exception:
+                    problems += 1
+        if not problems:
+            drive.set_setting('layout', 2)
+        if changed:
+            emit('drive', f'🗂 Đã xếp lại {changed} tệp trên Drive: mỗi thư mục chỉ còn video và phụ đề, phần còn lại vào thư mục {DATA_FOLDER}.')
+        return changed
+    drive.tidy_layout = tidy_layout
 
     def sync_once():
         if state['running'] or not drive.setting('auto_upload', True) or not drive.accounts():
@@ -317,6 +381,10 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
 
     def loop():
         while not (stop_event and stop_event.is_set()):
+            try:
+                tidy_layout()
+            except Exception:
+                pass
             try:
                 sync_once()
             except Exception:

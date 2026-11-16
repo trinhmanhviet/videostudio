@@ -412,6 +412,24 @@ class DriveStorage:
             raise DriveError(_write_problem(created, 'tạo thư mục ' + name))
         return created.json()['id']
 
+    def parent_of(self, account, file_id):
+        """The folder a file sits in (None when the file is gone)."""
+        response = httpx.get(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30,
+                             params={'fields': 'parents,trashed', 'supportsAllDrives': 'true'})
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 300:
+            raise DriveError(f'Không đọc được tệp trên Drive (mã {response.status_code})')
+        data = response.json()
+        return None if data.get('trashed') else (data.get('parents') or [None])[0]
+
+    def rename(self, account, file_id, name):
+        response = httpx.patch(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30, json={'name': name},
+                               params={'fields': 'id,name', 'supportsAllDrives': 'true'})
+        if response.status_code >= 300:
+            raise DriveError(_write_problem(response, 'đổi tên ' + name))
+        return True
+
     def move(self, account, file_id, from_folder, to_folder):
         """Move a file between folders (same file id, so a later download of it still works)."""
         response = httpx.patch(f'{API}/files/{file_id}', headers=self._headers(account), timeout=30, json={},
