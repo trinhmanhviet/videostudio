@@ -14,7 +14,7 @@ from aiohttp import web
 from .chrome_browser import DedicatedChrome, ROOT
 from .cdp_protocol import CDPConnection, CDPError
 from .cdp_requests import RequestJournal, IndeterminateRequest, valid_chat_url
-from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, correlate_turns
+from .cdp_page import snapshot_expression, composer_expression, send_button_expression, chat_mode_button_expression, chat_mode_click_expression, correlate_turns
 from .exchanges import parse_reply
 from .cdp_images import ChatGPTImages, ImageAuthentication, ImageRejected, valid_attachments, SOCIAL_ROOT
 from .cdp_social import PostReader
@@ -42,7 +42,10 @@ EMPTY_RELOAD_PAUSE = 5   # longest wait for another tab to finish typing; then n
 NO_TURN_WAIT = 90        # sent, but our message never appeared and nothing is generated
 STALL_WAIT = 150         # generating, but neither the thinking nor the answer moved
 UNREAD_WAIT = 45         # finished answer on the page that is not a readable JSON reply
-HARD_EXTRA = 600         # the longest a request may keep extending past its timeout while ChatGPT keeps generating
+MODE_SWITCH_WAIT = 4      # after a Chat toggle click, how long a Work page may take to switch before clicking again
+MODE_SWITCH_CLICKS = 3    # mouse, mouse at the toggle's new place, then a click from the page
+MODE_CONTROL_WAIT = 10    # the Chat/Work toggle renders a moment after the composer
+HARD_EXTRA = 600        # the longest a request may keep extending past its timeout while ChatGPT keeps generating
 
 
 class RequestCancelled(RuntimeError):
@@ -292,8 +295,9 @@ class ChromeChatGPTBridge:
         session = await self.session(target)
         # Only activate the tool-owned tab; no global freeze/Memory Saver changes.
         await self.cdp.command('Target.activateTarget', {'targetId':target})
-        deadline = time.monotonic()+timeout
-        switched = False
+        started_at = time.monotonic()
+        deadline = started_at+timeout
+        switched, switched_at = 0, 0.0
         reattachments = 0
         while time.monotonic() < deadline:
             try:
@@ -324,14 +328,30 @@ class ChromeChatGPTBridge:
                         await self.clear_composer(session)
                         continue
                     raise RuntimeError('Work draft exists; refusing to discard it by changing modes')
-                if switched:
+                # A new tab can open in Work (2026-11). Switching is asynchronous and the toggle can still move while
+                # the page hydrates, so a Work snapshot right after a click is not a failure: wait for it, click again
+                # at the toggle's current place, and last press the button from the page. Clicking Chat is harmless
+                # when Chat is already on, and nothing is typed until Chat is verified.
+                now = time.monotonic()
+                if switched and now - switched_at < MODE_SWITCH_WAIT:
+                    await asyncio.sleep(.3)
+                    continue
+                if switched >= MODE_SWITCH_CLICKS:
                     raise RuntimeError('Chat mode switch did not take effect; no prompt sent')
                 button = await self.evaluate(session, chat_mode_button_expression())
                 if not button:
+                    if now - started_at < MODE_CONTROL_WAIT:  # the toggle renders after the composer
+                        await asyncio.sleep(.5)
+                        continue
                     raise RuntimeError('Chat mode control unavailable; no prompt sent')
-                for kind in ('mousePressed','mouseReleased'):
-                    await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
-                switched = True
+                if switched + 1 < MODE_SWITCH_CLICKS:
+                    for kind in ('mouseMoved','mousePressed','mouseReleased'):
+                        await self.cdp.command('Input.dispatchMouseEvent', {'type':kind, 'x':button['x'], 'y':button['y'], 'button':'left', 'clickCount':1}, session=session)
+                else:
+                    await self.evaluate(session, chat_mode_click_expression())
+                switched += 1
+                switched_at = time.monotonic()
+                lane_log(f'[{lane_of(job)}] {job}: ChatGPT opened in Work; switching to Chat (try {switched})')
                 await asyncio.sleep(.5)
                 continue
             if state and state.get('composer') and state.get('mode') != 'chat':

@@ -120,8 +120,40 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         _,_,state=await self.bridge.page_ready('job')
         self.assertEqual(state['mode'],'chat')
         mouse=[c for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Input.dispatchMouseEvent']
-        self.assertEqual(len(mouse),2)
+        self.assertEqual([c.args[1]['type'] for c in mouse],['mouseMoved','mousePressed','mouseReleased'])
         self.assertTrue(self.bridge.authenticated)
+
+    def mode_page(self,states):
+        """evaluate() for a page whose snapshots follow `states` (the last repeats); records page-side Chat clicks."""
+        from videostudio.cdp_page import chat_mode_button_expression,chat_mode_click_expression
+        seen=list(states);self.page_clicks=0
+        async def evaluate(session,expression):
+            if expression==chat_mode_button_expression():return {'x':10,'y':20}
+            if expression==chat_mode_click_expression():self.page_clicks+=1;return True
+            return self.page_state(seen.pop(0) if len(seen)>1 else seen[0])
+        return evaluate
+    def mouse_clicks(self):
+        return sum(1 for c in self.bridge.cdp.command.call_args_list if c.args[0]=='Input.dispatchMouseEvent' and c.args[1]['type']=='mousePressed')
+    async def test_slow_mode_switch_is_waited_for_not_failed_or_clicked_again(self):
+        # 2026-11-16: a new story's tab opened in Work and the switch took longer than half a second; it failed at once.
+        await self.setup_page();self.bridge.evaluate=self.mode_page(['work']*4+['chat'])
+        from unittest.mock import patch
+        with patch('videostudio.cdp_daemon.asyncio.sleep',new=AsyncMock()):
+            _,_,state=await self.bridge.page_ready('job')
+        self.assertEqual(state['mode'],'chat');self.assertEqual(self.mouse_clicks(),1);self.assertEqual(self.page_clicks,0)
+    async def test_mode_switch_clicks_again_then_from_the_page(self):
+        await self.setup_page();self.bridge.evaluate=self.mode_page(['work']*3+['chat'])
+        from unittest.mock import patch
+        with patch('videostudio.cdp_daemon.MODE_SWITCH_WAIT',0),patch('videostudio.cdp_daemon.asyncio.sleep',new=AsyncMock()):
+            _,_,state=await self.bridge.page_ready('job')
+        self.assertEqual(state['mode'],'chat');self.assertEqual(self.mouse_clicks(),2);self.assertEqual(self.page_clicks,1)
+    async def test_mode_that_never_switches_fails_without_typing(self):
+        await self.setup_page();self.bridge.evaluate=self.mode_page(['work'])
+        from unittest.mock import patch
+        with patch('videostudio.cdp_daemon.MODE_SWITCH_WAIT',0),patch('videostudio.cdp_daemon.asyncio.sleep',new=AsyncMock()):
+            with self.assertRaisesRegex(RuntimeError,'Chat mode switch did not take effect'):
+                await self.bridge.page_ready('job')
+        self.assertEqual(self.mouse_clicks(),2);self.assertEqual(self.page_clicks,1);self.assertFalse(self.bridge.authenticated)
     async def test_unknown_mode_fails_closed_without_typing(self):
         await self.setup_page();self.bridge.evaluate=AsyncMock(return_value=self.page_state('unknown'))
         with self.assertRaisesRegex(RuntimeError,'Chat mode'):

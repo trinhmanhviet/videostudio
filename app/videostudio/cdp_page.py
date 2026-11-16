@@ -22,6 +22,14 @@ MODE_EXPRESSION = r'''(() => {
 def chat_mode_button_expression():
     return "("+MODE_EXPRESSION+").chatButton"
 
+
+def chat_mode_click_expression():
+    """Press the visible Chat toggle from the page (fallback when a mouse click at its place did not take)."""
+    return r'''(() => {
+  const chat=[...document.querySelectorAll('button,[role="tab"]')].find(e=>e.getBoundingClientRect().width>0&&e.textContent.trim()==='Chat');
+  if(!chat) return false; chat.click(); return true;
+})()'''
+
 # Correlate only an assistant following the exact request marker, never the last
 # arbitrary code block on a page. Missing selectors are errors, not success.
 def snapshot_expression(marker=''):
