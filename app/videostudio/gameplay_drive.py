@@ -36,6 +36,7 @@ class GameplayFolder:
         self.drive = drive or DriveStorage(store)
         self.lock = threading.Lock()
         self.task = {'state': 'idle', 'done': 0, 'total': 0, 'current': '', 'received': 0, 'size': 0, 'added': 0, 'error': None}
+        self.on_new_clips = None  # called after a sync that added clips (Làm dần cả truyện goes on when enough)
 
     def source(self):
         return self.library.gameplay_setting('folder')
@@ -150,6 +151,11 @@ class GameplayFolder:
             self.task.update(state='done', current='', error=error)
             if self.task['added']:
                 emit('drive', f'🎮 Đã lấy {self.task["added"]} clip gameplay mới từ Drive.')
+                if self.on_new_clips:
+                    try:
+                        self.on_new_clips()
+                    except Exception:  # noqa: BLE001 - its own check runs again shortly
+                        pass
             if error and error != REPORTED.get('error'):
                 emit('drive', f'⚠️ Lấy clip gameplay từ Drive có lỗi, tool sẽ thử lại lần sau:\n{error[:300]}')
         except Exception as error:

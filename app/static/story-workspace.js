@@ -216,7 +216,12 @@
     audioOnly.onchange = () => {state.audioOnly = audioOnly.checked; state.enqueueKey = null; renderFooter();};
     const audioOnlyLabel = add(el('label','sw-check sw-audio-only'), audioOnly, el('span','','Chỉ làm lời đọc (MP3)'));
     audioOnlyLabel.title = 'Đọc trước thành MP3 để nghe duyệt. Khi dựng video sau, giọng đã đọc được dùng lại, không đọc lại.';
-    add(footer, total, modeSelect, targetSelect, audioOnlyLabel, btn('Lưu nháp',()=>saveChapter(true),'','save'), enqueueButton);
+    // Làm dần cả truyện: the chapters not yet made go into the queue one episode at a time (the chosen way of making
+    // episodes); the book stops by itself when the new gameplay is too short for the next episode, and goes on when clips arrive.
+    const autorunBar = el('div','sw-autorun'); autorunBar.hidden = true; autorunBar.setAttribute('role','status'); autorunBar.setAttribute('aria-live','polite');
+    const autorunButton = btn('Làm dần cả truyện',startAutorun,'sw-autorun-start','play');
+    autorunButton.title = 'Đưa lần lượt các chương chưa làm vào hàng đợi, mỗi lần một tập (theo cách tạo video đang chọn). Hết gameplay mới thì tạm dừng và báo; có clip mới đủ thì tự chạy tiếp.';
+    add(footer, autorunBar, total, modeSelect, targetSelect, audioOnlyLabel, btn('Lưu nháp',()=>saveChapter(true),'','save'), autorunButton, enqueueButton);
     const empty = el('div','sw-empty');
     add(page, header, bar, columns, footer, empty);
     root.replaceChildren(page);
@@ -261,7 +266,8 @@
       state.book = await api('/api/story/books/'+id);
       bookSelect.value = id; writeLocal('book', id);
       state.selected = new Set(); state.page = 1; state.q = ''; search.value = ''; state.chapter = null; state.enqueueKey = null;
-      await Promise.all([loadChapters(true), loadGameplay()]);
+      state.autorun = null; renderAutorun();
+      await Promise.all([loadChapters(true), loadGameplay(), loadAutorun()]);
       renderAll();
     }
     async function newBook() {
@@ -672,7 +678,50 @@
     }
 
     // --- rendering -----------------------------------------------------------------------------------------
-    function renderAll() {renderEmpty(); renderChapters(); renderEditor(); renderSettings(); renderFooter(); renderSaveState();}
+    // --- Làm dần cả truyện ------------------------------------------------------------------------------------
+    async function loadAutorun() {
+      if (!state.book) return;
+      const bookId = state.book.id;
+      const data = await api(`/api/story/books/${bookId}/autorun`).catch(() => null);
+      if (!data || state.book?.id !== bookId) return;
+      const before = state.autorun;
+      state.autorun = data; renderAutorun();
+      // an episode finished meanwhile: the chapter tabs move it to Đã xong
+      if (before && before.todo != null && data.todo != null && before.todo !== data.todo) loadChapters().catch(() => {});
+      clearTimeout(state.autorunTimer);
+      if (data.state !== 'off' && !state.destroyed) state.autorunTimer = setTimeout(() => loadAutorun().catch(() => {}), 15000);
+    }
+    async function autorunAction(body) {
+      state.autorun = await api(`/api/story/books/${state.book.id}/autorun`, json('POST', body), 120000);
+      renderAutorun(); loadChapters().catch(() => {});
+      clearTimeout(state.autorunTimer);
+      if (state.autorun.state !== 'off') state.autorunTimer = setTimeout(() => loadAutorun().catch(() => {}), 15000);
+    }
+    async function startAutorun() {
+      const mode = state.mode === 'group' ? 'group' : 'each';
+      await autorunAction({action:'start', mode, target_minutes:state.target});
+      toast(mode === 'group' ? `Làm dần cả truyện: mỗi lần một tập khoảng ${state.target} phút.` : 'Làm dần cả truyện: mỗi lần một chương.');
+    }
+    function renderAutorun() {
+      const run = state.autorun;
+      const on = Boolean(run && run.state !== 'off');
+      autorunBar.hidden = !on; autorunButton.hidden = on || !state.book;
+      if (!on) {autorunBar.replaceChildren(); return;}
+      const warn = run.state === 'waiting_gameplay' || run.state === 'error';
+      autorunBar.className = 'sw-autorun' + (warn ? ' is-warning' : run.state === 'paused' ? ' is-paused' : '');
+      const how = run.mode === 'group' ? `tập khoảng ${run.target_minutes} phút` : 'mỗi chương một video';
+      const head = {running:'Đang làm dần cả truyện', waiting_gameplay:'Tạm dừng: thiếu gameplay mới', error:'Tạm dừng vì lỗi', paused:'Đã tạm dừng'}[run.state] || 'Làm dần cả truyện';
+      const detail = [how, run.todo != null ? `còn ${run.todo} chương chưa làm` : '', run.reuse ? 'đang dùng lại clip đã dùng' : ''].filter(Boolean).join(' · ');
+      const actions = add(el('div','sw-autorun-actions'),
+        run.state === 'running' ? btn('Tạm dừng', () => autorunAction({action:'pause'})) : btn('Tiếp tục', () => autorunAction({action:'resume'}), 'sw-accent', 'play'),
+        btn('Dừng hẳn', async () => {
+          if (!global.confirm('Dừng hẳn làm dần cả truyện này? Tập đang trong hàng đợi vẫn làm xong; các chương còn lại không được xếp tiếp.')) return;
+          await autorunAction({action:'stop'}); toast('Đã dừng hẳn làm dần cả truyện.');
+        }));
+      autorunBar.replaceChildren(add(el('div','sw-autorun-text'), el('strong','',head), el('span','',run.message || ''), el('span','sw-muted',detail)), actions);
+    }
+
+    function renderAll() {renderEmpty(); renderChapters(); renderEditor(); renderSettings(); renderFooter(); renderSaveState(); renderAutorun();}
     function renderEmpty() {
       const none = !state.book;
       columns.hidden = none; footer.hidden = none;
@@ -1097,7 +1146,7 @@
     return {
       refresh: () => {if (state.book) loadChapters().then(loadGameplay).then(renderSettings).catch(e=>toast(e.message)); else loadBooks().catch(e=>toast(e.message));},
       save: () => saveChapter(false).catch(e=>toast(e.message)),
-      destroy: () => {global.removeEventListener('beforeunload', beforeUnload); clearTimeout(saveTimer); clearTimeout(pollTimer); clearTimeout(state.crawlTimer); clearTimeout(state.folderTimer); state.destroyed = true;},
+      destroy: () => {global.removeEventListener('beforeunload', beforeUnload); clearTimeout(saveTimer); clearTimeout(pollTimer); clearTimeout(state.crawlTimer); clearTimeout(state.folderTimer); clearTimeout(state.autorunTimer); state.destroyed = true;},
     };
   }
   global.StoryWorkspace = {mount};

@@ -84,6 +84,14 @@
 .sw-total{font-weight:700;font-size:16px;margin-right:auto}
 .sw-footer .sw-primary{min-height:42px;padding:9px 20px;font-size:15px}
 .sw-footer select{width:auto;max-width:300px}
+/* Làm dần cả truyện: a status line across the top of the footer, loud when the book stopped */
+.sw-autorun{flex:1 1 100%;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #2f6c88;background:#12324455;border-radius:8px;padding:8px 11px}
+.sw-autorun[hidden]{display:none}
+.sw-autorun-text{display:flex;flex-direction:column;gap:2px;flex:1 1 320px;min-width:0;font-size:13.5px;line-height:1.45}
+.sw-autorun-text strong{color:var(--sw-accent);font-size:14px}
+.sw-autorun.is-warning{border-color:#a8862f;background:#3a321a99}.sw-autorun.is-warning .sw-autorun-text strong{color:#ffd36e}
+.sw-autorun.is-paused{border-color:var(--sw-border);background:transparent}.sw-autorun.is-paused .sw-autorun-text strong{color:var(--sw-muted)}
+.sw-autorun-actions{display:flex;gap:8px;flex-wrap:wrap}
 .sw-empty{background:var(--sw-panel);border:1px dashed #58728b;border-radius:12px;padding:40px 20px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
 .sw-empty-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .sw-list-empty{padding:20px 4px}
@@ -149,7 +157,7 @@ body.studio-ready main:has(>.studio-view:not([hidden])>.story-workspace){padding
 .sw-footer{bottom:10px}
 /* Phone: the app nav sits fixed along the bottom (73px), so the strip sticks just above it. */
 @media (max-width:760px){body.studio-ready main:has(>.studio-view:not([hidden])>.story-workspace){padding-bottom:77px}
-  .sw-footer{bottom:77px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center}.sw-total{grid-column:1/-1}
+  .sw-footer{bottom:77px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center}.sw-total,.sw-autorun{grid-column:1/-1}
   .sw-footer select,.sw-footer .sw-btn{width:100%;min-width:0;min-height:38px;padding-top:6px;padding-bottom:6px}.sw-footer .sw-btn{white-space:normal;line-height:1.2}.sw-audio-only{font-size:13px}}
 /* Desktop: the app's "Kết nối & hệ thống" row shares the line with the Kể truyện title, so the columns start higher. */
 @media (min-width:761px){body.studio-ready main:has(>.studio-view:not([hidden])>.story-workspace){position:relative}

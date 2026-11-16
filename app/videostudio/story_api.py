@@ -421,6 +421,25 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         if type(audio_only) is not bool:
             raise HTTPException(422, 'audio_only phải là bật/tắt')
         book_data = call(library.book, book_id)
+        index = library.index(book_id)
+        order = {c['id']: c['order'] for c in index}
+        if any(c not in order for c in chapter_ids):
+            raise HTTPException(409, 'Có chương không còn trong truyện. Tải lại danh sách.')
+        chapter_ids = sorted(dict.fromkeys(chapter_ids), key=order.get)
+        listing = {c['id']: c['words'] for c in index}
+        if mode == 'group':
+            groups = group_by_length(chapter_ids, listing, target, float(book_data['settings'].get('speech_speed', 1) or 1))
+        else:
+            groups = [[c] for c in chapter_ids] if mode == 'each' else [chapter_ids]
+        if len(groups) > 100:
+            raise HTTPException(422, 'Tối đa 100 video mỗi lần xếp hàng; chọn ít chương hơn')
+        result = queue_groups(book_data, groups, idempotency_key, audio_only, listing)
+        return {'batch': result['batch'], 'videos': len(groups)}
+
+    def queue_groups(book_data, groups, idempotency_key, audio_only=False, listing=None):
+        """Freeze each group of chapters as one episode and put them all in the shared video queue as one batch.
+        Used by Thêm vào hàng đợi and by Làm dần cả truyện (one episode at a time)."""
+        book_id = book_data['id']
         settings, layout = book_data['settings'], book_data['layout']
         if not audio_only and not layout.get('horizontal', True) and not layout.get('vertical', True):
             raise HTTPException(422, 'Chọn ít nhất một định dạng: ngang hoặc dọc')
@@ -430,25 +449,14 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         import shutil
         free = shutil.disk_usage(store.outputs).free
         outputs = int(bool(layout.get('horizontal', True))) + int(bool(layout.get('vertical', True)))
-        index = library.index(book_id)
-        order = {c['id']: c['order'] for c in index}
-        if any(c not in order for c in chapter_ids):
-            raise HTTPException(409, 'Có chương không còn trong truyện. Tải lại danh sách.')
-        chapter_ids = sorted(dict.fromkeys(chapter_ids), key=order.get)
-        listing = {c['id']: c['words'] for c in index}
-        biggest = max(listing.get(c, 0) for c in chapter_ids) if mode == 'each' else sum(listing.get(c, 0) for c in chapter_ids)
+        listing = listing if listing is not None else {c['id']: c['words'] for c in library.index(book_id)}
+        biggest = max(sum(listing.get(c, 0) for c in group) for group in groups)
         minutes = biggest / 4.2 / 60
         from .story_pipeline import space_needed
         need = space_needed(minutes * 60, 0 if audio_only else outputs)
         if free < need:
             raise HTTPException(422, f'Ổ lưu video ({store.outputs}) chỉ còn {free / 2**30:.1f} GB, cần khoảng {need / 2**30:.1f} GB cho một video. Giải phóng ổ trước khi xếp hàng.')
-        if mode == 'group':
-            groups = group_by_length(chapter_ids, listing, target, float(settings.get('speech_speed', 1) or 1))
-        else:
-            groups = [[c] for c in chapter_ids] if mode == 'each' else [chapter_ids]
-        if len(groups) > 100:
-            raise HTTPException(422, 'Tối đa 100 video mỗi lần xếp hàng; chọn ít chương hơn')
-        items = []
+        items, digests = [], []
         for index, group in enumerate(groups):
             snapshot = call(library.freeze, book_id, group, f'{idempotency_key}:{index}:{"audio:" if audio_only else ""}{",".join(group)}', audio_only)
             words = sum(len(c['text'].split()) for c in snapshot['chapters'])
@@ -466,11 +474,66 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
                 if settings.get('speech_reference_text'):
                     request_body['speech_reference_text'] = settings['speech_reference_text']
             items.append({'title': title, 'content': f'{title}\n{words} từ · snapshot {snapshot["sha256"][:12]}', 'request': request_body})
+            digests.append(snapshot['sha256'])
         try:
             batch = factory.create_prepared_batch(book_data['title'], 'story', items, 'story:' + idempotency_key)
         except ValueError as error:
             raise HTTPException(409 if 'already used' in str(error) else 422, str(error))
-        return {'batch': batch, 'videos': len(items)}
+        return {'batch': batch, 'digests': digests}
+
+    def episode_states(digests):
+        """For Làm dần cả truyện: where each frozen episode stands in the queue ('done', 'active', 'failed')."""
+        found = {}
+        digests = list(dict.fromkeys(digests))
+        rank = {'done': 3, 'active': 2, 'failed': 1}
+        with store.db() as db:
+            for start in range(0, len(digests), 400):
+                part = digests[start:start + 400]
+                marks = ','.join('?' * len(part))
+                rows = [(r['digest'], 'done' if r['state'] == 'completed' else 'failed' if r['state'] in ('failed', 'cancelled') else 'active',
+                         r['error'] or ('đã huỷ' if r['state'] == 'cancelled' else ''))
+                        for r in db.execute(f"SELECT json_extract(request,'$.story_snapshot') AS digest, state, error FROM jobs "
+                                            f"WHERE json_extract(request,'$.story_snapshot') IN ({marks})", part)]
+                rows += [(r['digest'], 'active' if r['state'] in ('pending', 'waiting', 'dispatching') else 'failed', r['message'] or '')
+                         for r in db.execute(f"SELECT json_extract(request,'$.story_snapshot') AS digest, state, message FROM factory_items "
+                                             f"WHERE job_id IS NULL AND json_extract(request,'$.story_snapshot') IN ({marks})", part)]
+                for digest, kind, message in rows:
+                    if digest not in found or rank[kind] > rank[found[digest][0]]:
+                        found[digest] = (kind, str(message or '')[:300])
+        return found
+
+    # --- Làm dần cả truyện ------------------------------------------------------------------------------------------
+    from .story_autorun import AutoRun
+
+    def queue_one(book_id, chapter_ids, key):
+        return queue_groups(library.book(book_id), [chapter_ids], key)['digests'][0]
+    autorun = AutoRun(library, queue_one, episode_states)
+    app.state.story_autorun = autorun
+    gameplay_folder.on_new_clips = autorun.tick  # "Lấy clip mới" brought clips: a book stopped for gameplay goes on
+
+    @app.get('/api/story/books/{book_id}/autorun')
+    def autorun_status(book_id: str):
+        call(library.book, book_id)
+        return autorun.status(book_id)
+
+    @app.post('/api/story/books/{book_id}/autorun')
+    def autorun_action(book_id: str, data: dict, request: Request):
+        """action: start {mode, target_minutes} | pause | resume (Tiếp tục) | stop (Dừng hẳn)."""
+        same_origin(request)
+        action = data.get('action')
+        if action == 'start':
+            sync_done()
+            return call(autorun.start, book_id, data.get('mode', 'each'), data.get('target_minutes', 30))
+        if action in ('pause', 'resume', 'stop'):
+            if action == 'resume':
+                sync_done()
+            return call(getattr(autorun, action), book_id)
+        raise HTTPException(422, 'Thao tác không hợp lệ')
+
+    def start_autorun():
+        if resume_editing:
+            autorun.start_loop()
+    app.state.story_autorun_start = start_autorun
 
     @app.post('/api/story/jobs/{job_id}/rerender')
     def rerender(job_id: str, request: Request):
