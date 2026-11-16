@@ -87,8 +87,16 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         return call(library.delete_book, book_id)
 
     @app.get('/api/story/books/{book_id}/chapters')
-    def chapters(book_id: str, q: str = '', page: int = 1, page_size: int = 50, status: str = ''):
-        return call(library.chapters, book_id, q, page, page_size, status)
+    def chapters(book_id: str, q: str = '', page: int = 1, page_size: int = 50, status: str = '', view: str = ''):
+        sync_done()
+        return call(library.chapters, book_id, q, page, page_size, status, view)
+
+    def sync_done():
+        """Finished story videos mark their chapters done (Đã xong tab), merged episodes included."""
+        with store.db() as db:
+            rows = db.execute("SELECT json_extract(request,'$.story_snapshot') AS digest FROM jobs WHERE state='completed' "
+                              "AND json_extract(request,'$.story_snapshot') IS NOT NULL").fetchall()
+        library.mark_done(row['digest'] for row in rows)
 
     @app.get('/api/story/chapters/{chapter_id}/source')
     def chapter_source(chapter_id: str):

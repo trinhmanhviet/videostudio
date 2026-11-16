@@ -102,6 +102,26 @@ class StoryLibraryTests(unittest.TestCase):
         detail = self.library.chapter(listing['items'][1]['id'])
         self.assertEqual([i['code'] for i in detail['lint']], ['ellipsis_mid', 'tilde'])
 
+    def test_finished_videos_move_chapters_to_the_done_tab(self):
+        book = self.library.create_book('Truyện thử')
+        self.library.import_files(book['id'], [{'name': 'gop.txt', 'text': ''.join(f'Chương {n}: C{n}\n\nCâu {n}.\n\n' for n in range(1, 6))}])
+        ids = self.library.chapters(book['id'])['all_ids']
+        single = self.library.freeze(book['id'], [ids[0]], 'one')
+        merged = self.library.freeze(book['id'], ids[2:4], 'merged')
+        audio = self.library.freeze(book['id'], [ids[4]], 'audio', audio_only=True)
+        self.library.freeze(book['id'], [ids[1]], 'queued-only')
+        self.library.mark_done([single['sha256'], merged['sha256'], audio['sha256'], 'f' * 64])
+        todo = self.library.chapters(book['id'], view='todo')
+        done = self.library.chapters(book['id'], view='done')
+        self.assertEqual(todo['counts'], {'todo': 2, 'done': 3})
+        self.assertEqual(todo['all_ids'], [ids[1], ids[4]])
+        self.assertEqual([c['order'] for c in done['items']], [1, 3, 4])
+        self.assertTrue(all(c['done'] for c in done['items']))
+        self.assertEqual(done['order_ids'], ids)
+        # Moving a chapter in one tab keeps every chapter in the book's order.
+        self.library.reorder(book['id'], [ids[1], ids[0], *ids[2:]])
+        self.assertEqual([c['order'] for c in self.library.chapters(book['id'], view='done')['items']], [2, 3, 4])
+
     def test_audio_only_episode_has_no_gameplay(self):
         book = self.library.create_book('Truyện thử')
         self.library.import_files(book['id'], [{'name': '1.txt', 'text': 'Một câu.'}])

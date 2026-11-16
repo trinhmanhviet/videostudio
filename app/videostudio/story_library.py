@@ -152,6 +152,10 @@ class StoryLibrary:
             if 'source_sha256' not in {r['name'] for r in db.execute('PRAGMA table_info(chapters)')}:
                 db.execute('ALTER TABLE chapters ADD COLUMN source_sha256 TEXT')
                 db.execute('UPDATE chapters SET source_sha256=sha256')
+            # done = when a video (not an MP3-only reading) of this episode finished; its chapters move to the Đã xong tab.
+            if 'done' not in {r['name'] for r in db.execute('PRAGMA table_info(episodes)')}:
+                db.execute('ALTER TABLE episodes ADD COLUMN done REAL')
+        self._done_seen = set()
 
     @contextmanager
     def db(self):
@@ -271,14 +275,23 @@ class StoryLibrary:
             value['lint'] = issues
         return value
 
-    def chapters(self, book_id, q='', page=1, page_size=50, status=''):
+    def chapters(self, book_id, q='', page=1, page_size=50, status='', view=''):
+        """view: 'todo' = chapters without a finished video, 'done' = chapters that have one, '' = all.
+        `order_ids` is every chapter in reading order, so moving one inside a tab keeps the whole order."""
         self.book(book_id)
         page, page_size = max(1, int(page)), min(200, max(1, int(page_size)))
         with self.db() as db:
             rows = db.execute('SELECT * FROM chapters WHERE book_id=? AND deleted=0 ORDER BY position', (book_id,)).fetchall()
+        done = self.done_chapter_ids(book_id)
         items = [self._chapter(row) for row in rows]
         for index, item in enumerate(items, 1):
             item['order'] = index
+            item['done'] = item['id'] in done
+        order_ids = [i['id'] for i in items]
+        done_count = sum(i['done'] for i in items)
+        counts = {'todo': len(items) - done_count, 'done': done_count}
+        if view in ('todo', 'done'):
+            items = [i for i in items if i['done'] == (view == 'done')]
         needle = slug(q, 200).replace('-', ' ') if q else ''
         if needle:
             items = [i for i in items if needle in slug(i['title'], 200).replace('-', ' ') or needle == str(i['order'])]
@@ -289,7 +302,8 @@ class StoryLibrary:
         total_words = sum(i['words'] for i in items)
         start = (page - 1) * page_size
         return {'items': items[start:start + page_size], 'total': len(items), 'page': page, 'page_size': page_size,
-                'total_words': total_words, 'all_ids': [i['id'] for i in items], 'words_by_id': {i['id']: i['words'] for i in items}}
+                'total_words': total_words, 'all_ids': [i['id'] for i in items], 'words_by_id': {i['id']: i['words'] for i in items},
+                'order_ids': order_ids, 'counts': counts}
 
     def issues(self, book_id, code='', limit=1000):
         """Every spot to check across the whole book, in reading order, so thousands of chapters need no scrolling.
@@ -819,8 +833,26 @@ class StoryLibrary:
             part.write_text(raw, encoding='utf-8')
             part.replace(path)
         with self.db() as db:
-            db.execute('INSERT OR IGNORE INTO episodes VALUES(?,?,?,?,?,?)', (uuid.uuid4().hex, book_id, digest, json.dumps(chapter_ids), idem, time.time()))
+            db.execute('INSERT OR IGNORE INTO episodes(id,book_id,snapshot_sha256,chapter_ids,idem,created) VALUES(?,?,?,?,?,?)', (uuid.uuid4().hex, book_id, digest, json.dumps(chapter_ids), idem, time.time()))
         return {**snapshot, 'sha256': digest}
+
+    def mark_done(self, digests):
+        """Snapshots whose job finished: their episodes count as done. Remembered here, so the chapters stay done after
+        the job itself is cleaned up. An MP3-only reading is not a video and does not count."""
+        for digest in set(digests) - self._done_seen:
+            try:
+                audio_only = bool(self.snapshot(digest).get('audio_only'))
+            except (OSError, ValueError):
+                audio_only = True
+            if not audio_only:
+                with self.db() as db:
+                    db.execute('UPDATE episodes SET done=? WHERE snapshot_sha256=? AND done IS NULL', (time.time(), digest))
+            self._done_seen.add(digest)
+
+    def done_chapter_ids(self, book_id):
+        with self.db() as db:
+            rows = db.execute('SELECT chapter_ids FROM episodes WHERE book_id=? AND done IS NOT NULL', (book_id,)).fetchall()
+        return {identifier for row in rows for identifier in json.loads(row['chapter_ids'])}
 
     def _clip_path(self, clip_id):
         with self.db() as db:

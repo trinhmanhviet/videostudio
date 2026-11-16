@@ -18,7 +18,7 @@
   function mount(root, opts = {}) {
     const doc = root.ownerDocument;
     const toast = opts.toast || (m => console.log(m));
-    const state = {books:[], book:null, chapters:[], total:0, totalWords:0, allIds:[], page:1, q:'', selected:new Set(), chapter:null,
+    const state = {books:[], book:null, chapters:[], total:0, totalWords:0, allIds:[], orderIds:[], view:'todo', counts:{todo:0,done:0}, page:1, q:'', selected:new Set(), chapter:null,
       dirty:false, saving:false, saveError:'', voices:[], gameplay:{items:[],total_seconds:0}, backgrounds:[], tab:'voice',
       mode:'each', target:30, audioOnly:false, enqueueKey:null, preview:null, destroyed:false, sources:[]};
     let saveTimer = null, pollTimer = null, dragId = null;
@@ -72,11 +72,17 @@
     const selectedCount = el('span');
     const statusFilter = select([['','Mọi chương'],['pending','Chưa duyệt'],['reviewed','Đã duyệt'],['issues','Cần sửa chữ']], '', v=>{state.status=v;state.page=1;loadChapters().catch(e=>toast(e.message));});
     statusFilter.setAttribute('aria-label','Lọc theo trạng thái duyệt');
+    // Chưa làm / Đã xong: a chapter with a finished video lives only in Đã xong; search, filter and Chọn tất cả act on the open tab.
+    const listTabs = el('div','sw-tabs sw-list-tabs');listTabs.setAttribute('role','tablist');listTabs.setAttribute('aria-label','Chương chưa làm hoặc đã xong');
+    for (const key of ['todo','done']) {
+      const t = btn('',async()=>{if(state.view===key)return;state.view=key;state.page=1;state.selected=new Set();state.enqueueKey=null;await loadChapters();},'sw-tab');
+      t.dataset.view=key;t.setAttribute('role','tab');listTabs.append(t);
+    }
     const chapterList = el('div','sw-chapter-list');
     const pager = el('div','sw-pager');
     // Cần kiểm tra cả truyện: every spot across the book in one list; tapping one opens that chapter at that spot.
     const issuesBox = el('details','sw-lint sw-book-issues'); issuesBox.hidden = true;
-    add(left, el('h2','','Truyện & chương'), add(el('div','sw-search'),search,statusFilter),
+    add(left, el('h2','','Truyện & chương'), listTabs, add(el('div','sw-search'),search,statusFilter),
       add(el('div','sw-select-row'), selectedCount, add(el('label','sw-check'), selectAll, el('span','','Chọn tất cả'))), chapterList, pager, issuesBox,
       el('p','sw-muted sw-hint','Kéo ⠿ hoặc dùng ↑ ↓ để đổi thứ tự đọc.'));
 
@@ -272,8 +278,9 @@
     // --- chapters ----------------------------------------------------------------------------------------
     async function loadChapters(openFirst = false) {
       if (!state.book) return;
-      const data = await api(`/api/story/books/${state.book.id}/chapters?page=${state.page}&page_size=${PAGE_SIZE}&q=${encodeURIComponent(state.q)}&status=${state.status||''}`);
+      const data = await api(`/api/story/books/${state.book.id}/chapters?page=${state.page}&page_size=${PAGE_SIZE}&q=${encodeURIComponent(state.q)}&status=${state.status||''}&view=${state.view}`);
       state.chapters = data.items; state.total = data.total; state.totalWords = data.total_words; state.allIds = data.all_ids;
+      state.orderIds = data.order_ids || data.all_ids; state.counts = data.counts || {todo:data.total, done:0};
       state.wordsById = new Map(Object.entries(data.words_by_id || {}));
       state.selected = new Set([...state.selected].filter(id => state.allIds.includes(id)));
       if ((openFirst || !state.chapter) && data.items[0]) await openChapter(data.items[0].id);
@@ -335,9 +342,10 @@
       toast(`Đã thêm ${added} chương` + (updated ? `, cập nhật ${updated}` : '') + (skipped ? `, bỏ qua ${skipped} chương trùng` : '') + '.');
     }
     async function moveChapter(id, delta) {
-      const ids = [...state.allIds]; const from = ids.indexOf(id); const to = from + delta;
-      if (from < 0 || to < 0 || to >= ids.length) return;
-      ids.splice(to, 0, ids.splice(from, 1)[0]); await reorder(ids);
+      const shown = state.allIds, at = shown.indexOf(id), neighbour = shown[at + delta];
+      if (at < 0 || !neighbour) return;
+      const ids = state.orderIds.filter(x => x !== id);
+      ids.splice(ids.indexOf(neighbour) + (delta > 0 ? 1 : 0), 0, id); await reorder(ids);
     }
     async function reorder(ids) {await api(`/api/story/books/${state.book.id}/chapters/order`, json('POST', {chapter_ids:ids})); state.enqueueKey = null; await loadChapters();}
     async function renameChapter(chapter) {
@@ -425,7 +433,7 @@
         renderPreview(); pollPreview();
       }, 3000);
     }
-    const orderOf = id => state.allIds.indexOf(id) + 1;
+    const orderOf = id => state.orderIds.indexOf(id) + 1;
 
     // --- gameplay ----------------------------------------------------------------------------------------
     async function loadGameplay() {
@@ -679,6 +687,10 @@
     }
     function renderChapters() {
       if (!state.book) return;
+      for (const t of listTabs.children) {
+        const on = t.dataset.view === state.view; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on));
+        t.replaceChildren(el('span','',t.dataset.view === 'done' ? 'Đã xong' : 'Chưa làm'), el('span','sw-tab-count',String(state.counts[t.dataset.view] ?? 0)));
+      }
       selectedCount.textContent = `${state.selected.size} chương đã chọn`;
       selectAll.checked = state.allIds.length > 0 && state.selected.size === state.allIds.length;
       selectAll.indeterminate = state.selected.size > 0 && state.selected.size < state.allIds.length;
@@ -686,7 +698,7 @@
         const row = el('article','sw-chapter'); row.classList.toggle('is-active', chapter.id === state.chapter?.id); row.draggable = !state.q;
         row.ondragstart = e => {if(e.target.closest('button,input')){e.preventDefault();return;}dragId=chapter.id;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',chapter.id);};
         row.ondragend = () => {dragId = null;}; row.ondragover = e => {if(dragId)e.preventDefault();};
-        row.ondrop = async e => {if(!dragId||dragId===chapter.id)return;e.preventDefault();const ids=[...state.allIds];const from=ids.indexOf(dragId);ids.splice(from,1);ids.splice(ids.indexOf(chapter.id)+(from<ids.indexOf(chapter.id)+1?1:0),0,dragId);dragId=null;try{await reorder(ids);}catch(err){toast(err.message);}};
+        row.ondrop = async e => {if(!dragId||dragId===chapter.id)return;e.preventDefault();const ids=[...state.orderIds];const from=ids.indexOf(dragId);ids.splice(from,1);ids.splice(ids.indexOf(chapter.id)+(from<ids.indexOf(chapter.id)+1?1:0),0,dragId);dragId=null;try{await reorder(ids);}catch(err){toast(err.message);}};
         const check = el('input'); check.type='checkbox'; check.checked = state.selected.has(chapter.id); check.setAttribute('aria-label','Chọn '+chapter.title);
         check.onchange = () => {if(check.checked)state.selected.add(chapter.id);else state.selected.delete(chapter.id);state.enqueueKey=null;renderChapters();renderFooter();};
         const open = el('button','sw-chapter-open'); open.type='button'; open.onclick = () => openChapter(chapter.id).catch(e=>toast(e.message));
@@ -699,7 +711,7 @@
         add(row, grip, check, open, add(el('div','sw-row-actions'), up, down, rename, remove));
         return row;
       }));
-      if (!state.chapters.length) chapterList.append(el('p','sw-muted sw-list-empty', state.q ? 'Không có chương khớp.' : 'Chưa có chương. Thả tệp TXT (mỗi tệp một chương) hoặc một tệp gộp có tiêu đề “Chương N”.'));
+      if (!state.chapters.length) chapterList.append(el('p','sw-muted sw-list-empty', state.q || state.status ? 'Không có chương khớp.' : state.view === 'done' ? 'Chưa có chương nào làm xong video. Video trong hàng đợi làm xong thì chương chuyển sang đây.' : state.counts.done ? 'Mọi chương đều đã có video. Xem ở tab Đã xong.' : 'Chưa có chương. Thả tệp TXT (mỗi tệp một chương) hoặc một tệp gộp có tiêu đề “Chương N”.'));
       const pages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
       const prev = iconBtn('left','Trang trước',async()=>{state.page--;await loadChapters();}); prev.disabled = state.page <= 1;
       const next = iconBtn('right','Trang sau',async()=>{state.page++;await loadChapters();}); next.disabled = state.page >= pages;
