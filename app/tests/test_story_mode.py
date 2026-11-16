@@ -98,7 +98,12 @@ class StoryLibraryTests(unittest.TestCase):
     def test_title_intro_animates_each_letter_and_waits_for_it(self):
         snapshot = {'book': {'id': 'b', 'title': 'Trọng sinh: Công lược'}, 'layout': {'channel': 'Kênh'},
                     'chapters': [{'id': 'c1', 'order': 1, 'number': 1, 'title': 'Trọng sinh', 'read_title': True, 'text': 'x'}]}
-        self.assertEqual(story_pipeline.intro_seconds(snapshot), story_pipeline.INTRO_SECONDS)
+        # Last letter lands, half a second of hold, the fade-out: then the story starts.
+        landed = max(start for _, _, starts, _ in story_pipeline._intro_flights(snapshot) for _, start in starts) + story_pipeline.INTRO_FLIGHT_MS
+        intro = story_pipeline.intro_seconds(snapshot)
+        self.assertAlmostEqual(intro, (landed + 500 + story_pipeline.INTRO_FADE_OUT_MS) / 1000, delta=.01)
+        self.assertEqual(story_pipeline.hold_first_frame(1.5), ',tpad=start_duration=1.500:start_mode=clone')
+        self.assertEqual(story_pipeline.hold_first_frame(0), '')
         self.assertEqual(story_pipeline.intro_seconds({**snapshot, 'layout': {'intro': False}}), 0)
         self.assertEqual(story_pipeline.intro_seconds({**snapshot, 'audio_only': True}), 0)
         # Decomposed accents stay with their letter.
@@ -109,13 +114,16 @@ class StoryLibraryTests(unittest.TestCase):
                 plain = story_pipeline.write_ass(Path(tmp) / 'a.ass', orientation, snapshot, cues, True).read_text(encoding='utf-8')
                 self.assertNotIn('IntroBook', plain)
                 self.assertIn('Dialogue: 1,0:00:00.00', plain)
-                shifted = story_pipeline.shift_cues(cues, 2.5)
-                text = story_pipeline.write_ass(Path(tmp) / 'b.ass', orientation, snapshot, shifted, True, intro=2.5).read_text(encoding='utf-8')
+                shifted = story_pipeline.shift_cues(cues, intro)
+                text = story_pipeline.write_ass(Path(tmp) / 'b.ass', orientation, snapshot, shifted, True, intro=intro).read_text(encoding='utf-8')
                 letters = len([c for c in 'TRỌNG SINH: CÔNG LƯỢC' if c != ' ']) + len([c for c in 'Chương 1: Trọng sinh' if c != ' '])
                 self.assertEqual(text.count('\\move('), 2 * letters)  # outline + fill per letter
                 self.assertEqual(text.count('\\p1}'), 1)  # one dark band
                 self.assertNotIn('Dialogue: 1,0:00:00.00', text)  # top titles wait for the intro to leave
-                self.assertIn('Dialogue: 0,0:00:02.50,0:00:04.50,Caption', text)
+                at = story_pipeline._ass_time(intro)
+                self.assertIn(f'Dialogue: 0,{at},{story_pipeline._ass_time(intro + 2)},Caption', text)
+                self.assertIn(f'Dialogue: 1,{at},', text)  # top titles return with the story
+                self.assertIn(f'Dialogue: 5,0:00:00.00,{at},', text)  # the intro is gone by then
 
     def test_listing_counts_writing_issues_and_filters_them(self):
         book = self.library.create_book('Truyện thử')
@@ -345,10 +353,14 @@ class StoryRenderTests(unittest.TestCase):
                                      'chuong-001-canh-cong-cu-v1_doc.mp4', 'chuong-001-canh-cong-cu-v1_doc.srt',
                                      'chuong-001-canh-cong-cu-v1_ngang.mp4', 'chuong-001-canh-cong-cu-v1_ngang.srt'])
             # The title intro is on by default: narration and subtitles wait for it, the video is that much longer.
-            self.assertEqual(job['checkpoints']['render']['intro_seconds'], story_pipeline.INTRO_SECONDS)
+            intro = story_pipeline.intro_seconds(snapshot)
+            self.assertGreater(intro, 1)
+            self.assertEqual(job['checkpoints']['render']['intro_seconds'], intro)
             srt = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_ngang.srt').read_text(encoding='utf-8')
-            self.assertIn('00:00:02,500 --> ', srt)
-            self.assertAlmostEqual(result['duration_seconds'], 4.0 + story_pipeline.INTRO_SECONDS, places=3)
+            self.assertIn(story_pipeline._srt_time(intro) + ' --> ', srt)
+            self.assertAlmostEqual(result['duration_seconds'], 4.0 + intro, places=3)
+            # The intro plays on the first gameplay frame held still: no extra footage is planned for it.
+            self.assertAlmostEqual(json.loads((output / 'story-gameplay' / 'plan.json').read_text(encoding='utf-8'))['seconds'], 4.5)
             kit = (root / 'Book' / 'chuong-001-canh-cong-cu-v1_dang-bai.txt').read_text(encoding='utf-8')
             self.assertIn('Chuyến trở về · Chương 1: Cánh cổng cũ', kit)
             self.assertIn('#truyenaudio', kit)

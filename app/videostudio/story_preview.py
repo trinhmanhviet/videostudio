@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .media import run
 from .story_library import PRESET_BACKGROUNDS
-from .story_pipeline import FPS, INTRO_SECONDS, LAYOUTS, _background_input, intro_seconds, layout_for, write_ass
+from .story_pipeline import FPS, LAYOUTS, _background_input, hold_first_frame, intro_seconds, layout_for, write_ass
 
 
 def _context(library, book_id, chapter_id):
@@ -54,7 +54,7 @@ def _compose(library, pipeline, snapshot, clip, sentence, orientation, seconds, 
     background, bg_filter = _background_input(snapshot, width, height, seconds, folder, getattr(pipeline, 'ffmpeg', 'ffmpeg'))
     start = min(max(clip['start'], 0) + 3, max(0, clip['end'] - seconds - .5))
     gameplay = ['-ss', f'{start:.2f}', '-t', f'{seconds:.2f}', '-i', clip_path(library, clip['id'])]
-    graph = (f'{bg_filter};[1:v]fps={FPS},scale={gw}:{gh}:force_original_aspect_ratio=decrease,setsar=1[g];'
+    graph = (f'{bg_filter};[1:v]fps={FPS},scale={gw}:{gh}:force_original_aspect_ratio=decrease,setsar=1{hold_first_frame(intro)}[g];'
              f'[bg][g]overlay=x={gx}+({gw}-w)/2:y={gy}+({gh}-h)/2:eof_action=repeat,ass={ass.name}[v]')
     args = [getattr(pipeline, 'ffmpeg', 'ffmpeg'), '-v', 'error', '-y', *background, *gameplay, '-filter_complex', graph, '-map', '[v]']
     if still:
@@ -86,7 +86,7 @@ def still(library, pipeline, book_id, chapter_id, orientation):
 def test_clip(library, pipeline, book_id, chapter_id, orientation):
     snapshot, clip, sentence = _context(library, book_id, chapter_id)
     key = {'o': orientation, 'snapshot': {k: v for k, v in snapshot.items() if k != 'chapters'}, 'chapter': snapshot['chapters'][0]['title'],
-           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 2}
+           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 3}
     target = library.root / 'previews' / _name('test', key, '.mp4')
     if not target.is_file():  # starts like the real video: with the intro when the book has it on
         _compose(library, pipeline, snapshot, clip, sentence, orientation, 10.0, target, False, intro=intro_seconds(snapshot))
@@ -98,8 +98,9 @@ def intro_clip(library, pipeline, book_id, chapter_id, orientation):
     book has the intro turned off, so it can be judged before turning it on."""
     snapshot, clip, sentence = _context(library, book_id, chapter_id)
     key = {'o': orientation, 'snapshot': {k: v for k, v in snapshot.items() if k != 'chapters'}, 'chapter': snapshot['chapters'][0]['title'],
-           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 1, 'intro': INTRO_SECONDS}
+           'sentence': sentence, 'clip': clip['sha256'], 'start': clip['start'], 'v': 2}
+    intro = intro_seconds({**snapshot, 'layout': {**snapshot['layout'], 'intro': True}})
     target = library.root / 'previews' / _name('intro', key, '.mp4')
     if not target.is_file():
-        _compose(library, pipeline, snapshot, clip, sentence, orientation, INTRO_SECONDS + 2.0, target, False, intro=INTRO_SECONDS)
+        _compose(library, pipeline, snapshot, clip, sentence, orientation, intro + 2.5, target, False, intro=intro)
     return target
