@@ -199,3 +199,5 @@ button.st-icon:disabled{opacity:.35;cursor:default}
 .studio-services .studio-service:first-of-type{border-top:0}
 .studio-service-info{display:flex;flex-direction:column;gap:3px;min-width:220px;flex:1}
 .studio-service-state{font-size:13px;font-weight:600;color:#f2c46d}.studio-service-state.is-on{color:#8fe0a8}.studio-service-state.is-off{color:#a8b7c9}
+.studio-notify-groups{display:grid;gap:12px;margin-bottom:12px}
+.studio-notify-title{margin:18px 0 10px;font-size:14px}

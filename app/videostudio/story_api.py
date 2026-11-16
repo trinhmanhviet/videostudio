@@ -13,6 +13,7 @@ from pathlib import Path
 from fastapi import Header, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from .notify import emit
 from .paths import APP_ROOT
 from .story_library import ConflictError, StoryLibrary, estimate_seconds, natural_key
 
@@ -564,6 +565,7 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         stop = threading.Event()
 
         def chapter_done(number):
+            emit('story', '', merge=('chapters:' + name, f'📖 {heading()}: xong chương ', number))
             try:
                 result = import_edited(path)
                 if result and (result['added'] or result['updated']):
@@ -571,22 +573,44 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
             except Exception as error:
                 log.append('Chưa thêm được chương vào Kể truyện: ' + str(error)[:200])
 
+        titles = {}
+
+        def heading():
+            if 'title' not in titles:
+                try:
+                    titles['title'] = source_info(path)['title']
+                except Exception:  # noqa: BLE001 - a notice never stops the edit
+                    titles['title'] = name
+            return titles['title']
+
+        def status(text):
+            editing[name].update(status=text)
+            # the daemon found ChatGPT stuck and the chapter is asked again, or ChatGPT answered with an error
+            if text.startswith('ChatGPT đứng yên'):
+                line = f'🔁 {heading()}: ChatGPT đứng yên, tool tự hỏi lại trong cuộc trò chuyện mới.'
+                emit('story', line, merge=('stuck:' + name, line, ''))
+            elif text.startswith('Lỗi:') or text.startswith('Không liên lạc được dịch vụ ChatGPT'):
+                line = f'⚠️ {heading()}: {text}'
+                emit('story', line, merge=('warn:' + name + text[:30], line, ''))
+
         def work():
             from .story_editor import Paused, StoryEditor
+            span = f' (chương {first or 1}–{last})' if last else (f' (từ chương {first})' if first else '')
+            emit('story', f'✍️ Bắt đầu biên tập: {heading()}{span}')
             try:
-                StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line)),
-                            status=lambda text: editing[name].update(status=text), stop=stop).run(first, last, on_chapter=chapter_done)
+                summary = StoryEditor(path, log=lambda line: log.append(time.strftime('%H:%M ') + str(line)),
+                                      status=status, stop=stop).run(first, last, on_chapter=chapter_done)
                 marker.unlink(missing_ok=True)  # finished: nothing to resume
-                try:
-                    from .notify import send
-                    send(store, f'📚 Đã biên tập xong truyện: {source_info(path)["title"]}')
-                except Exception:
-                    pass
+                review = (summary or {}).get('needs_review') or []
+                emit('story', f'📚 Đã biên tập xong truyện: {heading()}'
+                     + (f'\nCần xem lại chương: {", ".join(map(str, review[:20]))}' if review else ''))
             except Paused:
                 log.append(time.strftime('%H:%M ') + 'Đã tạm dừng. Các chương đã xong vẫn giữ; bấm Tiếp tục để biên tập tiếp.')
+                emit('story', f'⏸ Đã tạm dừng biên tập: {heading()}')
             except Exception as error:
                 editing[name]['error'] = str(error)[:500]
                 log.append('Dừng: ' + str(error)[:300])
+                emit('story', f'❌ Biên tập dừng vì lỗi: {heading()}\n{str(error)[:300]}')
             finally:
                 editing[name]['status'] = ''
 
@@ -610,6 +634,7 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
         saved = saved or {}
         if saved.get('paused') and (state or {}).get('log') is not None:
             state['log'].append(time.strftime('%H:%M ') + 'Tiếp tục biên tập.')
+            emit('story', f'▶️ Tiếp tục biên tập: {source_info(path)["title"]}')
         start_edit(path, data.get('from', saved.get('from')), data.get('to', saved.get('to')))
         return source_info(path)
 
@@ -659,15 +684,11 @@ def register_story_routes(app, store, factory, pipeline, voices, same_origin, re
     def crawl_done(result):
         if result.get('stopped'):
             return
-        try:
-            from .notify import send
-            title = result.get('title') or result.get('url')
-            if result.get('error'):
-                send(store, f'⚠️ Tải truyện dừng: {title}\n{result["error"][:300]}')
-            else:
-                send(store, f'📥 Đã tải {result.get("saved", 0)} chương mới: {title}' + (' (đến chương mới nhất)' if result.get('complete') else ''))
-        except Exception:
-            pass
+        title = result.get('title') or result.get('url')
+        if result.get('error'):
+            emit('story', f'⚠️ Tải truyện dừng: {title}\n{result["error"][:300]}')
+        else:
+            emit('story', f'📥 Đã tải {result.get("saved", 0)} chương mới: {title}' + (' (đến chương mới nhất)' if result.get('complete') else ''))
     crawler = Crawler(SOURCES_ROOT.parent / 'crawl_wikicv.py', SOURCES_ROOT, on_finish=crawl_done)
 
     @app.get('/api/story/crawl')

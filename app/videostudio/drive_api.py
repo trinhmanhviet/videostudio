@@ -12,6 +12,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from .drive_storage import CATEGORIES, DriveError, DriveStorage, local_md5
+from .notify import emit
 
 
 def register_drive_routes(app, store, factory, same_origin, stop_event=None, background=True):
@@ -283,6 +284,10 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
                 state['jobs_done'] += 1
         finally:
             state['result'] = {'uploaded': uploaded, 'failed': failed, 'bytes': state['bytes_done'], 'seconds': round(time.time() - (state['started'] or time.time()))}
+            if uploaded or failed:
+                names = '; '.join(r['job'] for r in state['recent'][:uploaded][:5])
+                emit('drive', f'☁️ Đã đưa {uploaded} video lên Drive ({state["bytes_done"] / 2**30:.1f} GB)'.replace('.', ',')
+                     + (f': {names}' if names else '') + (f'\n⚠️ {failed} video chưa đưa lên được, tool sẽ tự thử lại.' if failed else ''))
             state.update(running=False, current=None, phase=None, file=None, speed=0.0, last=time.time())
 
     def trash_posted():
@@ -305,6 +310,8 @@ def register_drive_routes(app, store, factory, same_origin, stop_event=None, bac
             with store.db() as db:
                 db.execute('UPDATE drive_files SET trashed=1 WHERE job_id=? AND kind=?', (row['job_id'], row['kind']))
             moved += 1
+        if moved:
+            emit('drive', f'🗑 Đã chuyển {moved} tệp video đã đăng vào thùng rác Drive.')
         return moved
     drive.trash_posted = trash_posted
 

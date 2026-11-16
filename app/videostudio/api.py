@@ -103,6 +103,9 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             # story edits stopped by the restart go on (paused ones stay paused); never at import time
             resume=getattr(app.state,'resume_story_edits',None)
             if resume:resume()
+            # Telegram notices: the sender and the watchers start with the real server only
+            notify_start=getattr(app.state,'notify_start',None)
+            if notify_start:notify_start()
         yield
         stop.set()
         # Running stage checks cancellation through store; shutdown leaves running

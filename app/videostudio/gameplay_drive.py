@@ -14,9 +14,11 @@ import time
 from pathlib import Path
 
 from .drive_storage import CACHE, DriveError, DriveStorage, cache_trim, folder_id_from_link
+from .notify import emit
 
 VIDEO_TYPES = {'.mp4', '.mkv', '.mov', '.webm'}
 SYNC_EVERY = 15 * 60
+REPORTED = {}  # the last sync problem sent to Telegram
 USED = 'Used'
 
 
@@ -146,10 +148,17 @@ class GameplayFolder:
             error = '; '.join(problems)[:600] or None
             self._save(last_sync=time.time(), error=error)
             self.task.update(state='done', current='', error=error)
+            if self.task['added']:
+                emit('drive', f'🎮 Đã lấy {self.task["added"]} clip gameplay mới từ Drive.')
+            if error and error != REPORTED.get('error'):
+                emit('drive', f'⚠️ Lấy clip gameplay từ Drive có lỗi, tool sẽ thử lại lần sau:\n{error[:300]}')
         except Exception as error:
             self._save(last_sync=time.time(), error=str(error)[:300])
             self.task.update(state='failed', current='', error=str(error)[:300])
+            if str(error)[:300] != REPORTED.get('error'):
+                emit('drive', f'⚠️ Đồng bộ thư mục gameplay trên Drive lỗi, tool sẽ thử lại lần sau:\n{str(error)[:300]}')
         finally:
+            REPORTED['error'] = self.task.get('error')  # the same problem is reported once, not every sync
             self.lock.release()
         return self.status()
 
@@ -212,6 +221,8 @@ class GameplayFolder:
                 drive = 'trashed' if self.drive.trash(self._account_for(row), row['drive_file_id']) else 'gone'
             except Exception as error:  # the clip is gone here either way; say why Drive kept its file
                 drive, problem = 'failed', str(error)[:300]
+        emit('drive', f'🗑 Đã xoá clip gameplay: {row.get("name") or Path(row["path"]).name}'
+             + {'trashed': ' (bản trên Drive vào thùng rác)', 'failed': f'\n⚠️ Drive chưa xoá được: {problem}'}.get(drive, ''))
         return {'deleted': True, 'local': local, 'drive': drive, 'error': problem}
 
     # --- used clips --------------------------------------------------------------------------------------------
@@ -241,6 +252,7 @@ class GameplayFolder:
         try:
             self.move_used()
             log(f'Đã chuyển {len(newly)} clip gameplay đã dùng vào thư mục {USED} trên Drive.')
+            emit('drive', f'🎮 Đã chuyển {len(newly)} clip gameplay đã dùng vào thư mục {USED} trên Drive.')
         except Exception as error:
             self._save(error=str(error)[:300])
             log(f'{len(newly)} clip gameplay đã dùng; chưa chuyển được vào {USED} trên Drive ({str(error)[:160]}). Tool sẽ thử lại khi lấy clip mới.')

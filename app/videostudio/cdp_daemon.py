@@ -22,6 +22,9 @@ from .cdp_flow import FlowImages, FlowTaskError
 from .cdp_meta import MetaImages, MetaQuotaExhausted
 
 
+STARTED_AT = time.time()  # lets the server tell a restarted service from a running one
+
+
 class NeedsAuthentication(RuntimeError):
     pass
 
@@ -141,7 +144,7 @@ class ChromeChatGPTBridge:
         return {'ok':True, 'service':'videostudio-dedicated-cdp', 'connected':connected,
                 'ready':connected and self.authenticated, 'mode':'headed', 'readiness_scope':'connector_only', 'production_ready':False,
                 'authentication':'verified' if connected and self.authenticated else 'unverified',
-                'last_error':self.last_error,'reasoning_effort':self.reasoning_effort}
+                'last_error':self.last_error,'reasoning_effort':self.reasoning_effort,'started_at':STARTED_AT}
 
     async def connect(self):
         async with self.connect_lock:

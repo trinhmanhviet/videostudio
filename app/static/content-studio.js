@@ -455,19 +455,28 @@
   }
 
   async function renderNotify(card) {
-    // Settings → Báo qua Telegram: the user's own bot sends "video xong / lỗi" to their phone.
+    // Settings → Báo qua Telegram: the owner's own bot reports every activity of the tool, per group.
     let info;try{info=await request('/api/notify');}catch(error){card.replaceChildren(el('h3','','Báo qua Telegram'),el('p','studio-error',error.message));return;}
-    const token=el('input');token.type='password';token.placeholder=info.has_token?'Đã lưu token (nhập lại để đổi)':'Token bot, dạng 123456789:ABC…';token.autocomplete='off';
-    const saveToken=button('Lưu token',async()=>{try{await request('/api/notify',{method:'PUT',body:JSON.stringify({token:token.value})});toast('Đã lưu token.');renderNotify(card);}catch(error){toast(error.message);}},'');
+    const put=async(body,done)=>{try{await request('/api/notify',{method:'PUT',body:JSON.stringify(body)});if(done)toast(done);renderNotify(card);}catch(error){toast(error.message);renderNotify(card);}};
+    const token=el('input');token.type='password';token.placeholder=info.has_token?'Đã lưu token (nhập lại để đổi)':'Token bot, dạng 123456789:ABC…';token.autocomplete='off';token.setAttribute('aria-label','Token bot Telegram');
+    const saveToken=button('Lưu token',()=>put({token:token.value},'Đã lưu token.'),'');
+    const chat=el('input');chat.placeholder='Chat ID, dạng 123456789';chat.value=info.chat||'';chat.autocomplete='off';chat.inputMode='numeric';chat.setAttribute('aria-label','Chat ID Telegram');
+    const saveChat=button('Lưu chat ID',()=>put({chat:chat.value},'Đã lưu chat ID.'),'secondary');
     const detect=button('Lấy chat ID tự động',async()=>{try{await request('/api/notify/detect-chat',{method:'POST',body:'{}'});toast('Đã nhận chat ID.');renderNotify(card);}catch(error){toast(error.message);}},'secondary');
-    const test=button('Gửi thử',async()=>{try{await request('/api/notify/test',{method:'POST',body:'{}'});toast('Đã gửi, xem Telegram trên điện thoại.');}catch(error){toast(error.message);}},'secondary');
-    const on=el('input');on.type='checkbox';on.checked=info.enabled;on.onchange=async()=>{await request('/api/notify',{method:'PUT',body:JSON.stringify({enabled:on.checked})});};
-    card.replaceChildren(stHead('Báo qua Telegram',info.configured?(info.enabled?'Đang bật':'Đang tắt'):'Chưa kết nối',info.configured&&info.enabled?'ok':'warn'),
-      el('p','notice','Tool nhắn vào Telegram khi video làm xong hoặc bị lỗi, và khi biên tập xong một truyện.'),
-      append(el('details','st-help'),el('summary','','Cách lấy token'),el('p','','Trong Telegram mở @BotFather → /newbot → đặt tên → nhận token, dán vào đây và Lưu. Sau đó nhắn một chữ bất kỳ cho bot vừa tạo rồi bấm "Lấy chat ID tự động".')),
-      append(el('div','studio-output-row'),token,saveToken),append(el('div','studio-drive-row'),detect,test),
-      stSwitch(info.enabled,'Bật thông báo','Tắt thì tool không nhắn gì.',async(value,input)=>{try{await request('/api/notify',{method:'PUT',body:JSON.stringify({enabled:value})});renderNotify(card);}catch(error){input.checked=!value;toast(error.message);}}),
-      el('p','notice',info.configured?'Đã kết nối, chat ID '+info.chat+'.':(info.has_token?'Đã có token, còn thiếu chat ID.':'Chưa kết nối.')));
+    const test=button('Gửi thử',async()=>{test.disabled=true;try{await request('/api/notify/test',{method:'POST',body:'{}'});toast('Đã gửi, xem Telegram trên điện thoại.');renderNotify(card);}catch(error){toast(error.message);}finally{test.disabled=false;}},'');
+    test.disabled=!info.configured;
+    const groups=el('div','studio-notify-groups');
+    for(const group of info.groups||[])groups.append(stSwitch(group.on,group.label,group.hint,(value,input)=>{input.disabled=true;put({groups:{[group.key]:value}});}));
+    const state=info.last_error?el('p','studio-error','Lần gửi gần nhất lỗi: '+info.last_error):el('p','notice',info.configured?'Đã kết nối, chat ID '+info.chat+'.'+(info.waiting?` Đang chờ gửi ${info.waiting} tin.`:''):(info.has_token?'Đã có token, còn thiếu chat ID.':'Chưa kết nối.'));
+    card.replaceChildren(stHead('Báo qua Telegram',info.configured?(info.enabled?'Đang bật':'Đang tắt'):'Chưa kết nối',info.configured&&info.enabled&&!info.last_error?'ok':'warn'),
+      el('p','notice','Tool nhắn vào Telegram mọi việc nó làm: video, biên tập truyện, đăng bài, Drive, khởi động lại, ChatGPT cần đăng nhập, ổ đầy. Tin dồn dập được gom lại cho đỡ ồn.'),
+      append(el('details','st-help'),el('summary','','Cách lấy token và chat ID'),
+        el('p','','1. Trong Telegram mở @BotFather, gửi /newbot, đặt tên và tên đăng nhập cho bot (kết thúc bằng bot). BotFather gửi lại token dạng 123456789:ABC…, dán vào ô Token rồi bấm Lưu token.'),
+        el('p','','2. Mở bot vừa tạo, bấm Start hoặc nhắn một chữ bất kỳ, rồi bấm "Lấy chat ID tự động". Muốn tự nhập thì nhắn cho @userinfobot để biết chat ID của bạn.'),
+        el('p','','3. Bấm Gửi thử. Tin "thông báo đã hoạt động" đến điện thoại là xong.')),
+      append(el('div','studio-output-row'),token,saveToken),append(el('div','studio-output-row'),chat,saveChat),append(el('div','studio-drive-row'),detect,test),
+      stSwitch(info.enabled,'Bật thông báo','Tắt thì tool không nhắn gì.',(value,input)=>{input.disabled=true;put({enabled:value});}),
+      el('h4','studio-notify-title','Báo những việc nào'),groups,state);
   }
   function stHead(title,pill,tone){const head=el('div','st-head');head.append(el('h3','',title));if(pill)head.append(el('span','st-pill'+(tone?' is-'+tone:''),pill));return head;}
   function stSize(bytes){bytes=Math.max(0,Number(bytes)||0);return bytes>=2**30?(bytes/2**30).toFixed(2).replace('.',',')+' GB':bytes>=10*2**20?Math.round(bytes/2**20)+' MB':bytes>=2**20?(bytes/2**20).toFixed(1).replace('.',',')+' MB':Math.round(bytes/1024)+' KB';}
