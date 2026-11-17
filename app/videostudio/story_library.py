@@ -36,13 +36,17 @@ DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': 
                   'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc',
                   'cover_source': 'game', 'cover_image': '', 'cover_at': 0.3, 'cover_text': True,
                   'intro': True}
-# Built-in backgrounds: gradients rendered by FFmpeg, no image files required.
+# Keep existing preset IDs so saved book layouts pick up the new artwork.
+PRESET_BACKGROUND_ROOT = Path(__file__).resolve().parents[1] / 'assets' / 'story-backgrounds'
 PRESET_BACKGROUNDS = {
-    'preset:dem-xanh': {'name': 'Đêm xanh', 'top': '0x0b1a33', 'bottom': '0x1d3b63'},
-    'preset:hoang-hon': {'name': 'Hoàng hôn', 'top': '0x2a1033', 'bottom': '0x7a3b2e'},
-    'preset:rung-sau': {'name': 'Rừng sâu', 'top': '0x0c1f17', 'bottom': '0x24513a'},
-    'preset:giay-cu': {'name': 'Giấy cũ', 'top': '0x3a2c1c', 'bottom': '0x6b5232'},
+    'preset:dem-xanh': {'name': 'Thư viện giữa các thế giới', 'image': 'thu-vien-the-gioi.png',
+                        'top': '0x0b1a33', 'bottom': '0x1d3b63'},
+    'preset:rung-sau': {'name': 'Cung điện thủy triều', 'image': 'cung-dien-thuy-trieu.png',
+                       'top': '0x0c1f17', 'bottom': '0x24513a'},
+    'preset:giay-cu': {'name': 'Khúc lụa đỏ', 'image': 'khuc-lua-do.png',
+                      'top': '0x3a2c1c', 'bottom': '0x6b5232'},
 }
+PRESET_BACKGROUND_ALIASES = {'preset:hoang-hon': 'preset:giay-cu'}
 
 
 def slug(text, limit=60):
@@ -770,6 +774,12 @@ class StoryLibrary:
         return {'id': 'image:' + target.name, 'name': target.stem.split('-', 1)[-1], 'preset': False}
 
     def background_path(self, background_id):
+        if isinstance(background_id, str):
+            preset = PRESET_BACKGROUNDS.get(PRESET_BACKGROUND_ALIASES.get(background_id, background_id))
+            if preset:
+                path = PRESET_BACKGROUND_ROOT / preset['image']
+                if path.is_file():
+                    return path
         if isinstance(background_id, str) and background_id.startswith('image:'):
             path = (self.root / 'backgrounds' / background_id[6:]).resolve()
             if path.parent == (self.root / 'backgrounds').resolve() and path.is_file():
