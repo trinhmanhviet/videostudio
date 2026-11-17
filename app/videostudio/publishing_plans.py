@@ -18,6 +18,7 @@ HORIZON = 48 * 3600      # slots are filled up to two days ahead
 LEAD = 20 * 60           # a slot closer than this is left alone (uploads need time)
 EVERY = 300              # seconds between two planning rounds
 STYLES = ('story', 'case', 'news', 'meme')
+INTERNAL_CLASH = 'Idempotency-Key'   # the tool's own key clash: never a reason to skip a video for good
 CASE_NOTE = 'Bài đăng thuật lại vụ án, không cổ suý bạo lực. Khán thính giả vui lòng cân nhắc trước khi xem.'
 
 
@@ -63,6 +64,8 @@ class PostingPlans:
                     plan_id TEXT NOT NULL, job_id TEXT NOT NULL, reason TEXT NOT NULL, created REAL NOT NULL,
                     PRIMARY KEY(plan_id, job_id));
             ''')
+            # A clash of the tool's own keys once marked a whole book as skipped (2026-11-17): those videos come back.
+            db.execute(f"DELETE FROM publishing_plan_skips WHERE reason LIKE '%{INTERNAL_CLASH}%'")
 
     # --- plans ---------------------------------------------------------------------------------------------
     def _validate(self, data):
@@ -195,9 +198,38 @@ class PostingPlans:
         except (OSError, ValueError, KeyError):
             return (1, 0, job['created'])
 
+    @staticmethod
+    def _episode(output):
+        """The chapters a story video tells (their ids), or None for other videos. Two renders of the same chapters are
+        the same episode: only one of them is ever posted."""
+        try:
+            snapshot = json.loads((Path(output) / 'story-snapshot.json').read_text(encoding='utf-8'))
+            ids = tuple(sorted(str(c['id']) for c in snapshot.get('chapters') or [] if c.get('id')))
+            return ids or None
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+
+    @staticmethod
+    def _release_dead_slots(db):
+        """A slot whose schedules were all cancelled (or removed on the channel) is free again, and so is its video.
+        A slot whose video was posted early (Đăng ngay, or made public in YouTube Studio) is free again for the next
+        episode; its video stays posted, so it is not posted twice."""
+        states = {r[0]: (r[1], r[2]) for r in db.execute("SELECT id, state, publish_at FROM publishing_schedules WHERE state IN ('cancelled','published')")}
+        for plan_id, at, ids in db.execute('SELECT plan_id, slot_at, schedule_ids FROM publishing_plan_slots').fetchall():
+            try:
+                made = json.loads(ids)
+            except ValueError:
+                continue
+            gone = made and all(states.get(i, ('',))[0] == 'cancelled' for i in made)
+            early = made and all(i in states for i in made) and any(states[i][0] == 'published' for i in made) \
+                and all(states[i][0] == 'cancelled' or states[i][1] < at - 1800 for i in made)
+            if gone or early:
+                db.execute('DELETE FROM publishing_plan_slots WHERE plan_id=? AND slot_at=?', (plan_id, at))
+
     def candidates(self, plan):
         from .project_lifecycle import deleted_job_ids
         with self.store.db() as db:
+            self._release_dead_slots(db)
             hidden = deleted_job_ids(db)
             rows = db.execute('''SELECT j.id, b.style, b.project FROM jobs j JOIN factory_items i ON i.job_id=j.id
                                  JOIN factory_batches b ON b.id=i.batch_id WHERE j.state='completed' AND b.style=?''', (plan['style'],)).fetchall()
@@ -206,7 +238,21 @@ class PostingPlans:
                                                plan['channels'])}
             planned = {r[0] for r in db.execute('SELECT job_id FROM publishing_plan_slots')}
             skipped = {r[0] for r in db.execute('SELECT job_id FROM publishing_plan_skips WHERE plan_id=?', (plan['id'],))}
-        jobs = []
+            # Posts that vanished from the channel (deleted by the owner, or dropped by YouTube itself).
+            removed = {r[0]: r[1] for r in db.execute(f"SELECT job_id, COUNT(*) FROM publishing_schedules WHERE state='cancelled' AND phase='removed' "
+                                                      f"AND channel_id IN ({marks}) GROUP BY job_id", plan['channels'])}
+            used = posted | planned | set(removed)
+            outputs = {r[0]: r[1] for r in db.execute('SELECT id, output FROM jobs WHERE id IN (%s)' % ','.join('?' * len(used)), tuple(used))} if used else {}
+        # Chapters already posted or planned in any render are done; a new render of them is not a new episode.
+        done = {e for e in (self._episode(outputs.get(j, '')) for j in posted | planned) if e}
+        # An episode is posted again by itself once after its post vanished; a second time means something is wrong on the
+        # channel (YouTube dropped the upload), so it waits for the owner instead of being uploaded over and over.
+        vanished = {}
+        for job_id, count in removed.items():
+            key = self._episode(outputs.get(job_id, '')) or job_id
+            vanished[key] = vanished.get(key, 0) + count
+        stuck = {key for key, count in vanished.items() if count >= 2}
+        newest = {}
         for row in rows:
             if row['id'] in hidden or row['id'] in posted or row['id'] in planned or row['id'] in skipped:
                 continue
@@ -219,8 +265,15 @@ class PostingPlans:
             render = job['checkpoints'].get('render', {})
             if render.get('audio_only') or job['checkpoints'].get('verify', {}).get('verified') is not True:
                 continue  # MP3-only narrations and unverified videos are never posted
-            jobs.append(job)
-        return sorted(jobs, key=self._order)
+            episode = self._episode(job['output'])
+            if episode in done:
+                continue
+            key = episode or job['id']
+            if key not in newest or job['created'] > newest[key]['created']:
+                newest[key] = job  # several renders of one chapter: the latest one is posted
+        for key, job in newest.items():
+            job['_stuck'] = key in stuck
+        return sorted(newest.values(), key=self._order)
 
     # --- planning round ------------------------------------------------------------------------------------
     def slots(self, plan, now):
@@ -234,6 +287,18 @@ class PostingPlans:
                 at = datetime(day.year, day.month, day.day, hour, minute, tzinfo=VN).timestamp()
                 if now + LEAD <= at <= now + HORIZON:
                     yield at
+
+    def _key(self, plan, at, channel_id, job_id):
+        """The idempotency key of a plan's post. The same video in the same slot keeps its key (a round cut short after
+        the post was made finds it again instead of making a second one). A slot filled again (its post was removed, or
+        posted early and given to the next chapter) gets a new key, never the key of the earlier post."""
+        base = f'plan:{plan["id"]}:{int(at)}:{channel_id}'
+        with self.store.db() as db:
+            earlier = db.execute('SELECT idem, job_id, state FROM publishing_schedules WHERE idem=? OR idem LIKE ?', (base, base + ':%')).fetchall()
+        for idem, earlier_job, state in earlier:
+            if earlier_job == job_id and state != 'cancelled':
+                return idem
+        return f'{base}:{len(earlier)}' if earlier else base
 
     def _schedule(self, plan, job, at):
         from . import social_copy
@@ -251,12 +316,45 @@ class PostingPlans:
                     'caption': youtube_text if youtube else facebook_text, 'publish_at': datetime.fromtimestamp(at, timezone.utc).isoformat(),
                     'tags': tags if youtube else [], 'ai_label': plan['ai_label']}
             try:
-                made.append(self.publishing.create_schedule(body, f'plan:{plan["id"]}:{int(at)}:{channel_id}')['id'])
+                made.append(self.publishing.create_schedule(body, self._key(plan, at, channel_id, job['id']))['id'])
             except Exception as error:
                 problems.append(f'{(channels.get(channel_id) or {}).get("name", channel_id)}: {error}')
         if not made:
             return None, '; '.join(problems)[:500] or 'Không tạo được lịch đăng'
         return made, '; '.join(problems)[:500] or None
+
+    def _move_up(self, plan, free, queue):
+        """A free slot before planned ones (a chapter was posted early): the planned posts move up one slot each, so the
+        chapters stay in order and the newest slot is the one left to fill. When the next video to post comes before the
+        planned one (its post was removed and it is posted again), it takes the free slot instead. Returns the slots
+        left free to fill; a slot that could not be filled in order (the move failed) is left empty for a story."""
+        free = sorted(free)
+        waiting = next((job for job in queue if not job.get('_stuck')), None)
+        while free:
+            at = free[0]
+            with self.store.db() as db:
+                later = db.execute('SELECT slot_at, schedule_ids, job_id FROM publishing_plan_slots WHERE plan_id=? AND slot_at>? ORDER BY slot_at LIMIT 1',
+                                   (plan['id'], at)).fetchone()
+            if later is None:
+                break  # nothing planned after it: fill it with the next video
+            try:
+                planned_order = self._order(self.store.get(later[2]))
+            except KeyError:
+                planned_order = None
+            if waiting is not None and planned_order is not None and self._order(waiting) < planned_order:
+                break  # the video waiting to be posted comes first: it fills this slot
+            try:
+                for identifier in json.loads(later[1]):
+                    self.publishing.reschedule(identifier, at)
+            except Exception as error:
+                with self.store.db() as db:
+                    db.execute('UPDATE publishing_plans SET note=? WHERE id=?',
+                               ('Chưa dời được tập kế tiếp lên giờ trống (' + str(error)[:200] + '); giờ đó để trống để không đăng lệch thứ tự.', plan['id']))
+                return [] if plan['style'] == 'story' else free  # a story never gets a later chapter ahead of an earlier one
+            with self.store.db() as db:
+                db.execute('UPDATE publishing_plan_slots SET slot_at=? WHERE plan_id=? AND slot_at=?', (at, plan['id'], later[0]))
+            free = sorted(free[1:] + [later[0]])
+        return free
 
     def tick(self, force=False):
         now = self.clock()
@@ -268,15 +366,26 @@ class PostingPlans:
             plans = [self._public_light(dict(r)) for r in db.execute('SELECT * FROM publishing_plans WHERE enabled=1')]
         for plan in plans:
             with self.store.db() as db:
+                self._release_dead_slots(db)
                 taken = {r[0] for r in db.execute('SELECT slot_at FROM publishing_plan_slots WHERE plan_id=?', (plan['id'],))}
             free = [at for at in self.slots(plan, now) if at not in taken]
             if not free:
                 continue
             queue = self.candidates(plan)
-            note = None
+            free = self._move_up(plan, free, queue)
+            if not free:
+                continue
+            note, held = None, False   # held: the plan stopped on purpose; keep its note
             for at in free:
                 while queue:
                     job = queue.pop(0)
+                    if job.get('_stuck'):
+                        note = (f'"{self._title(job["id"])}" đã bị gỡ khỏi kênh 2 lần sau khi tải lên; kiểm tra trong YouTube Studio. '
+                                + ('Kế hoạch dừng ở tập này để không đăng lệch thứ tự chương.' if plan['style'] == 'story' else 'Video này được bỏ qua.'))
+                        if plan['style'] == 'story':
+                            held = True; queue.clear()  # never post the next chapters before this one
+                            break
+                        continue
                     try:
                         ids, problem = self._schedule(plan, job, at)
                     except Exception as error:
@@ -287,11 +396,16 @@ class PostingPlans:
                         made += 1
                         note = problem
                         break
+                    if problem and INTERNAL_CLASH in problem:
+                        note = 'Chưa tạo được lịch cho giờ này (lỗi nội bộ); tool thử lại ở lượt sau.'
+                        held = True; queue.clear()  # keep the order: retry this same video next round
+                        break
                     if problem and 'đang chờ tool viết' not in problem:
                         with self.store.db() as db:  # never retried by this plan; shown in the plan card
                             db.execute('INSERT OR REPLACE INTO publishing_plan_skips VALUES(?,?,?,?)', (plan['id'], job['id'], problem, now))
                 else:
-                    note = 'Hết video sẵn sàng để đăng: làm thêm video cho kế hoạch này.'
+                    if not held:
+                        note = 'Hết video sẵn sàng để đăng: làm thêm video cho kế hoạch này.'
                     break
             with self.store.db() as db:
                 db.execute('UPDATE publishing_plans SET note=? WHERE id=?', (note, plan['id']))

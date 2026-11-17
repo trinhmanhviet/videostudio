@@ -725,6 +725,15 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
         with store.db() as c:hidden=deleted_job_ids(c)
         items=[public_job(j) for j in store.list() if j['id'] not in hidden]
         return {'items':items,'jobs':items}
+    @app.post('/api/jobs/delete-many')
+    def delete_jobs(request:Request,data:dict|None=None):
+        same_origin(request);data=data or {}
+        ids=data.get('job_ids')
+        if not isinstance(ids,list) or not ids or len(ids)>500 or not all(isinstance(i,str) and 0<len(i)<=80 for i in ids):
+            raise HTTPException(422,'job_ids phải là danh sách video')
+        if type(data.get('delete_files',False)) is not bool:raise HTTPException(422,'delete_files phải là boolean')
+        if data.get('confirm') is not True:raise HTTPException(422,'Cần xác nhận xóa video')
+        return project_lifecycle.delete_jobs(ids,data.get('delete_files',False))
     @app.post('/api/jobs/{job_id}/delete')
     def delete_job(job_id:str,request:Request,data:dict|None=None):
         same_origin(request);data=data or {}

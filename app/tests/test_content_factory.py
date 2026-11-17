@@ -157,6 +157,15 @@ class FactoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.factory.get_video_version(job['id'], version['id'])
 
+    def test_library_counts_each_kind_for_its_tabs_whatever_tab_is_open(self):
+        self.verified_job()
+        self.assertEqual(self.factory.videos()['counts'], {'news': 1})
+        other_tab = self.factory.videos(style='case')
+        self.assertEqual((other_tab['total'], other_tab['counts']), (0, {'news': 1, 'case': 0}))
+        # a video whose files are gone is not counted in its tab while another tab is open either
+        self.factory._kind_counts = {('', '', '', '', ''): {'news': 0}}
+        self.assertEqual(self.factory.videos(style='case')['counts'], {'news': 0, 'case': 0})
+
     def test_library_lists_the_landscape_copy_and_repeated_listing_is_read_only(self):
         job, video = self.verified_job()
         self.assertIsNone(self.factory.videos()['items'][0]['wide_url'])

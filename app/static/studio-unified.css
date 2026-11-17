@@ -201,3 +201,29 @@ button.st-icon:disabled{opacity:.35;cursor:default}
 .studio-service-state{font-size:13px;font-weight:600;color:#f2c46d}.studio-service-state.is-on{color:#8fe0a8}.studio-service-state.is-off{color:#a8b7c9}
 .studio-notify-groups{display:grid;gap:12px;margin-bottom:12px}
 .studio-notify-title{margin:18px 0 10px;font-size:14px}
+
+/* Kho video: Chọn nhiều to delete several videos at once */
+.studio-pick-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-8px 0 16px}
+.studio-pick-bar.is-on{position:sticky;top:0;z-index:5;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.studio-pick-count{flex:1;min-width:140px;color:var(--muted);font-size:13px}
+.studio-video-card{position:relative}
+.studio-pick{position:absolute;top:10px;left:10px;z-index:2;width:22px;height:22px;margin:0;accent-color:#7cc4f5;cursor:pointer}
+.studio-video-grid.is-picking .studio-video-card{cursor:pointer}
+.studio-video-card.is-picked{outline:2px solid #7cc4f5;outline-offset:-2px}
+
+/* Kho video: one tab per kind of video */
+.studio-kind-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.studio-kind-tab{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:inherit;font-weight:600}
+.studio-kind-tab b{min-width:22px;padding:1px 7px;border-radius:999px;background:#ffffff14;font-size:12px;text-align:center}
+.studio-kind-tab[aria-selected="true"]{background:#7cc4f5;border-color:#7cc4f5;color:#0b1a2a}
+.studio-kind-tab[aria-selected="true"] b{background:#0b1a2a26}
+.studio-kind-tab.is-empty{opacity:.5}
+.studio-filters{grid-template-columns:minmax(180px,2fr) minmax(140px,1fr)}
+
+/* Page buttons (Kho video, Sổ đăng) */
+.studio-pages{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.studio-pages button{min-width:38px;min-height:36px;padding:6px 10px;border-radius:9px}
+.studio-page{background:transparent;border:1px solid var(--line);color:inherit}
+.studio-page.is-current{background:#7cc4f5;border-color:#7cc4f5;color:#0b1a2a;font-weight:700}
+.studio-pages-gap{padding:0 4px;color:var(--muted)}
+.studio-pages-count{color:var(--muted);font-size:12px}

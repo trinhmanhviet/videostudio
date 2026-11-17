@@ -5,6 +5,7 @@ validated directory to quarantine; a staging/transaction failure restores them a
 """
 import json
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -195,6 +196,25 @@ class ProjectLifecycle:
             raise
         pending=removal.purge() if removal else False
         return {'ok':True,'name':name,'deleted':True,'files_deleted':files_deleted,'files_preserved':not files_deleted,'cleanup_pending':pending}
+    def delete_jobs(self,job_ids,delete_files,background=True):
+        """Many videos at once. Each one leaves the library at once (a quick database change); removing their files,
+        which checks every other job for shared files, runs afterwards in the background, one video after another.
+        Returns the ids taken off and, for the others, why not (still running, still scheduled...)."""
+        removed,refused=[],{}
+        for job_id in dict.fromkeys(str(i) for i in job_ids):
+            try:
+                self.delete_job(job_id,False);removed.append(job_id)
+            except KeyError:refused[job_id]='Không tìm thấy video'
+            except ValueError as error:refused[job_id]=str(error)
+        if delete_files and removed:
+            def purge():
+                for job_id in removed:
+                    try:self.delete_job(job_id,True)
+                    except Exception as error:  # the video stays hidden; its files are kept
+                        with self.store.db() as c:self.store.event(c,job_id,None,'job_files_kept',str(error)[:300])
+            if background:threading.Thread(target=purge,name='delete-videos',daemon=True).start()
+            else:purge()
+        return {'ok':True,'removed':removed,'refused':refused,'files':'background' if delete_files and removed and background else bool(delete_files)}
     def delete_job(self,job_id,delete_files):
         removal=None
         try:

@@ -110,6 +110,24 @@ class ProjectLifecycleTests(unittest.TestCase):
   self.assertIn(running['id'],[j['id'] for j in self.client.get('/api/jobs').json()['items']])
   self.assertEqual(self.delete_video('missing').status_code,404)
   self.assertEqual(self.client.post(f"/api/jobs/{running['id']}/delete",json={'confirm':True},headers={'Origin':'https://untrusted.invalid'}).status_code,403)
+ def test_delete_many_videos_at_once_files_go_in_the_background(self):
+  """Kho video Chọn nhiều: several videos leave the library together; a running one is kept and named (2026-11-17)."""
+  a=self.job(state='completed');b=self.job(state='completed',bridge=False);running=self.job(state='running',bridge=False)
+  for j in (a,b):(Path(j['output'])/'v.mp4').write_text('x')
+  ran=[]
+  class Now:
+   def __init__(self,target,**kw):self.target=target
+   def start(self):ran.append(1);self.target()
+  self.assertEqual(self.client.post('/api/jobs/delete-many',json={'job_ids':[a['id']],'confirm':False}).status_code,422)
+  self.assertEqual(self.client.post('/api/jobs/delete-many',json={'job_ids':'x','confirm':True}).status_code,422)
+  with patch('videostudio.project_lifecycle.threading.Thread',Now):
+   response=self.client.post('/api/jobs/delete-many',json={'job_ids':[a['id'],b['id'],running['id'],'missing'],'delete_files':True,'confirm':True})
+  self.assertEqual(response.status_code,200,response.text);body=response.json()
+  self.assertEqual(body['removed'],[a['id'],b['id']]);self.assertEqual(set(body['refused']),{running['id'],'missing'})
+  self.assertEqual((ran,body['files']),([1],'background'))
+  self.assertFalse(Path(a['output']).exists());self.assertFalse(Path(b['output']).exists());self.assertTrue(Path(running['output']).is_dir())
+  ids=[j['id'] for j in self.client.get('/api/jobs').json()['items']]
+  self.assertNotIn(a['id'],ids);self.assertNotIn(b['id'],ids);self.assertIn(running['id'],ids)
  def test_dismiss_optional_delete_body_and_confirmation(self):
   j=self.job();url=f'/api/connector/bridges/{self.bridge}/jobs/{j["id"]}/dismiss'
   result=self.client.post(url);self.assertEqual(result.status_code,200,result.text);self.assertTrue(result.json().get('files_preserved'))

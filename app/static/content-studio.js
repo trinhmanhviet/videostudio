@@ -203,7 +203,7 @@
   const el = (tag, cls, value) => {const node=document.createElement(tag);if(cls)node.className=cls;if(value!=null)node.textContent=value;return node;};
   const button = (label, action, cls='secondary') => {const node=el('button',cls,label);node.type='button';node.onclick=action;return node;};
   const append = (node,...children) => {node.append(...children.filter(Boolean));return node;};
-  const state = {page:'projects',batch:false,batchItems:[],batchRows:[],batchSubmitting:false,queue:null,libraryView:'videos',publication:{q:'',platform:'',page:1,page_size:10},library:{q:'',style:'',project:'',review_state:'',status:'',page:1,page_size:10},libraryData:null,channels:[],schedules:[],week:new Date(),scheduleView:'week',drawerFocus:null,request:0,loading:false};
+  const state = {page:'projects',batch:false,batchItems:[],batchRows:[],batchSubmitting:false,queue:null,libraryView:'videos',publication:{q:'',platform:'',page:1,page_size:10},library:{q:'',style:'',project:'',review_state:'',status:'',page:1,page_size:10},libraryData:null,picking:false,picked:new Set(),channels:[],schedules:[],week:new Date(),scheduleView:'week',drawerFocus:null,request:0,loading:false};
   const labels = {pending:'Đang chờ',waiting:'Chờ điều kiện chạy',dispatching:'Đang chuẩn bị',queued:'Đang chờ',running:'Đang tạo',retrying:'Đang thử lại',completed:'Hoàn tất',succeeded:'Hoàn tất',failed:'Có lỗi',cancelled:'Đã hủy',skipped:'Đã bỏ qua',awaiting_visual_review:'Chờ duyệt hình',awaiting_flow_account:'Chờ tài khoản tạo ảnh',scheduled:'Đã lên lịch',blocked:'Cần kết nối',publishing:'Đang đăng',published:'Đã đăng',unknown:'Cần kiểm tra',draft:'Bản nháp'};
   const styleLabels = {news:'Tin tức',case:'Vụ án',meme:'Meme hài'};
   const filterStyleLabels = {...styleLabels,story:'Kể truyện'};
@@ -822,9 +822,7 @@
       if(!data.items?.length)list.append(empty('Chưa có bài đã đăng','Sau khi đăng video, chọn Đã đăng & dọn để lưu thông tin và xóa job/tệp.'));
       for(const entry of data.items||[])list.append(publicationRow(entry));root.append(list);
       const pages=Math.max(1,data.total_pages||1);state.publication.page=data.page||state.publication.page;
-      const previous=button('← Trước',()=>{state.publication.page--;loadPublicationHistory();});previous.disabled=state.publication.page<=1;
-      const next=button('Sau →',()=>{state.publication.page++;loadPublicationHistory();});next.disabled=state.publication.page>=pages;
-      root.append(append(el('div','studio-pagination'),previous,el('span','','Trang '+state.publication.page+' / '+pages+' · '+(data.total||0)+' bài'),next));
+      root.append(pager(state.publication.page,pages,(data.total||0)+' bài',page=>{state.publication.page=page;loadPublicationHistory();}));
       if(focusName){const replacement=root.querySelector('[name="'+focusName+'"]');replacement?.focus();if(selection!=null)replacement?.setSelectionRange?.(selection,selection);}
     }catch(error){if(ticket===state.request){libraryHeader(root);const message=el('p','studio-error',error.message);message.setAttribute('role','alert');root.append(message,button('Thử lại',()=>loadPublicationHistory()));}}
   }
@@ -854,9 +852,16 @@
   async function loadLibrary() {if(state.libraryView==='history')return loadPublicationHistory();if(state.libraryView==='facebook')return loadFacebookReels();const root=$('#studio-library');const ticket=++state.request;try{const data=await request('/api/factory/videos?'+filterQuery(state.library));if(ticket!==state.request)return;state.libraryData=data;
       const focused=document.activeElement;const focusName=root.contains(focused)?focused.name:null;const selection=focusName&&typeof focused.selectionStart==='number'?focused.selectionStart:null;
       libraryHeader(root);
-      const filters=el('div','studio-filters');append(filters,filterControl('Tìm kiếm','q'),filterControl('Phong cách','style',[['','Mọi phong cách'],...Object.entries(filterStyleLabels)]),filterControl('Duyệt video','review_state',[['','Tất cả'],['pending','Chưa duyệt'],['approved','Đã duyệt']]));root.append(filters);
-      const grid=el('div','studio-video-grid');if(!data.items?.length)grid.append(empty('Chưa có video phù hợp','Thành phẩm đã kiểm tra sẽ xuất hiện ở đây. Bạn có thể đổi bộ lọc hoặc tạo video mới.',button('Tạo video',()=>navigate('batch'))));for(const video of data.items||[])grid.append(videoCard(video));root.append(grid);
-      const pages=Math.max(1,data.total_pages||1);const previous=button('← Trước',()=>{state.library.page--;loadLibrary();});previous.disabled=state.library.page<=1;const next=button('Sau →',()=>{state.library.page++;loadLibrary();});next.disabled=state.library.page>=pages;root.append(append(el('div','studio-pagination'),previous,el('span','','Trang '+state.library.page+' / '+pages+' · '+(data.total||0)+' video'),next));
+      // One tab per kind of video, with how many there are; the search and review filters work inside the tab.
+      const kinds=el('div','studio-kind-tabs');kinds.setAttribute('role','tablist');kinds.setAttribute('aria-label','Thể loại video');const counts=data.counts||{};
+      for(const [value,label] of [['','Tất cả'],['story','Kể truyện'],['case','Vụ án'],['news','Tin tức'],['meme','Meme hài']]){
+        const count=value?counts[value]||0:Object.values(counts).reduce((a,b)=>a+b,0);
+        const tab=button('',()=>{if(state.library.style===value)return;state.library.style=value;state.library.page=1;state.picked.clear();loadLibrary();},'studio-kind-tab');
+        append(tab,el('span','',label),el('b','',String(count)));tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(state.library.style===value));
+        if(!count&&state.library.style!==value)tab.classList.add('is-empty');kinds.append(tab);}
+      const filters=el('div','studio-filters');append(filters,filterControl('Tìm kiếm','q'),filterControl('Duyệt video','review_state',[['','Tất cả'],['pending','Chưa duyệt'],['approved','Đã duyệt']]));root.append(kinds,filters,pickBar(data.items||[]));
+      const grid=el('div','studio-video-grid'+(state.picking?' is-picking':''));if(!data.items?.length)grid.append(empty('Chưa có video phù hợp','Thành phẩm đã kiểm tra sẽ xuất hiện ở đây. Bạn có thể đổi bộ lọc hoặc tạo video mới.',button('Tạo video',()=>navigate('batch'))));for(const video of data.items||[])grid.append(videoCard(video));root.append(grid);
+      const pages=Math.max(1,data.total_pages||1);root.append(pager(state.library.page,pages,(data.total||0)+' video',page=>{state.library.page=page;loadLibrary();}));
       if(focusName){const replacement=root.querySelector('[name="'+focusName+'"]');replacement?.focus();if(selection!=null)replacement?.setSelectionRange?.(selection,selection);}
     }catch(error){if(ticket===state.request){libraryHeader(root);const message=el('p','studio-error',error.message);message.setAttribute('role','alert');root.append(message,button('Thử lại',()=>loadLibrary()));}}}
   document.addEventListener('click',event=>{for(const menu of document.querySelectorAll('details.studio-more[open]'))if(!menu.contains(event.target))menu.open=false;});
@@ -878,10 +883,63 @@
     if(typeof global.socialPanel==='function')modal.box.append(global.socialPanel({id:video.job_id||video.id}));
     modal.box.append(button('Đã đăng & dọn',()=>{modal.close();openPostedCleanup(video);}));
   }
+  // Chọn nhiều: tick videos, then delete them together. The cards leave the screen at once; the server takes them off
+  // the library in one quick step and removes their files afterwards in the background.
+  function pick(id,card,on) {
+    on=on??!state.picked.has(id);if(on)state.picked.add(id);else state.picked.delete(id);
+    card.classList.toggle('is-picked',on);const box=card.querySelector('.studio-pick');if(box)box.checked=on;updatePickBar();
+  }
+  function updatePickBar() {const count=$('#studio-library .studio-pick-count');if(count)count.textContent=state.picked.size?'Đã chọn '+state.picked.size+' video':'Bấm vào video để chọn';const go=$('#studio-library .studio-pick-delete');if(go)go.disabled=!state.picked.size;}
+  function pickBar(items) {
+    const bar=el('div','studio-pick-bar');
+    if(!state.picking){bar.append(button('Chọn nhiều',()=>{state.picking=true;state.picked.clear();loadLibrary();},'secondary'));return bar;}
+    bar.classList.add('is-on');
+    const all=button('Chọn cả trang',()=>{for(const card of document.querySelectorAll('#studio-library .studio-video-card'))pick(card.dataset.job,card,true);},'secondary');
+    const go=button('Xóa đã chọn',()=>deletePicked(),'studio-danger studio-pick-delete');
+    append(bar,el('span','studio-pick-count'),all,go,button('Xong',()=>{state.picking=false;state.picked.clear();loadLibrary();},'secondary'));
+    queueMicrotask(updatePickBar);return bar;
+  }
+  function deletePicked() {
+    const ids=[...state.picked];if(!ids.length)return;
+    const modal=dialog('Xóa '+ids.length+' video');
+    const filesLabel=el('label','studio-check');const files=el('input');files.type='checkbox';append(filesLabel,files,el('span','','Xóa luôn tệp video, ảnh, giọng đọc còn trên máy (không khôi phục được)'));
+    modal.box.append(el('p','notice','Các video này rời Kho video và Đăng tự động ngay. Bản trên Drive vẫn giữ nguyên. Video còn lịch đăng hoặc đang chạy sẽ được giữ lại.'),filesLabel);
+    const confirm=button('Xóa '+ids.length+' video',()=>{
+      modal.close();
+      for(const id of ids){const card=document.querySelector('#studio-library .studio-video-card[data-job="'+CSS.escape(id)+'"]');card?.remove();}
+      state.picked.clear();updatePickBar();toast('Đã xóa '+ids.length+' video'+(files.checked?'; tệp trên máy đang được dọn ở chạy nền.':'.'));
+      request('/api/jobs/delete-many',{method:'POST',body:JSON.stringify({job_ids:ids,delete_files:files.checked,confirm:true})}).then(result=>{
+        const kept=Object.entries(result.refused||{});
+        if(kept.length)toast(kept.length+' video chưa xóa được: '+kept[0][1]);
+        loadLibrary();
+      }).catch(error=>{toast('Chưa xóa được: '+error.message);loadLibrary();});
+    },'studio-danger');
+    append(modal.box,append(el('div','studio-dialog-actions'),button('Hủy',()=>modal.close()),confirm));
+  }
+  // Page buttons: first, last and the pages around the current one (1 … 4 5 [6] 7 8 … 12), with ← and →.
+  function pager(page,pages,count,go) {
+    const bar=el('nav','studio-pagination');bar.setAttribute('aria-label','Phân trang');
+    const previous=button('←',()=>go(page-1),'secondary');previous.disabled=page<=1;previous.setAttribute('aria-label','Trang trước');
+    const next=button('→',()=>go(page+1),'secondary');next.disabled=page>=pages;next.setAttribute('aria-label','Trang sau');
+    const list=el('div','studio-pages');list.append(previous);
+    const near=[1,pages,page-2,page-1,page,page+1,page+2];
+    if(page-3===2)near.push(2);if(page+3===pages-1)near.push(pages-1);  // a gap of one page shows the page, not "…"
+    const shown=[...new Set(near)].filter(n=>n>=1&&n<=pages).sort((a,b)=>a-b);
+    let last=0;
+    for(const n of shown){
+      if(n-last>1)list.append(el('span','studio-pages-gap','…'));
+      const node=button(String(n),()=>{if(n!==page)go(n);},n===page?'studio-page is-current':'studio-page');
+      if(n===page)node.setAttribute('aria-current','page');node.setAttribute('aria-label','Trang '+n);list.append(node);last=n;
+    }
+    list.append(next);
+    append(bar,list,el('span','studio-pages-count','Trang '+page+' / '+pages+' · '+count));return bar;
+  }
   function videoCard(video) {
     const id=video.job_id||video.id;const card=el('article','studio-video-card');
     const versions=Array.isArray(video.versions)?video.versions:[];let version=versions.find(v=>v.approved)||versions[0];
-    const thumb=el('button','studio-video-thumb');thumb.type='button';thumb.setAttribute('aria-label','Xem '+(video.title||'video'));thumb.onclick=()=>openVideo(video,version);
+    const thumb=el('button','studio-video-thumb');thumb.type='button';thumb.setAttribute('aria-label','Xem '+(video.title||'video'));thumb.onclick=()=>state.picking?pick(id,card):openVideo(video,version);
+    card.dataset.job=id;
+    if(state.picking){const box=el('input','studio-pick');box.type='checkbox';box.checked=state.picked.has(id);box.setAttribute('aria-label','Chọn '+(video.title||'video'));box.onchange=()=>pick(id,card,box.checked);card.append(box);card.classList.toggle('is-picked',box.checked);}
     const src=video.thumbnail&&localURL(video.thumbnail);if(src){const img=el('img');img.src=src;img.alt='';img.loading='lazy';thumb.append(img);}else thumb.append(el('span','','▷'));
     const badge=el('span');const length=el('span','studio-video-length',video.duration_seconds?clock(video.duration_seconds):'');append(thumb,badge,length);
     const meta=[video.project&&video.project!==video.title?video.project:'',filterStyleLabels[video.style]].filter(Boolean).join(' · ');
@@ -906,8 +964,10 @@
         try{await request('/api/story/jobs/'+encodeURIComponent(id)+'/rerender',{method:'POST',body:'{}'});toast('Đã xếp hàng dựng lại. Xem ở Hàng đợi.');}catch(error){toast(error.message);}
       });
       if(version?.drive){badge.className='studio-state completed';badge.textContent='☁ Trên Drive';actions.append(post);if(version.drive_link){const open=el('a','button secondary','Mở trên Drive');open.href=version.drive_link;open.target='_blank';open.rel='noopener';actions.append(open);}actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));
-        if(isStory(video)){const more=el('details','studio-more');const list=el('div','studio-more-list');more.append(el('summary','','⋯'),list);more.querySelector('summary').setAttribute('aria-label','Thao tác khác');
-          list.append(button('Chi tiết',()=>global.openProject(video.project||'Dự án mặc định',id)),rerender());actions.append(more);}
+        const more=el('details','studio-more');const list=el('div','studio-more-list');more.append(el('summary','','⋯'),list);more.querySelector('summary').setAttribute('aria-label','Thao tác khác');
+        list.append(button('Chi tiết',()=>global.openProject(video.project||'Dự án mặc định',id)));
+        if(isStory(video))list.append(rerender());
+        list.append(button('Xóa',()=>openDeleteVideo(video,true),'secondary studio-danger'));actions.append(more);
         return;}
       if(post)actions.append(post);
       actions.append(button('Đã đăng & dọn',()=>openPostedCleanup(video)));
@@ -1047,7 +1107,8 @@
       finally{postedSending.delete(id);submit.disabled=false;submit.textContent='Đã đăng & dọn';}
     };
   }
-  function openDeleteVideo(video) {const modal=dialog('Xóa video');const id=video.job_id||video.id;modal.box.append(el('p','notice',video.title||'Video'));
+  function openDeleteVideo(video,onDrive) {const modal=dialog('Xóa video');const id=video.job_id||video.id;modal.box.append(el('p','notice',video.title||'Video'));
+    if(onDrive)modal.box.append(el('p','notice','Bản trên Drive vẫn giữ nguyên; tool chỉ bỏ video này khỏi Kho video và Đăng tự động.'));
     const filesLabel=el('label','studio-check');const files=el('input');files.type='checkbox';files.id='studioDeleteFiles';append(filesLabel,files,el('span','','Xóa luôn tệp video, ảnh, giọng đọc trên ổ đĩa (không khôi phục được)'));
     const note=el('p','notice','Không tích: video chỉ bị ẩn khỏi Kho video, Hàng đợi và dự án; tệp vẫn còn trong thư mục xuất.');const error=el('p','studio-error');error.setAttribute('role','alert');
     const confirm=button('Xóa video',async()=>{confirm.disabled=true;error.textContent='';try{const result=await request('/api/jobs/'+encodeURIComponent(id)+'/delete',{method:'POST',body:JSON.stringify({delete_files:files.checked,confirm:true})});modal.close();toast(result.files_deleted?(result.cleanup_pending?'Đã xóa video; một số tệp đang bận sẽ được dọn sau.':'Đã xóa video và tệp.'):'Đã ẩn video khỏi kho; tệp vẫn được giữ.');await loadLibrary();}catch(err){error.textContent=err.message;confirm.disabled=false;}},'studio-danger');
@@ -1209,7 +1270,24 @@
       try{await request('/api/publishing/plans'+(plan?'/'+plan.id:''),{method:plan?'PUT':'POST',body:JSON.stringify(body)});modal.close();toast('Đã lưu kế hoạch. Tool xếp lịch trong vài phút, hoặc bấm Xếp lịch ngay.');loadPlans();}
       catch(e){error.textContent=e.message;}finally{save.disabled=false;}};
   }
-  function scheduleDetail(item) {const modal=dialog(item.title||item.video_title||'Chi tiết lịch đăng');append(modal.box,el('p','notice',prettyDate(item.publish_at)+' · Giờ Việt Nam'),stateBadge(item.state||item.status),el('p','',item.caption||'Chưa có lời đăng.'));if(item.message||item.error)modal.box.append(el('p','studio-error',item.message||item.error));if(item.remote_url){try{const url=new URL(item.remote_url);if(url.protocol==='https:'&&/^(www\.)?(youtube\.com|youtu\.be|facebook\.com)$/.test(url.hostname)){const link=el('a','button secondary','Mở bài đã đăng');link.href=url.href;link.target='_blank';link.rel='noopener';modal.box.append(link);}}catch{}}if(['blocked','needs_attention'].includes(item.state))modal.box.append(button('Thử lại',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/retry',{method:'POST',body:'{}'});modal.close();loadCalendar();}catch(error){toast(error.message);}}));if(['scheduled','blocked'].includes(item.state))modal.box.append(button('Hủy lịch đăng',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id),{method:'DELETE'});modal.close();loadCalendar();toast('Đã hủy lịch đăng.');}catch(error){toast(error.message);}}));}
+  function scheduleDetail(item) {const modal=dialog(item.title||item.video_title||'Chi tiết lịch đăng');append(modal.box,el('p','notice',prettyDate(item.publish_at)+' · Giờ Việt Nam'),stateBadge(item.state||item.status),el('p','',item.caption||'Chưa có lời đăng.'));if(item.message||item.error)modal.box.append(el('p','studio-error',item.message||item.error));if(item.remote_url){try{const url=new URL(item.remote_url);if(url.protocol==='https:'&&/^(www\.)?(youtube\.com|youtu\.be|facebook\.com)$/.test(url.hostname)){const link=el('a','button secondary','Mở bài đã đăng');link.href=url.href;link.target='_blank';link.rel='noopener';modal.box.append(link);}}catch{}}if(item.platform==='youtube'&&/^[\w-]{6,20}$/.test(item.remote_id||'')&&['scheduled_remote','processing','needs_attention'].includes(item.state)){
+        // The tool may only upload to YouTube, not delete: the owner deletes the scheduled video in Studio, the tool then sees it gone.
+        modal.box.append(el('p','notice','Muốn bỏ lịch này: xóa video trong YouTube Studio. Tool thấy video không còn ở 2 lần kiểm tra cách nhau 10 phút thì gỡ lịch, và Đăng tự động xếp lại tập này bằng bản dựng mới nhất.'));
+        const studio=el('a','button secondary','Mở trong YouTube Studio');studio.href='https://studio.youtube.com/video/'+item.remote_id+'/edit';studio.target='_blank';studio.rel='noopener';
+        const check=button('Kiểm tra lại',async()=>{check.disabled=true;try{const result=await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/reconcile',{method:'POST',body:'{}'});modal.close();loadCalendar();toast(result.state==='cancelled'?'Video đã xóa trên YouTube: đã gỡ lịch.':result.phase==='missing'?result.error:'Video vẫn còn trên YouTube.');}catch(error){toast(error.message);check.disabled=false;}});
+        append(modal.box,append(el('div','studio-dialog-actions'),studio,check));}
+      // Đăng ngay: a YouTube video already on the channel goes public now; a Facebook post not sent yet is sent now.
+      if((item.platform==='youtube'&&item.remote_id&&['scheduled_remote','processing','needs_attention'].includes(item.state))||(item.platform==='facebook'&&!item.remote_id&&['scheduled','blocked'].includes(item.state))){
+        const now=button('Đăng ngay',async()=>{if(!global.confirm('Đăng "'+(item.title||'video')+'" công khai ngay bây giờ, không chờ tới giờ hẹn?'))return;now.disabled=true;
+          try{const result=await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/publish-now',{method:'POST',body:'{}'});modal.close();loadCalendar();toast(result.state==='published'?'Đã đăng công khai.':'Đang gửi bài lên kênh.');}
+          catch(error){now.disabled=false;
+            if(!/kết nối lại kênh YouTube/.test(error.message)){toast(error.message);return;}
+            // The channel was connected before the "manage" permission: reconnect right here, then press Đăng ngay again.
+            if(modal.box.querySelector('.studio-reconnect'))return;
+            const box=el('div','studio-reconnect notice');const go=button('Kết nối lại YouTube',async()=>{go.disabled=true;try{const result=await request('/api/publishing/youtube/connect',{method:'POST',body:'{}'});const url=new URL(result.url);if(url.protocol!=='https:'||url.hostname!=='accounts.google.com')throw Error('Không nhận được địa chỉ đăng nhập Google hợp lệ.');global.open(url.href,'_blank','noopener');box.firstChild.textContent='Chọn đúng tài khoản của kênh này trên Google, bấm Cho phép, rồi quay lại bấm Đăng ngay.';}catch(e){toast(e.message);}finally{go.disabled=false;}});
+            append(box,el('p','','Kênh này được kết nối trước khi tool có quyền đăng ngay. Kết nối lại một lần (đồng ý quyền "Quản lý tài khoản YouTube"):'),go);modal.box.append(box);}});
+        modal.box.append(now);}
+      if(['blocked','needs_attention'].includes(item.state))modal.box.append(button('Thử lại',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id)+'/retry',{method:'POST',body:'{}'});modal.close();loadCalendar();}catch(error){toast(error.message);}}));if(['scheduled','blocked'].includes(item.state))modal.box.append(button('Hủy lịch đăng',async()=>{try{await request('/api/publishing/schedules/'+encodeURIComponent(item.id),{method:'DELETE'});modal.close();loadCalendar();toast('Đã hủy lịch đăng.');}catch(error){toast(error.message);}}));}
   labels.connected='Đã kết nối';
   Object.assign(labels,{uploading:'Đang tải lên',processing:'Đang xử lý trên kênh',scheduled_remote:'Kênh đã nhận lịch',needs_attention:'Cần bạn kiểm tra'});
   global.ContentStudio.navigate=navigate;

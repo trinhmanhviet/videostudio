@@ -79,6 +79,87 @@ class PublishingTests(unittest.TestCase):
         restored.tick()
         self.assertEqual(self.sent, [row['id']])
 
+    def test_a_video_over_15_minutes_is_not_sent_to_a_channel_not_verified_for_long_videos(self):
+        """Chương 2 (17 min) was uploaded 7 times: YouTube stopped processing it and hid it from the API (2026-11-17)."""
+        row = {'path': 'p', 'job_id': 'job', 'channel_id': 'youtube:UCx'}
+        asked = []
+        reply = {'items': [{'status': {'longUploadsStatus': 'eligible'}}]}
+        self.service._request = lambda method, url, **kw: (asked.append(kw.get('params')), type('R', (), {'json': lambda s: reply})())[1]
+        self.service._video_seconds = lambda row: 1032.5
+        with self.assertRaisesRegex(PublishBlocked, 'Video dài 17 phút 12 giây.*youtube.com/verify'):
+            self.service._check_youtube_length(row, {}, {})
+        self.assertEqual(asked, [{'part': 'status', 'id': 'UCx'}])
+        reply = {'items': [{'status': {'longUploadsStatus': 'allowed'}}]}
+        self.service._check_youtube_length(row, {}, {})       # verified channel: sent
+        self.service._video_seconds = lambda row: 642.5
+        asked.clear()
+        self.service._check_youtube_length(row, {}, {})       # short video: no question asked
+        self.assertEqual(asked, [])
+
+    def test_a_second_schedule_of_the_same_video_says_when_it_is_already_planned(self):
+        """Posting chapter 3 by hand while the plan had it for 08:00 on 19/11 only said "không tạo trùng" (2026-11-17)."""
+        first = self.schedule()
+        body = dict(job_id='job', version_id='v1', channel_id='youtube:one', title='A title', caption='Description',
+                    publish_at=datetime.fromtimestamp(self.now+7200, timezone.utc).isoformat())
+        when = datetime.fromtimestamp(self.now+3600, timezone(timedelta(hours=7))).strftime('%H:%M ngày %d/%m')
+        with self.assertRaisesRegex(ValueError, f'đã có lịch đăng lên kênh lúc {when}.*Đăng ngay'):
+            self.service.create_schedule(body, 'other-key')
+
+    def test_publish_now_makes_the_scheduled_youtube_video_public(self):
+        row = self.schedule()
+        self.service._save(row['id'], state='scheduled_remote', remote_id='abc123')
+        sent = []
+        granted = {'https://www.googleapis.com/auth/youtube.upload'}
+        self.service._yt_token = lambda channel: ({'Authorization': 'Bearer t'}, granted)
+        self.service._request = lambda method, url, **kw: (sent.append((method, kw.get('params'), kw.get('json'))),
+                                                           type('R', (), {'json': lambda s: {'status': {'privacyStatus': 'public'}}})())[1]
+        with self.assertRaisesRegex(PublishBlocked, 'kết nối lại kênh YouTube'):
+            self.service.publish_now(row['id'])       # the channel was connected before the new permission
+        self.assertEqual(sent, [])
+        granted.add('https://www.googleapis.com/auth/youtube')
+        done = self.service.publish_now(row['id'])
+        self.assertEqual(sent, [('PUT', {'part': 'status'}, {'id': 'abc123', 'status': {
+            'privacyStatus': 'public', 'selfDeclaredMadeForKids': False, 'containsSyntheticMedia': True}})])
+        self.assertEqual(done['state'], 'published')
+        with self.assertRaises(ValueError):
+            self.service.publish_now(row['id'])
+
+    def test_reschedule_moves_the_youtube_time_then_the_calendar(self):
+        row = self.schedule()
+        self.service._save(row['id'], state='scheduled_remote', remote_id='abc123')
+        sent = []
+        self.service._yt_token = lambda channel: ({}, {'https://www.googleapis.com/auth/youtube'})
+        self.service._request = lambda method, url, **kw: (sent.append(kw.get('json')), type('R', (), {'json': lambda s: {'status': {'publishAt': 'x'}}})())[1]
+        at = self.now + 7200
+        self.assertEqual(self.service.reschedule(row['id'], at)['publish_at'], datetime.fromtimestamp(at, timezone.utc).isoformat().replace('+00:00', 'Z'))
+        self.assertEqual(sent[0]['status']['privacyStatus'], 'private')
+        self.assertEqual(sent[0]['status']['publishAt'], datetime.fromtimestamp(at, timezone.utc).isoformat().replace('+00:00', 'Z'))
+        with self.assertRaises(ValueError):
+            self.service.reschedule(row['id'], self.now + 60)   # too close
+
+    def test_publish_now_sends_a_waiting_facebook_post_at_once(self):
+        self.service.save_channel('facebook:1', 'facebook', 'Page', {'access_token': 'page-secret', 'page_id': '1'})
+        row = self.schedule(channel_id='facebook:1')
+        self.service.adapters['facebook'] = lambda row, channel, save: dict(state='processing', remote_id='fb1')
+        self.assertFalse(self.service.tick())          # its time has not come
+        self.service.publish_now(row['id'])
+        self.assertTrue(self.service.tick())
+        self.assertEqual(self.service.get_schedule(row['id'])['remote_id'], 'fb1')
+
+    def test_platform_refusals_say_what_the_platform_said(self):
+        def answer(status, reason):
+            body = {'error': {'errors': [{'reason': reason}], 'message': 'The user has exceeded the number of videos they may upload.'}}
+            self.service.client = type('C', (), {'request': lambda s, *a, **k: httpx.Response(status, json=body)})()
+        answer(400, 'uploadLimitExceeded')
+        with self.assertRaisesRegex(PublishBlocked, 'hết lượt tải video'):
+            self.service._request('POST', 'https://x')
+        answer(403, 'quotaExceeded')
+        with self.assertRaisesRegex(PublishBlocked, 'hạn mức gọi YouTube API'):
+            self.service._request('POST', 'https://x')
+        answer(400, 'invalidTitle')
+        with self.assertRaisesRegex(PublishBlocked, 'HTTP 400, invalidTitle'):
+            self.service._request('POST', 'https://x')
+
     def test_uncertain_reply_never_reuploads_automatically(self):
         row = self.schedule()
         def uncertain(row, channel, save):
@@ -97,6 +178,34 @@ class PublishingTests(unittest.TestCase):
         self.service.cancel(row['id'])
         self.assertFalse(self.service.tick())
         self.assertEqual(self.sent, [])
+
+    def test_scheduled_video_deleted_in_youtube_studio_ends_the_schedule(self):
+        """The tool may only upload; the owner deletes a scheduled video in Studio and the schedule is then gone (2026-11-17)."""
+        row = self.schedule()
+        self.assertTrue(self.service.tick())
+        self.service._yt_headers = lambda channel: {}
+        found = {'items': [{'status': {'privacyStatus': 'private', 'publishAt': 'x', 'uploadStatus': 'processed'}}]}
+        self.service._request = lambda *args, **kwargs: type('R', (), {'json': lambda s: found})()
+        self.assertEqual(self.service.reconcile(row['id'])['state'], 'scheduled_remote')
+        # One empty answer is not enough: chapter 2 was dropped two minutes after its upload, then uploaded again (2026-11-17).
+        found = {'items': []}
+        first = self.service.reconcile(row['id'])
+        self.assertEqual((first['state'], first['phase']), ('scheduled_remote', 'missing'))
+        self.assertIn('10 phút', first['error'])
+        self.assertEqual(self.service.reconcile(row['id'])['state'], 'scheduled_remote')  # asked again at once: still kept
+        self.assertFalse(self.service.tick())  # the worker waits the ten minutes too
+        found = {'items': [{'status': {'privacyStatus': 'private', 'publishAt': 'x', 'uploadStatus': 'processed'}}]}
+        back = self.service.reconcile(row['id'])
+        self.assertEqual((back['state'], back['phase'], back['error']), ('scheduled_remote', 'uploaded', None))
+        found = {'items': []}
+        self.service.reconcile(row['id'])
+        self.now += 601
+        self.assertTrue(self.service.tick())
+        after = self.service.get_schedule(row['id'])
+        self.assertEqual((after['state'], after['error']), ('cancelled', 'Video đã bị xóa trên YouTube; lịch này đã gỡ'))
+        # a video that was never seen scheduled is not taken for deleted
+        with self.assertRaises(PublishUncertain):
+            self.service.poll_remote({'remote_id': 'x', 'platform': 'youtube', 'state': 'processing'}, {'credentials': {}})
 
     def test_facebook_waits_until_due(self):
         self.service.save_channel('facebook:1', 'facebook', 'Page', {'access_token':'page-secret', 'page_id':'1'})

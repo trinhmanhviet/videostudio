@@ -118,6 +118,11 @@ def register_publishing_routes(app, store, versions, same_origin, local_request)
         local_request(request); same_origin(request)
         return call(service.cancel, identifier)
 
+    @app.post('/api/publishing/schedules/{identifier}/publish-now')
+    def publish_schedule_now(identifier: str, request: Request):
+        local_request(request); same_origin(request)
+        return call(service.publish_now, identifier)
+
     @app.post('/api/publishing/schedules/{identifier}/retry')
     def retry_schedule(identifier: str, request: Request):
         local_request(request); same_origin(request)

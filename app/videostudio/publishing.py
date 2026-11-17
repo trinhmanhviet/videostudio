@@ -13,13 +13,19 @@ import time
 import uuid
 import tempfile
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 import httpx
 
 from .core import digest
+
+VN = timezone(timedelta(hours=7))
+YOUTUBE_MANAGE = 'https://www.googleapis.com/auth/youtube'   # change a video already uploaded (Đăng ngay)
+YOUTUBE_SCOPES = ('https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', YOUTUBE_MANAGE)
+YOUTUBE_SHORT_LIMIT = 15 * 60   # longest upload YouTube processes on a channel not verified for long videos
+MISSING_RECHECK = 600  # a YouTube video seen missing is checked once more this much later before its schedule is dropped
 
 
 
@@ -373,7 +379,7 @@ class Publishing:
             db.execute('INSERT INTO publishing_oauth VALUES(?,?,?)', (state, self.clock()+600, callback))
         return {'url': 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode(dict(
             client_id=client['client_id'], redirect_uri=callback, response_type='code', state=state,
-            scope='https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
+            scope=' '.join(YOUTUBE_SCOPES),
             access_type='offline', prompt='select_account consent'))}
 
     def oauth_finish(self, state, code):
@@ -477,9 +483,14 @@ class Publishing:
                 if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='publication_history'").fetchone():
                     if db.execute('SELECT 1 FROM publication_history WHERE job_id=?',(normalized['job_id'],)).fetchone() or not db.execute('SELECT 1 FROM jobs WHERE id=?',(normalized['job_id'],)).fetchone():
                         raise ValueError('Video đã được dọn hoặc không còn tồn tại; không tạo lịch đăng mới')
-                duplicate = db.execute("SELECT 1 FROM publishing_schedules WHERE channel_id=? AND sha256=? AND state!='cancelled'", (channel['id'],sha)).fetchone()
+                duplicate = db.execute("SELECT state,publish_at,remote_id,platform FROM publishing_schedules WHERE channel_id=? AND sha256=? AND state!='cancelled'",
+                                       (channel['id'],sha)).fetchone()
                 if duplicate:
-                    raise ValueError('Bản video này đã có lịch hoặc đã đăng trên kênh; không tạo trùng')
+                    when = datetime.fromtimestamp(duplicate['publish_at'], VN).strftime('%H:%M ngày %d/%m')
+                    if duplicate['state'] == 'published':
+                        raise ValueError(f'Video này đã đăng trên kênh ({when}); không đăng trùng')
+                    hint = ' Muốn đăng ngay: mở Lịch đăng, bấm vào lịch đó rồi chọn "Đăng ngay".'
+                    raise ValueError(f'Video này đã có lịch đăng lên kênh lúc {when}; tool không tạo bản thứ hai.'+hint)
                 db.execute('''INSERT INTO publishing_schedules
                     (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags,ai_label)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
@@ -569,6 +580,65 @@ class Publishing:
             db.execute("UPDATE publishing_schedules SET state='cancelled',updated=? WHERE id=?", (self.clock(),identifier))
         return self.get_schedule(identifier)
 
+    def reschedule(self, identifier, at):
+        """Move a planned post to another time (Đăng tự động moves later chapters up when one is posted early).
+        A YouTube video already uploaded gets its new time on YouTube first; a post not sent yet only changes here."""
+        row = self._raw_schedule(identifier)
+        if row['lease_until'] > self.clock():
+            raise ValueError('Bài đang được gửi hoặc kiểm tra')
+        if at < self.clock() + 600:
+            raise ValueError('Giờ mới quá sát')
+        if row['platform'] == 'youtube' and row['remote_id'] and row['state'] == 'scheduled_remote':
+            channel = self.channel(row['channel_id'])
+            headers, granted = self._yt_token(channel)
+            if YOUTUBE_MANAGE not in granted:
+                raise PublishBlocked('Kênh chưa cấp quyền sửa video; kết nối lại kênh YouTube')
+            body = {'id': row['remote_id'], 'status': {'privacyStatus': 'private', 'publishAt': _iso(at), 'selfDeclaredMadeForKids': False,
+                                                       'containsSyntheticMedia': bool(row.get('ai_label', 1))}}
+            answer = self._request('PUT', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status'},
+                                   headers=headers, json=body).json()
+            if not (answer.get('status') or {}).get('publishAt'):
+                raise PublishUncertain('YouTube chưa xác nhận giờ đăng mới')
+        elif not (row['state'] in ('scheduled', 'blocked') and not row['remote_id'] and not row['upload_url']):
+            raise ValueError('Bài này không đổi giờ được')
+        with self.store.db() as db:
+            db.execute('UPDATE publishing_schedules SET publish_at=?,updated=? WHERE id=?', (at, self.clock(), identifier))
+        return self.get_schedule(identifier)
+
+    def publish_now(self, identifier):
+        """Đăng ngay: a YouTube video already uploaded with a later time is made public now; a post not sent yet
+        (Facebook sends at its time) is moved to now and sent by the next round."""
+        row = self._raw_schedule(identifier)
+        if row['state'] in ('published', 'cancelled'):
+            raise ValueError('Bài này đã kết thúc')
+        if row['lease_until'] > self.clock():
+            raise ValueError('Bài đang được gửi hoặc kiểm tra; chờ một chút rồi bấm lại')
+        if row['platform'] == 'youtube' and row['remote_id'] and row['state'] in ('scheduled_remote', 'processing', 'needs_attention'):
+            channel = self.channel(row['channel_id'])
+            if not channel['connected']:
+                raise PublishBlocked('Kênh đã ngắt kết nối; kết nối lại để tiếp tục')
+            headers, granted = self._yt_token(channel)
+            if YOUTUBE_MANAGE not in granted:
+                raise PublishBlocked('Kênh chưa cấp quyền sửa video cho tool. Vào Cài đặt, kết nối lại kênh YouTube này một lần '
+                                     '(đồng ý quyền "Quản lý tài khoản YouTube"), rồi bấm Đăng ngay')
+            # videos.update replaces the whole status part: send every field the upload set, without the later time.
+            body = {'id': row['remote_id'], 'status': {'privacyStatus': 'public', 'selfDeclaredMadeForKids': False,
+                                                       'containsSyntheticMedia': bool(row.get('ai_label', 1))}}
+            answer = self._request('PUT', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status'},
+                                   headers=headers, json=body).json()
+            if (answer.get('status') or {}).get('privacyStatus') != 'public':
+                raise PublishUncertain('YouTube chưa xác nhận video đã công khai; kiểm tra trong YouTube Studio')
+            with self.store.db() as db:
+                db.execute("UPDATE publishing_schedules SET state='published',publish_at=?,error=NULL,next_at=0,updated=? WHERE id=?",
+                           (self.clock(), self.clock(), identifier))
+            return self.get_schedule(identifier)
+        if row['state'] in ('scheduled', 'blocked') and not row['remote_id'] and not row['upload_url'] and row['platform'] == 'facebook':
+            with self.store.db() as db:
+                db.execute("UPDATE publishing_schedules SET state='scheduled',publish_at=?,error=NULL,next_at=0,updated=? WHERE id=?",
+                           (self.clock(), self.clock(), identifier))
+            return self.get_schedule(identifier)
+        raise ValueError('Bài này chưa đăng ngay được: chờ video gửi lên kênh xong rồi bấm lại')
+
     def retry(self, identifier):
         row = self._raw_schedule(identifier)
         resumable = row['platform']=='youtube' and row['upload_url'] and not row['remote_id']
@@ -593,7 +663,7 @@ class Publishing:
             channel=self.channel(row['channel_id'])
             if not channel['connected']:raise PublishBlocked('Kết nối lại kênh trước khi đối soát')
             changes=self.poll_remote(row,channel)
-            self._save(identifier,**changes,error=None,next_at=self.clock()+60)
+            self._save(identifier,**{'error':None,'next_at':self.clock()+60,**changes})
             return self.get_schedule(identifier)
         except Exception:
             self._save(identifier,state='needs_attention',error='Chưa xác nhận được kết quả; giữ nguyên receipt và kiểm tra lại')
@@ -632,7 +702,7 @@ class Publishing:
                 result = self.adapters[row['platform']](row, channel, save)
             else:
                 result = self.poll_remote(row, channel)
-            self._save(identifier, **result, error=None, lease_until=0, next_at=self.clock()+60)
+            self._save(identifier, **{'error':None, 'next_at':self.clock()+60, **result}, lease_until=0)
         except PublishBlocked as error:
             self._save(identifier, state='blocked', error=str(error), lease_until=0)
         except Exception as error:
@@ -647,19 +717,65 @@ class Publishing:
 
     def _request(self, method, url, **kwargs):
         response = self.client.request(method, url, **kwargs)
-        if response.status_code in (401,403):
-            raise PublishBlocked('Quyền đăng đã hết hạn hoặc chưa được cấp; kết nối lại tài khoản và kiểm tra quyền ứng dụng')
         if response.status_code>=400:
-            raise PublishBlocked(f'Nền tảng từ chối yêu cầu (HTTP {response.status_code}); kiểm tra tài khoản và cấu hình API')
+            # Say what the platform said: a full upload quota is not an expired permission.
+            try:
+                error = response.json().get('error') or {}
+                reason = ((error.get('errors') or [{}])[0].get('reason') or error.get('status') or '') if isinstance(error, dict) else ''
+                detail = str(error.get('message') or '')[:160] if isinstance(error, dict) else ''
+            except Exception:
+                reason, detail = '', ''
+            if reason == 'uploadLimitExceeded':
+                raise PublishBlocked('Kênh đã hết lượt tải video lên YouTube trong ngày; YouTube cho tải tiếp sau khoảng 24 giờ, rồi bấm Thử lại')
+            if reason in ('quotaExceeded', 'rateLimitExceeded', 'userRateLimitExceeded'):
+                raise PublishBlocked('Hết hạn mức gọi YouTube API hôm nay; hạn mức đặt lại lúc 14:00 giờ Việt Nam, rồi bấm Thử lại')
+            if response.status_code in (401,403):
+                raise PublishBlocked('Quyền đăng đã hết hạn hoặc chưa được cấp; kết nối lại tài khoản và kiểm tra quyền ứng dụng'
+                                     + (f' ({reason})' if reason else ''))
+            raise PublishBlocked(f'Nền tảng từ chối yêu cầu (HTTP {response.status_code}'+(f', {reason}' if reason else '')+')'
+                                 + (f': {detail}' if detail else '; kiểm tra tài khoản và cấu hình API'))
         return response
 
+    def _video_seconds(self, row):
+        """How long the scheduled video is (Drive record, else the job's checked length), or None."""
+        with self.store.db() as db:
+            if str(row['path']).startswith('drive:'):
+                job_id, name = row['path'][len('drive:'):].split('/', 1)
+                found = db.execute('SELECT duration FROM drive_files WHERE job_id=? AND name=?', (job_id, name)).fetchone()
+                if found and found[0]:
+                    return float(found[0])
+            found = db.execute("SELECT value FROM checkpoints WHERE job=? AND stage='verify'", (row['job_id'],)).fetchone()
+        try:
+            return float(json.loads(found[0]).get('duration_seconds')) if found else None
+        except (TypeError, ValueError):
+            return None
+
+    def _check_youtube_length(self, row, channel, headers):
+        """YouTube stops processing a video over 15 minutes on a channel that is not verified for long uploads, and then
+        hides it from the API: check before uploading instead of sending it for nothing (2026-11-17, chapter 2 x7)."""
+        seconds = self._video_seconds(row)
+        if not seconds or seconds <= YOUTUBE_SHORT_LIMIT:
+            return
+        channel_id = str(row['channel_id']).split(':', 1)[-1]
+        items = self._request('GET','https://www.googleapis.com/youtube/v3/channels',
+                              params={'part':'status','id':channel_id},headers=headers).json().get('items') or []
+        allowed = items and (items[0].get('status') or {}).get('longUploadsStatus') == 'allowed'
+        if not allowed:
+            raise PublishBlocked(f'Video dài {int(seconds // 60)} phút {int(seconds % 60)} giây; kênh chưa được YouTube cho đăng video trên 15 phút. '
+                                 'Xác minh kênh tại https://www.youtube.com/verify rồi bấm Thử lại')
+
     def _yt_headers(self, channel):
+        return self._yt_token(channel)[0]
+
+    def _yt_token(self, channel):
+        """Fresh access headers and the permissions the channel granted (Google lists them with each refresh)."""
         config = self.youtube_config()
-        token = self._request('POST','https://oauth2.googleapis.com/token',data=dict(
-            **config, grant_type='refresh_token', refresh_token=channel['credentials'].get('refresh_token',''))).json().get('access_token')
+        answer = self._request('POST','https://oauth2.googleapis.com/token',data=dict(
+            **config, grant_type='refresh_token', refresh_token=channel['credentials'].get('refresh_token',''))).json()
+        token = answer.get('access_token')
         if not token:
             raise PublishBlocked('Không thể làm mới quyền YouTube; kết nối lại')
-        return {'Authorization':'Bearer '+token}
+        return {'Authorization':'Bearer '+token}, set(str(answer.get('scope') or '').split())
 
     @staticmethod
     def _upload_url(url, hosts):
@@ -686,6 +802,8 @@ class Publishing:
             yield snapshot,size
 
     def upload_youtube(self,row,channel,save):
+        if not row.get('upload_url'):
+            self._check_youtube_length(row, channel, self._yt_headers(channel))
         with self.upload_source(row,save) as (source,size):
             return self._upload_youtube(row,channel,save,source,size)
 
@@ -768,6 +886,17 @@ class Publishing:
                 params={'part':'status,processingDetails','id':row['remote_id']},headers=self._yt_headers(channel)).json()
             items = response.get('items',[])
             if not items:
+                if row['state'] in ('scheduled_remote','needs_attention'):
+                    # The owner deleted the scheduled video in YouTube Studio: the schedule is over and the episode can be
+                    # planned again. A single empty answer is not enough (a schedule must never be dropped, and the video
+                    # uploaded twice, on one bad reply): the video has to be missing again ten minutes later.
+                    if row.get('phase')=='missing' and self.clock()>=(row.get('next_at') or 0):
+                        return {'state':'cancelled','phase':'removed','error':'Video đã bị xóa trên YouTube; lịch này đã gỡ'}
+                    if row.get('phase')=='missing':
+                        return {'state':'scheduled_remote','phase':'missing','next_at':row['next_at'],
+                                'error':'Chưa thấy video trên YouTube; tool kiểm tra lại lúc '+time.strftime('%H:%M',time.localtime(row['next_at']))+' rồi mới gỡ lịch'}
+                    return {'state':'scheduled_remote','phase':'missing','next_at':self.clock()+MISSING_RECHECK,
+                            'error':'Chưa thấy video trên YouTube; tool kiểm tra lại sau 10 phút rồi mới gỡ lịch'}
                 raise PublishUncertain('Không tìm thấy ID video YouTube đã gửi; không tạo lại')
             status = items[0].get('status',{})
             if status.get('uploadStatus') in ('failed','rejected','deleted'):
@@ -776,7 +905,7 @@ class Publishing:
                 return {'state':'published'}
             if self.clock()>row['publish_at']+600 and not status.get('publishAt'):
                 raise PublishBlocked('YouTube giữ video riêng tư; kiểm tra quyền ứng dụng/upload trong YouTube Studio')
-            return {'state':'scheduled_remote'}
+            return {'state':'scheduled_remote',**({'phase':'uploaded'} if row.get('phase')=='missing' else {})}
         credentials = channel['credentials']
         base = 'https://graph.facebook.com/'+credentials.get('api_version','v24.0')
         headers = {'Authorization':'Bearer '+credentials['access_token']}

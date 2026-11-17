@@ -687,7 +687,7 @@ class ContentFactory:
             metadata = {row['job_id']: dict(row) for row in db.execute('''SELECT i.job_id,i.title,b.style,b.input_mode FROM factory_items i
                 JOIN factory_batches b ON b.id=i.batch_id WHERE i.job_id IS NOT NULL''')}
             # Publisher registers this optional query hook for per-channel state.
-        records = []
+        records, counts = [], {}
         for identifier in ids:
             # Only what the list needs: render/verify (which files are the video) and images (the thumbnail).
             try:job = self.store.get_light(identifier, ('render', 'verify', 'images'))
@@ -697,9 +697,12 @@ class ContentFactory:
             item_style = meta.get('style') or ('meme' if request.get('workflow_mode') == 'meme' else 'news')
             item_project = request.get('project') or 'Dự án mặc định'
             title = meta.get('title') or request['idea'].splitlines()[0][:120]
-            if style and style != item_style or project and project != item_project:
+            if project and project != item_project:
                 continue
             if q.strip().casefold() not in (title + ' ' + item_project + ' ' + request['idea']).casefold():
+                continue
+            counts[item_style] = counts.get(item_style, 0) + 1  # the Kho video tabs: how many of each kind
+            if style and style != item_style:
                 continue
             if status and status not in ('completed', 'ready'):
                 continue
@@ -728,8 +731,20 @@ class ContentFactory:
                             'wide_url': (drive['wide_url'] if drive else f"/api/jobs/{identifier}/files/video-ngang.mp4") if (drive or job['checkpoints'].get('render', {}).get('video_ngang')) else None,
                             'versions': versions, 'channels': channels, 'drive_files': drive['drive_files'] if drive else None})
         total = len(records)
+        # The counts above are taken before the video files are looked up (that is the slow part); the open tab and
+        # "all" are exact: a video whose files are gone is not counted.
+        # The exact counts of the "all" view (same search and filters) are kept and reused while a tab is open.
+        key = (q.strip().casefold(), project, review_state, status, channel)
+        exact = getattr(self, '_kind_counts', {})
+        if style:
+            counts = {**counts, **exact.get(key, {}), style: total}
+        else:
+            counts = {}
+            for record in records:
+                counts[record['style']] = counts.get(record['style'], 0) + 1
+            self._kind_counts = {**exact, key: counts} if len(exact) < 50 else {key: counts}
         return {'items': records[(page - 1) * page_size:page * page_size], 'page': page, 'page_size': page_size,
-                'total': total, 'total_pages': max(1, (total + page_size - 1) // page_size)}
+                'total': total, 'total_pages': max(1, (total + page_size - 1) // page_size), 'counts': counts}
 
     def pack(self, job_id, version_id=None, include=('video', 'captions', 'sidecar')):
         if not include or set(include) - {'video', 'captions', 'sidecar'}:
