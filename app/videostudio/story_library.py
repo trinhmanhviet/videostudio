@@ -35,7 +35,7 @@ DEFAULT_LAYOUT = {'channel': '', 'background': 'preset:dem-xanh', 'horizontal': 
                   'burn_subtitles': True, 'export_srt': True, 'export_mp3': True, 'game_audio': False,
                   'continue_gameplay': True, 'game_box': {}, 'video_codec': 'hevc',
                   'cover_source': 'game', 'cover_image': '', 'cover_at': 0.3, 'cover_text': True,
-                  'intro': True}
+                  'intro': True, 'story_art': False}   # story_art: ComfyUI pictures that follow the story as background (story_art.py)
 # Keep existing preset IDs so saved book layouts pick up the new artwork.
 PRESET_BACKGROUND_ROOT = Path(__file__).resolve().parents[1] / 'assets' / 'story-backgrounds'
 PRESET_BACKGROUNDS = {
@@ -944,7 +944,7 @@ def validate_layout(value):
     if set(value) - set(DEFAULT_LAYOUT):
         raise ValueError('Khung hình có trường lạ')
     result = dict(value)
-    for key in ('horizontal', 'vertical', 'burn_subtitles', 'export_srt', 'export_mp3', 'game_audio', 'continue_gameplay', 'intro'):
+    for key in ('horizontal', 'vertical', 'burn_subtitles', 'export_srt', 'export_mp3', 'game_audio', 'continue_gameplay', 'intro', 'story_art'):
         if key in result and type(result[key]) is not bool:
             raise ValueError(key + ' phải là bật/tắt')
     if 'channel' in result:

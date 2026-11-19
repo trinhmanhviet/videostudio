@@ -26,6 +26,21 @@ MAX_IMPORT_CHARACTERS = 1_000_000
 _DIGESTS = {}
 
 
+def _story_fields(job):
+    """A story episode's chapter (for chapter order), its book and its YouTube thumbnail when one was made
+    (story_promo); nothing when the snapshot is gone."""
+    try:
+        from .story_promo import episode, ROOT
+        info = episode(job)
+    except Exception:
+        info = None
+    if not info:
+        return {}
+    thumb = ROOT / info['book_id'] / info['key'] / 'thumb.jpg'
+    return {'chapter': info['order'], 'episode': info['number'], 'book_id': info['book_id'],
+            'promo_thumb': f"/api/story-promo/thumb/{job['id']}" if thumb.is_file() else None}
+
+
 def _cached_digest(path):
     """The queue page polls every few seconds; rehash a thumbnail only when the file changes."""
     stat = path.stat()
@@ -673,9 +688,12 @@ class ContentFactory:
                         pass
         return None
 
-    def videos(self, q='', style='', project='', review_state='', status='', channel='', page=1, page_size=20):
-        if type(page) is not int or page < 1 or page_size not in (10, 20, 30):
-            raise ValueError('Phân trang phải dùng 10, 20 hoặc 30 video')
+    def videos(self, q='', style='', project='', review_state='', status='', channel='', page=1, page_size=20, sort=''):
+        """sort='chapter': story episodes in chapter order (one book's page in Kho video); otherwise newest first."""
+        if type(page) is not int or page < 1 or page_size not in (10, 20, 30, 50, 100):
+            raise ValueError('Phân trang phải dùng 10, 20, 30, 50 hoặc 100 video')
+        if sort not in ('', 'chapter'):
+            raise ValueError('Cách xếp không hợp lệ')
         if style and style not in STYLES:
             raise ValueError('Phong cách không hợp lệ')
         if review_state and review_state not in ('pending', 'approved'):
@@ -730,6 +748,10 @@ class ContentFactory:
                             'output_url': versions[0]['url'], 'review_state': review, 'approved': approved,
                             'wide_url': (drive['wide_url'] if drive else f"/api/jobs/{identifier}/files/video-ngang.mp4") if (drive or job['checkpoints'].get('render', {}).get('video_ngang')) else None,
                             'versions': versions, 'channels': channels, 'drive_files': drive['drive_files'] if drive else None})
+            if item_style == 'story':
+                records[-1].update(_story_fields(job))
+        if sort == 'chapter':
+            records.sort(key=lambda r: (r.get('chapter') is None, r.get('chapter') or 0, -r['created']))
         total = len(records)
         # The counts above are taken before the video files are looked up (that is the slow part); the open tab and
         # "all" are exact: a video whose files are gone is not counted.

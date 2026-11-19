@@ -227,3 +227,40 @@ button.st-icon:disabled{opacity:.35;cursor:default}
 .studio-page.is-current{background:#7cc4f5;border-color:#7cc4f5;color:#0b1a2a;font-weight:700}
 .studio-pages-gap{padding:0 4px;color:var(--muted)}
 .studio-pages-count{color:var(--muted);font-size:12px}
+
+/* Kho video → Kể truyện: books as small cards, one book's chapters as compact rows, the book's cast (2026-11-19) */
+.st-books{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.st-book{display:flex;flex-direction:column;align-items:stretch;padding:0;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden;color:inherit;min-height:0}
+.st-book:hover{border-color:#7cc4f5}
+.st-book-cover{display:grid;place-items:center;aspect-ratio:16/9;background:linear-gradient(130deg,#263f58,#142337);color:#8daec8;font-size:22px}
+.st-book-cover img{width:100%;height:100%;object-fit:cover}
+.st-book-body{display:flex;flex-direction:column;gap:3px;padding:9px 11px 11px}
+.st-book-body strong{font-size:13.5px;line-height:1.3;overflow-wrap:anywhere}
+.st-book-body small{color:var(--muted);font-size:11.5px}
+.st-book-head{display:flex;align-items:center;gap:14px;margin:4px 0 10px}
+.st-book-head h3{margin:0;font-size:19px}
+.st-cast{display:flex;align-items:flex-start;gap:9px;overflow-x:auto;padding:2px 0 10px;margin-bottom:12px}
+.st-cast-label{align-self:center;font-size:12px;color:var(--muted);white-space:nowrap;margin-right:2px}
+.st-cast-item{display:flex;flex-direction:column;align-items:center;gap:3px;width:86px;flex:0 0 86px;padding:5px;background:transparent;border:1px solid var(--line);border-radius:10px;color:inherit;min-height:0}
+.st-cast-item img,.st-cast-empty{width:72px;height:96px;object-fit:cover;object-position:top;border-radius:7px;background:#1b2b40}
+.st-cast-empty{display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.st-cast-item strong{font-size:11.5px;line-height:1.2;text-align:center}
+.st-cast-item small{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.2}
+.st-cast-dialog img{display:block;max-height:60vh;max-width:100%;margin:0 auto 10px;border-radius:10px}
+.studio-page-size{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.studio-page-size select{min-height:32px;padding:4px 8px;font-size:12px}
+.studio-video-grid.is-rows{display:flex;flex-direction:column;gap:6px}
+.studio-video-card.is-row{display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:12px;padding:5px 10px 5px 5px;border-radius:9px}
+.studio-video-card.is-row .studio-video-thumb{aspect-ratio:16/9;border-radius:6px;overflow:hidden;font-size:16px}
+.studio-video-card.is-row .studio-video-thumb>.studio-state{left:4px;bottom:4px;font-size:9.5px;padding:1px 5px}
+.studio-video-card.is-row .studio-video-length{font-size:10px}
+.studio-video-card.is-row .studio-video-body{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0}
+.studio-video-card.is-row .studio-video-body h3{flex:1 1 220px;margin:0;font-size:13.5px}
+.studio-video-card.is-row .studio-video-body select{margin-top:0;min-height:30px}
+.studio-video-card.is-row .studio-video-actions{margin-top:0}
+/* The ⋯ menu opened upwards and was cut by the short row (2026-11-19): in rows it opens downwards, above the next rows */
+.studio-video-card.is-row{overflow:visible}
+.studio-video-card.is-row:has(details.studio-more[open]){z-index:30}
+.studio-video-card.is-row .studio-more-list{bottom:auto;top:calc(100% + 6px)}
+.studio-video-card.is-row .studio-video-actions button,.studio-video-card.is-row .studio-video-actions a{min-height:28px;padding:4px 9px}
+@media(max-width:760px){.studio-video-card.is-row{grid-template-columns:88px minmax(0,1fr)}.st-books{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}

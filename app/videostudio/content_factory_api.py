@@ -64,8 +64,8 @@ def register_content_factory_routes(app, store, same_origin, public_job, submit_
 
     @app.get('/api/factory/videos')
     def videos(q: str = '', style: str = '', project: str = '', review_state: str = '',
-               status: str = '', channel: str = '', page: int = 1, page_size: int = 20):
-        return call(service.videos, q, style, project, review_state, status, channel, page, page_size)
+               status: str = '', channel: str = '', page: int = 1, page_size: int = 20, sort: str = ''):
+        return call(service.videos, q, style, project, review_state, status, channel, page, page_size, sort)
 
     @app.get('/api/factory/videos/{job_id}/versions')
     def versions(job_id: str):

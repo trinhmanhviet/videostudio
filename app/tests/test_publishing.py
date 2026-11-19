@@ -111,15 +111,19 @@ class PublishingTests(unittest.TestCase):
         sent = []
         granted = {'https://www.googleapis.com/auth/youtube.upload'}
         self.service._yt_token = lambda channel: ({'Authorization': 'Bearer t'}, granted)
+        # on YouTube: scheduled, embedding allowed, a licence chosen by the owner; only the visibility may change
+        on_youtube = {'items': [{'status': {'privacyStatus': 'private', 'publishAt': '2026-11-19T01:00:00Z', 'embeddable': True,
+                                            'license': 'creativeCommon', 'publicStatsViewable': True, 'uploadStatus': 'processed'}}]}
         self.service._request = lambda method, url, **kw: (sent.append((method, kw.get('params'), kw.get('json'))),
-                                                           type('R', (), {'json': lambda s: {'status': {'privacyStatus': 'public'}}})())[1]
+                                                           type('R', (), {'json': lambda s: on_youtube if method == 'GET' else {'status': {'privacyStatus': 'public'}}})())[1]
         with self.assertRaisesRegex(PublishBlocked, 'kết nối lại kênh YouTube'):
             self.service.publish_now(row['id'])       # the channel was connected before the new permission
         self.assertEqual(sent, [])
         granted.add('https://www.googleapis.com/auth/youtube')
         done = self.service.publish_now(row['id'])
-        self.assertEqual(sent, [('PUT', {'part': 'status'}, {'id': 'abc123', 'status': {
-            'privacyStatus': 'public', 'selfDeclaredMadeForKids': False, 'containsSyntheticMedia': True}})])
+        self.assertEqual(sent[-1], ('PUT', {'part': 'status'}, {'id': 'abc123', 'status': {
+            'privacyStatus': 'public', 'embeddable': True, 'license': 'creativeCommon', 'publicStatsViewable': True,
+            'selfDeclaredMadeForKids': False, 'containsSyntheticMedia': True}}))   # chapters 2 and 3 lost "embeddable" (2026-11-18)
         self.assertEqual(done['state'], 'published')
         with self.assertRaises(ValueError):
             self.service.publish_now(row['id'])
@@ -129,13 +133,70 @@ class PublishingTests(unittest.TestCase):
         self.service._save(row['id'], state='scheduled_remote', remote_id='abc123')
         sent = []
         self.service._yt_token = lambda channel: ({}, {'https://www.googleapis.com/auth/youtube'})
-        self.service._request = lambda method, url, **kw: (sent.append(kw.get('json')), type('R', (), {'json': lambda s: {'status': {'publishAt': 'x'}}})())[1]
+        on_youtube = {'items': [{'status': {'privacyStatus': 'private', 'publishAt': 'old', 'embeddable': False}}]}
+        self.service._request = lambda method, url, **kw: (sent.append(kw.get('json')), type('R', (), {'json': lambda s: on_youtube if method == 'GET' else {'status': {'publishAt': 'x'}}})())[1]
         at = self.now + 7200
         self.assertEqual(self.service.reschedule(row['id'], at)['publish_at'], datetime.fromtimestamp(at, timezone.utc).isoformat().replace('+00:00', 'Z'))
-        self.assertEqual(sent[0]['status']['privacyStatus'], 'private')
-        self.assertEqual(sent[0]['status']['publishAt'], datetime.fromtimestamp(at, timezone.utc).isoformat().replace('+00:00', 'Z'))
+        status = sent[-1]['status']
+        self.assertEqual((status['privacyStatus'], status['embeddable']), ('private', False))   # the owner's choice is kept
+        self.assertEqual(status['publishAt'], datetime.fromtimestamp(at, timezone.utc).isoformat().replace('+00:00', 'Z'))
         with self.assertRaises(ValueError):
             self.service.reschedule(row['id'], self.now + 60)   # too close
+
+    def test_a_facebook_video_longer_than_a_reel_is_posted_as_a_page_video(self):
+        """Reels of 3–16 minutes sent through the Reels API got 0 views; by hand they were normal videos (2026-11-18)."""
+        import io
+        from contextlib import contextmanager
+        data = b'x' * 2500
+        @contextmanager
+        def source(row, save=None):
+            yield io.BytesIO(data), len(data)
+        self.service.upload_source = source
+        calls, saved = [], []
+        def answer(method, url, **kw):
+            calls.append((url, dict(kw.get('data') or {})))
+            phase = (kw.get('data') or {}).get('upload_phase')
+            body = {'start': {'video_id': '555', 'upload_session_id': 'up1', 'start_offset': '0', 'end_offset': '1000'},
+                    'transfer': {'start_offset': str(min(int(kw['data']['start_offset']) + 1000, 2500)),
+                                 'end_offset': str(min(int(kw['data']['start_offset']) + 2000, 2500))} if phase == 'transfer' else {},
+                    'finish': {'success': True}}.get(phase, {})
+            return type('R', (), {'json': lambda s: body})()
+        self.service._request = answer
+        row = {'path': 'p', 'job_id': 'job', 'title': 'Tiêu đề', 'caption': 'Lời đăng'}
+        channel = {'credentials': {'page_id': '9', 'access_token': 't'}}
+        self.service._video_seconds = lambda row: 403.0
+        result = self.service.upload_facebook(row, channel, lambda **c: saved.append(c))
+        self.assertEqual([c[1]['upload_phase'] for c in calls], ['start', 'transfer', 'transfer', 'transfer', 'finish'])
+        self.assertTrue(all(c[0] == 'https://graph-video.facebook.com/v24.0/9/videos' for c in calls))
+        self.assertEqual((calls[-1][1]['published'], calls[-1][1]['title'], calls[-1][1]['description']), ('true', 'Tiêu đề', 'Lời đăng'))
+        self.assertEqual((result['phase'], result['remote_id'], result['remote_url']), ('video-finished', '555', 'https://www.facebook.com/9/videos/555'))
+        self.assertIn({'remote_id': '555', 'phase': 'video-created'}, saved)
+        # its status: published once Facebook has processed it
+        reply = {'status': {'video_status': 'processing'}, 'published': True}
+        self.service._request = lambda method, url, **kw: type('R', (), {'json': lambda s: reply})()
+        polled = {'remote_id': '555', 'platform': 'facebook', 'phase': 'video-finished'}
+        self.assertEqual(self.service.poll_remote(polled, channel), {'state': 'processing'})
+        reply = {'status': {'video_status': 'ready'}, 'published': True}
+        self.assertEqual(self.service.poll_remote(polled, channel)['state'], 'published')
+        # a short one stays a Reel
+        self.service._video_seconds = lambda row: 75.0
+        self.service._upload_facebook = lambda *a: {'phase': 'reel'}
+        self.assertEqual(self.service.upload_facebook(row, channel, lambda **c: None), {'phase': 'reel'})
+
+    def test_a_server_hiccup_while_checking_a_sent_post_is_asked_again_later(self):
+        """Chapter 4 was marked blocked for good after one HTTP 500 from Google while checking it (2026-11-17)."""
+        row = self.schedule()
+        self.assertTrue(self.service.tick())                    # sent: scheduled_remote
+        self.service.client = type('C', (), {'request': lambda s, *a, **k: httpx.Response(500, json={})})()
+        self.service._yt_headers = lambda channel: {}
+        self.now += 120
+        self.service.tick()
+        current = self.service.get_schedule(row['id'])
+        self.assertEqual(current['state'], 'scheduled_remote')
+        self.assertIn('lỗi tạm thời', current['error'])
+        self.assertFalse(self.service.tick())                   # not asked again at once
+        self.now += 301
+        self.assertTrue(self.service.tick())                    # asked again five minutes later
 
     def test_publish_now_sends_a_waiting_facebook_post_at_once(self):
         self.service.save_channel('facebook:1', 'facebook', 'Page', {'access_token': 'page-secret', 'page_id': '1'})

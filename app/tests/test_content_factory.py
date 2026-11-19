@@ -184,7 +184,9 @@ class FactoryTests(unittest.TestCase):
         self.store.create({'idea': 'Queued', 'voice_id': 'voice', 'duration_seconds': 30}, 'queued')
         self.assertEqual(self.factory.videos()['total'], 0)
         with self.assertRaises(ValueError):
-            self.factory.videos(page_size=100)
+            self.factory.videos(page_size=200)   # 50 and 100 are allowed: one book's chapters in Kho video
+        with self.assertRaises(ValueError):
+            self.factory.videos(sort='newest')
 
     def test_manual_jobs_have_priority_over_pending_factory_requests(self):
         self.batch()

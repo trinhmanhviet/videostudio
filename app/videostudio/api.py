@@ -100,6 +100,12 @@ def create_app(store=None,pipeline=None,worker_enabled=True):
             if voice_studio:voice_studio.recover()
             for target in (loop,heartbeat,publishing_loop,cleanup_loop,gameplay_loop):
                 t=threading.Thread(target=target,daemon=True);t.start();threads.append(t)
+            shorts_loop=getattr(app.state,'shorts_loop',None)  # Bản ngắn: made and scheduled in their own thread
+            if shorts_loop:
+                t=threading.Thread(target=shorts_loop,args=(stop,),name='shorts',daemon=True);t.start();threads.append(t)
+            promo_loop=getattr(app.state,'promo_loop',None)  # Truyện trên YouTube: tiêu đề, ảnh bìa, danh sách phát
+            if promo_loop:
+                t=threading.Thread(target=promo_loop,args=(stop,),name='story-promo',daemon=True);t.start();threads.append(t)
             # story edits stopped by the restart go on (paused ones stay paused); never at import time
             resume=getattr(app.state,'resume_story_edits',None)
             if resume:resume()

@@ -663,8 +663,35 @@ def images(pipeline, job, check):
     # The master is a rebuildable cache (from the frozen plan), so it is not an attested asset: it may be removed to
     # save disk after the videos are published, and render rebuilds it if a later re-render needs it.
     detail = [{'name': s['name'], 'start': s['start'], 'length': s['length']} for s in plan_data['segments']][:500]
-    return {'gameplay_plan': str(plan_path), 'master': str(master), 'segments': len(plan_data['segments']), 'seconds': seconds,
-            'segments_detail': detail, 'loops': plan_data['loops'], 'scenes': [], 'assets': [asset(plan_path)]}
+    result = {'gameplay_plan': str(plan_path), 'master': str(master), 'segments': len(plan_data['segments']), 'seconds': seconds,
+              'segments_detail': detail, 'loops': plan_data['loops'], 'scenes': [], 'assets': [asset(plan_path)]}
+    if layout.get('story_art'):
+        art = story_pictures(pipeline, job, speech_seconds, check)
+        if art:
+            result['story_art'] = art
+            result['assets'] += [asset(seg['path']) for seg in art['segments']]
+    return result
+
+
+def story_pictures(pipeline, job, speech_seconds, check):
+    """The chapter's pictures behind the video (story_art.py). Any failure falls back to the book's usual background:
+    the video is never stopped for them."""
+    from .core import Cancelled
+    from .story_art import plan_and_draw
+    from .story_promo import StoryPromo
+    store = getattr(pipeline, 'store', None)
+    if store is None:
+        return None
+    try:
+        ledger = _read(Path(job['output']) / 'story-ledger.json')
+        art = plan_and_draw(StoryPromo(store, None), job, ledger, speech_seconds, check, lambda text: _log(pipeline, job, 'images', text))
+        _log(pipeline, job, 'images', f'Tranh nền: {len(art["segments"])} tranh theo diễn biến.')
+        return art
+    except Cancelled:
+        raise
+    except Exception as error:
+        _log(pipeline, job, 'images', f'Chưa vẽ được tranh nền ({str(error)[:200]}); video dùng nền thường của truyện.')
+        return None
 
 
 def master_size(job):
@@ -823,10 +850,12 @@ def intro_events(snapshot, layout, intro):
     fade_out = INTRO_FADE_OUT_MS
     end = int(round(intro * 1000))  # fully faded out the moment the gameplay and narration start
     band_top, band_height = gy + gh * 215 / 720, gh * 300 / 720
-    x = width // 2
-    events = [f'Dialogue: 5,0:00:00.00,{_ms_time(end)},IntroBook,,0,0,0,,{{\\an7\\pos(0,{band_top:.0f})\\bord0\\shad0\\1c&H26140B&\\1a&H61&'
-              f'\\fad(300,{fade_out})\\p1}}m 0 0 l {width} 0 {width} {band_height:.0f} 0 {band_height:.0f}{{\\p0}}']
-    travel = int(width * .55)
+    # Over the story pictures the gameplay box sits in a corner: the intro plays inside that box, not across the picture.
+    left, span = (gx, gw) if layout.get('titles') else (0, width)
+    x = left + span // 2
+    events = [f'Dialogue: 5,0:00:00.00,{_ms_time(end)},IntroBook,,0,0,0,,{{\\an7\\pos({left},{band_top:.0f})\\bord0\\shad0\\1c&H26140B&\\1a&H61&'
+              f'\\fad(300,{fade_out})\\p1}}m 0 0 l {span} 0 {span} {band_height:.0f} 0 {band_height:.0f}{{\\p0}}']
+    travel = int(span * .55)
     rows = {True: ('IntroBook', gy + gh * 300 / 720), False: ('IntroChapter', gy + gh * 470 / 720)}
     for _, parts, starts, from_left in _intro_flights(snapshot):
         style, y = rows[from_left]
@@ -844,10 +873,10 @@ def shift_cues(cues, offset):
     return [{**cue, 'start': cue['start'] + offset, 'end': cue['end'] + offset} for cue in cues] if offset else cues
 
 
-def write_ass(path, orientation, snapshot, cues, burn, intro=0.0):
+def write_ass(path, orientation, snapshot, cues, burn, intro=0.0, layout=None):
     """intro > 0: the cover-style title intro plays first and the top titles fade in when it ends; `cues` are already
-    shifted by the caller."""
-    layout = layout_for(orientation, snapshot.get('layout'))
+    shifted by the caller. layout: the story pictures' layout (art_layout), else the book's."""
+    layout = layout or layout_for(orientation, snapshot.get('layout'))
     width, height = layout['size']
     margin = layout['title_margin']
     room = {'ngang': 52, 'doc': 22}[orientation]
@@ -870,10 +899,12 @@ def write_ass(path, orientation, snapshot, cues, burn, intro=0.0):
         intro_styles, events = intro_events(snapshot, layout, intro)
         styles += intro_styles
         begin, appear = _ms_time(int(round(intro * 1000))), '\\fad(400,0)'
+    # Story pictures, landscape: small titles at the top left over the picture's open side.
+    place = (lambda y: f'\\an7\\pos(60,{y})') if layout.get('titles') == 'left' else (lambda y: f'\\pos({x},{y})')
     if channel:
-        events.append(f'Dialogue: 1,{begin},{end},Channel,,0,0,0,,{{\\pos({x},{t["channel"][0]}){appear}}}{_ass_text(channel)}')
-    events.append(f'Dialogue: 1,{begin},{end},Book,,0,0,0,,{{\\pos({x},{t["book"][0]}){appear}}}{_ass_text(book)}')
-    events.append(f'Dialogue: 1,{begin},{end},Chapter,,0,0,0,,{{\\pos({x},{t["chapter"][0]}){appear}}}{_ass_text(chapter)}')
+        events.append(f'Dialogue: 1,{begin},{end},Channel,,0,0,0,,{{{place(t["channel"][0])}{appear}}}{_ass_text(channel)}')
+    events.append(f'Dialogue: 1,{begin},{end},Book,,0,0,0,,{{{place(t["book"][0])}{appear}}}{_ass_text(book)}')
+    events.append(f'Dialogue: 1,{begin},{end},Chapter,,0,0,0,,{{{place(t["chapter"][0])}{appear}}}{_ass_text(chapter)}')
     if burn:
         for cue in cues:
             events.append(f'Dialogue: 0,{_ass_time(cue["start"])},{_ass_time(cue["end"])},Caption,,0,0,0,,' + '\\N'.join(_ass_text(l) for l in cue['lines']))
@@ -897,30 +928,55 @@ def _background_input(snapshot, width, height, seconds, folder=None, ffmpeg='ffm
     return ['-i', str(still)], f'[0:v]{tail}'
 
 
-def compose(pipeline, job, orientation, snapshot, master, audio, cues, seconds, check, game_audio=False, intro=0.0):
-    """`audio` already starts with `intro` seconds of silence; `cues` are on the narration's own clock."""
-    layout = layout_for(orientation, snapshot.get('layout'))
+def art_layout(orientation):
+    """The layout used with the story pictures (story_art.ART_LAYOUT): gameplay in the lower-left quarter of the
+    landscape frame; on vertical video the picture on top, the gameplay under it, titles and captions below."""
+    from .story_art import ART_LAYOUT
+    art = ART_LAYOUT[orientation]
+    layout = {**LAYOUTS[orientation], 'game': art['game'], 'titles': art['titles']}
+    if orientation == 'ngang':
+        layout['title'] = {'channel': (34, 28), 'book': (62, 44), 'chapter': (116, 32)}
+    else:
+        # A long book name takes two lines: the chapter sits below both (chapter 1, 2026-11-19).
+        layout['title'] = {'channel': (1220, 30), 'book': (1250, 58), 'chapter': (1410, 40)}
+        layout['caption_bottom'] = art['caption_bottom']
+    return layout
+
+
+def compose(pipeline, job, orientation, snapshot, master, audio, cues, seconds, check, game_audio=False, intro=0.0, art=None):
+    """`audio` already starts with `intro` seconds of silence; `cues` are on the narration's own clock. art: the
+    chapter's story pictures (story_art), which replace the background and move the gameplay box."""
+    layout = art_layout(orientation) if art else layout_for(orientation, snapshot.get('layout'))
     width, height = layout['size']
     gx, gy, gw, gh = layout['game']
     folder = Path(job['output'])
-    ass = write_ass(folder / f'story-{orientation}.ass', orientation, snapshot, shift_cues(cues, intro),
-                    snapshot['layout'].get('burn_subtitles', True), intro=intro)
+    # Landscape over the pictures: no burned subtitles (YouTube shows the uploaded .srt; owner, 2026-11-19).
+    burn = snapshot['layout'].get('burn_subtitles', True) and not (art and orientation == 'ngang')
+    ass = write_ass(folder / f'story-{orientation}.ass', orientation, snapshot, shift_cues(cues, intro), burn, intro=intro,
+                    layout=layout if art else None)
     target = folder / f'story-out-{orientation}.mp4'
     identity = _identity({'algorithm': ALGORITHM, 'orientation': orientation, 'layout': layout, 'master': _file_id(master),
                           'audio': _file_id(audio), 'ass': hashlib.sha256(ass.read_bytes()).hexdigest(), 'game_audio': game_audio,
                           'background': snapshot.get('background') and _file_id(snapshot['background']), 'preset': snapshot.get('background_preset'),
+                          'art': [(seg['start'], seg['sha256']) for seg in art['segments']] if art else None,
                           'codec': snapshot['layout'].get('video_codec', 'h264')})
     receipt = target.with_suffix('.json')
     if target.is_file() and receipt.is_file() and _read(receipt).get('identity') == identity:
         return target
-    background, bg_filter = _background_input(snapshot, width, height, seconds, folder, pipeline.ffmpeg)
+    if art:
+        from .story_art import background as art_background
+        background, bg_filter, count = art_background(art['segments'], orientation, folder / 'story-art', seconds, intro, FPS)
+    else:
+        background, bg_filter = _background_input(snapshot, width, height, seconds, folder, pipeline.ffmpeg)
+        count = 1
+    game, voice = count, count + 1   # input numbers of the gameplay master and the narration
     inputs = background + ['-i', str(master), '-i', str(audio)]
-    graph = (f'{bg_filter};[1:v]scale={gw}:{gh}:force_original_aspect_ratio=decrease:flags=bilinear,setsar=1,format=yuv420p{hold_first_frame(intro)}[g];'
+    graph = (f'{bg_filter};[{game}:v]scale={gw}:{gh}:force_original_aspect_ratio=decrease:flags=bilinear,setsar=1,format=yuv420p{hold_first_frame(intro)}[g];'
              f'[bg][g]overlay=x={gx}+({gw}-w)/2:y={gy}+({gh}-h)/2:eof_action=repeat:format=yuv420,ass={ass.name}[v]')
-    audio_args = ['-map', '2:a:0', '-c:a', 'copy']
+    audio_args = ['-map', f'{voice}:a:0', '-c:a', 'copy']
     if game_audio:
         delay = f'adelay=delays={int(round(intro * 1000))}:all=1,' if intro else ''
-        graph += f';[1:a]{delay}volume=0.15[game];[2:a][game]amix=inputs=2:duration=first:dropout_transition=0[a]'
+        graph += f';[{game}:a]{delay}volume=0.15[game];[{voice}:a][game]amix=inputs=2:duration=first:dropout_transition=0[a]'
         audio_args = ['-map', '[a]', '-c:a', 'aac', '-b:a', '192k']
     head = [pipeline.ffmpeg, '-v', 'error', '-y', *inputs, '-filter_complex', graph, '-map', '[v]', *audio_args, '-t', f'{seconds:.3f}', '-r', str(FPS)]
     _log(pipeline, job, 'render', f'Dựng bản {"ngang 1920×1080" if orientation == "ngang" else "dọc 1080×1920"} bằng GPU…')
@@ -992,6 +1048,11 @@ def render(pipeline, job, check):
         delay = f',adelay=delays={int(round(intro * 1000))}:all=1' if intro else ''
         run([pipeline.ffmpeg, '-v', 'error', '-y', '-i', str(narration), '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000' + delay,
              '-c:a', 'aac', '-b:a', '192k', str(levelled)], check, timeout=max(600, seconds))
+    # The story pictures drawn in the images step, when they are all still here.
+    art = job['checkpoints']['images'].get('story_art')
+    if art and not all(Path(seg['path']).is_file() for seg in art['segments']):
+        _log(pipeline, job, 'render', 'Thiếu tệp tranh nền; video dùng nền thường của truyện.')
+        art = None
     # One after the other: measured on a 1080p chapter, running both at once was not faster (the CPU-side overlay is the limit).
     outputs, timed = {}, {}
     for orientation in wanted:
@@ -1000,7 +1061,7 @@ def render(pipeline, job, check):
             _write(cues_path, caption_cues(_read(folder / 'story-ledger.json'), LAYOUTS[orientation]['line_chars']))
         cues = timed[orientation] = _read(cues_path)
         outputs[orientation] = compose(pipeline, job, orientation, snapshot, master, levelled, cues, seconds, check,
-                                       game_audio=bool(layout.get('game_audio')), intro=intro)
+                                       game_audio=bool(layout.get('game_audio')), intro=intro, art=art)
     # Publish beside each other in the book's folder: <stem>_ngang.mp4, <stem>_doc.mp4, <stem>.mp3, <stem>_<o>.srt
     root, stem = _root(job), _stem(job, snapshot, getattr(pipeline, 'store', None))
     published, files = {}, []
@@ -1031,8 +1092,12 @@ def render(pipeline, job, check):
     # Ready-to-post kit beside the videos: cover image (also the library thumbnail) and title/description/hashtags.
     thumb = cover_image(pipeline, job, snapshot, master, seconds, check)
     cover = root / f'{stem}_anh-bia.jpg'
-    shutil.copyfile(thumb, cover)
+    # The chapter's YouTube thumbnail and title (story_promo), when made, go in the kit: the owner posts by hand too.
+    promo_thumb, promo_title = _promo_kit(job)
+    shutil.copyfile(promo_thumb or thumb, cover)
     post = post_text(snapshot, _read(folder / 'story-ledger.json'), offset=intro)
+    if promo_title:
+        post['title'] = promo_title
     kit = root / f'{stem}_dang-bai.txt'
     kit.write_text(f'TIÊU ĐỀ\n{post["title"]}\n\nMÔ TẢ\n{post["description"]}\n\nHASHTAG\n{" ".join(post["hashtags"])}\n', encoding='utf-8')
     published.update(cover=str(cover), post=str(kit))
@@ -1051,6 +1116,21 @@ def render(pipeline, job, check):
     if 'ngang' in published:
         result['video_ngang'] = published['ngang']
     return result
+
+
+def _promo_kit(job):
+    """(thumbnail path or None, YouTube title or None) of the chapter, from story_promo; nothing on any problem."""
+    try:
+        from .story_promo import ROOT, episode
+        info = episode(job)
+        if not info:
+            return None, None
+        folder = ROOT / info['book_id'] / info['key']
+        record = _read(folder / 'promo.json')
+        thumb = folder / 'thumb.jpg'
+        return (thumb if record.get('state') == 'ready' and thumb.is_file() else None), (record.get('title') or None)
+    except Exception:
+        return None, None
 
 
 def render_audio(pipeline, job, snapshot, check):

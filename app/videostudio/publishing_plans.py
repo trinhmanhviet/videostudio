@@ -48,8 +48,9 @@ def captions(social, style, title):
 
 
 class PostingPlans:
-    def __init__(self, store, publishing, factory, clock=time.time):
+    def __init__(self, store, publishing, factory, clock=time.time, shorts=None):
         self.store, self.publishing, self.factory, self.clock = store, publishing, factory, clock
+        self.shorts = shorts  # ShortMaker: the 45–88 s cut of each planned video, when the plan asks for it
         self.last_round = 0
         with store.db() as db:
             db.executescript('''
@@ -66,6 +67,8 @@ class PostingPlans:
             ''')
             # A clash of the tool's own keys once marked a whole book as skipped (2026-11-17): those videos come back.
             db.execute(f"DELETE FROM publishing_plan_skips WHERE reason LIKE '%{INTERNAL_CLASH}%'")
+            if 'shorts' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_plans)')}:
+                db.execute('ALTER TABLE publishing_plans ADD COLUMN shorts INTEGER NOT NULL DEFAULT 0')
 
     # --- plans ---------------------------------------------------------------------------------------------
     def _validate(self, data):
@@ -98,9 +101,11 @@ class PostingPlans:
         for key in ('enabled', 'ai_label'):
             if type(data.get(key, True)) is not bool:
                 raise ValueError(key + ' phải là bật/tắt')
+        if type(data.get('shorts', False)) is not bool:
+            raise ValueError('shorts phải là bật/tắt')
         return {'name': name or ('Đăng ' + project if project else 'Đăng tự động'), 'style': style, 'project': project,
                 'channels': channels, 'times': sorted(set(clean)), 'days': sorted(set(days)),
-                'enabled': data.get('enabled', True), 'ai_label': data.get('ai_label', True)}
+                'enabled': data.get('enabled', True), 'ai_label': data.get('ai_label', True), 'shorts': data.get('shorts', False)}
 
     def save(self, data, plan_id=None):
         plan = self._validate(data)
@@ -109,14 +114,15 @@ class PostingPlans:
             if plan_id:
                 if not db.execute('SELECT 1 FROM publishing_plans WHERE id=?', (plan_id,)).fetchone():
                     raise KeyError(plan_id)
-                db.execute('''UPDATE publishing_plans SET name=?,style=?,project=?,channels=?,times=?,days=?,enabled=?,ai_label=?,note=NULL,updated=?
+                db.execute('''UPDATE publishing_plans SET name=?,style=?,project=?,channels=?,times=?,days=?,enabled=?,ai_label=?,shorts=?,note=NULL,updated=?
                               WHERE id=?''', (plan['name'], plan['style'], plan['project'], _json(plan['channels']), _json(plan['times']),
-                                              _json(plan['days']), int(plan['enabled']), int(plan['ai_label']), now, plan_id))
+                                              _json(plan['days']), int(plan['enabled']), int(plan['ai_label']), int(plan['shorts']), now, plan_id))
             else:
                 plan_id = uuid.uuid4().hex
-                db.execute('INSERT INTO publishing_plans VALUES(?,?,?,?,?,?,?,?,?,NULL,?,?)',
+                db.execute('''INSERT INTO publishing_plans(id,name,style,project,channels,times,days,enabled,ai_label,note,created,updated,shorts)
+                              VALUES(?,?,?,?,?,?,?,?,?,NULL,?,?,?)''',
                            (plan_id, plan['name'], plan['style'], plan['project'], _json(plan['channels']), _json(plan['times']),
-                            _json(plan['days']), int(plan['enabled']), int(plan['ai_label']), now, now))
+                            _json(plan['days']), int(plan['enabled']), int(plan['ai_label']), now, now, int(plan['shorts'])))
         self.last_round = 0  # plan at once
         return self.get(plan_id)
 
@@ -137,7 +143,7 @@ class PostingPlans:
 
     def _public(self, row):
         plan = {**row, 'channels': json.loads(row['channels']), 'times': json.loads(row['times']), 'days': json.loads(row['days']),
-                'enabled': bool(row['enabled']), 'ai_label': bool(row['ai_label'])}
+                'enabled': bool(row['enabled']), 'ai_label': bool(row['ai_label']), 'shorts': bool(row.get('shorts'))}
         with self.store.db() as db:
             slots = [dict(r) for r in db.execute('SELECT * FROM publishing_plan_slots WHERE plan_id=? AND slot_at>=? ORDER BY slot_at',
                                                  (plan['id'], self.clock() - 3600))]
@@ -234,13 +240,13 @@ class PostingPlans:
             rows = db.execute('''SELECT j.id, b.style, b.project FROM jobs j JOIN factory_items i ON i.job_id=j.id
                                  JOIN factory_batches b ON b.id=i.batch_id WHERE j.state='completed' AND b.style=?''', (plan['style'],)).fetchall()
             marks = ','.join('?' * len(plan['channels']))
-            posted = {r[0] for r in db.execute(f"SELECT job_id FROM publishing_schedules WHERE state!='cancelled' AND channel_id IN ({marks})",
+            posted = {r[0] for r in db.execute(f"SELECT job_id FROM publishing_schedules WHERE state!='cancelled' AND cut='' AND channel_id IN ({marks})",
                                                plan['channels'])}
             planned = {r[0] for r in db.execute('SELECT job_id FROM publishing_plan_slots')}
             skipped = {r[0] for r in db.execute('SELECT job_id FROM publishing_plan_skips WHERE plan_id=?', (plan['id'],))}
             # Posts that vanished from the channel (deleted by the owner, or dropped by YouTube itself).
             removed = {r[0]: r[1] for r in db.execute(f"SELECT job_id, COUNT(*) FROM publishing_schedules WHERE state='cancelled' AND phase='removed' "
-                                                      f"AND channel_id IN ({marks}) GROUP BY job_id", plan['channels'])}
+                                                      f"AND cut='' AND channel_id IN ({marks}) GROUP BY job_id", plan['channels'])}
             used = posted | planned | set(removed)
             outputs = {r[0]: r[1] for r in db.execute('SELECT id, output FROM jobs WHERE id IN (%s)' % ','.join('?' * len(used)), tuple(used))} if used else {}
         # Chapters already posted or planned in any render are done; a new render of them is not a new episode.
@@ -393,6 +399,9 @@ class PostingPlans:
                     if ids:
                         with self.store.db() as db:
                             db.execute('INSERT OR IGNORE INTO publishing_plan_slots VALUES(?,?,?,?,?)', (plan['id'], at, job['id'], _json(ids), now))
+                        if plan.get('shorts') and self.shorts:
+                            from .shorts import AFTER_FULL
+                            self.shorts.request(job['id'], plan['channels'], at + AFTER_FULL)
                         made += 1
                         note = problem
                         break
@@ -414,4 +423,4 @@ class PostingPlans:
     @staticmethod
     def _public_light(row):
         return {**row, 'channels': json.loads(row['channels']), 'times': json.loads(row['times']), 'days': json.loads(row['days']),
-                'enabled': bool(row['enabled']), 'ai_label': bool(row['ai_label'])}
+                'enabled': bool(row['enabled']), 'ai_label': bool(row['ai_label']), 'shorts': bool(row.get('shorts'))}

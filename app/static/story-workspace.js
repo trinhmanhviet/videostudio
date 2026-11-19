@@ -1114,6 +1114,7 @@
         return b;
       };
       add(box, field('Tên kênh', channel), field('Ảnh nền', add(el('div','sw-inline'), background, iconBtn('upload','Tải ảnh nền lên',()=>bgInput.click()))), bgInput,
+        add(el('div','sw-checks'), check('story_art','Tranh nền vẽ theo diễn biến (Comfy, đúng nhân vật của truyện): thay ảnh nền; game nằm góc dưới bên trái, bản ngang không in phụ đề; vẽ thêm khoảng 2 phút mỗi chương')),
         field('Nén video', codec),
         el('h3','','Ảnh bìa'), coverBox,
         el('h3','','Mở đầu video'), add(el('div','sw-checks'), check('intro','Intro tên truyện và chương như ảnh bìa (lời kể bắt đầu sau 2,5 giây)')),

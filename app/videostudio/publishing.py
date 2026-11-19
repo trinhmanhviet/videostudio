@@ -24,6 +24,7 @@ from .core import digest
 VN = timezone(timedelta(hours=7))
 YOUTUBE_MANAGE = 'https://www.googleapis.com/auth/youtube'   # change a video already uploaded (Đăng ngay)
 YOUTUBE_SCOPES = ('https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', YOUTUBE_MANAGE)
+FACEBOOK_REEL_LIMIT = 90   # longest video Facebook spreads as a Reel; longer ones are posted as Page videos
 YOUTUBE_SHORT_LIMIT = 15 * 60   # longest upload YouTube processes on a channel not verified for long videos
 MISSING_RECHECK = 600  # a YouTube video seen missing is checked once more this much later before its schedule is dropped
 
@@ -56,6 +57,10 @@ class PublishBlocked(Exception):
 
 class PublishUncertain(Exception):
     pass
+
+
+class PlatformBusy(PublishBlocked):
+    """The platform's own server failed (HTTP 5xx): a passing fault, not a refusal."""
 
 
 def _json(value):
@@ -108,6 +113,9 @@ class Publishing:
             # ai_label: the video was made with AI (voice, pictures), declared to the platform when it allows it
             if 'ai_label' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_schedules)')}:
                 db.execute('ALTER TABLE publishing_schedules ADD COLUMN ai_label INTEGER NOT NULL DEFAULT 1')
+            # cut: '' for the video itself, 'short' for its 45–88 second cut (shorts.py)
+            if 'cut' not in {r[1] for r in db.execute('PRAGMA table_info(publishing_schedules)')}:
+                db.execute("ALTER TABLE publishing_schedules ADD COLUMN cut TEXT NOT NULL DEFAULT ''")
 
     def save_channel(self, identifier, platform, name, credentials):
         if platform not in self.adapters:
@@ -203,8 +211,16 @@ class Publishing:
         with self.store.db() as db:
             ours = {r['remote_id']: dict(r) for r in db.execute(
                 "SELECT remote_id,job_id,title,state FROM publishing_schedules WHERE platform='facebook' AND remote_id IS NOT NULL")}
+        found = {v['id']: v for v in reels.json().get('data', []) if v.get('id')}
+        # Videos longer than a Reel are posted as normal Page videos (2026-11-18): list those too.
+        videos = self.client.get(f"{base}/{credentials['page_id']}/videos", params={'fields': self.REEL_FIELDS, 'limit': limit}, headers=headers)
+        if videos.status_code == 200:
+            for video in videos.json().get('data', []):
+                if video.get('id'):
+                    found.setdefault(video['id'], video)
+        listed = sorted(found.values(), key=lambda v: str(v.get('created_time') or ''), reverse=True)[:limit]
         items, insights_ok = [], None
-        for video in reels.json().get('data', []):
+        for video in listed:
             insights = {}
             if insights_ok is not False:
                 answer = self.client.get(f"{base}/{video['id']}/video_insights", headers=headers)
@@ -441,6 +457,11 @@ class Publishing:
             normalized['tags'] = tags
         if not ai_label:
             normalized['ai_label'] = False
+        cut = data.get('cut') or ''
+        if cut not in ('', 'short'):
+            raise ValueError('Bản cắt không hợp lệ')
+        if cut:
+            normalized['cut'] = cut
         fingerprint = hashlib.sha256(_json(normalized).encode()).hexdigest()
         with self.store.db() as db:
             prior = db.execute('SELECT id,fingerprint FROM publishing_schedules WHERE idem=?', (key,)).fetchone()
@@ -456,7 +477,15 @@ class Publishing:
         approved = self.versions.approved_version(normalized['job_id'])
         if not approved or approved['version_id'] != normalized['version_id']:
             raise ValueError('Duyệt đúng phiên bản video trước khi lên lịch')
-        if str(approved['version_id']).startswith('drive-'):
+        if cut == 'short':
+            from . import shorts
+            record = shorts.load(normalized['job_id'])
+            if not record:
+                raise ValueError('Chưa có bản ngắn của video này')
+            path, sha = Path(record['path']), record['sha256']
+            if digest(path) != sha:
+                raise ValueError('Bản ngắn đã thay đổi; làm lại bản ngắn')
+        elif str(approved['version_id']).startswith('drive-'):
             # The video now lives on Google Drive: post from there (downloaded just before the upload, checked by MD5).
             path, sha = self._drive_source(normalized['job_id'], channel['platform'] == 'youtube')
         else:
@@ -492,10 +521,10 @@ class Publishing:
                     hint = ' Muốn đăng ngay: mở Lịch đăng, bấm vào lịch đó rồi chọn "Đăng ngay".'
                     raise ValueError(f'Video này đã có lịch đăng lên kênh lúc {when}; tool không tạo bản thứ hai.'+hint)
                 db.execute('''INSERT INTO publishing_schedules
-                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags,ai_label)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (id,idem,fingerprint,job_id,version_id,path,sha256,channel_id,platform,title,caption,publish_at,state,created,updated,tags,ai_label,cut)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                     (identifier,key,fingerprint,normalized['job_id'],normalized['version_id'],str(path),sha,
-                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now,_json(tags),int(ai_label)))
+                     channel['id'],channel['platform'],title,caption,at,'scheduled',now,now,_json(tags),int(ai_label),cut))
         return self.get_schedule(identifier)
 
     def _drive_source(self, job_id, youtube):
@@ -580,6 +609,26 @@ class Publishing:
             db.execute("UPDATE publishing_schedules SET state='cancelled',updated=? WHERE id=?", (self.clock(),identifier))
         return self.get_schedule(identifier)
 
+    # The status fields videos.update may write back; whatever is sent replaces the whole status part.
+    YT_STATUS_KEEP = ('privacyStatus', 'publishAt', 'embeddable', 'license', 'publicStatsViewable', 'selfDeclaredMadeForKids',
+                      'containsSyntheticMedia')
+
+    def _yt_set_status(self, row, headers, changes, drop=()):
+        """Change some status fields of a video and keep the others as they are on YouTube. videos.update resets every
+        field it is not sent: Đăng ngay once turned "allow embedding" off on chapters 2 and 3 (2026-11-18)."""
+        found = self._request('GET', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status', 'id': row['remote_id']},
+                              headers=headers).json().get('items') or []
+        if not found:
+            raise PublishUncertain('Không đọc được video trên YouTube')
+        current = found[0].get('status') or {}
+        status = {k: current[k] for k in self.YT_STATUS_KEEP if k in current and k not in drop}
+        status.setdefault('embeddable', True)
+        status.setdefault('selfDeclaredMadeForKids', False)
+        status.setdefault('containsSyntheticMedia', bool(row.get('ai_label', 1)))
+        status.update(changes)
+        return self._request('PUT', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status'},
+                             headers=headers, json={'id': row['remote_id'], 'status': status}).json()
+
     def reschedule(self, identifier, at):
         """Move a planned post to another time (Đăng tự động moves later chapters up when one is posted early).
         A YouTube video already uploaded gets its new time on YouTube first; a post not sent yet only changes here."""
@@ -593,10 +642,7 @@ class Publishing:
             headers, granted = self._yt_token(channel)
             if YOUTUBE_MANAGE not in granted:
                 raise PublishBlocked('Kênh chưa cấp quyền sửa video; kết nối lại kênh YouTube')
-            body = {'id': row['remote_id'], 'status': {'privacyStatus': 'private', 'publishAt': _iso(at), 'selfDeclaredMadeForKids': False,
-                                                       'containsSyntheticMedia': bool(row.get('ai_label', 1))}}
-            answer = self._request('PUT', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status'},
-                                   headers=headers, json=body).json()
+            answer = self._yt_set_status(row, headers, {'privacyStatus': 'private', 'publishAt': _iso(at)})
             if not (answer.get('status') or {}).get('publishAt'):
                 raise PublishUncertain('YouTube chưa xác nhận giờ đăng mới')
         elif not (row['state'] in ('scheduled', 'blocked') and not row['remote_id'] and not row['upload_url']):
@@ -622,10 +668,7 @@ class Publishing:
                 raise PublishBlocked('Kênh chưa cấp quyền sửa video cho tool. Vào Cài đặt, kết nối lại kênh YouTube này một lần '
                                      '(đồng ý quyền "Quản lý tài khoản YouTube"), rồi bấm Đăng ngay')
             # videos.update replaces the whole status part: send every field the upload set, without the later time.
-            body = {'id': row['remote_id'], 'status': {'privacyStatus': 'public', 'selfDeclaredMadeForKids': False,
-                                                       'containsSyntheticMedia': bool(row.get('ai_label', 1))}}
-            answer = self._request('PUT', 'https://www.googleapis.com/youtube/v3/videos', params={'part': 'status'},
-                                   headers=headers, json=body).json()
+            answer = self._yt_set_status(row, headers, {'privacyStatus': 'public'}, drop=('publishAt',))
             if (answer.get('status') or {}).get('privacyStatus') != 'public':
                 raise PublishUncertain('YouTube chưa xác nhận video đã công khai; kiểm tra trong YouTube Studio')
             with self.store.db() as db:
@@ -703,6 +746,11 @@ class Publishing:
             else:
                 result = self.poll_remote(row, channel)
             self._save(identifier, **{'error':None, 'next_at':self.clock()+60, **result}, lease_until=0)
+        except PlatformBusy as error:
+            if uploading:
+                self._save(identifier, state='blocked', error=str(error), lease_until=0)
+            else:  # checking a post already sent: a server hiccup at YouTube/Facebook only means asking again later
+                self._save(identifier, error=str(error)+'; tool tự hỏi lại sau 5 phút', lease_until=0, next_at=self.clock()+300)
         except PublishBlocked as error:
             self._save(identifier, state='blocked', error=str(error), lease_until=0)
         except Exception as error:
@@ -732,12 +780,18 @@ class Publishing:
             if response.status_code in (401,403):
                 raise PublishBlocked('Quyền đăng đã hết hạn hoặc chưa được cấp; kết nối lại tài khoản và kiểm tra quyền ứng dụng'
                                      + (f' ({reason})' if reason else ''))
+            if response.status_code >= 500:
+                raise PlatformBusy(f'Máy chủ nền tảng đang lỗi tạm thời (HTTP {response.status_code})')
             raise PublishBlocked(f'Nền tảng từ chối yêu cầu (HTTP {response.status_code}'+(f', {reason}' if reason else '')+')'
                                  + (f': {detail}' if detail else '; kiểm tra tài khoản và cấu hình API'))
         return response
 
     def _video_seconds(self, row):
         """How long the scheduled video is (Drive record, else the job's checked length), or None."""
+        if row.get('cut') == 'short':
+            from . import shorts
+            record = shorts.load(row['job_id'])
+            return float(record['seconds']) if record else None
         with self.store.db() as db:
             if str(row['path']).startswith('drive:'):
                 job_id, name = row['path'][len('drive:'):].split('/', 1)
@@ -807,6 +861,14 @@ class Publishing:
         with self.upload_source(row,save) as (source,size):
             return self._upload_youtube(row,channel,save,source,size)
 
+    def _category(self, row):
+        """YouTube category: 24 (Entertainment) for story episodes, 22 (People & Blogs) for the rest."""
+        try:
+            story = self.store.get(row['job_id'])['request'].get('workflow_mode') == 'story_narration'
+        except Exception:
+            story = False
+        return '24' if story else '22'
+
     def _upload_youtube(self, row, channel, save, source, size):
         headers = self._yt_headers(channel)
         url = row.get('upload_url')
@@ -820,7 +882,7 @@ class Publishing:
             received=status.headers.get('Range')
             offset=int(received.split('-')[-1])+1 if received else 0
         else:
-            metadata = {'snippet':{'title':row['title'],'description':row['caption'],'categoryId':'22',
+            metadata = {'snippet':{'title':row['title'],'description':row['caption'],'categoryId':self._category(row),
                                    **({'tags':json.loads(row.get('tags') or '[]')} if json.loads(row.get('tags') or '[]') else {})},
                         'status':{'privacyStatus':'private','publishAt':_iso(row['publish_at']), 'selfDeclaredMadeForKids':False,
                                   'containsSyntheticMedia':bool(row.get('ai_label', 1))}}
@@ -854,8 +916,41 @@ class Publishing:
         raise PublishUncertain('YouTube chưa xác nhận hoàn tất; giữ receipt, không upload bản khác')
 
     def upload_facebook(self,row,channel,save):
+        # Facebook only spreads a Reel of 3–90 seconds; longer videos sent as Reels got 0 views (2026-11-14..17),
+        # while the same kind of video uploaded by hand as a normal Page video got hundreds. Longer ones go as Page videos.
+        seconds = self._video_seconds(row)
         with self.upload_source(row,save) as (source,size):
+            if seconds and seconds > FACEBOOK_REEL_LIMIT:
+                return self._upload_facebook_video(row,channel,save,source,size)
             return self._upload_facebook(row,channel,save,source,size)
+
+    def _upload_facebook_video(self, row, channel, save, source, size):
+        """A normal Page video, sent in chunks and published at once (the round sends it when its time has come)."""
+        credentials = channel['credentials']
+        base = 'https://graph-video.facebook.com/'+credentials.get('api_version','v24.0')+'/'+credentials['page_id']+'/videos'
+        headers = {'Authorization':'Bearer '+credentials['access_token']}
+        session = self._request('POST',base,data={'upload_phase':'start','file_size':str(size)},headers=headers).json()
+        identifier = str(session.get('video_id') or '')
+        upload = str(session.get('upload_session_id') or '')
+        if not identifier.isdigit() or not upload:
+            raise PublishUncertain('Facebook chưa xác nhận ID video upload')
+        save(remote_id=identifier,phase='video-created')
+        start, end = int(session.get('start_offset', 0)), int(session.get('end_offset', 0))
+        renewed = self.clock()
+        while start < end:
+            source.seek(start)
+            chunk = source.read(end - start)
+            answer = self._request('POST',base,headers=headers,data={'upload_phase':'transfer','upload_session_id':upload,'start_offset':str(start)},
+                                   files={'video_file_chunk':('chunk',chunk,'application/octet-stream')}).json()
+            start, end = int(answer.get('start_offset', end)), int(answer.get('end_offset', end))
+            if self.clock()-renewed>=60:
+                save(phase='video-created'); renewed=self.clock()
+        # Persist before the effect: a lost finish reply must never lead to a second upload.
+        save(phase='video-finishing')
+        self._request('POST',base,headers=headers,data={'upload_phase':'finish','upload_session_id':upload,'published':'true',
+                                                       'title':row['title'],'description':row['caption']})
+        return dict(state='processing',phase='video-finished',remote_id=identifier,
+                    remote_url='https://www.facebook.com/'+credentials['page_id']+'/videos/'+identifier)
 
     def _upload_facebook(self, row, channel, save, source, size):
         credentials = channel['credentials']
@@ -909,7 +1004,15 @@ class Publishing:
         credentials = channel['credentials']
         base = 'https://graph.facebook.com/'+credentials.get('api_version','v24.0')
         headers = {'Authorization':'Bearer '+credentials['access_token']}
-        status = self._request('GET',base+'/'+row['remote_id'],params={'fields':'status'},headers=headers).json().get('status',{})
+        answer = self._request('GET',base+'/'+row['remote_id'],params={'fields':'status,published'},headers=headers).json()
+        status = answer.get('status',{})
+        if str(row.get('phase') or '').startswith('video-'):
+            # A normal Page video: it is out once Facebook has processed it and it is published.
+            if status.get('video_status')=='error' or status.get('processing_phase',{}).get('status')=='error':
+                raise PublishBlocked('Facebook báo lỗi xử lý video; kiểm tra Page / Meta Business Suite')
+            if status.get('video_status')=='ready' and answer.get('published') is not False:
+                return {'state':'published','phase':'published'}
+            return {'state':'processing'}
         phase = status.get('publishing_phase',{})
         if phase.get('publish_status')=='published' or phase.get('status')=='complete':
             return {'state':'published','phase':'published'}
